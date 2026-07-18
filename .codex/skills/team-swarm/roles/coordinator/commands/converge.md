@@ -11,7 +11,7 @@
 ### Step 1: Call aco.py report
 
 ```
-Bash: python <skill_root>/scripts/aco.py --session <session> report
+Bash: python <skill_root>/scripts/aco.py --session {run_dir}/work/team report
 ```
 
 Parse stdout JSON. Expected:
@@ -26,7 +26,7 @@ Parse stdout JSON. Expected:
 }
 ```
 
-Save full report to `<session>/artifacts/swarm-report.json` (raw data for analyst).
+Save full report to `{run_dir}/outputs/swarm-report.json` (raw data for analyst).
 
 ### Step 2: Spawn analyst worker
 
@@ -38,7 +38,7 @@ STOP. Resume on analyst callback.
 
 ### Step 3: On analyst callback
 
-Verify `<session>/artifacts/best-solution.md` exists.
+Verify `{run_dir}/outputs/best-solution.md` exists.
 
 If missing -> request_user_input (skip synthesis / retry analyst).
 

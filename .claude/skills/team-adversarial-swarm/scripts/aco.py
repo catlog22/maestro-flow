@@ -40,7 +40,7 @@ VERSION = "1.0"
 # ---------------------------------------------------------------------------
 
 class SessionPaths:
-    def __init__(self, session: Path):
+    def __init__(self, session: Path, run_dir: Optional[Path] = None):
         self.session = session
         self.config = session / "swarm-config.json"
         self.pheromone_dir = session / "pheromone"
@@ -52,6 +52,8 @@ class SessionPaths:
         self.artifacts = session / "artifacts"
         self.scores = session / "scores"
         self.best = session / "best.json"
+        self.run_dir = run_dir
+        self.outputs = (run_dir / "outputs") if run_dir else self.artifacts
 
     def ensure_dirs(self) -> None:
         for d in [self.pheromone_dir, self.pheromone_history, self.trails, self.artifacts, self.scores]:
@@ -85,8 +87,13 @@ def _discover_nodes(spec: dict) -> List[str]:
     raise ValueError("task_space requires either 'nodes' list or 'auto_discover_from' glob")
 
 
+def _run_dir(args: argparse.Namespace) -> Optional[Path]:
+    rd = getattr(args, "run_dir", None)
+    return Path(rd) if rd else None
+
+
 def cmd_init(args: argparse.Namespace) -> None:
-    paths = SessionPaths(Path(args.session))
+    paths = SessionPaths(Path(args.session), _run_dir(args))
     if not paths.config.exists():
         _fail(2, f"config not found: {paths.config}")
     config = json.loads(paths.config.read_text(encoding="utf-8"))
@@ -147,7 +154,7 @@ def _pick_start_node(nodes: List[str], state: PheromoneState, mode: str) -> str:
 
 
 def cmd_select(args: argparse.Namespace) -> None:
-    paths = SessionPaths(Path(args.session))
+    paths = SessionPaths(Path(args.session), _run_dir(args))
     config = json.loads(paths.config.read_text(encoding="utf-8"))
     state = PheromoneState.load(paths.pheromone_current)
     task_space = json.loads(paths.task_space.read_text(encoding="utf-8"))
@@ -185,8 +192,11 @@ def cmd_select(args: argparse.Namespace) -> None:
 # ---------------------------------------------------------------------------
 
 def _load_iteration_artifacts(paths: SessionPaths, iteration: int) -> List[dict]:
-    pattern = str(paths.artifacts / f"ant-{iteration}-*.json")
+    pattern = str(paths.outputs / f"ant-{iteration}-*.json")
     files = sorted(glob.glob(pattern))
+    if not files and paths.run_dir and paths.artifacts != paths.outputs:
+        pattern = str(paths.artifacts / f"ant-{iteration}-*.json")
+        files = sorted(glob.glob(pattern))
     artifacts = []
     for f in files:
         try:
@@ -196,7 +206,15 @@ def _load_iteration_artifacts(paths: SessionPaths, iteration: int) -> List[dict]
     return artifacts
 
 
-def _validate_artifact(art: dict, valid_nodes: set) -> Optional[str]:
+def _validate_artifact(art: dict, valid_nodes: set, require_meta: bool = False) -> Optional[str]:
+    if require_meta:
+        meta = art.get("_meta")
+        if not isinstance(meta, dict):
+            return "missing or invalid _meta"
+        if not isinstance(meta.get("kind"), str) or not meta["kind"].strip():
+            return "missing or invalid _meta.kind"
+        if not isinstance(meta.get("schema"), str) or not meta["schema"].strip():
+            return "missing or invalid _meta.schema"
     required = ["schema_version", "ant_id", "iteration", "path", "self_score", "self_confidence"]
     for f in required:
         if f not in art:
@@ -212,7 +230,7 @@ def _validate_artifact(art: dict, valid_nodes: set) -> Optional[str]:
 
 
 def cmd_update(args: argparse.Namespace) -> None:
-    paths = SessionPaths(Path(args.session))
+    paths = SessionPaths(Path(args.session), _run_dir(args))
     config = json.loads(paths.config.read_text(encoding="utf-8"))
     state = PheromoneState.load(paths.pheromone_current)
     task_space = json.loads(paths.task_space.read_text(encoding="utf-8"))
@@ -242,7 +260,7 @@ def cmd_update(args: argparse.Namespace) -> None:
     hallucinations = []
     scored = []
     for art in artifacts:
-        err = _validate_artifact(art, valid_nodes)
+        err = _validate_artifact(art, valid_nodes, require_meta=paths.run_dir is not None)
         if err:
             print(f"warning: invalid artifact {art.get('ant_id', '?')}: {err}", file=sys.stderr)
             continue
@@ -322,7 +340,7 @@ def cmd_update(args: argparse.Namespace) -> None:
 # ---------------------------------------------------------------------------
 
 def cmd_converged(args: argparse.Namespace) -> None:
-    paths = SessionPaths(Path(args.session))
+    paths = SessionPaths(Path(args.session), _run_dir(args))
     config = json.loads(paths.config.read_text(encoding="utf-8"))
     cv = config.get("convergence", {})
 
@@ -392,7 +410,7 @@ def cmd_converged(args: argparse.Namespace) -> None:
 # ---------------------------------------------------------------------------
 
 def cmd_report(args: argparse.Namespace) -> None:
-    paths = SessionPaths(Path(args.session))
+    paths = SessionPaths(Path(args.session), _run_dir(args))
     state = PheromoneState.load(paths.pheromone_current)
 
     best = None
@@ -436,6 +454,7 @@ def cmd_report(args: argparse.Namespace) -> None:
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(prog="aco", description=f"ACO controller v{VERSION}")
     p.add_argument("--session", required=True, help="path to session folder")
+    p.add_argument("--run-dir", dest="run_dir", default=None, help="run session outputs directory (formal deliverables)")
     sub = p.add_subparsers(dest="command", required=True)
 
     sub.add_parser("init", help="initialize pheromone + task-space from config")

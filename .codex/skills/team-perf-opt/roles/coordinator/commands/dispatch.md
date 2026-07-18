@@ -11,14 +11,14 @@
 | User requirement | From coordinator Phase 1 | Yes |
 | Session folder | From coordinator Phase 2 | Yes |
 | Pipeline definition | From SKILL.md Pipeline Definitions | Yes |
-| Parallel mode | From session.json `parallel_mode` | Yes |
-| Max branches | From session.json `max_branches` | Yes |
-| Independent targets | From session.json `independent_targets` (independent mode only) | Conditional |
+| Parallel mode | From team-session.json `parallel_mode` | Yes |
+| Max branches | From team-session.json `max_branches` | Yes |
+| Independent targets | From team-session.json `independent_targets` (independent mode only) | Conditional |
 
-1. Load user requirement and optimization scope from session.json
+1. Load user requirement and optimization scope from team-session.json
 2. Load pipeline stage definitions from SKILL.md Task Metadata Registry
-3. Read `parallel_mode` and `max_branches` from session.json
-4. For `independent` mode: read `independent_targets` array from session.json
+3. Read `parallel_mode` and `max_branches` from team-session.json
+4. For `independent` mode: read `independent_targets` array from team-session.json
 
 ## Phase 3: Task Chain Creation (Mode-Branched)
 
@@ -35,11 +35,11 @@ TASK:
   - <step 2: specific action>
   - <step 3: specific action>
 CONTEXT:
-  - Session: <session-folder>
+  - Session: {run_dir}/work/team
   - Scope: <optimization-scope>
   - Branch: <branch-id or 'none'>
   - Upstream artifacts: <artifact-1>, <artifact-2>
-  - Shared memory: <session>/.msg/meta.json
+  - Shared memory: {run_dir}/work/team/.msg/meta.json
 EXPECTED: <deliverable path> + <quality criteria>
 CONSTRAINTS: <scope limits, focus areas>
 ---
@@ -75,11 +75,11 @@ TASK:
   - Execute profiling across relevant dimensions (CPU, memory, I/O, network, rendering)
   - Collect baseline metrics and rank bottlenecks by severity
 CONTEXT:
-  - Session: <session-folder>
+  - Session: {run_dir}/work/team
   - Scope: <optimization-scope>
   - Branch: none
-  - Shared memory: <session>/.msg/meta.json
-EXPECTED: <session>/artifacts/baseline-metrics.json + <session>/artifacts/bottleneck-report.md | Quantified metrics with evidence
+  - Shared memory: {run_dir}/work/team/.msg/meta.json
+EXPECTED: {run_dir}/outputs/baseline-metrics.json + {run_dir}/outputs/bottleneck-report.md | Quantified metrics with evidence
 CONSTRAINTS: Focus on <optimization-scope> | Profile before any changes
 ---
 InnerLoop: false",
@@ -98,12 +98,12 @@ TASK:
   - Prioritize by impact/effort ratio, define success criteria
   - Each optimization MUST have a unique OPT-ID (OPT-001, OPT-002, ...) with non-overlapping target files
 CONTEXT:
-  - Session: <session-folder>
+  - Session: {run_dir}/work/team
   - Scope: <optimization-scope>
   - Branch: none
   - Upstream artifacts: baseline-metrics.json, bottleneck-report.md
-  - Shared memory: <session>/.msg/meta.json
-EXPECTED: <session>/artifacts/optimization-plan.md | Priority-ordered with improvement targets, discrete OPT-IDs
+  - Shared memory: {run_dir}/work/team/.msg/meta.json
+EXPECTED: {run_dir}/outputs/optimization-plan.md | Priority-ordered with improvement targets, discrete OPT-IDs
 CONSTRAINTS: Focus on highest-impact optimizations | Risk assessment required | Non-overlapping file targets per OPT-ID
 ---
 InnerLoop: false",
@@ -122,11 +122,11 @@ TASK:
   - Apply optimizations in priority order (P0 first)
   - Validate changes compile and pass existing tests
 CONTEXT:
-  - Session: <session-folder>
+  - Session: {run_dir}/work/team
   - Scope: <optimization-scope>
   - Branch: none
   - Upstream artifacts: optimization-plan.md
-  - Shared memory: <session>/.msg/meta.json
+  - Shared memory: {run_dir}/work/team/.msg/meta.json
 EXPECTED: Modified source files + validation passing | Optimizations applied without regressions
 CONSTRAINTS: Preserve existing behavior | Minimal changes per optimization | Follow code conventions
 ---
@@ -146,12 +146,12 @@ TASK:
   - Run benchmarks matching project type
   - Compare before/after metrics, calculate improvements
 CONTEXT:
-  - Session: <session-folder>
+  - Session: {run_dir}/work/team
   - Scope: <optimization-scope>
   - Branch: none
   - Upstream artifacts: baseline-metrics.json, optimization-plan.md
-  - Shared memory: <session>/.msg/meta.json
-EXPECTED: <session>/artifacts/benchmark-results.json | Per-metric comparison with verdicts
+  - Shared memory: {run_dir}/work/team/.msg/meta.json
+EXPECTED: {run_dir}/outputs/benchmark-results.json | Per-metric comparison with verdicts
 CONSTRAINTS: Must compare against baseline | Flag any regressions
 ---
 InnerLoop: false",
@@ -170,12 +170,12 @@ TASK:
   - Review across 5 dimensions: correctness, side effects, maintainability, regression risk, best practices
   - Issue verdict: APPROVE, REVISE, or REJECT with actionable feedback
 CONTEXT:
-  - Session: <session-folder>
+  - Session: {run_dir}/work/team
   - Scope: <optimization-scope>
   - Branch: none
   - Upstream artifacts: optimization-plan.md, benchmark-results.json (if available)
-  - Shared memory: <session>/.msg/meta.json
-EXPECTED: <session>/artifacts/review-report.md | Per-dimension findings with severity
+  - Shared memory: {run_dir}/work/team/.msg/meta.json
+EXPECTED: {run_dir}/outputs/review-report.md | Per-dimension findings with severity
 CONSTRAINTS: Focus on optimization changes only | Provide specific file:line references
 ---
 InnerLoop: false",
@@ -206,7 +206,7 @@ For each target index `i` (0-based), with prefix char `P = pipeline_prefix_chars
 
 ```
 // Create session subdirectory for this pipeline
-Bash("mkdir -p <session>/artifacts/pipelines/<P>")
+Bash("mkdir -p {run_dir}/outputs/pipelines/<P>")
 
 update_plan({ subject: "PROFILE-<P>01", ... })
 update_plan({ subject: "STRATEGY-<P>01", ... })
@@ -222,7 +222,7 @@ update_plan({ taskId: "REVIEW-<P>01", addBlockedBy: ["IMPL-<P>01"] })
 
 Task descriptions follow same template as single mode, with additions:
 - `Branch: <P>` in CONTEXT
-- Artifact paths use `<session>/artifacts/pipelines/<P>/` instead of `<session>/artifacts/`
+- Artifact paths use `{run_dir}/outputs/pipelines/<P>/` instead of `{run_dir}/outputs/`
 - Shared-memory namespace uses `<role>.<P>` (e.g., `profiler.A`, `optimizer.B`)
 - Each pipeline's scope is its specific target from `independent_targets[i]`
 
@@ -236,11 +236,11 @@ TASK:
   - Execute profiling focused on rendering performance
   - Collect baseline metrics and rank rendering bottlenecks
 CONTEXT:
-  - Session: <session-folder>
+  - Session: {run_dir}/work/team
   - Scope: optimize rendering
   - Pipeline: A
-  - Shared memory: <session>/.msg/meta.json (namespace: profiler.A)
-EXPECTED: <session>/artifacts/pipelines/A/baseline-metrics.json + bottleneck-report.md
+  - Shared memory: {run_dir}/work/team/.msg/meta.json (namespace: profiler.A)
+EXPECTED: {run_dir}/outputs/pipelines/A/baseline-metrics.json + bottleneck-report.md
 CONSTRAINTS: Focus on rendering scope
 ---
 InnerLoop: false
@@ -257,7 +257,7 @@ PipelineId: A",
 
 **Procedure**:
 
-1. Read `<session>/artifacts/optimization-plan.md` to count OPT-IDs
+1. Read `{run_dir}/outputs/optimization-plan.md` to count OPT-IDs
 2. Read `.msg/meta.json` -> `strategist.optimization_count`
 3. **Auto mode decision**:
 
@@ -266,7 +266,7 @@ PipelineId: A",
 | count <= 2 | Switch to `single` mode -- create IMPL-001, BENCH-001, REVIEW-001 (standard single pipeline) |
 | count >= 3 | Switch to `fan-out` mode -- create branch tasks below |
 
-4. Update session.json with resolved `parallel_mode` (auto -> single or fan-out)
+4. Update team-session.json with resolved `parallel_mode` (auto -> single or fan-out)
 
 5. **Fan-out branch creation** (when count >= 3 or forced fan-out):
    - Truncate to `max_branches` if `optimization_count > max_branches` (keep top N by priority)
@@ -274,10 +274,10 @@ PipelineId: A",
 
 ```
 // Create branch artifact directory
-Bash("mkdir -p <session>/artifacts/branches/B{NN}")
+Bash("mkdir -p {run_dir}/outputs/branches/B{NN}")
 
 // Extract single OPT detail to branch
-Write("<session>/artifacts/branches/B{NN}/optimization-detail.md",
+Write("{run_dir}/outputs/branches/B{NN}/optimization-detail.md",
   extracted OPT-{NNN} block from optimization-plan.md)
 ```
 
@@ -292,10 +292,10 @@ TASK:
   - Apply this single optimization to target files
   - Validate changes compile and pass existing tests
 CONTEXT:
-  - Session: <session-folder>
+  - Session: {run_dir}/work/team
   - Branch: B{NN}
   - Upstream artifacts: branches/B{NN}/optimization-detail.md
-  - Shared memory: <session>/.msg/meta.json (namespace: optimizer.B{NN})
+  - Shared memory: {run_dir}/work/team/.msg/meta.json (namespace: optimizer.B{NN})
 EXPECTED: Modified source files for OPT-{NNN} only
 CONSTRAINTS: Only implement this branch's optimization | Do not touch files outside OPT-{NNN} scope
 ---
@@ -313,11 +313,11 @@ TASK:
   - Benchmark only metrics relevant to this optimization
   - Compare against baseline, calculate improvement
 CONTEXT:
-  - Session: <session-folder>
+  - Session: {run_dir}/work/team
   - Branch: B{NN}
   - Upstream artifacts: baseline-metrics.json, branches/B{NN}/optimization-detail.md
-  - Shared memory: <session>/.msg/meta.json (namespace: benchmarker.B{NN})
-EXPECTED: <session>/artifacts/branches/B{NN}/benchmark-results.json
+  - Shared memory: {run_dir}/work/team/.msg/meta.json (namespace: benchmarker.B{NN})
+EXPECTED: {run_dir}/outputs/branches/B{NN}/benchmark-results.json
 CONSTRAINTS: Only benchmark this branch's metrics
 ---
 InnerLoop: false
@@ -334,11 +334,11 @@ TASK:
   - Review across 5 dimensions for this branch's changes only
   - Issue verdict: APPROVE, REVISE, or REJECT
 CONTEXT:
-  - Session: <session-folder>
+  - Session: {run_dir}/work/team
   - Branch: B{NN}
   - Upstream artifacts: branches/B{NN}/optimization-detail.md
-  - Shared memory: <session>/.msg/meta.json (namespace: reviewer.B{NN})
-EXPECTED: <session>/artifacts/branches/B{NN}/review-report.md
+  - Shared memory: {run_dir}/work/team/.msg/meta.json (namespace: reviewer.B{NN})
+EXPECTED: {run_dir}/outputs/branches/B{NN}/review-report.md
 CONSTRAINTS: Only review this branch's changes
 ---
 InnerLoop: false
@@ -348,7 +348,7 @@ BranchId: B{NN}",
 update_plan({ taskId: "REVIEW-B{NN}", addBlockedBy: ["IMPL-B{NN}"] })
 ```
 
-7. Update session.json:
+7. Update team-session.json:
    - `branches`: array of branch IDs (["B01", "B02", ...])
    - `fix_cycles`: object keyed by branch ID, all initialized to 0
 
@@ -365,7 +365,7 @@ Verify task chain integrity:
 | No circular dependencies | Trace dependency graph | Acyclic |
 | Task IDs use correct prefixes | Pattern check | Match naming rules per mode |
 | Structured descriptions complete | Each has PURPOSE/TASK/CONTEXT/EXPECTED/CONSTRAINTS | All present |
-| Branch/Pipeline IDs consistent | Cross-check with session.json | Match |
+| Branch/Pipeline IDs consistent | Cross-check with team-session.json | Match |
 
 ### Naming Rules Summary
 

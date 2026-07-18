@@ -13,7 +13,7 @@ message_types: [state_update]
 |-------|--------|----------|
 | Architecture baseline | {run_dir}/outputs/architecture-baseline.json (shared) | Yes |
 | Refactoring plan / detail | Varies by mode (see below) | Yes |
-| .msg/meta.json | <session>/wisdom/.msg/meta.json | Yes |
+| .msg/meta.json | {run_dir}/work/team/wisdom/.msg/meta.json | Yes |
 
 1. Extract session path from task description
 2. **Detect branch/pipeline context** from task description:
@@ -104,7 +104,7 @@ Compare against baseline and plan criteria:
    - Independent: `{run_dir}/outputs/pipelines/{P}/validation-results.json`
    - Content: Per-dimension: name, baseline value, current value, improvement/regression, verdict; Overall verdict: PASS / WARN / FAIL; Failure details (if any)
 
-2. Update `<session>/wisdom/.msg/meta.json` under scoped namespace:
+2. Update `{run_dir}/work/team/wisdom/.msg/meta.json` under scoped namespace:
    - Single: merge `{ "validator": { verdict, improvements, regressions, build_pass, test_pass } }`
    - Fan-out: merge `{ "validator.B{NN}": { verdict, improvements, regressions, build_pass, test_pass } }`
    - Independent: merge `{ "validator.{P}": { verdict, improvements, regressions, build_pass, test_pass } }`

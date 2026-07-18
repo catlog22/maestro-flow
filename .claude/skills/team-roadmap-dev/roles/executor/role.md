@@ -16,11 +16,11 @@ message_types:
 
 | Input | Source | Required |
 |-------|--------|----------|
-| Task JSONs | <session>/phase-{N}/.task/IMPL-*.json | Yes |
-| Prior summaries | <session>/phase-{1..N-1}/summary-*.md | No |
-| Wisdom | <session>/wisdom/ | No |
+| Task JSONs | {run_dir}/outputs/phase-{N}/.task/IMPL-*.json | Yes |
+| Prior summaries | {run_dir}/outputs/phase-{1..N-1}/summary-*.md | No |
+| Wisdom | {run_dir}/work/team/wisdom/ | No |
 
-1. Glob `<session>/phase-{N}/.task/IMPL-*.json`, error if none found
+1. Glob `{run_dir}/outputs/phase-{N}/.task/IMPL-*.json`, error if none found
 2. Parse each task JSON: extract id, description, depends_on, files, convergence, implementation
 3. Compute execution waves from dependency graph:
    - Wave 1: tasks with no dependencies
@@ -55,7 +55,7 @@ Execute waves sequentially, tasks within each wave can be parallel.
      run_in_background: false
    })
    ```
-4. Write `<session>/phase-{N}/summary-{IMPL-ID}.md` with: task ID, affected files, changes made, status
+4. Write `{run_dir}/outputs/phase-{N}/summary-{IMPL-ID}.md` with: task ID, affected files, changes made, status
 
 **Between waves**: report wave progress via team_msg (type: exec_progress)
 

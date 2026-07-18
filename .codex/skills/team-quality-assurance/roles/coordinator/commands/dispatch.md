@@ -13,7 +13,7 @@
 5. For each task (in order):
    - update_plan with structured description (see template below)
    - update_plan with addBlockedBy + owner assignment
-6. Update session.json with pipeline.tasks_total
+6. Update team-session.json with pipeline.tasks_total
 7. Validate chain (no orphans, no cycles, all refs valid)
 
 ## Task Description Template
@@ -24,15 +24,15 @@ TASK:
   - <step 1>
   - <step 2>
 CONTEXT:
-  - Session: <session-folder>
+  - Session: {run_dir}/work/team
   - Layer: <L1-unit|L2-integration|L3-e2e> (if applicable)
   - Upstream artifacts: <list>
-  - Shared memory: <session>/wisdom/.msg/meta.json
+  - Shared memory: {run_dir}/work/team/wisdom/.msg/meta.json
 EXPECTED: <artifact path> + <quality criteria>
 CONSTRAINTS: <scope limits>
 ---
 InnerLoop: <true|false>
-RoleSpec: ~  or <project>/.claude/skills/team-quality-assurance/roles/<role>/role.md
+RoleSpec: ~  or <project>/.codex/skills/team-quality-assurance/roles/<role>/role.md
 ```
 
 ## Pipeline Task Registry
@@ -105,7 +105,7 @@ SCOUT-002 (scout): Regression scan after fixes
 ```
 mcp__maestro__team_msg({
   operation: "log",
-  session_id: <session-id>,
+  session_id: <run-id>,
   from: "coordinator",
   type: "pipeline_selected",
   data: { pipeline: "<mode>", task_count: <N> }

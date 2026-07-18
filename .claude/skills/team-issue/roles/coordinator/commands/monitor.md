@@ -39,7 +39,7 @@ Worker completed. Process and advance.
 
 4. **Review gate check** (when reviewer completes):
    - If completed task is AUDIT-* AND pipeline is full or batch:
-   - Read audit report from `<session>/audits/audit-report.json`
+   - Read audit report from `{run_dir}/outputs/audits/audit-report.json`
    - Read .msg/meta.json for fix_cycles
 
    | Verdict | fix_cycles < max | Action |
@@ -54,7 +54,7 @@ Worker completed. Process and advance.
 
 5. **Deferred BUILD task creation** (when integrator completes):
    - If completed task is MARSHAL-* AND pipeline is batch:
-   - Read execution queue from `.workflow/issues/queue/execution-queue.json`
+   - Read execution queue from `{run_dir}/outputs/queue/execution-queue.json`
    - Parse parallel_groups to determine BUILD task count M
    - Create BUILD-001..M tasks dynamically (see dispatch.md Batch Pipeline BUILD section)
    - Proceed to handleSpawnNext
@@ -126,14 +126,14 @@ Find ready tasks, spawn workers, STOP.
         prompt: `## Role Assignment
       role: <role>
       role_spec: ~  or <project>/.claude/skills/team-issue/roles/<role>/role.md
-      session: <session-folder>
-      session_id: <session-id>
+      session: {run_dir}/work/team
+      session_id: <run-id>
       team_name: issue
       requirement: <task-description>
       inner_loop: false
 
       ## Progress Milestones
-      session_id: <session-id>
+      session_id: <run-id>
       Report progress via team_msg at natural phase boundaries (context loaded -> core work done -> verification).
       Report blockers immediately via team_msg type="blocker".
       Report completion via team_msg type="task_complete" after final SendMessage.
@@ -164,15 +164,15 @@ Agent({
   prompt: `## Role Assignment
 role: <role>
 role_spec: ~  or <project>/.claude/skills/team-issue/roles/<role>/role.md
-session: <session-folder>
-session_id: <session-id>
+session: {run_dir}/work/team
+session_id: <run-id>
 team_name: issue
 requirement: <task-description>
 agent_name: <role>-<N>
 inner_loop: false
 
 ## Progress Milestones
-session_id: <session-id>
+session_id: <run-id>
 Report progress via team_msg at natural phase boundaries (context loaded -> core work done -> verification).
 Report blockers immediately via team_msg type="blocker".
 Report completion via team_msg type="task_complete" after final SendMessage.
@@ -220,7 +220,7 @@ Capability gap reported mid-pipeline.
 
 1. Parse gap description
 2. Check if existing role covers it -> redirect
-3. Role count < 6 -> generate dynamic role-spec in <session>/role-specs/
+3. Role count < 6 -> generate dynamic role-spec in {run_dir}/work/team/role-specs/
 4. Create new task, spawn worker
 5. Role count >= 6 -> merge or pause
 

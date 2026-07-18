@@ -13,7 +13,7 @@ message_types: [state_update]
 |-------|--------|----------|
 | Task description | From task subject/description | Yes |
 | Session path | Extracted from task description | Yes |
-| .msg/meta.json | <session>/wisdom/.msg/meta.json | No |
+| .msg/meta.json | {run_dir}/work/team/wisdom/.msg/meta.json | No |
 
 1. Extract session path and target scope from task description
 2. Detect project type by scanning for framework markers:
@@ -80,5 +80,5 @@ After analysis, scan findings for context-aware trigger signals (based on detect
    - Evidence summary per issue
    - Detected project type and analysis methods used
 
-3. Update `<session>/wisdom/.msg/meta.json` under `analyzer` namespace:
+3. Update `{run_dir}/work/team/wisdom/.msg/meta.json` under `analyzer` namespace:
    - Read existing -> merge `{ "analyzer": { project_type, issue_count, top_issue, scope, categories } }` -> write back

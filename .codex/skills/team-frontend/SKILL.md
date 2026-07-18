@@ -33,11 +33,11 @@ contract:
     exit: []
 ---
 
-> **Agent timeout**: `spawn_agent` 异步执行且无内置超时 — 除明确短任务外一律 `spawn_agent` 后立即 `wait_agent({ timeout_ms: 3600000 })`（上限 1 小时）阻塞等待，绝不依赖 30000 默认值；`timed_out: true` 且 Agent 未完成时再次 `wait_agent` 续等，不丢弃。批量场景使用 `spawn_agents_on_csv({ max_runtime_seconds: 3600, ... })`。
-
 <required_reading>
 @~/.maestro/workflows/run-mode-lite.md
 </required_reading>
+
+> **Agent timeout**: `spawn_agent` 异步执行且无内置超时 — 除明确短任务外一律 `spawn_agent` 后立即 `wait_agent({ timeout_ms: 3600000 })`（上限 1 小时）阻塞等待，绝不依赖 30000 默认值；`timed_out: true` 且 Agent 未完成时再次 `wait_agent` 续等，不丢弃。批量场景使用 `spawn_agents_on_csv({ max_runtime_seconds: 3600, ... })`。
 
 # Team Frontend Development
 
@@ -92,9 +92,9 @@ Parse `$ARGUMENTS`:
 ## Shared Constants
 
 - **Session prefix**: `FE`
-- **Session path**: `.workflow/.team/FE-<slug>-<date>/`
+- **Session path**: `{run_dir}/work/team/`
 - **CLI tools**: `maestro delegate --mode analysis` (read-only), `maestro delegate --mode write` (modifications)
-- **Message bus**: `mcp__maestro__team_msg(session_id=<session-id>, ...)`
+- **Message bus**: `mcp__maestro__team_msg(session_id=<run-id>, ...)`
 
 ## Worker Spawn Template
 
@@ -114,22 +114,22 @@ spawn_agent({ task_name: "<role>", message: "Spawn <role> worker", fork_turns: "
 ## Session Directory
 
 ```
-.workflow/.team/FE-<slug>-<YYYY-MM-DD>/
+{run_dir}/work/team/
 ├── .msg/
 │   ├── messages.jsonl          # Message bus log
 │   └── meta.json               # Session state + cross-role state
 ├── task-analysis.json          # Coordinator analyze output
 ├── wisdom/                     # Cross-task knowledge
-├── analysis/                   # Analyst output
+├── {run_dir}/outputs/analysis/                   # Analyst output
 │   ├── design-intelligence.json
 │   └── requirements.md
-├── architecture/               # Architect output
+├── {run_dir}/outputs/architecture/               # Architect output
 │   ├── design-tokens.json
 │   ├── component-specs/
 │   └── project-structure.md
-├── qa/                         # QA output
+├── {run_dir}/outputs/qa/                         # QA output
 │   └── audit-<NNN>.md
-└── build/                      # Developer output
+└── {run_dir}/outputs/build/                      # Developer output
 ```
 
 ## Specs Reference

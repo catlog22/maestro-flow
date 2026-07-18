@@ -163,7 +163,7 @@ Capability gap reported mid-pipeline.
 
 1. Parse gap description
 2. Check if existing role covers it -> redirect
-3. Role count < 5 -> generate dynamic role-spec in <session>/role-specs/
+3. Role count < 5 -> generate dynamic role-spec in {run_dir}/work/team/role-specs/
 4. Create new task, spawn worker
 5. Role count >= 5 -> merge or pause
 

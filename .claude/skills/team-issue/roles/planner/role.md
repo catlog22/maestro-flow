@@ -12,17 +12,17 @@ message_types: [solution_ready, multi_solution, error]
 
 | Input | Source | Required |
 |-------|--------|----------|
-| Issue ID | Task description (GH-\d+ or ISS-\d{8}-\d{6}) | Yes |
-| Explorer context | `<session>/explorations/context-<issueId>.json` | No |
+| Issue ID | Task description (GH-\d+ or ISS-\d{8}-\d{3}) | Yes |
+| Explorer context | `{run_dir}/work/team/explorations/context-<issueId>.json` | No |
 | Review feedback | Task description (for SOLVE-fix tasks) | No |
-| wisdom meta | <session>/wisdom/.msg/meta.json | No |
+| wisdom meta | {run_dir}/work/team/wisdom/.msg/meta.json | No |
 
-1. Extract issue ID from task description via regex: `(?:GH-\d+|ISS-\d{8}-\d{6})`
+1. Extract issue ID from task description via regex: `(?:GH-\d+|ISS-\d{8}-\d{3})`
 2. If no issue ID found -> report error, STOP
 3. Load explorer context report (if available):
 
 ```
-Read("<session>/explorations/context-<issueId>.json")
+Read("{run_dir}/work/team/explorations/context-<issueId>.json")
 ```
 
 4. Check if this is a revision task (SOLVE-fix-N):
@@ -36,9 +36,9 @@ Read("<session>/explorations/context-<issueId>.json")
 
 ```
 Bash("maestro delegate \\\"
-PURPOSE: Design solution for issue <issueId> and decompose into implementation tasks; success = solution bound to issue with task breakdown
+PURPOSE: Design solution for issue <issueId> and decompose into implementation tasks; success = canonical Run solution artifact with task breakdown
 
-TASK: • Load issue details from ccw issue status • Analyze explorer context • Design solution approach • Break down into implementation tasks • Generate solution JSON • Bind solution to issue
+TASK: • Load issue details via Maestro maestro-manage issue status • Analyze explorer context • Design solution approach • Break down into implementation tasks • Generate solution JSON • Record the Run artifact path on the issue
 
 MODE: analysis
 
@@ -48,8 +48,8 @@ Relevant files: <explorerContext.relevant_files>
 Complexity: <explorerContext.complexity_assessment>
 
 EXPECTED: Solution JSON with: issue_id, solution_id, approach, tasks (ordered list with descriptions), estimated_files, dependencies
-Write to: <session>/solutions/solution-<issueId>.json
-Then bind: ccw issue bind <issueId> <solution_id>
+Write to: {run_dir}/outputs/solutions/solution-<issueId>.json
+Then record: `Bash("maestro issue update <issueId> --fix-direction \"Solution: {run_dir}/outputs/solutions/solution-<issueId>.json\" --note \"Solution artifact created\" --json")`
 
 CONSTRAINTS: Follow existing patterns | Minimal changes | Address reviewer feedback if SOLVE-fix task
 \" --tool agy --mode analysis", { run_in_background: false })
@@ -60,7 +60,7 @@ CONSTRAINTS: Follow existing patterns | Minimal changes | Address reviewer feedb
 **Parse result**:
 
 ```
-Read("<session>/solutions/solution-<issueId>.json")
+Read("{run_dir}/outputs/solutions/solution-<issueId>.json")
 ```
 
 ## Phase 4: Solution Selection & Reporting
@@ -73,7 +73,7 @@ Read("<session>/solutions/solution-<issueId>.json")
 | Multiple solutions pending | `multi_solution` | Report for user selection |
 | No solution generated | `error` | Report failure to coordinator |
 
-Write solution summary to `<session>/solutions/solution-<issueId>.json`.
+Write solution summary to `{run_dir}/outputs/solutions/solution-<issueId>.json`.
 
-Update `<session>/wisdom/.msg/meta.json` under `planner` namespace:
+Update `{run_dir}/work/team/wisdom/.msg/meta.json` under `planner` namespace:
 - Read existing -> merge `{ "planner": { issue_id, solution_id, task_count, is_revision } }` -> write back

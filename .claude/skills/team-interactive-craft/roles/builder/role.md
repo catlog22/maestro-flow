@@ -11,10 +11,10 @@ message_types: [state_update]
 
 | Input | Source | Required |
 |-------|--------|----------|
-| Interaction blueprints | <session>/interaction/blueprints/*.md | Yes |
-| Research artifacts | <session>/research/*.json | Yes |
-| .msg/meta.json | <session>/wisdom/.msg/meta.json | Yes |
-| A11y audit feedback | <session>/a11y/a11y-audit-*.md | Only for GC fix tasks |
+| Interaction blueprints | {run_dir}/outputs/interaction/blueprints/*.md | Yes |
+| Research artifacts | {run_dir}/outputs/research/*.json | Yes |
+| .msg/meta.json | {run_dir}/work/team/wisdom/.msg/meta.json | Yes |
+| A11y audit feedback | {run_dir}/outputs/a11y/a11y-audit-*.md | Only for GC fix tasks |
 
 1. Extract session path from task description
 2. Read interaction blueprint for target component
@@ -27,7 +27,7 @@ message_types: [state_update]
 **Component Implementation (BUILD-001, BUILD-002, etc.)**:
 
 ### JavaScript (ES Module)
-Implement component class in `<session>/build/components/{name}.js`:
+Implement component class in `{run_dir}/outputs/build/components/{name}.js`:
 
 ```javascript
 // Structure template (adapt to component type)
@@ -83,7 +83,7 @@ Requirements:
 - Auto-init via data attribute for progressive enhancement
 
 ### CSS (Custom Properties)
-Implement styles in `<session>/build/components/{name}.css`:
+Implement styles in `{run_dir}/outputs/build/components/{name}.css`:
 
 ```css
 /* Structure template */
@@ -210,5 +210,5 @@ Requirements:
 | No forced reflow | No offsetWidth/getBoundingClientRect in animation loop |
 | Cleanup | destroy() disconnects all observers and listeners |
 
-5. Update `<session>/wisdom/.msg/meta.json` under `builder` namespace:
+5. Update `{run_dir}/work/team/wisdom/.msg/meta.json` under `builder` namespace:
    - Read existing -> merge `{ "builder": { task_type, component_name, file_count, output_dir, states_implemented, events_bound } }` -> write back

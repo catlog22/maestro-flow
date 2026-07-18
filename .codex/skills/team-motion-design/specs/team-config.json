@@ -89,11 +89,11 @@
   },
 
   "session_dirs": {
-    "base": ".workflow/.team/MD-{slug}-{YYYY-MM-DD}/",
-    "research": "research/",
-    "choreography": "choreography/",
-    "animations": "animations/",
-    "testing": "testing/",
-    "messages": ".workflow/.team-msg/{team-name}/"
+    "base": "{run_dir}/work/team/",
+    "research": "{run_dir}/outputs/research/",
+    "choreography": "{run_dir}/outputs/choreography/",
+    "animations": "{run_dir}/outputs/animations/",
+    "testing": "{run_dir}/outputs/testing/",
+    "messages": "{run_dir}/work/team/.msg/"
   }
 }

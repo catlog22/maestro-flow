@@ -122,7 +122,7 @@ TeamCreate if team does not exist.
 
 **Workflow**:
 1. Load session state -> count completed tasks, duration
-2. List all deliverables with output paths in `<session>/artifacts/`
+2. List all deliverables with output paths in `{run_dir}/outputs/`
 3. Include discussion summaries (if inline discuss was used)
 4. Summarize wisdom accumulated during execution
 5. Output report:
@@ -139,7 +139,7 @@ TeamCreate if team does not exist.
 [executor] Roles: <role-list>
 [executor] Duration: <elapsed>
 [executor]
-[executor] Session: <session-folder>
+[executor] Session: {run_dir}/work/team
 [executor] ============================================
 ```
 

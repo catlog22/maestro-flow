@@ -57,7 +57,7 @@ task-analysis.json encodes the pipeline:
 Dynamic — loaded from session role-specs at runtime:
 
 ```
-<session>/role-specs/<role-name>.md -> team-worker agent
+{run_dir}/work/team/role-specs/<role-name>.md -> team-worker agent
 ```
 
 Role-spec files contain YAML frontmatter:

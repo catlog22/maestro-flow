@@ -46,7 +46,7 @@ Session: `.workflow/.maestro/{session_id}/status.json`.
 <context>
 $ARGUMENTS — user intent text, or special keywords.
 
-**Keywords:** `continue`/`next`/`go` → state-based routing; `status` → `Skill("manage", "status")`
+**Keywords:** `continue`/`next`/`go` → state-based routing; `status` → `Skill("maestro-manage", "status")`
 
 **Flags:**
 - `-y` / `--yes` — Auto mode: skip clarification, skip confirmation, auto-skip on errors
@@ -63,7 +63,7 @@ $ARGUMENTS — user intent text, or special keywords.
 3. **Auto flag pass-through** — 仅当用户传入 `-y` 时透传 `-y` 到 skill args
 4. **Decomposition contract — maestro owns** — `source=="maestro"` 的 session 由 maestro 拥有分解契约（`decomposition_owner="maestro"`）：S_DECOMPOSE 产出 additive block (`boundary_contract`, `execution_criteria`, `task_decomposition`)，下游 ralph 只消费不覆盖（当 `decomposition_owner == "maestro"` 时跳过二次提问，仅做 shape 校验 + 缺省字段补齐）
 5. **status.json 唯一真源** — 不生成 `goal-checklist.md` 或外部清单
-6. **执行步骤统一通过 `maestro ralph next` 加载** — `command_scope`/`command_path` 由 `maestro ralph skills --platform codex --json --quiet` 预校验（project 覆盖 global，限定 `.claude/`）；decision 节点不走 CLI，走 `spawn_agent({ task_name: "maestro_ralph", message: "Execute skill maestro-ralph" })` handoff
+6. **执行步骤统一通过 `maestro ralph next` 加载** — `command_scope`/`command_path` 由 `maestro ralph skills --platform codex --steps --json --quiet` 预校验（project 覆盖 global；command/skill 来自平台目录，step 来自 prepare/workflows 步骤注册表）；decision 节点不走 CLI，走 `spawn_agent({ task_name: "maestro_ralph", message: "Execute skill maestro-ralph" })` handoff
 7. **Topology awareness** — chain catalog 含 grill / brainstorm / blueprint / analyze-macro / analyze / roadmap / plan(三路径) / execute / ...；scope_verdict 由 ralph 在 `post-analyze-scope` 决定
 8. **Grill `-y` 透传** — `-y` auto mode 透传 `-y` 到 grill args（grill 自身 Auto mode 用代码代答），不删除 grill stage；grill 仍产出 grill-report/terminology/context-package 供下游 brainstorm
 9. **D-007-S session 解析** — session 由 `state.json.sessions[]` 的 `session_id` 或 intent slug 匹配
@@ -185,14 +185,14 @@ Execute a saved workflow template through the ralph chain runner. Flags: `--cont
 3. Select chain from chainMap，遵循拓扑约束：
    - 压力测试/拷问/验证假设/grill/stress-test → `grill`（**-y 模式透传 `-y` 到 grill，grill 以 Auto mode 执行，不跳过**）
    - 头脑风暴/探索 → `brainstorm`
-   - 学习/阅读代码/跟读/follow → `Skill("learn", "follow")`；调查/为什么/investigate → `Skill("learn", "investigate")`；分解/模式/decompose → `Skill("learn", "decompose")`；评审/挑战/second-opinion → `Skill("learn", "consult")`；回顾/retro → step `retrospective`（`maestro run prepare --platform codex retrospective` + `maestro run create retrospective --session YYYYMMDD-retrospective-{topic} --intent "{goal}"`）
+   - 学习/阅读代码/跟读/follow → `Skill("maestro-learn", "follow")`；调查/为什么/investigate → `Skill("maestro-learn", "investigate")`；分解/模式/decompose → `Skill("maestro-learn", "decompose")`；评审/挑战/second-opinion → `Skill("maestro-learn", "consult")`；回顾/retro → step `retrospective`（`maestro run prepare --platform codex retrospective` + `maestro run create retrospective --session YYYYMMDD-retrospective-{topic} --intent "{goal}"`）
    - 正式规格/spec-generate/7-phase → `blueprint`
    - 项目初始化 → `init`
    - 宽/中等意图 + 无 session 上下文 → `analyze-macro`（产 scope_verdict，由 ralph 在 `post-analyze-scope` 决定是否插入 roadmap+analyze 或直跳 plan --from analyze）
    - session 上下文 → `analyze --session {session}` → `plan --session {session}` → `execute --session {session}` → quality pipeline
    - 已有 analyze artifact 想直达执行 → `plan --from analyze:{ANL_ID}` → execute → quality pipeline
    - 已有 blueprint artifact → `plan --from blueprint:{BLP_ID}` → execute → quality pipeline
-4. 执行 step：`Bash("maestro ralph skills --platform codex --json --quiet")` 预校验 skill 名，命中写绝对路径到 `command_path`，未命中标 `missing`；同时写 `step.stage` / `step.scope` / `step.source_artifact_ref`。decision 节点不解析 command_path
+4. 执行 step：`Bash("maestro ralph skills --platform codex --steps --json --quiet")` 预校验 skill 名（命中 command、skill 或 step 任一即通过；生命周期 step 名 analyze/plan/execute/… 由 `--steps` 步骤注册表命中），命中写绝对路径到 `command_path`，未命中标 `missing`；同时写 `step.stage` / `step.scope` / `step.source_artifact_ref`。decision 节点不解析 command_path
 
 ### A_CLARIFY
 
@@ -291,7 +291,7 @@ Execute a saved workflow template through the ralph chain runner. Flags: `--cont
 - [ ] Chain selected and confirmed (or auto-confirmed)
 - [ ] Session dir created with status.json before execution; decomposition fields additive-only
 - [ ] 执行 step 含 `command_scope` + `command_path` + `completion_confirmed`；decision step 由 `step.decision` 标识
-- [ ] `command_scope`/`command_path` 由 `maestro ralph skills --platform codex --json --quiet` 预校验（project 覆盖 global）
+- [ ] `command_scope`/`command_path` 由 `maestro ralph skills --platform codex --steps --json --quiet` 预校验（project 覆盖 global，含步骤注册表）
 - [ ] Session schema 含 `ralph_protocol_version: "2"` + `active_step_index: null` + step.load 占位
 - [ ] 用户传入 `-y` 时透传到 skill args
 - [ ] All chains dispatched via maestro-ralph

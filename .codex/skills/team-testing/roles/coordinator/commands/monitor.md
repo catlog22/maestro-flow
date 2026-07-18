@@ -29,10 +29,10 @@
 
 | Prefix | Role | Role Spec | inner_loop |
 |--------|------|-----------|------------|
-| STRATEGY-* | strategist | `~  or <project>/.claude/skills/team-testing/roles/strategist/role.md` | false |
-| TESTGEN-* | generator | `~  or <project>/.claude/skills/team-testing/roles/generator/role.md` | true |
-| TESTRUN-* | executor | `~  or <project>/.claude/skills/team-testing/roles/executor/role.md` | true |
-| TESTANA-* | analyst | `~  or <project>/.claude/skills/team-testing/roles/analyst/role.md` | false |
+| STRATEGY-* | strategist | `~  or <project>/.codex/skills/team-testing/roles/strategist/role.md` | false |
+| TESTGEN-* | generator | `~  or <project>/.codex/skills/team-testing/roles/generator/role.md` | true |
+| TESTRUN-* | executor | `~  or <project>/.codex/skills/team-testing/roles/executor/role.md` | true |
+| TESTANA-* | analyst | `~  or <project>/.codex/skills/team-testing/roles/analyst/role.md` | false |
 
 ## handleCallback
 
@@ -65,26 +65,26 @@ TASK:
   - Revise tests to address failures
   - Improve coverage for uncovered areas
 CONTEXT:
-  - Session: <session-folder>
+  - Session: {run_dir}/work/team
   - Layer: <layer>
-  - Previous results: <session>/results/run-<N>.json
-EXPECTED: Revised test files in <session>/tests/<layer>/
+  - Previous results: {run_dir}/outputs/results/run-<N>.json
+EXPECTED: Revised test files in {run_dir}/outputs/tests/<layer>/
 CONSTRAINTS: Only modify test files
 ---
 InnerLoop: true
-RoleSpec: ~  or <project>/.claude/skills/team-testing/roles/generator/role.md"
+RoleSpec: ~  or <project>/.codex/skills/team-testing/roles/generator/role.md"
 })
 update_plan({
   subject: "TESTRUN-<layer>-fix-<round>: Re-execute <layer> (GC #<round>)",
   description: "PURPOSE: Re-execute tests after revision | Success: pass_rate >= 0.95
 CONTEXT:
-  - Session: <session-folder>
+  - Session: {run_dir}/work/team
   - Layer: <layer>
   - Input: tests/<layer>
-EXPECTED: <session>/results/run-<N>-gc.json
+EXPECTED: {run_dir}/outputs/results/run-<N>-gc.json
 ---
 InnerLoop: true
-RoleSpec: ~  or <project>/.claude/skills/team-testing/roles/executor/role.md",
+RoleSpec: ~  or <project>/.codex/skills/team-testing/roles/executor/role.md",
   blockedBy: ["TESTGEN-<layer>-fix-<round>"]
 })
 ```
@@ -181,7 +181,7 @@ spawn_agent({ task_name: "<role>", message: "Spawn <role> worker for <subject>",
    - TESTGEN-001 + TESTGEN-002 both unblocked -> spawn both in parallel (name: "generator-1", "generator-2")
    - TESTRUN-001 + TESTRUN-002 both unblocked -> spawn both in parallel (name: "executor-1", "executor-2")
 
-6. Update session.json, output summary, STOP
+6. Update team-session.json, output summary, STOP
 
 ## handleComplete
 
@@ -203,7 +203,7 @@ Capability gap reported mid-pipeline.
 
 1. Parse gap description
 2. Check if existing role covers it -> redirect
-3. Role count < 5 -> generate dynamic role-spec in <session>/role-specs/
+3. Role count < 5 -> generate dynamic role-spec in {run_dir}/work/team/role-specs/
 4. Create new task, spawn worker
 5. Role count >= 5 -> merge or pause
 
@@ -219,7 +219,7 @@ On every coordinator wake:
 After every handler execution:
 1. Reconcile active_workers with actual list_agents states
 2. Remove entries for completed/deleted tasks
-3. Write updated session.json
+3. Write updated team-session.json
 4. STOP (wait for next callback)
 
 ## Error Handling

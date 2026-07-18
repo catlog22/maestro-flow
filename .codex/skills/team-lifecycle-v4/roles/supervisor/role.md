@@ -25,7 +25,7 @@ message_types:
 - Verify process compliance (upstream consumed, artifacts exist, wisdom contributed)
 - Analyze error/retry patterns in message bus
 - Output supervision_report with clear verdict (pass/warn/block)
-- Write checkpoint report to `<session>/artifacts/CHECKPOINT-NNN-report.md`
+- Write checkpoint report to `{run_dir}/outputs/CHECKPOINT-NNN-report.md`
 
 ### MUST NOT
 - Perform deep quality scoring (reviewer's job — 4 dimensions × 25% weight)
@@ -41,7 +41,7 @@ Load ALL available context for comprehensive supervision:
 
 ### Step 1: Message Bus Analysis
 ```
-team_msg(operation="list", session_id=<session_id>)
+team_msg(operation="list", session_id=<run-id>)
 ```
 - Collect all messages since session start
 - Group by: type, from, error count
@@ -61,7 +61,7 @@ team_msg(operation="get_state")  // all roles
 - DO NOT deep-read entire documents — scan headings + key sections only
 
 ### Step 4: Wisdom Loading
-- Read `<session>/wisdom/*.md` for accumulated team knowledge
+- Read `{run_dir}/work/team/wisdom/*.md` for accumulated team knowledge
 - Check for contradictions between wisdom entries and current artifacts
 
 ## Phase 3: Supervision Checks
@@ -125,7 +125,7 @@ checkpoint_score = sum(check_scores) / num_checks
 
 ### Report Generation
 
-Write to `<session>/artifacts/CHECKPOINT-NNN-report.md`:
+Write to `{run_dir}/outputs/CHECKPOINT-NNN-report.md`:
 
 ```markdown
 # Checkpoint Report: CHECKPOINT-NNN
@@ -168,7 +168,7 @@ Tasks checked: [DRAFT-001, DRAFT-002]
 {
   "status": "task_complete",
   "task_id": "CHECKPOINT-001",
-  "ref": "<session>/artifacts/CHECKPOINT-001-report.md",
+  "ref": "{run_dir}/outputs/CHECKPOINT-001-report.md",
   "key_findings": ["Terminology aligned", "Decision chain consistent"],
   "decisions": ["Proceed to architecture phase"],
   "verification": "self-validated",

@@ -73,7 +73,7 @@
 | maestro-init + roadmap/blueprint (steps) | `guide/quick-start-guide.md` | planned |
 | maestro-ralph | `guide/maestro-ralph-guide.md` | planned |
 | maestro (协调器) | `guide/maestro-coordinator-guide.md` | planned |
-| /manage 子命令 | `guide/command-usage-guide.md` (管理) | planned |
+| /maestro-manage 子命令 | `guide/command-usage-guide.md` (管理) | planned |
 | review/test/auto-test/debug (steps) | `guide/command-usage-guide.md` (质量) | planned |
 | delegate | `guide/delegate-async-guide.md` | planned |
 | overlay/amend | `guide/overlay-guide.md` | planned |

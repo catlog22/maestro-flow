@@ -39,7 +39,7 @@ Event-driven pipeline coordination with Spawn-and-Stop pattern. Role names are r
 
 | Input | Source | Required |
 |-------|--------|----------|
-| Session file | `<session-folder>/team-session.json` | Yes |
+| Session file | `{run_dir}/work/team/team-session.json` | Yes |
 | Task list | `list_agents()` | Yes |
 | Active workers | session.active_workers[] | Yes |
 | Role registry | session.roles[] | Yes |
@@ -180,7 +180,7 @@ Ready tasks found?
       |   +- YES -> SKIP spawn (existing worker will pick it up via inner loop)
       |   +- NO -> normal spawn below
       +- update_plan -> in_progress
-      +- team_msg log -> task_unblocked (session_id=<session-id>)
+      +- team_msg log -> task_unblocked (session_id=<run-id>)
       +- Spawn team-worker (see spawn tool call below)
       +- Add to session.active_workers
       Update session file -> output summary -> STOP
@@ -264,7 +264,7 @@ Parse capability_gap message:
   +- Generate new role-spec:
       1. Read specs/role-spec-template.md
       2. Fill template with: frontmatter (role, prefix, inner_loop, message_types) + Phase 2-4 content
-      3. Write to <session-folder>/role-specs/<new-role>.md
+      3. Write to {run_dir}/work/team/role-specs/<new-role>.md
       4. Add to session.roles[]
   +- Create new task(s) via update_plan
   +- Update team-session.json

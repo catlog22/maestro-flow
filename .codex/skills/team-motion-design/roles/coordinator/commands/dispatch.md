@@ -10,12 +10,12 @@
 |-------|--------|----------|
 | User requirement | From coordinator Phase 1 | Yes |
 | Session folder | From coordinator Phase 2 | Yes |
-| Pipeline mode | From session.json `pipeline` | Yes |
-| Framework config | From session.json `framework` | Yes |
+| Pipeline mode | From team-session.json `pipeline` | Yes |
+| Framework config | From team-session.json `framework` | Yes |
 
-1. Load user requirement and motion scope from session.json
+1. Load user requirement and motion scope from team-session.json
 2. Load pipeline stage definitions from specs/pipelines.md
-3. Read `pipeline` and `framework` from session.json
+3. Read `pipeline` and `framework` from team-session.json
 
 ## Phase 3: Task Chain Creation (Mode-Branched)
 
@@ -32,11 +32,11 @@ TASK:
   - <step 2: specific action>
   - <step 3: specific action>
 CONTEXT:
-  - Session: <session-folder>
+  - Session: {run_dir}/work/team
   - Scope: <motion-scope>
   - Framework: <framework>
   - Upstream artifacts: <artifact-1>, <artifact-2>
-  - Shared memory: <session>/wisdom/.msg/meta.json
+  - Shared memory: {run_dir}/work/team/wisdom/.msg/meta.json
 EXPECTED: <deliverable path> + <quality criteria>
 CONSTRAINTS: <scope limits, focus areas>"
 })
@@ -66,11 +66,11 @@ TASK:
   - Catalog existing easing functions and timing patterns
   - Identify properties being animated (safe vs unsafe for compositor)
 CONTEXT:
-  - Session: <session-folder>
+  - Session: {run_dir}/work/team
   - Scope: <motion-scope>
   - Framework: <framework>
-  - Shared memory: <session>/wisdom/.msg/meta.json
-EXPECTED: <session>/research/*.json | All 3 research files with valid JSON
+  - Shared memory: {run_dir}/work/team/wisdom/.msg/meta.json
+EXPECTED: {run_dir}/outputs/research/*.json | All 3 research files with valid JSON
 CONSTRAINTS: Read-only analysis | Focus on existing animation patterns"
 })
 update_plan({ taskId: "MRESEARCH-001", owner: "motion-researcher" })
@@ -88,12 +88,12 @@ TASK:
   - Define reduced-motion fallback tokens
   - Reference specs/motion-tokens.md for token schema
 CONTEXT:
-  - Session: <session-folder>
+  - Session: {run_dir}/work/team
   - Scope: <motion-scope>
   - Framework: <framework>
-  - Upstream artifacts: research/*.json
-  - Shared memory: <session>/wisdom/.msg/meta.json
-EXPECTED: <session>/choreography/motion-tokens.json | Complete token system
+  - Upstream artifacts: {run_dir}/outputs/research/*.json
+  - Shared memory: {run_dir}/work/team/wisdom/.msg/meta.json
+EXPECTED: {run_dir}/outputs/choreography/motion-tokens.json | Complete token system
 CONSTRAINTS: Follow motion-tokens.md schema | All tokens must have reduced-motion fallback"
 })
 update_plan({ taskId: "CHOREO-001", addBlockedBy: ["MRESEARCH-001"], owner: "choreographer" })
@@ -110,12 +110,12 @@ TASK:
   - Add prefers-reduced-motion media query overrides
   - Ensure compositor-only properties (transform, opacity) per specs/gpu-constraints.md
 CONTEXT:
-  - Session: <session-folder>
+  - Session: {run_dir}/work/team
   - Scope: <motion-scope>
   - Framework: <framework>
   - Upstream artifacts: choreography/motion-tokens.json
-  - Shared memory: <session>/wisdom/.msg/meta.json
-EXPECTED: <session>/animations/keyframes/*.css | Token CSS + utility classes + reduced-motion
+  - Shared memory: {run_dir}/work/team/wisdom/.msg/meta.json
+EXPECTED: {run_dir}/outputs/animations/keyframes/*.css | Token CSS + utility classes + reduced-motion
 CONSTRAINTS: Compositor-only animations | No layout-triggering properties | will-change budget"
 })
 update_plan({ taskId: "ANIM-001", addBlockedBy: ["CHOREO-001"], owner: "animator" })
@@ -133,12 +133,12 @@ TASK:
   - Validate prefers-reduced-motion @media query presence
   - Static code analysis as fallback if Chrome DevTools unavailable
 CONTEXT:
-  - Session: <session-folder>
+  - Session: {run_dir}/work/team
   - Scope: <motion-scope>
   - Framework: <framework>
   - Upstream artifacts: animations/keyframes/*.css, choreography/motion-tokens.json
-  - Shared memory: <session>/wisdom/.msg/meta.json
-EXPECTED: <session>/testing/reports/perf-report-001.md | Performance validation report
+  - Shared memory: {run_dir}/work/team/wisdom/.msg/meta.json
+EXPECTED: {run_dir}/outputs/testing/reports/perf-report-001.md | Performance validation report
 CONSTRAINTS: Target 60fps | Flag any layout-triggering properties"
 })
 update_plan({ taskId: "MTEST-001", addBlockedBy: ["ANIM-001"], owner: "motion-tester" })
@@ -176,11 +176,11 @@ TASK:
   - Add scroll-linked parallax (if specified in choreography)
   - Ensure prefers-reduced-motion fallback
 CONTEXT:
-  - Session: <session-folder>
+  - Session: {run_dir}/work/team
   - Section: <section-name>
   - Upstream artifacts: choreography/sequences/<section>.md, choreography/motion-tokens.json
-  - Shared memory: <session>/wisdom/.msg/meta.json
-EXPECTED: <session>/animations/keyframes/<section>.css + orchestrators/<section>.js
+  - Shared memory: {run_dir}/work/team/wisdom/.msg/meta.json
+EXPECTED: {run_dir}/outputs/animations/keyframes/<section>.css + orchestrators/<section>.js
 CONSTRAINTS: Compositor-only | will-change budget | Follow motion-tokens"
 })
 update_plan({ taskId: "ANIM-<NNN>", addBlockedBy: ["CHOREO-001"], owner: "animator" })

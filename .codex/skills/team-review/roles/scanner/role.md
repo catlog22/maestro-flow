@@ -17,7 +17,7 @@ message_types:
 |-------|--------|----------|
 | Task description | From task subject/description | Yes |
 | Session path | Extracted from task description | Yes |
-| .msg/meta.json | <session>/.msg/meta.json | No |
+| .msg/meta.json | {run_dir}/work/team/.msg/meta.json | No |
 
 1. Extract session path, target, dimensions, quick flag from task description
 2. Resolve target files (glob pattern or directory -> `**/*.{ts,tsx,js,jsx,py,go,java,rs}`)
@@ -33,7 +33,7 @@ message_types:
 | mypy | mypy available + `pyproject.toml` | COR |
 | npmAudit | `package-lock.json` exists | SEC |
 
-5. Load wisdom files from `<session>/wisdom/` if they exist
+5. Load wisdom files from `{run_dir}/work/team/wisdom/` if they exist
 
 ## Phase 3: Scan Execution
 
@@ -42,7 +42,7 @@ message_types:
 **Standard mode** (sequential):
 
 ### 3A: Toolchain Scan
-Run detected tools in parallel via Bash backgrounding. Each tool writes to `<session>/scan/tmp/<tool>.{json|txt}`. After `wait`, parse each output into normalized findings:
+Run detected tools in parallel via Bash backgrounding. Each tool writes to `{run_dir}/outputs/scan/tmp/<tool>.{json|txt}`. After `wait`, parse each output into normalized findings:
 - tsc: `file(line,col): error TSxxxx: msg` -> dimension=correctness, source=tool:tsc
 - eslint: JSON array -> severity 2=correctness/high, else=maintainability/medium
 - semgrep: `{results[]}` -> dimension=security, severity from extra.severity
@@ -50,7 +50,7 @@ Run detected tools in parallel via Bash backgrounding. Each tool writes to `<ses
 - mypy: `file:line: error: msg [code]` -> dimension=correctness
 - npm audit: `{vulnerabilities:{}}` -> dimension=security, category=dependency
 
-Write `<session>/scan/toolchain-findings.json`.
+Write `{run_dir}/outputs/scan/toolchain-findings.json`.
 
 ### 3B: Semantic Scan (LLM via CLI)
 Build prompt with target file patterns, toolchain dedup summary, and per-dimension focus areas:
@@ -59,7 +59,7 @@ Build prompt with target file patterns, toolchain dedup summary, and per-dimensi
 - PRF: Algorithm complexity, N+1 queries, unnecessary sync, memory leaks, missing caching
 - MNT: Architectural coupling, abstraction leaks, convention violations, dead code
 
-Execute via `maestro delegate --role review --mode analysis --rule analysis-review-code-quality`. Parse JSON array response, validate required fields (dimension, title, location.file), enforce per-dimension limit (max 5 each), filter minimum severity (medium+). Write `<session>/scan/semantic-findings.json`.
+Execute via `maestro delegate --role review --mode analysis --rule analysis-review-code-quality`. Parse JSON array response, validate required fields (dimension, title, location.file), enforce per-dimension limit (max 5 each), filter minimum severity (medium+). Write `{run_dir}/outputs/scan/semantic-findings.json`.
 
 ### Tech Profile Scan
 
@@ -73,7 +73,7 @@ After scan execution, emit context-aware trigger signals (based on detected code
 
 1. Merge toolchain + semantic findings, deduplicate (same file + line + dimension = duplicate)
 2. Assign dimension-prefixed IDs: SEC-001, COR-001, PRF-001, MNT-001
-3. Write `<session>/scan/scan-results.json` with schema: `{scan_date, target, dimensions, quick_mode, total_findings, by_severity, by_dimension, findings[]}`
+3. Write `{run_dir}/outputs/scan/scan-results.json` with schema: `{scan_date, target, dimensions, quick_mode, total_findings, by_severity, by_dimension, findings[]}`
 4. Each finding: `{id, dimension, category, severity, title, description, location:{file,line}, source, suggested_fix, effort, confidence}`
-5. Update `<session>/.msg/meta.json` with scan summary (findings_count, by_severity, by_dimension)
-6. Contribute discoveries to `<session>/wisdom/` files
+5. Update `{run_dir}/work/team/.msg/meta.json` with scan summary (findings_count, by_severity, by_dimension)
+6. Contribute discoveries to `{run_dir}/work/team/wisdom/` files

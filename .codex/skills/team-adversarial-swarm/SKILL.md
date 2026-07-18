@@ -84,12 +84,12 @@ SKILL.md (Coordinator — this file)
 **所有依赖均在本 skill 内部，无外部引用。**
 
 - **Python ACO 脚本**: `<this-skill>/scripts/aco.py`
-  - 运行时解析: `Glob(".claude/skills/team-adversarial-swarm/scripts/aco.py")`
+  - 运行时解析: `Glob(".codex/skills/team-adversarial-swarm/scripts/aco.py")`
   - 依赖模块: `pheromone.py`, `scoring.py`（同目录）
   - 命令: `init` / `select` / `update` / `converged` / `report`
   - 协议: [specs/swarm-protocol.md](specs/swarm-protocol.md)
 - **Workflow 脚本**: `<this-skill>/workflows/wf-swarm-*.js`
-  - 运行时解析: `Glob(".claude/skills/team-adversarial-swarm/workflows/wf-swarm-*.js")`
+  - 运行时解析: `Glob(".codex/skills/team-adversarial-swarm/workflows/wf-swarm-*.js")`
 
 ## Specs Reference
 
@@ -104,7 +104,7 @@ SKILL.md (Coordinator — this file)
 ## Session Directory
 
 ```
-.workflow/.team/TAS-<slug>-<date>/
+{run_dir}/work/team/
 ├── swarm-config.json       # Phase 1 output
 ├── pheromone/              # ACO state (managed by aco.py)
 │   ├── current.json
@@ -128,7 +128,7 @@ SKILL.md (Coordinator — this file)
 
 ### Phase 0: Resume Check
 
-1. `Glob(".workflow/.team/TAS-*/swarm-config.json")` → 查找活跃 session
+1. `Glob("{run_dir}/work/team/swarm-config.json")` → 查找活跃 session
 2. 若存在且有 `workflows/converge-*.json` 未标记 converged → 恢复到对应迭代
 3. 若无活跃 session → Phase 1
 
@@ -154,13 +154,13 @@ SKILL.md (Coordinator — this file)
 }
 ```
 
-Write 到 `<session>/swarm-config.json`。
+Write 到 `{run_dir}/work/team/swarm-config.json`。
 
 ### Phase 2: ACO Init
 
 1. 创建 session 目录: `TAS-<slug>-<date>`
 2. 解析 aco.py 路径（从 team-swarm skill 继承）
-3. `Bash: python <aco.py> --session <session> init`
+3. `Bash: python <aco.py> --session {run_dir}/work/team init`
 4. 解析输出: `{ n_nodes, n_edges, pheromone_path }`
 
 ### Phase 3: Iteration Loop
@@ -168,7 +168,7 @@ Write 到 `<session>/swarm-config.json`。
 ```python
 for k in range(1, max_iterations + 1):
     # 3a. ACO selection
-    assignments = Bash("python aco.py --session <session> select --iter k")
+    assignments = Bash("python aco.py --session {run_dir}/work/team select --iter k")
     
     # 3b. Parallel exploration (Workflow Module 1)
     explore_result = Workflow({
@@ -183,8 +183,8 @@ for k in range(1, max_iterations + 1):
     })
     
     # 3d. Write scores + pheromone update
-    Write("<session>/scores/iter-k-scores.json", score_result)
-    Bash("python aco.py --session <session> update --iter k")
+    Write("{run_dir}/work/team/scores/iter-k-scores.json", score_result)
+    Bash("python aco.py --session {run_dir}/work/team update --iter k")
     
     # 3e. Adversarial convergence check (Workflow Module 3)
     converge_result = Workflow({
@@ -193,7 +193,7 @@ for k in range(1, max_iterations + 1):
     })
     
     # 3f. Save + check
-    Write("<session>/workflows/converge-k.json", converge_result)
+    Write("{run_dir}/work/team/workflows/converge-k.json", converge_result)
     if converge_result.converged: break
 ```
 
@@ -202,7 +202,7 @@ Coordinator 负责 Workflow 间的数据桥接和 Python 脚本调用。
 
 ### Phase 4: Synthesis
 
-1. `Bash: python aco.py --session <session> report` → 获取 best + top_k + curve
+1. `Bash: python aco.py --session {run_dir}/work/team report` → 获取 best + top_k + curve
 2. 调用 Workflow Module 4:
    ```
    Workflow({
@@ -210,7 +210,7 @@ Coordinator 负责 Workflow 间的数据桥接和 Python 脚本调用。
      args: { best, top_k, convergence_story, objective }
    })
    ```
-3. 将 synthesis 结果写入 `<session>/artifacts/best-solution.md`
+3. 将 synthesis 结果写入 `{run_dir}/outputs/best-solution.md`
 4. 展示完成摘要 + request_user_input（归档 / 保留 / 导出 / 再跑一轮）
 
 ---

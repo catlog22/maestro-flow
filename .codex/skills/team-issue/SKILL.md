@@ -31,11 +31,11 @@ contract:
     exit: []
 ---
 
-> **Agent timeout**: `spawn_agent` 异步执行且无内置超时 — 除明确短任务外一律 `spawn_agent` 后立即 `wait_agent({ timeout_ms: 3600000 })`（上限 1 小时）阻塞等待，绝不依赖 30000 默认值；`timed_out: true` 且 Agent 未完成时再次 `wait_agent` 续等，不丢弃。批量场景使用 `spawn_agents_on_csv({ max_runtime_seconds: 3600, ... })`。
-
 <required_reading>
 @~/.maestro/workflows/run-mode-lite.md
 </required_reading>
+
+> **Agent timeout**: `spawn_agent` 异步执行且无内置超时 — 除明确短任务外一律 `spawn_agent` 后立即 `wait_agent({ timeout_ms: 3600000 })`（上限 1 小时）阻塞等待，绝不依赖 30000 默认值；`timed_out: true` 且 Agent 未完成时再次 `wait_agent` 续等，不丢弃。批量场景使用 `spawn_agents_on_csv({ max_runtime_seconds: 3600, ... })`。
 
 # Team Issue Resolution
 
@@ -90,10 +90,10 @@ Parse `$ARGUMENTS`:
 ## Shared Constants
 
 - **Session prefix**: `TISL`
-- **Session path**: `.workflow/.team/TISL-<slug>-<date>/`
+- **Session path**: `{run_dir}/work/team/`
 - **Team name**: `issue`
 - **CLI tools**: `maestro delegate --mode analysis` (read-only), `maestro delegate --mode write` (modifications)
-- **Message bus**: `mcp__maestro__team_msg(session_id=<session-id>, ...)`
+- **Message bus**: `mcp__maestro__team_msg(session_id=<run-id>, ...)`
 
 ## Worker Spawn Template
 
@@ -119,8 +119,8 @@ spawn_agent({ task_name: "<role>_<n>", message: "<message>", fork_turns: "none",
 ## Session Directory
 
 ```
-.workflow/.team/TISL-<slug>-<date>/
-├── session.json                    # Session metadata + pipeline + fix_cycles
+{run_dir}/work/team/
+├── team-session.json                    # Session metadata + pipeline + fix_cycles
 ├── task-analysis.json              # Coordinator analyze output
 ├── .msg/
 │   ├── messages.jsonl              # Message bus log
@@ -132,12 +132,12 @@ spawn_agent({ task_name: "<role>_<n>", message: "<message>", fork_turns: "none",
 │   └── issues.md
 ├── explorations/                   # Explorer output
 │   └── context-<issueId>.json
-├── solutions/                      # Planner output
+├── {run_dir}/outputs/solutions/                      # Planner output
 │   └── solution-<issueId>.json
-├── audits/                         # Reviewer output
+├── {run_dir}/outputs/audits/                         # Reviewer output
 │   └── audit-report.json
 ├── queue/                          # Integrator output (also .workflow/issues/queue/)
-└── builds/                         # Implementer output
+└── {run_dir}/outputs/builds/                         # Implementer output
 ```
 
 ## Specs Reference

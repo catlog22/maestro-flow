@@ -15,13 +15,13 @@ message_types: [state_update]
 
 | Input | Source | Required |
 |-------|--------|----------|
-| Animation files | <session>/animations/keyframes/*.css | Yes |
-| JS orchestrators | <session>/animations/orchestrators/*.js | Yes |
-| Motion tokens | <session>/choreography/motion-tokens.json | Yes |
-| Choreography sequences | <session>/choreography/sequences/*.md | Yes (component/page) |
+| Animation files | {run_dir}/outputs/animations/keyframes/*.css | Yes |
+| JS orchestrators | {run_dir}/outputs/animations/orchestrators/*.js | Yes |
+| Motion tokens | {run_dir}/outputs/choreography/motion-tokens.json | Yes |
+| Choreography sequences | {run_dir}/outputs/choreography/sequences/*.md | Yes (component/page) |
 | GPU constraints | specs/gpu-constraints.md | Yes |
 | Reduced motion spec | specs/reduced-motion.md | Yes |
-| .msg/meta.json | <session>/wisdom/.msg/meta.json | Yes |
+| .msg/meta.json | {run_dir}/work/team/wisdom/.msg/meta.json | Yes |
 
 1. Extract session path from task description
 2. Read all animation CSS files from animations/keyframes/
@@ -131,7 +131,7 @@ For each JS file:
 
 ## Phase 4: Report & Output
 
-1. Write performance report to `<session>/testing/reports/perf-report-{NNN}.md`:
+1. Write performance report to `{run_dir}/outputs/testing/reports/perf-report-{NNN}.md`:
    ```markdown
    # Performance Report {NNN}
 
@@ -173,5 +173,5 @@ For each JS file:
    1. [Priority] Description
    ```
 
-2. Update `<session>/wisdom/.msg/meta.json` under `motion-tester` namespace:
+2. Update `{run_dir}/work/team/wisdom/.msg/meta.json` under `motion-tester` namespace:
    - Read existing -> merge `{ "motion-tester": { report_id, score, signal, fps_average, safe_percentage, thrashing_count, will_change_count, reduced_motion_complete } }` -> write back

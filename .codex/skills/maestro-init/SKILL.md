@@ -143,7 +143,7 @@ Status verdicts:
 | Roadmap needed (default light) | step `roadmap` (`maestro run prepare --platform codex roadmap` + `maestro run create roadmap --session YYYYMMDD-roadmap-{topic} --intent "{goal}"`) |
 | Full spec package | step `blueprint` (`maestro run prepare --platform codex blueprint` + `maestro run create blueprint --session YYYYMMDD-blueprint-{topic} --intent "{goal}"`) |
 | Explore ideas first | step `brainstorm` (`maestro run prepare --platform codex brainstorm` + `maestro run create brainstorm --session YYYYMMDD-brainstorm-{topic} --intent "{goal}"`) |
-| View project dashboard | `/manage status` |
+| View project dashboard | `/maestro-manage status` |
 | Quick ad-hoc task | step `quick` (`maestro run prepare --platform codex quick` + `maestro run create quick --session YYYYMMDD-quick-{topic} --intent "{goal}"`) |
 </completion>
 

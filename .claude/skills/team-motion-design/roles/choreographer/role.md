@@ -11,8 +11,8 @@ message_types: [state_update]
 
 | Input | Source | Required |
 |-------|--------|----------|
-| Research artifacts | <session>/research/*.json | Yes |
-| .msg/meta.json | <session>/wisdom/.msg/meta.json | Yes |
+| Research artifacts | {run_dir}/outputs/research/*.json | Yes |
+| .msg/meta.json | {run_dir}/work/team/wisdom/.msg/meta.json | Yes |
 | Motion token spec | specs/motion-tokens.md | Yes |
 | GPU constraints | specs/gpu-constraints.md | Yes |
 | Reduced motion spec | specs/reduced-motion.md | Yes |
@@ -54,7 +54,7 @@ Define complete token system as CSS custom properties + JSON:
 - No parallax, no bounce/spring
 - Opacity-only fades allowed (<0.15s)
 
-Output: `<session>/choreography/motion-tokens.json`
+Output: `{run_dir}/outputs/choreography/motion-tokens.json`
 ```json
 {
   "easing": {
@@ -93,7 +93,7 @@ For component and page modes, define reveal sequences:
 - Parallax depths: foreground (1x), midground (0.5x), background (0.2x) scroll rates
 - Scroll-linked effects: progress-based opacity, transform interpolation
 
-Output per section: `<session>/choreography/sequences/<section-name>.md`
+Output per section: `{run_dir}/outputs/choreography/sequences/<section-name>.md`
 ```markdown
 # Section: <name>
 
@@ -158,5 +158,5 @@ All transitions use compositor-only properties (transform, opacity) per GPU cons
 | compositor_only | All animated properties are transform or opacity |
 | durations_use_tokens | All durations reference token scale values |
 
-4. Update `<session>/wisdom/.msg/meta.json` under `choreographer` namespace:
+4. Update `{run_dir}/work/team/wisdom/.msg/meta.json` under `choreographer` namespace:
    - Read existing -> merge `{ "choreographer": { token_count, sequence_count, state_diagrams, has_parallax, has_stagger } }` -> write back

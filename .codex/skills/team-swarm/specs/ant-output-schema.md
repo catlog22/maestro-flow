@@ -7,7 +7,7 @@
 ## File Path
 
 ```
-<session>/artifacts/ant-<iteration>-<ant_id>.json
+{run_dir}/outputs/ant-<iteration>-<ant_id>.json
 ```
 
 Example: `artifacts/ant-3-2.json` (ant id 2 in iteration 3)
@@ -16,6 +16,11 @@ Example: `artifacts/ant-3-2.json` (ant id 2 in iteration 3)
 
 ```json
 {
+  "_meta": {
+    "kind": "swarm-ant-result",
+    "schema": "swarm-ant-result/1.0",
+    "role": "evidence"
+  },
   "schema_version": "1.0",
   "ant_id": "ANT-3-2",
   "iteration": 3,
@@ -63,6 +68,7 @@ Example: `artifacts/ant-3-2.json` (ant id 2 in iteration 3)
 
 | Field | Type | Required | Constraint |
 |-------|------|----------|------------|
+| `_meta` | object | yes | complete artifact metadata; `kind` = `swarm-ant-result`, `schema` = `swarm-ant-result/1.0` |
 | `schema_version` | string | yes | must be `"1.0"` |
 | `ant_id` | string | yes | matches assignment |
 | `iteration` | int | yes | matches assignment |
@@ -80,7 +86,7 @@ Example: `artifacts/ant-3-2.json` (ant id 2 in iteration 3)
 |-------|--------|---------|
 | `self_score` | Ant LLM self-report | Cheap early-stop signal; tracked but NOT used for pheromone update |
 | `self_confidence` | Ant LLM self-report | Used to weight self_score when no verified_score is available |
-| `verified_score` | scoring.py OR scorer role | **Authoritative input to pheromone update.** Written to separate file: `<session>/scores/iter-k-scores.json` |
+| `verified_score` | scoring.py OR scorer role | **Authoritative input to pheromone update.** Written to separate file: `{run_dir}/work/team/scores/iter-k-scores.json` |
 
 If `verified_score` is missing for an ant (scorer disabled), pheromone update falls back to:
 ```

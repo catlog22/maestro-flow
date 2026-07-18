@@ -28,12 +28,12 @@
 
 | Input | Source | Required |
 |-------|--------|----------|
-| Session state | <session>/session.json | Yes |
+| Session state | {run_dir}/work/team/team-session.json | Yes |
 | Task list | list_agents() | Yes |
 | Trigger event | From Entry Router detection | Yes |
 | Pipeline definition | From SKILL.md | Yes |
 
-1. Load session.json for current state, `pipeline_mode`, `gc_rounds`
+1. Load team-session.json for current state, `pipeline_mode`, `gc_rounds`
 2. Run list_agents() to get current task statuses
 3. Identify trigger event type from Entry Router
 
@@ -87,9 +87,9 @@ TASK:
   - Address critical and high severity issues
   - Re-validate fixes against coding standards
 CONTEXT:
-  - Session: <session-folder>
-  - Upstream artifacts: <session>/qa/audit-<NNN>.md
-  - Shared memory: <session>/.msg/meta.json
+  - Session: {run_dir}/work/team
+  - Upstream artifacts: {run_dir}/outputs/qa/audit-<NNN>.md
+  - Shared memory: {run_dir}/work/team/.msg/meta.json
 EXPECTED: Fixed source files | QA issues resolved
 CONSTRAINTS: Targeted fixes only | Do not introduce regressions"
 })
@@ -103,10 +103,10 @@ TASK:
   - Focus on previously flagged issues
   - Calculate new score
 CONTEXT:
-  - Session: <session-folder>
+  - Session: {run_dir}/work/team
   - Review type: code-review
-  - Shared memory: <session>/.msg/meta.json
-EXPECTED: <session>/qa/audit-<NNN>.md | Improved score
+  - Shared memory: {run_dir}/work/team/.msg/meta.json
+EXPECTED: {run_dir}/outputs/qa/audit-<NNN>.md | Improved score
 CONSTRAINTS: Read-only review"
 })
 update_plan({ taskId: "QA-recheck-<round>", addBlockedBy: ["DEV-fix-<round>"], owner: "qa" })
@@ -176,7 +176,7 @@ Pipeline Status (<mode> mode):
   [WAIT]  QA-001       (qa)         -> blocked by DEV-001
 
 GC Rounds: 0/2
-Session: <session-id>
+Session: <run-id>
 ```
 
 Output status -- do NOT advance pipeline.
@@ -209,6 +209,6 @@ Triggered when all pipeline tasks are completed.
 
 After every handler execution:
 
-1. Update session.json with current state (active tasks, gc_rounds, last event)
+1. Update team-session.json with current state (active tasks, gc_rounds, last event)
 2. Verify task list consistency
 3. STOP and wait for next event

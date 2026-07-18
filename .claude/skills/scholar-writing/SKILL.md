@@ -13,6 +13,16 @@ session-mode: run
 
 End-to-end workflow for writing publication-ready ML/AI papers from research repositories. Integrates paper writing craft, citation verification, and anti-AI polishing into a structured 6-phase pipeline.
 
+## Run Lifecycle
+
+Follow `~/.maestro/workflows/run-mode.md`. If an orchestrator injected `run_id` / `run_dir` in the birth packet, use them and do NOT call `maestro run create`. Otherwise self-start before Phase 1:
+
+```bash
+maestro run create scholar-writing --session <YYYYMMDD-scholar-writing-{topic}> --intent "<short phrase>"
+```
+
+Session slug is ASCII-only, ≤64 chars. The paper itself lives in the user's `outputDir` (a working area in the user's repo, like source code — **not** the Run truth source). Write the workflow synthesis and the delivery manifest (paths to `paper.tex` / `paper.pdf` / `references.bib`, verification status, remaining action items) to `{run_dir}/report.md`, and the delivery-paths list to `{run_dir}/outputs/`. Close per the Final Checklist.
+
 ## Pre-load (before execution)
 
 1. **Codebase docs**: If `.workflow/codebase/ARCHITECTURE.md` exists, read for project context
@@ -200,8 +210,11 @@ Phase 4 ──updatedDraft + verifiedBib──→ Phase 5
 Phase 5 ──polishedDraft──→ Phase 6
 Phase 4 ──verifiedBib──→ Phase 6
 
-Data persistence: All intermediate outputs written to outputDir/
-  outputDir/.writing/
+Data persistence: The paper artifacts live in outputDir/ — a working area in the
+user's repo (analogous to source code), NOT the Run truth source. The Run records
+synthesis + a delivery manifest (see Run Lifecycle above).
+
+  outputDir/.writing/            (paper workspace, user-owned)
   ├── repo-context.md        (Phase 1 output)
   ├── paper-outline.md       (Phase 2 output)
   ├── drafts/                (Phase 3 output)
@@ -216,6 +229,9 @@ Data persistence: All intermediate outputs written to outputDir/
   ├── polished/              (Phase 5 output)
   │   └── (same structure as drafts/)
   └── paper.tex              (Phase 6 output)
+
+  {run_dir}/report.md            (workflow synthesis + delivery manifest)
+  {run_dir}/outputs/             (delivery-paths list pointing into outputDir/)
 ```
 
 ## TodoWrite Pattern

@@ -22,8 +22,8 @@ message_types: [state_update]
 | Branch refactoring detail | {run_dir}/outputs/branches/B{NN}/refactoring-detail.md | Yes (REFACTOR with branch) |
 | Pipeline refactoring plan | {run_dir}/outputs/pipelines/{P}/refactoring-plan.md | Yes (REFACTOR with pipeline) |
 | Review/validation feedback | From task description | Yes (FIX) |
-| .msg/meta.json | <session>/wisdom/.msg/meta.json | Yes |
-| Wisdom files | <session>/wisdom/patterns.md | No |
+| .msg/meta.json | {run_dir}/work/team/wisdom/.msg/meta.json | Yes |
+| Wisdom files | {run_dir}/work/team/wisdom/patterns.md | No |
 | Context accumulator | From prior REFACTOR/FIX tasks | Yes (inner loop) |
 
 1. Extract session path and task mode (REFACTOR or FIX) from task description

@@ -59,10 +59,10 @@ TASK:
   - Revise tests to address failures
   - Improve coverage for uncovered areas
 CONTEXT:
-  - Session: <session-folder>
+  - Session: {run_dir}/work/team
   - Layer: <layer>
-  - Previous results: <session>/results/run-<N>.json
-EXPECTED: Revised test files in <session>/tests/<layer>/
+  - Previous results: {run_dir}/outputs/results/run-<N>.json
+EXPECTED: Revised test files in {run_dir}/outputs/tests/<layer>/
 CONSTRAINTS: Only modify test files
 ---
 InnerLoop: true
@@ -72,10 +72,10 @@ TaskCreate({
   subject: "TESTRUN-<layer>-fix-<round>: Re-execute <layer> (GC #<round>)",
   description: "PURPOSE: Re-execute tests after revision | Success: pass_rate >= 0.95
 CONTEXT:
-  - Session: <session-folder>
+  - Session: {run_dir}/work/team
   - Layer: <layer>
   - Input: tests/<layer>
-EXPECTED: <session>/results/run-<N>-gc.json
+EXPECTED: {run_dir}/outputs/results/run-<N>-gc.json
 ---
 InnerLoop: true
 RoleSpec: ~  or <project>/.claude/skills/team-testing/roles/executor/role.md",
@@ -175,8 +175,8 @@ Agent({
   prompt: `## Role Assignment
 role: <role>
 role_spec: ~  or <project>/.claude/skills/team-testing/roles/<role>/role.md
-session: <session-folder>
-session_id: <session-id>
+session: {run_dir}/work/team
+session_id: <run-id>
 team_name: testing
 requirement: <task-description>
 inner_loop: <true|false>
@@ -186,7 +186,7 @@ inner_loop: <true|false>
 - Task: <subject>
 
 ## Progress Milestones
-session_id: <session-id>
+session_id: <run-id>
 Report progress via team_msg at natural phase boundaries (context loaded -> core work done -> verification).
 Report blockers immediately via team_msg type="blocker".
 Report completion via team_msg type="task_complete" after final SendMessage.
@@ -202,7 +202,7 @@ Execute built-in Phase 1 (task discovery) -> role Phase 2-4 -> built-in Phase 5 
    - TESTGEN-001 + TESTGEN-002 both unblocked -> spawn both in parallel (name: "generator-1", "generator-2")
    - TESTRUN-001 + TESTRUN-002 both unblocked -> spawn both in parallel (name: "executor-1", "executor-2")
 
-6. Update session.json, output summary, STOP
+6. Update team-session.json, output summary, STOP
 
 ## handleComplete
 
@@ -229,7 +229,7 @@ Capability gap reported mid-pipeline.
 
 1. Parse gap description
 2. Check if existing role covers it -> redirect
-3. Role count < 5 -> generate dynamic role-spec in <session>/role-specs/
+3. Role count < 5 -> generate dynamic role-spec in {run_dir}/work/team/role-specs/
 4. Create new task, spawn worker
 5. Role count >= 5 -> merge or pause
 
@@ -245,7 +245,7 @@ On every coordinator wake:
 After every handler execution:
 1. Reconcile active_workers with actual TaskList states
 2. Remove entries for completed/deleted tasks
-3. Write updated session.json
+3. Write updated team-session.json
 4. STOP (wait for next callback)
 
 ## Error Handling

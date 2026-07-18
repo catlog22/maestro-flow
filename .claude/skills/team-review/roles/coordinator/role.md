@@ -42,14 +42,14 @@ When coordinator needs to execute a specific phase:
 | Manual resume | Args contain "resume" or "continue" | -> handleResume (monitor.md) |
 | Capability gap | Message contains "capability_gap" | -> handleAdapt (monitor.md) |
 | Pipeline complete | All tasks completed | -> handleComplete (monitor.md) |
-| Interrupted session | Active session in .workflow/.team/RV-* | -> Phase 0 |
+| Interrupted session | Active session in {run_dir}/work/team/ | -> Phase 0 |
 | New session | None of above | -> Phase 1 |
 
 For callback/check/resume/adapt/complete: load @commands/monitor.md, execute handler, STOP.
 
 ## Phase 0: Session Resume Check
 
-1. Scan .workflow/.team/RV-*/.msg/meta.json for active/paused sessions
+1. Scan {run_dir}/work/team/.msg/meta.json for active/paused sessions
 2. No sessions -> Phase 1
 3. Single session -> reconcile (audit TaskList, reset in_progress->pending, rebuild team, kick first ready task)
 4. Multiple -> AskUserQuestion for selection
@@ -79,13 +79,13 @@ TEXT-LEVEL ONLY. No source code reading.
    - `project_root` = result of `Bash({ command: "pwd" })`
    - `skill_root` = `<project_root>/.claude/skills/team-review`
 2. Generate session ID: RV-<slug>-<date>
-3. Create session folder structure (scan/, review/, fix/, wisdom/)
+3. Create `{run_dir}/work/team/wisdom/` and formal directories `{run_dir}/outputs/{scan,review,fix}/`
 4. TeamCreate with team name "review"
 5. Read specs/pipelines.md -> select pipeline based on mode
 6. Initialize pipeline via team_msg state_update:
    ```
    mcp__maestro__team_msg({
-     operation: "log", session_id: "<id>", from: "coordinator",
+     operation: "log", session_id: "<run-id>", from: "coordinator",
      type: "state_update", summary: "Session initialized",
      data: {
        pipeline_mode: "<default|full|fix-only|quick>",

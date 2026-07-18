@@ -26,7 +26,7 @@ TaskCreate({
 
 Input type: <issues|text|plan>
 Input: <raw-input>
-Session: <session-folder>
+Session: {run_dir}/work/team
 Execution method: <agent|codex|agy>
 
 ## Instructions
@@ -51,7 +51,7 @@ TaskCreate({
 
 Issue ID: <issueId>
 Solution file: {run_dir}/outputs/solutions/<issueId>.json
-Session: <session-folder>
+Session: {run_dir}/work/team
 Execution method: <agent|codex|agy>
 
 InnerLoop: true`,
@@ -70,7 +70,7 @@ TaskCreate({
 
 Input type: <issues|text|plan>
 Input: <new-input>
-Session: <session-folder>
+Session: {run_dir}/work/team
 Execution method: <execution-method>
 
 InnerLoop: true`,

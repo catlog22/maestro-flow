@@ -32,7 +32,7 @@ If task context requires codebase knowledge, set `needs_research: true`. Phase 2
 
 - **Delegation**: Inline execution (coordinator processes directly)
 - **Mode**: Text-level analysis only (no codebase reading)
-- **Output**: `<session>/task-analysis.json`
+- **Output**: `{run_dir}/work/team/task-analysis.json`
 
 ## Phase 2: Context Loading
 
@@ -68,13 +68,13 @@ Each capability produces default output artifacts:
 
 | Capability | Default Artifact | Format |
 |------------|-----------------|--------|
-| researcher | Research findings | `<session>/artifacts/research-findings.md` |
-| writer | Written document(s) | `<session>/artifacts/<doc-name>.md` |
-| developer | Code implementation | Source files + `<session>/artifacts/implementation-summary.md` |
-| designer | Design document | `<session>/artifacts/design-spec.md` |
-| analyst | Analysis report | `<session>/artifacts/analysis-report.md` |
-| tester | Test results | `<session>/artifacts/test-report.md` |
-| planner | Execution plan | `<session>/artifacts/execution-plan.md` |
+| researcher | Research findings | `{run_dir}/outputs/research-findings.md` |
+| writer | Written document(s) | `{run_dir}/outputs/<doc-name>.md` |
+| developer | Code implementation | Source files + `{run_dir}/outputs/implementation-summary.md` |
+| designer | Design document | `{run_dir}/outputs/design-spec.md` |
+| analyst | Analysis report | `{run_dir}/outputs/analysis-report.md` |
+| tester | Test results | `{run_dir}/outputs/test-report.md` |
+| planner | Execution plan | `{run_dir}/outputs/execution-plan.md` |
 
 ### Step 2.5: Key File Inference
 
@@ -151,7 +151,7 @@ For each role, determine frontmatter and generation hints:
 
 ## Phase 4: Output
 
-Write `<session-folder>/task-analysis.json`:
+Write `{run_dir}/work/team/task-analysis.json`:
 
 ```json
 {

@@ -181,7 +181,7 @@ if (paperPath) {
   for (const strategy of strategyMatrix) {
     if (strategy.responseType === 'Defend' || strategy.responseType === 'Clarify') {
       // Use Agy CLI to search for relevant sections
-      const cliCommand = `ccw cli -p "PURPOSE: Search paper content for evidence supporting response to reviewer comment
+      const cliCommand = `maestro delegate "PURPOSE: Search paper content for evidence supporting response to reviewer comment
 
 REVIEWER COMMENT:
 ${strategy.issueText}
@@ -208,7 +208,7 @@ EXPECTED: JSON with {
   'equations': [{'equationId': '...', 'content': '...', 'relevance': '...'}],
   'evidenceStrength': 'strong|moderate|weak',
   'gaps': ['gap1', 'gap2']
-}" --tool agy --mode analysis --rule analysis-trace-code-execution`
+}" --to agy --mode analysis --rule analysis-trace-code-execution`
 
       // Execute CLI command
       Bash({

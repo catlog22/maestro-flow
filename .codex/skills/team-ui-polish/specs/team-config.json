@@ -62,12 +62,12 @@
   },
 
   "session_dirs": {
-    "base": ".workflow/.team/UIP-{slug}-{YYYY-MM-DD}/",
-    "scan": "scan/",
-    "diagnosis": "diagnosis/",
-    "optimization": "optimization/",
-    "verification": "verification/",
-    "evidence": "evidence/",
-    "messages": ".workflow/.team-msg/{team-name}/"
+    "base": "{run_dir}/work/team/",
+    "scan": "{run_dir}/outputs/scan/",
+    "diagnosis": "{run_dir}/outputs/diagnosis/",
+    "optimization": "{run_dir}/outputs/optimization/",
+    "verification": "{run_dir}/outputs/verification/",
+    "evidence": "{run_dir}/evidence/",
+    "messages": "{run_dir}/work/team/.msg/"
   }
 }

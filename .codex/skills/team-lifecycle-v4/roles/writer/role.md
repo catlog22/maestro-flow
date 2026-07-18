@@ -49,10 +49,10 @@ message_types:
 
 ### Inputs
 - Template from routing table
-- blueprint-config.json from <session>/spec/
-- discovery-context.json from <session>/spec/
+- blueprint-config.json from {run_dir}/outputs/spec/
+- discovery-context.json from {run_dir}/outputs/spec/
 - Prior decisions from context_accumulator (inner loop)
-- Discussion feedback from <session>/discussions/ (if exists)
+- Discussion feedback from {run_dir}/evidence/discussions/ (if exists)
 
 ## Phase 3: Document Generation
 
@@ -61,9 +61,9 @@ CLI generation:
 Bash({ command: `maestro delegate "PURPOSE: Generate <doc-type> document following template
 TASK: • Load template • Apply spec config and discovery context • Integrate prior feedback • Generate all sections
 MODE: write
-CONTEXT: @<session>/spec/*.json @<template-path>
+CONTEXT: @{run_dir}/outputs/spec/*.json @<template-path>
 EXPECTED: Document at <output-path> with YAML frontmatter, all sections, cross-references
-CONSTRAINTS: Follow document standards" --tool agy --mode write --cd <session>`, run_in_background: false })
+CONSTRAINTS: Follow document standards" --tool agy --mode write --cd {run_dir}/work/team`, run_in_background: false })
 ```
 
 ## Phase 4: Validation

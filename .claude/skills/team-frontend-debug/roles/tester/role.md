@@ -89,7 +89,7 @@ For each scenario:
 
 1. **Capture baseline**:
    ```
-   mcp__chrome-devtools__take_screenshot({ filePath: "<session>/evidence/F-<id>-<scenario>-before.png" })
+   mcp__chrome-devtools__take_screenshot({ filePath: "{run_dir}/evidence/F-<id>-<scenario>-before.png" })
    mcp__chrome-devtools__list_console_messages()  // baseline errors
    ```
 
@@ -107,7 +107,7 @@ For each scenario:
 
 3. **Capture result**:
    ```
-   mcp__chrome-devtools__take_screenshot({ filePath: "<session>/evidence/F-<id>-<scenario>-after.png" })
+   mcp__chrome-devtools__take_screenshot({ filePath: "{run_dir}/evidence/F-<id>-<scenario>-after.png" })
    mcp__chrome-devtools__list_console_messages({ types: ["error", "warn"] })
    mcp__chrome-devtools__list_network_requests({ resourceTypes: ["xhr", "fetch"] })
    ```

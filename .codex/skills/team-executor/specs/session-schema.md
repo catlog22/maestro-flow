@@ -5,7 +5,7 @@ Required session structure for team-executor v2. All components MUST exist for v
 ## Directory Structure
 
 ```
-<session-folder>/
+{run_dir}/work/team/
 +-- team-session.json           # Session state + dynamic role registry (REQUIRED)
 +-- task-analysis.json          # Task analysis output: capabilities, dependency graph (REQUIRED)
 +-- role-specs/                 # Dynamic role-spec definitions (REQUIRED, >= 1 .md file)
@@ -23,7 +23,7 @@ Required session structure for team-executor v2. All components MUST exist for v
 +-- explorations/               # Shared explore cache
 |   +-- cache-index.json
 |   +-- explore-<angle>.json
-+-- discussions/                # Inline discuss records
++-- {run_dir}/evidence/discussions/                # Inline discuss records
 |   +-- <round>.md
 ```
 
@@ -231,7 +231,7 @@ For each role-spec in role-specs/<role>.md:
 ## Example Valid Session
 
 ```
-.workflow/.team/TC-auth-feature-2026-02-27/
+{run_dir}/work/team/
 +-- team-session.json           # Valid JSON with session metadata
 +-- task-analysis.json          # Valid JSON with dependency graph
 +-- role-specs/
@@ -246,7 +246,7 @@ For each role-spec in role-specs/<role>.md:
 |   +-- issues.md
 +-- explorations/
 |   +-- cache-index.json
-+-- discussions/                # (may be empty)
++-- {run_dir}/evidence/discussions/                # (may be empty)
 ```
 
 ---

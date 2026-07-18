@@ -29,7 +29,7 @@ Quality checks vary by `output_type` (from task-analysis.json role metadata).
 
 | Check | Pass Criteria |
 |-------|---------------|
-| Artifact exists | File written to `<session>/artifacts/` |
+| Artifact exists | File written to `{run_dir}/outputs/` |
 | Content non-empty | Substantive content, not just headers |
 | Format correct | Expected format (MD, JSON) matches deliverable |
 | Cross-references | All references to upstream artifacts resolve |
@@ -54,14 +54,14 @@ Derived from Behavioral Traits in [role-spec-template.md](role-spec-template.md)
 | Step | Action | Required |
 |------|--------|----------|
 | 1 | Verify all claimed files exist via Read | Yes |
-| 2 | Confirm artifact written to `<session>/artifacts/` | Yes |
+| 2 | Confirm artifact written to `{run_dir}/outputs/` | Yes |
 | 3 | Check verification summary fields present | Yes |
 | 4 | Score against quality dimensions | Yes |
 | 5 | Apply threshold -> Pass/Review/Fail | Yes |
 
 **On Fail**: Retry Phase 3 (max 2 retries). After 2 retries, report `partial_completion`.
 
-**On Review**: Proceed with warnings logged to `<session>/wisdom/issues.md`.
+**On Review**: Proceed with warnings logged to `{run_dir}/work/team/wisdom/issues.md`.
 
 ## 5. Code Review Dimensions
 

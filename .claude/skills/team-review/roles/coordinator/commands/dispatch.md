@@ -20,7 +20,7 @@ TASK:
   - <step 1>
   - <step 2>
 CONTEXT:
-  - Session: <session-folder>
+  - Session: {run_dir}/work/team
   - Target: <target>
   - Dimensions: <dimensions>
   - Upstream artifacts: <list>
@@ -81,7 +81,7 @@ SCAN-001 (scanner): Quick scan (fast mode)
 ```
 mcp__maestro__team_msg({
   operation: "log",
-  session_id: <session-id>,
+  session_id: <run-id>,
   from: "coordinator",
   type: "dispatch_ready",
   data: { pipeline: "<mode>", task_count: <N>, target: "<target>" }

@@ -90,6 +90,11 @@ function validateSkillMd(teamConfig) {
     results.warnings.push(`Session prefix ${teamConfig.sessionPrefix} not found in SKILL.md`);
   }
 
+  // Verify session-mode frontmatter declared (stateful orchestration skill must declare 'run')
+  if (!skillMd.includes('session-mode: run')) {
+    results.errors.push('SKILL.md frontmatter missing session-mode: run');
+  }
+
   // Verify NO beat model content in SKILL.md
   const beatModelPatterns = [
     'ONE_STEP_PER_INVOCATION',
@@ -148,6 +153,29 @@ function validateRoleFrontmatter(teamConfig) {
     if (!fm.includes('message_types:')) {
       results.warnings.push(`${role.name}/role.md frontmatter missing 'message_types'`);
     }
+  }
+
+  return results;
+}
+```
+
+## Step 4.3b: Coordinator Run Lifecycle Validation
+
+Verify the generated coordinator drives the Session/Run lifecycle (create on start, complete on finish):
+
+```javascript
+function validateCoordinatorRunLifecycle(teamConfig) {
+  const skillDir = `.claude/skills/${teamConfig.skillName}`;
+  const results = { errors: [], warnings: [], info: [] };
+  const coordinatorMd = Read(`${skillDir}/roles/coordinator/role.md`);
+
+  // Run create on start (birth-packet guard + otherwise create)
+  if (!coordinatorMd.includes('maestro run create')) {
+    results.errors.push('coordinator/role.md missing Run Lifecycle Integration (maestro run create)');
+  }
+  // Run complete on finish
+  if (!coordinatorMd.includes('maestro run complete')) {
+    results.errors.push('coordinator/role.md missing run completion (maestro run complete)');
   }
 
   return results;
@@ -242,16 +270,17 @@ function generateValidationReport(teamConfig) {
   const structural = validateStructure(teamConfig);
   const skillMd = validateSkillMd(teamConfig);
   const frontmatter = validateRoleFrontmatter(teamConfig);
+  const runLifecycle = validateCoordinatorRunLifecycle(teamConfig);
   const pipelines = validatePipelines(teamConfig);
   const commands = validateCommandsDistribution(teamConfig);
 
   const allErrors = [
     ...structural.errors, ...skillMd.errors,
-    ...frontmatter.errors, ...pipelines.errors, ...commands.errors
+    ...frontmatter.errors, ...runLifecycle.errors, ...pipelines.errors, ...commands.errors
   ];
   const allWarnings = [
     ...structural.warnings, ...skillMd.warnings,
-    ...frontmatter.warnings, ...pipelines.warnings, ...commands.warnings
+    ...frontmatter.warnings, ...runLifecycle.warnings, ...pipelines.warnings, ...commands.warnings
   ];
 
   const gate = allErrors.length === 0 ? 'PASS' :

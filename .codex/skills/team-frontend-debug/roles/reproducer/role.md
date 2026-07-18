@@ -61,8 +61,8 @@ Before executing steps, capture baseline state:
 
 | Evidence Type | Tool | Save To |
 |---------------|------|---------|
-| Screenshot (before) | `take_screenshot({ filePath: "<session>/evidence/before-screenshot.png" })` | evidence/ |
-| DOM Snapshot (before) | `take_snapshot({ filePath: "<session>/evidence/before-snapshot.txt" })` | evidence/ |
+| Screenshot (before) | `take_screenshot({ filePath: "{run_dir}/evidence/before-screenshot.png" })` | evidence/ |
+| DOM Snapshot (before) | `take_snapshot({ filePath: "{run_dir}/evidence/before-snapshot.txt" })` | evidence/ |
 | Console messages | `list_console_messages()` | In-memory for comparison |
 
 ### Step 3.3: Execute Reproduction Steps
@@ -92,8 +92,8 @@ After all steps executed:
 
 | Evidence | Tool | Condition |
 |----------|------|-----------|
-| Screenshot (after) | `take_screenshot({ filePath: "<session>/evidence/after-screenshot.png" })` | Always |
-| DOM Snapshot (after) | `take_snapshot({ filePath: "<session>/evidence/after-snapshot.txt" })` | Always |
+| Screenshot (after) | `take_screenshot({ filePath: "{run_dir}/evidence/after-screenshot.png" })` | Always |
+| DOM Snapshot (after) | `take_snapshot({ filePath: "{run_dir}/evidence/after-snapshot.txt" })` | Always |
 | Console Errors | `list_console_messages({ types: ["error", "warn"] })` | Always |
 | All Console Logs | `list_console_messages()` | If console dimension |
 | Network Requests | `list_network_requests()` | If network dimension |
@@ -103,7 +103,7 @@ After all steps executed:
 
 ### Step 3.5: Save Evidence Summary
 
-Write `<session>/evidence/evidence-summary.json`:
+Write `{run_dir}/evidence/evidence-summary.json`:
 ```json
 {
   "reproduction_success": true,
@@ -136,7 +136,7 @@ After reproduction, note any frontend-specific codebase characteristics:
    {
      "status": "task_complete",
      "task_id": "REPRODUCE-001",
-     "ref": "<session>/evidence/evidence-summary.json",
+     "ref": "{run_dir}/evidence/evidence-summary.json",
      "key_findings": ["Bug reproduced successfully", "3 console errors captured", "1 failed API request"],
      "decisions": [],
      "verification": "self-validated"

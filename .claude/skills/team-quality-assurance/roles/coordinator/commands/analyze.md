@@ -54,7 +54,7 @@ Results: 1-3 Low, 4-6 Medium, 7+ High
 
 ## Output
 
-Write <session>/task-analysis.json:
+Write {run_dir}/work/team/task-analysis.json:
 ```json
 {
   "task_description": "<original>",

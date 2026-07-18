@@ -10,13 +10,13 @@ message_types: [state_update]
 ## Phase 2: Context & Complexity Assessment
 
 1. Load scan report from `{run_dir}/outputs/scan-report.md`
-2. Load scanner state via `team_msg(operation="get_state", session_id=<session-id>, role="scanner")`
+2. Load scanner state via `team_msg(operation="get_state", session_id=<run-id>, role="scanner")`
 
 ### Wisdom Input
 
-1. Read `<session>/wisdom/patterns/ui-feedback.md` and `<session>/wisdom/patterns/state-management.md` if available
+1. Read `{run_dir}/work/team/wisdom/patterns/ui-feedback.md` and `{run_dir}/work/team/wisdom/patterns/state-management.md` if available
 2. Use patterns to identify root causes of UI interaction issues
-3. Reference `<session>/wisdom/anti-patterns/common-ux-pitfalls.md` for common causes
+3. Reference `{run_dir}/work/team/wisdom/anti-patterns/common-ux-pitfalls.md` for common causes
 
 3. Assess issue complexity:
 
@@ -88,12 +88,12 @@ For each issue from scan report:
 ### Wisdom Contribution
 
 If new root cause patterns discovered:
-1. Write diagnosis patterns to `<session>/wisdom/contributions/diagnoser-patterns-<timestamp>.md`
+1. Write diagnosis patterns to `{run_dir}/work/team/wisdom/contributions/diagnoser-patterns-<timestamp>.md`
 2. Format: Symptom, root cause, detection method, fix approach
 
 3. Share state via team_msg:
    ```
-   team_msg(operation="log", session_id=<session-id>, from="diagnoser",
+   team_msg(operation="log", session_id=<run-id>, from="diagnoser",
             type="state_update", data={
               diagnosed_issues: <count>,
               pattern_types: {

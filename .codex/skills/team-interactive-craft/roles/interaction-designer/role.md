@@ -15,9 +15,9 @@ message_types: [state_update]
 
 | Input | Source | Required |
 |-------|--------|----------|
-| Research artifacts | <session>/research/*.json | Yes |
-| .msg/meta.json | <session>/wisdom/.msg/meta.json | Yes |
-| Existing blueprints | <session>/interaction/blueprints/*.md | Only for INTERACT-002+ |
+| Research artifacts | {run_dir}/outputs/research/*.json | Yes |
+| .msg/meta.json | {run_dir}/work/team/wisdom/.msg/meta.json | Yes |
+| Existing blueprints | {run_dir}/outputs/interaction/blueprints/*.md | Only for INTERACT-002+ |
 
 1. Extract session path from task description
 2. Read research findings: interaction-inventory.json, browser-api-audit.json, pattern-reference.json
@@ -126,7 +126,7 @@ Document in blueprint: which native API to use, what the fallback is for unsuppo
 - Touch momentum and snap behavior
 - Reference base component blueprint for consistency
 
-Output: `<session>/interaction/blueprints/{component-name}.md`
+Output: `{run_dir}/outputs/interaction/blueprints/{component-name}.md`
 
 ## Phase 4: Self-Validation
 
@@ -142,5 +142,5 @@ Output: `<session>/interaction/blueprints/{component-name}.md`
 
 If any check fails, revise the blueprint before output.
 
-Update `<session>/wisdom/.msg/meta.json` under `interaction-designer` namespace:
+Update `{run_dir}/work/team/wisdom/.msg/meta.json` under `interaction-designer` namespace:
 - Read existing -> merge `{ "interaction-designer": { task_type, components_designed, states_count, events_count, gestures } }` -> write back

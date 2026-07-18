@@ -26,8 +26,8 @@ message_types:
 | Branch optimization detail | {run_dir}/outputs/branches/B{NN}/optimization-detail.md | Yes (IMPL with branch) |
 | Pipeline optimization plan | {run_dir}/outputs/pipelines/{P}/optimization-plan.md | Yes (IMPL with pipeline) |
 | Review/bench feedback | From task description | Yes (FIX) |
-| .msg/meta.json | <session>/.msg/meta.json | Yes |
-| Wisdom files | <session>/wisdom/patterns.md | No |
+| .msg/meta.json | {run_dir}/work/team/.msg/meta.json | Yes |
+| Wisdom files | {run_dir}/work/team/wisdom/patterns.md | No |
 | Context accumulator | From prior IMPL/FIX tasks | Yes (inner loop) |
 
 1. Extract session path and task mode (IMPL or FIX) from task description

@@ -81,8 +81,8 @@ Worker completed. Process and advance.
      - Parse re-audit reports for remaining issues
      - Apply targeted fixes for color and focus issues
    CONTEXT:
-     - Session: <session-folder>
-     - Upstream artifacts: re-audit/color-audit-002.md, re-audit/focus-audit-002.md" })
+     - Session: {run_dir}/work/team
+     - Upstream artifacts: {run_dir}/outputs/re-audit/color-audit-002.md, {run_dir}/outputs/re-audit/focus-audit-002.md" })
    TaskUpdate({ taskId: "FIX-002", addBlockedBy: ["COLOR-002", "FOCUS-002"], owner: "fix-implementer" })
    ```
    Then create new re-audit tasks blocked by FIX-002. Increment gc_state.round.
@@ -136,7 +136,7 @@ Pipeline Status (<pipeline-mode>):
 
 Fan-in: 2/3 audits complete
 GC Rounds: 0/2
-Session: <session-id>
+Session: <run-id>
 Commands: 'resume' to advance | 'check' to refresh
 ```
 
@@ -172,14 +172,14 @@ Agent({
   prompt: `## Role Assignment
 role: <role>
 role_spec: <skill_root>/roles/<role>/role.md
-session: <session-folder>
-session_id: <session-id>
+session: {run_dir}/work/team
+session_id: <run-id>
 team_name: visual-a11y
 requirement: <task-description>
 inner_loop: <true|false>
 
 ## Progress Milestones
-session_id: <session-id>
+session_id: <run-id>
 Report progress via team_msg at natural phase boundaries (context loaded -> core work done -> verification).
 Report blockers immediately via team_msg type="blocker".
 Report completion via team_msg type="task_complete" after final SendMessage.

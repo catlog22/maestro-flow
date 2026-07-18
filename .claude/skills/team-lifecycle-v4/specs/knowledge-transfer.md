@@ -8,9 +8,9 @@
 |---------|--------|----------|----------|
 | Artifacts | Files in `{run_dir}/outputs/` | Task executor | Next task in pipeline |
 | State Updates | `team_msg(type="state_update")` | Task executor | Coordinator + downstream |
-| Wisdom | Append to `<session>/wisdom/*.md` | Any role | All roles |
+| Wisdom | Append to `{run_dir}/work/team/wisdom/*.md` | Any role | All roles |
 | Context Accumulator | In-memory aggregation | Inner loop only | Current task |
-| Exploration Cache | `<session>/explorations/` | Analyst / researcher | All roles |
+| Exploration Cache | `{run_dir}/work/team/explorations/` | Analyst / researcher | All roles |
 
 ## 2. Context Loading Protocol (Before Task Execution)
 
@@ -20,8 +20,8 @@ Every role MUST load context in this order before starting work.
 |------|--------|----------|
 | 1 | `team_msg(operation="get_state", role=<upstream>)` | Yes |
 | 2 | Read artifact files from upstream state's `ref` paths | Yes |
-| 3 | Read `<session>/wisdom/*.md` if exists | Yes |
-| 4 | Check `<session>/explorations/cache-index.json` before new exploration | If exploring |
+| 3 | Read `{run_dir}/work/team/wisdom/*.md` if exists | Yes |
+| 4 | Check `{run_dir}/work/team/explorations/cache-index.json` before new exploration | If exploring |
 
 **Loading rules**:
 - Never skip step 1 -- state contains key decisions and findings
@@ -90,10 +90,10 @@ Prevents redundant research across tasks and discussion rounds.
 
 | Step | Action |
 |------|--------|
-| 1 | Read `<session>/explorations/cache-index.json` |
+| 1 | Read `{run_dir}/work/team/explorations/cache-index.json` |
 | 2 | If angle already explored, read cached result from `explore-<angle>.json` |
 | 3 | If not cached, perform exploration |
-| 4 | Write result to `<session>/explorations/explore-<angle>.json` |
+| 4 | Write result to `{run_dir}/work/team/explorations/explore-<angle>.json` |
 | 5 | Update `cache-index.json` with new entry |
 
 **cache-index.json format**:

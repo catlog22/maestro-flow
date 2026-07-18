@@ -91,7 +91,7 @@ Pipeline Status (standard):
   [WAIT]  IMPL-001    (implementer) -> blocked by DESIGN-001
   [WAIT]  TEST-001    (tester)      -> blocked by IMPL-001
 
-Session: <session-id>
+Session: <run-id>
 Commands: 'resume' to advance | 'check' to refresh
 ```
 
@@ -127,14 +127,14 @@ Agent({
   prompt: `## Role Assignment
 role: <role>
 role_spec: ~  or <project>/.claude/skills/team-ux-improve/roles/<role>/role.md
-session: <session-folder>
-session_id: <session-id>
+session: {run_dir}/work/team
+session_id: <run-id>
 team_name: ux-improve
 requirement: <task-description>
 inner_loop: <true|false>
 
 ## Progress Milestones
-session_id: <session-id>
+session_id: <run-id>
 Report progress via team_msg at natural phase boundaries (context loaded -> core work done -> verification).
 Report blockers immediately via team_msg type="blocker".
 Report completion via team_msg type="task_complete" after final SendMessage.

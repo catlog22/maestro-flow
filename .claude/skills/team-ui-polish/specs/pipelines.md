@@ -76,8 +76,8 @@ All modes use sequential spawning (one task at a time) since each task depends o
 
 | Task | Output Path |
 |------|-------------|
-| SCAN-001 | <session>/scan/scan-report.md |
-| DIAG-001 | <session>/diagnosis/diagnosis-report.md |
-| OPT-001 / OPT-fix-* | <session>/optimization/fix-log.md + modified source files |
-| VERIFY-001 / VERIFY-* | <session>/verification/verify-report.md |
-| Screenshots (if DevTools) | <session>/evidence/*.png |
+| SCAN-001 | {run_dir}/outputs/scan/scan-report.md |
+| DIAG-001 | {run_dir}/outputs/diagnosis/diagnosis-report.md |
+| OPT-001 / OPT-fix-* | {run_dir}/outputs/optimization/fix-log.md + modified source files |
+| VERIFY-001 / VERIFY-* | {run_dir}/outputs/verification/verify-report.md |
+| Screenshots (if DevTools) | {run_dir}/evidence/*.png |

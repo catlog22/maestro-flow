@@ -28,9 +28,9 @@
 
 | Prefix | Role | Role Spec | inner_loop |
 |--------|------|-----------|------------|
-| SCAN-* | scanner | `~  or <project>/.claude/skills/team-review/roles/scanner/role.md` | false |
-| REV-* | reviewer | `~  or <project>/.claude/skills/team-review/roles/reviewer/role.md` | false |
-| FIX-* | fixer | `~  or <project>/.claude/skills/team-review/roles/fixer/role.md` | true |
+| SCAN-* | scanner | `~  or <project>/.codex/skills/team-review/roles/scanner/role.md` | false |
+| REV-* | reviewer | `~  or <project>/.codex/skills/team-review/roles/reviewer/role.md` | false |
+| FIX-* | fixer | `~  or <project>/.codex/skills/team-review/roles/fixer/role.md` | true |
 
 ## handleCallback
 
@@ -170,7 +170,7 @@ Capability gap reported mid-pipeline.
 
 1. Parse gap description
 2. Check if existing role covers it -> redirect
-3. Role count < 4 -> generate dynamic role-spec in <session>/role-specs/
+3. Role count < 4 -> generate dynamic role-spec in {run_dir}/work/team/role-specs/
 4. Create new task, spawn worker
 5. Role count >= 4 -> merge or pause
 

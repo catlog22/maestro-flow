@@ -13,15 +13,15 @@ Read the roadmap and create a linked task chain (PLAN -> EXEC -> VERIFY) for a g
 | Parameter | Source | Description |
 |-----------|--------|-------------|
 | `phaseNumber` | From coordinator | Phase to dispatch (1-based) |
-| `sessionFolder` | From coordinator | Session artifact directory |
+| `sessionFolder` | From coordinator | Canonical `{run_dir}` root |
 
 ## Execution Steps
 
 ### Step 1: Read Roadmap and Extract Phase Requirements
 
 ```javascript
-const roadmap = Read(`${sessionFolder}/roadmap.md`)
-const config = JSON.parse(Read(`${sessionFolder}/config.json`))
+const roadmap = Read(`${sessionFolder}/outputs/roadmap.md`)
+const config = JSON.parse(Read(`${sessionFolder}/work/team/config.json`))
 
 // Parse phase section from roadmap
 // Extract: goal, requirements (REQ-IDs), success criteria
@@ -33,7 +33,7 @@ const phaseSuccessCriteria = extractPhaseSuccessCriteria(roadmap, phaseNumber)
 ### Step 2: Create Phase Directory
 
 ```javascript
-Bash(`mkdir -p "${sessionFolder}/phase-${phaseNumber}"`)
+Bash(`mkdir -p "${sessionFolder}/outputs/phase-${phaseNumber}"`)
 ```
 
 ### Step 3: Create PLAN Task (Assigned to Planner)
@@ -58,8 +58,8 @@ ${phaseRequirements.map(r => `- ${r}`).join('\n')}
 ${phaseSuccessCriteria.map(c => `- ${c}`).join('\n')}
 
 ## Deliverables
-- ${sessionFolder}/phase-${phaseNumber}/context.md (research context)
-- ${sessionFolder}/phase-${phaseNumber}/plan-01.md (execution plan with waves and must_haves)
+- ${sessionFolder}/outputs/phase-${phaseNumber}/context.md (research context)
+- ${sessionFolder}/outputs/phase-${phaseNumber}/plan-01.md (execution plan with waves and must_haves)
 
 ## Instructions
 1. Invoke spawn_agent({ task_name: "team_roadmap_dev", message: "Execute skill team-roadmap-dev, args: "--role=planner"" })
@@ -85,13 +85,13 @@ const execTaskId = update_plan({
 ${phaseGoal}
 
 ## Plan Reference
-- ${sessionFolder}/phase-${phaseNumber}/plan-01.md (and any additional plans)
+- ${sessionFolder}/outputs/phase-${phaseNumber}/plan-01.md (and any additional plans)
 
 ## Instructions
 1. Invoke spawn_agent({ task_name: "team_roadmap_dev", message: "Execute skill team-roadmap-dev, args: "--role=executor"" })
 2. Follow executor role.md implement command
 3. Execute all plans in wave order
-4. Write summary to ${sessionFolder}/phase-${phaseNumber}/summary-01.md
+4. Write summary to ${sessionFolder}/outputs/phase-${phaseNumber}/summary-01.md
 5. update_plan this task to completed when all plans executed`,
   activeForm: `Executing phase ${phaseNumber}`
 })
@@ -118,15 +118,15 @@ ${phaseGoal}
 ${phaseSuccessCriteria.map(c => `- ${c}`).join('\n')}
 
 ## References
-- Roadmap: ${sessionFolder}/roadmap.md
-- Plans: ${sessionFolder}/phase-${phaseNumber}/plan-*.md
-- Summaries: ${sessionFolder}/phase-${phaseNumber}/summary-*.md
+- Roadmap: ${sessionFolder}/outputs/roadmap.md
+- Plans: ${sessionFolder}/outputs/phase-${phaseNumber}/plan-*.md
+- Summaries: ${sessionFolder}/outputs/phase-${phaseNumber}/summary-*.md
 
 ## Instructions
 1. Invoke spawn_agent({ task_name: "team_roadmap_dev", message: "Execute skill team-roadmap-dev, args: "--role=verifier"" })
 2. Follow verifier role.md verify command
 3. Check each success criterion against actual implementation
-4. Write verification to ${sessionFolder}/phase-${phaseNumber}/verification.md
+4. Write verification to ${sessionFolder}/outputs/phase-${phaseNumber}/verification.md
 5. If gaps found: list them with gap IDs in verification.md
 6. update_plan this task to completed with result (passed/gaps_found)`,
   activeForm: `Verifying phase ${phaseNumber}`
@@ -139,7 +139,7 @@ update_plan({ taskId: verifyTaskId, addBlockedBy: [execTaskId] })
 ### Step 6: Update state.md
 
 ```javascript
-Edit(`${sessionFolder}/state.md`, {
+Edit(`${sessionFolder}/work/team/state.md`, {
   old_string: `- Phase: ${phaseNumber}\n- Status: ready_to_dispatch`,
   new_string: `- Phase: ${phaseNumber}\n- Status: in_progress\n- Tasks: PLAN-${phaseNumber}01 → EXEC-${phaseNumber}01 → VERIFY-${phaseNumber}01`
 })
@@ -152,7 +152,7 @@ mcp__maestro__team_msg({
   operation: "log", session_id: sessionId,
   from: "coordinator", to: "all",
   type: "phase_started",
-  data: { ref: `${sessionFolder}/roadmap.md` }
+  data: { ref: `${sessionFolder}/outputs/roadmap.md` }
 })
 ```
 

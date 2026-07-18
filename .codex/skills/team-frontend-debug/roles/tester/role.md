@@ -90,7 +90,7 @@ For each scenario:
 
 1. **Capture baseline**:
    ```
-   mcp__chrome-devtools__take_screenshot({ filePath: "<session>/evidence/F-<id>-<scenario>-before.png" })
+   mcp__chrome-devtools__take_screenshot({ filePath: "{run_dir}/evidence/F-<id>-<scenario>-before.png" })
    mcp__chrome-devtools__list_console_messages()  // baseline errors
    ```
 
@@ -108,7 +108,7 @@ For each scenario:
 
 3. **Capture result**:
    ```
-   mcp__chrome-devtools__take_screenshot({ filePath: "<session>/evidence/F-<id>-<scenario>-after.png" })
+   mcp__chrome-devtools__take_screenshot({ filePath: "{run_dir}/evidence/F-<id>-<scenario>-after.png" })
    mcp__chrome-devtools__list_console_messages({ types: ["error", "warn"] })
    mcp__chrome-devtools__list_network_requests({ resourceTypes: ["xhr", "fetch"] })
    ```
@@ -144,7 +144,7 @@ After each feature, send progress via state_update:
 
 ## Phase 4: Test Report
 
-Write `<session>/artifacts/TEST-001-report.md`:
+Write `{run_dir}/outputs/TEST-001-report.md`:
 
 ```markdown
 # Test Report
@@ -184,7 +184,7 @@ Write `<session>/artifacts/TEST-001-report.md`:
 | BUG-003 | F-005 | Low | Deprecation warning in console | Console warning |
 ```
 
-Write `<session>/artifacts/TEST-001-issues.json`:
+Write `{run_dir}/outputs/TEST-001-issues.json`:
 ```json
 {
   "issues": [
@@ -211,11 +211,11 @@ Send state_update:
 {
   "status": "task_complete",
   "task_id": "TEST-001",
-  "ref": "<session>/artifacts/TEST-001-report.md",
+  "ref": "{run_dir}/outputs/TEST-001-report.md",
   "key_findings": ["Tested N features", "Found X issues (Y high, Z medium)"],
   "decisions": [],
   "verification": "tested",
-  "issues_ref": "<session>/artifacts/TEST-001-issues.json"
+  "issues_ref": "{run_dir}/outputs/TEST-001-issues.json"
 }
 ```
 

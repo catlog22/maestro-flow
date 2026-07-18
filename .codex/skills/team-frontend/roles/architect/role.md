@@ -18,8 +18,8 @@ message_types:
 | Task description | From task subject/description | Yes |
 | Session path | Extracted from task description | Yes |
 | Scope | Extracted from task description (tokens/components/full) | No (default: full) |
-| Design intelligence | <session>/analysis/design-intelligence.json | Yes |
-| .msg/meta.json | <session>/.msg/meta.json | No |
+| Design intelligence | {run_dir}/outputs/analysis/design-intelligence.json | Yes |
+| .msg/meta.json | {run_dir}/work/team/.msg/meta.json | No |
 
 1. Extract session path and scope from task description
 2. Load design intelligence from analyst output
@@ -40,7 +40,7 @@ message_types:
 
 **Step 1: Design Token System** (scope: tokens or full):
 
-Generate `<session>/architecture/design-tokens.json` with categories:
+Generate `{run_dir}/outputs/architecture/design-tokens.json` with categories:
 
 | Category | Content | Source |
 |----------|---------|--------|
@@ -55,7 +55,7 @@ Use `$type` + `$value` format (Design Tokens Community Group). Support light/dar
 
 **Step 2: Component Architecture** (scope: components or full):
 
-Generate component specs in `<session>/architecture/component-specs/`:
+Generate component specs in `{run_dir}/outputs/architecture/component-specs/`:
 - Design reference (style, stack)
 - Props table (name, type, default, description)
 - Variants table
@@ -64,7 +64,7 @@ Generate component specs in `<session>/architecture/component-specs/`:
 
 **Step 3: Project Structure** (scope: full):
 
-Generate `<session>/architecture/project-structure.md` with stack-specific layout:
+Generate `{run_dir}/outputs/architecture/project-structure.md` with stack-specific layout:
 
 | Stack | Key Directories |
 |-------|----------------|

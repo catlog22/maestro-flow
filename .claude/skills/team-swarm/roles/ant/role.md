@@ -33,18 +33,18 @@ message_types:
 | Input | Source | Required |
 |-------|--------|----------|
 | Assignment | Task description (parse JSON block) | Yes |
-| Objective | `<session>/swarm-config.json#ant_prompt.objective` | Yes |
-| Task semantics | `<session>/swarm-config.json#ant_prompt` (full block) | Yes |
-| Task space | `<session>/task-space.json` (valid nodes list) | Yes |
+| Objective | `{run_dir}/work/team/swarm-config.json#ant_prompt.objective` | Yes |
+| Task semantics | `{run_dir}/work/team/swarm-config.json#ant_prompt` (full block) | Yes |
+| Task space | `{run_dir}/work/team/task-space.json` (valid nodes list) | Yes |
 | Pheromone hints | `assignment.edge_preferences` (already passed in) | Yes |
-| Wisdom from prior iters | `<session>/wisdom/learnings.md` (if exists) | Optional |
+| Wisdom from prior iters | `{run_dir}/work/team/wisdom/learnings.md` (if exists) | Optional |
 
 Workflow:
 1. Extract session path from task description
 2. Parse assignment JSON block from task description
 3. Read swarm-config.json -> capture `ant_prompt.objective`, `ant_prompt.evidence_requirements`, `task_space.max_path_length`
 4. Read task-space.json -> build valid_nodes set
-5. If `<session>/wisdom/learnings.md` exists -> read for prior-iteration insights
+5. If `{run_dir}/work/team/wisdom/learnings.md` exists -> read for prior-iteration insights
 
 ## Phase 3: Exploration
 

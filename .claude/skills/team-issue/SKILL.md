@@ -62,10 +62,10 @@ Parse `$ARGUMENTS`:
 ## Shared Constants
 
 - **Session prefix**: `TISL`
-- **Session path**: `.workflow/.team/TISL-<slug>-<date>/`
+- **Session path**: `{run_dir}/work/team/`
 - **Team name**: `issue`
 - **CLI tools**: `maestro delegate --mode analysis` (read-only), `maestro delegate --mode write` (modifications)
-- **Message bus**: `mcp__maestro__team_msg(session_id=<session-id>, ...)`
+- **Message bus**: `mcp__maestro__team_msg(session_id=<run-id>, ...)`
 
 ## Worker Spawn Template
 
@@ -81,14 +81,14 @@ Agent({
   prompt: `## Role Assignment
 role: <role>
 role_spec: <skill_root>/roles/<role>/role.md
-session: <session-folder>
-session_id: <session-id>
+session: {run_dir}/work/team
+session_id: <run-id>
 team_name: issue
 requirement: <task-description>
 inner_loop: false
 
 ## Progress Milestones
-session_id: <session-id>
+session_id: <run-id>
 Report progress via team_msg at natural phase boundaries (context loaded -> core work done -> verification).
 Report blockers immediately via team_msg type="blocker".
 Report completion via team_msg type="task_complete" after final SendMessage.
@@ -109,15 +109,15 @@ Agent({
   prompt: `## Role Assignment
 role: <role>
 role_spec: <skill_root>/roles/<role>/role.md
-session: <session-folder>
-session_id: <session-id>
+session: {run_dir}/work/team
+session_id: <run-id>
 team_name: issue
 requirement: <task-description>
 agent_name: <role>-<N>
 inner_loop: false
 
 ## Progress Milestones
-session_id: <session-id>
+session_id: <run-id>
 Report progress via team_msg at natural phase boundaries (context loaded -> core work done -> verification).
 Report blockers immediately via team_msg type="blocker".
 Report completion via team_msg type="task_complete" after final SendMessage.
@@ -137,8 +137,8 @@ Execute built-in Phase 1 (task discovery, owner=<role>-<N>) -> role Phase 2-4 ->
 ## Session Directory
 
 ```
-.workflow/.team/TISL-<slug>-<date>/
-├── session.json                    # Session metadata + pipeline + fix_cycles
+{run_dir}/work/team/
+├── team-session.json                    # Session metadata + pipeline + fix_cycles
 ├── task-analysis.json              # Coordinator analyze output
 ├── .msg/
 │   ├── messages.jsonl              # Message bus log
@@ -150,12 +150,12 @@ Execute built-in Phase 1 (task discovery, owner=<role>-<N>) -> role Phase 2-4 ->
 │   └── issues.md
 ├── explorations/                   # Explorer output
 │   └── context-<issueId>.json
-├── solutions/                      # Planner output
+├── {run_dir}/outputs/solutions/                      # Planner output
 │   └── solution-<issueId>.json
-├── audits/                         # Reviewer output
+├── {run_dir}/outputs/audits/                         # Reviewer output
 │   └── audit-report.json
-├── queue/                          # Integrator output (also .workflow/issues/queue/)
-└── builds/                         # Implementer output
+├── {run_dir}/outputs/queue/                            # Integrator output
+└── {run_dir}/outputs/builds/                         # Implementer output
 ```
 
 ## Specs Reference

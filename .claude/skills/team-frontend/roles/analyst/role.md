@@ -16,7 +16,7 @@ message_types:
 | Task description | From task subject/description | Yes |
 | Session path | Extracted from task description | Yes |
 | Industry context | Extracted from task description | Yes |
-| .msg/meta.json | <session>/.msg/meta.json | No |
+| .msg/meta.json | {run_dir}/work/team/.msg/meta.json | No |
 
 1. Extract session path, industry type, and tech stack from task description
 2. Detect existing design system:
@@ -75,8 +75,8 @@ Retrieve design intelligence via ui-ux-pro-max skill integration.
 | `recommendations` | Synthesized: style, anti-patterns, must-have |
 
 **Output files**:
-- `<session>/analysis/design-intelligence.json`
-- `<session>/analysis/requirements.md`
+- `{run_dir}/outputs/analysis/design-intelligence.json`
+- `{run_dir}/outputs/analysis/requirements.md`
 
 ### Tech Profile Scan
 

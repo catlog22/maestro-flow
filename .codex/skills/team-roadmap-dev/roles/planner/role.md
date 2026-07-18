@@ -17,10 +17,10 @@ message_types:
 
 | Input | Source | Required |
 |-------|--------|----------|
-| roadmap.md | <session>/roadmap.md | Yes |
-| config.json | <session>/config.json | Yes |
-| Prior summaries | <session>/phase-{1..N-1}/summary-*.md | No |
-| Wisdom | <session>/wisdom/ | No |
+| roadmap.md | {run_dir}/outputs/roadmap.md | Yes |
+| config.json | {run_dir}/work/team/config.json | Yes |
+| Prior summaries | {run_dir}/outputs/phase-{1..N-1}/summary-*.md | No |
+| Wisdom | {run_dir}/work/team/wisdom/ | No |
 
 1. Read roadmap.md, extract phase goal, requirements (REQ-IDs), success criteria
 2. Read config.json for depth setting (quick/standard/comprehensive)
@@ -40,12 +40,12 @@ message_types:
    ```
    - Target: files needing modification, patterns, dependencies, test infrastructure, risks
 6. If depth=comprehensive: run Agy CLI analysis (`--mode analysis --rule analysis-analyze-code-patterns`)
-7. Write `<session>/phase-{N}/context.md` combining roadmap requirements + exploration results
+7. Write `{run_dir}/outputs/phase-{N}/context.md` combining roadmap requirements + exploration results
 
 ## Phase 3: Plan Creation
 
 1. Load context.md from Phase 2
-2. Create output directory: `<session>/phase-{N}/.task/`
+2. Create output directory: `{run_dir}/outputs/phase-{N}/.task/`
 3. Delegate to CLI planning tool with:
    ```
    Bash({

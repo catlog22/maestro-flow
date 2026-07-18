@@ -71,8 +71,8 @@ Same as System pipeline, plus:
 
 | Task | Output Path |
 |------|-------------|
-| RESEARCH-001 | <session>/research/*.json |
-| DESIGN-001 | <session>/design/design-tokens.json + component-specs/*.md |
-| AUDIT-* | <session>/audit/audit-<NNN>.md |
-| BUILD-001 | <session>/build/token-files/* |
-| BUILD-002 | <session>/build/component-files/* |
+| RESEARCH-001 | {run_dir}/outputs/research/*.json |
+| DESIGN-001 | {run_dir}/outputs/design/design-tokens.json + component-specs/*.md |
+| AUDIT-* | {run_dir}/outputs/audit/audit-<NNN>.md |
+| BUILD-001 | {run_dir}/outputs/build/token-files/* |
+| BUILD-002 | {run_dir}/outputs/build/component-files/* |

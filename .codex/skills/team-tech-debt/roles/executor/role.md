@@ -16,8 +16,8 @@ message_types: [state_update]
 | Input | Source | Required |
 |-------|--------|----------|
 | Session path | task description (regex: `session:\s*(.+)`) | Yes |
-| .msg/meta.json | <session>/.msg/meta.json | Yes |
-| Remediation plan | <session>/plan/remediation-plan.json | Yes |
+| .msg/meta.json | {run_dir}/work/team/.msg/meta.json | Yes |
+| Remediation plan | {run_dir}/outputs/plan/remediation-plan.json | Yes |
 | Worktree info | meta.json:worktree.path, worktree.branch | Yes |
 | Context accumulator | From prior TDFIX tasks (inner loop) | Yes (inner loop) |
 
@@ -73,6 +73,6 @@ All commands in worktree:
 | Syntax | `tsc --noEmit` or `python -m py_compile` | No new errors |
 | Lint | `eslint --no-error-on-unmatched-pattern` | No new errors |
 
-Write `<session>/fixes/fix-log.json` with fix results. Update .msg/meta.json with `fix_results`.
+Write `{run_dir}/outputs/fixes/fix-log.json` with fix results. Update .msg/meta.json with `fix_results`.
 
 Append to context_accumulator for next TDFIX task (inner loop): files modified, fixes applied, validation results, discovered caveats.

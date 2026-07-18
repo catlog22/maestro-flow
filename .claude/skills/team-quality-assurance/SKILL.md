@@ -55,10 +55,10 @@ Parse `$ARGUMENTS`:
 ## Shared Constants
 
 - **Session prefix**: `QA`
-- **Session path**: `.workflow/.team/QA-<slug>-<date>/`
+- **Session path**: `{run_dir}/work/team/`
 - **Team name**: `quality-assurance`
 - **CLI tools**: `maestro delegate --mode analysis` (read-only), `maestro delegate --mode write` (modifications)
-- **Message bus**: `mcp__maestro__team_msg(session_id=<session-id>, ...)`
+- **Message bus**: `mcp__maestro__team_msg(session_id=<run-id>, ...)`
 
 ## Worker Spawn Template
 
@@ -74,14 +74,14 @@ Agent({
   prompt: `## Role Assignment
 role: <role>
 role_spec: <skill_root>/roles/<role>/role.md
-session: <session-folder>
-session_id: <session-id>
+session: {run_dir}/work/team
+session_id: <run-id>
 team_name: quality-assurance
 requirement: <task-description>
 inner_loop: <true|false>
 
 ## Progress Milestones
-session_id: <session-id>
+session_id: <run-id>
 Report progress via team_msg at natural phase boundaries (context loaded -> core work done -> verification).
 Report blockers immediately via team_msg type="blocker".
 Report completion via team_msg type="task_complete" after final SendMessage.
@@ -123,15 +123,15 @@ AskUserQuestion({
 ## Session Directory
 
 ```
-.workflow/.team/QA-<slug>-<date>/
+{run_dir}/work/team/
 ├── .msg/messages.jsonl     # Team message bus
 ├── .msg/meta.json          # Session state + shared memory
 ├── wisdom/                 # Cross-task knowledge
-├── scan/                   # Scout output
-├── strategy/               # Strategist output
-├── tests/                  # Generator output (L1/, L2/, L3/)
-├── results/                # Executor output
-└── analysis/               # Analyst output
+├── {run_dir}/outputs/scan/                   # Scout output
+├── {run_dir}/outputs/strategy/               # Strategist output
+├── {run_dir}/outputs/tests/                  # Generator output (L1/, L2/, L3/)
+├── {run_dir}/outputs/results/                # Executor output
+└── {run_dir}/outputs/analysis/               # Analyst output
 ```
 
 ## Specs Reference

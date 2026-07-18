@@ -41,7 +41,12 @@ The SKILL.md follows a strict template. Every generated SKILL.md contains these 
 name: ${teamConfig.skillName}
 description: "${teamConfig.domain}. Triggers on ${teamConfig.skillName}."
 allowed-tools: TeamCreate(*), TeamDelete(*), SendMessage(*), TaskCreate(*), TaskUpdate(*), TaskList(*), TaskGet(*), Agent(*), AskUserQuestion(*), Read(*), Write(*), Edit(*), Bash(*), Glob(*), Grep(*)
+session-mode: run
 ---
+
+<required_reading>
+@~/.maestro/workflows/run-mode-lite.md
+</required_reading>
 ```
 
 ### Section 2: Title + Architecture Diagram
@@ -102,9 +107,9 @@ Parse `$ARGUMENTS`:
 ## Shared Constants
 
 - **Session prefix**: `${teamConfig.sessionPrefix}`
-- **Session path**: `.workflow/.team/${teamConfig.sessionPrefix}-<slug>-<date>/`
+- **Session path**: `{run_dir}/work/team/`
 - **CLI tools**: `maestro delegate --mode analysis` (read-only), `maestro delegate --mode write` (modifications)
-- **Message bus**: `mcp__maestro__team_msg(session_id=<session-id>, ...)`
+- **Message bus**: `mcp__maestro__team_msg(session_id=<run-id>, ...)`
 ```
 
 ### Section 6: Worker Spawn Template
@@ -124,8 +129,8 @@ Agent({
   prompt: `## Role Assignment
 role: <role>
 role_spec: .claude/skills/${teamConfig.skillName}/roles/<role>/role.md
-session: <session-folder>
-session_id: <session-id>
+session: {run_dir}/work/team
+session_id: <run-id>
 team_name: <team-name>
 requirement: <task-description>
 inner_loop: <true|false>
@@ -190,15 +195,18 @@ ${teamConfig.specs.map(s =>
 ## Session Directory
 
 \```
-.workflow/.team/${teamConfig.sessionPrefix}-<slug>-<date>/
-├── team-session.json           # Session state + role registry
-├── spec/                       # Spec phase outputs
-├── plan/                       # Implementation plan + TASK-*.json
-├── artifacts/                  # All deliverables
-├── wisdom/                     # Cross-task knowledge
-├── explorations/               # Shared explore cache
-├── discussions/                # Discuss round records
-└── .msg/                       # Team message bus
+{run_dir}/
+├── outputs/                    # All formal deliverables
+│   ├── spec/                   # Spec phase outputs
+│   └── plan/                   # Implementation plan + TASK-*.json
+├── evidence/
+│   └── discussions/            # Discuss round records
+├── report.md                   # Human-readable synthesis + handoff
+└── work/team/                  # Team coordination (non-artifact)
+    ├── team-session.json       # Session state + role registry
+    ├── wisdom/                 # Cross-task knowledge
+    ├── explorations/           # Shared explore cache
+    └── .msg/                   # Team message bus
 \```
 ```
 

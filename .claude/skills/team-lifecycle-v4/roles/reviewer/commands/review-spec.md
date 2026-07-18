@@ -2,7 +2,7 @@
 
 ## Inputs
 
-- All spec docs in <session>/spec/
+- All spec docs in {run_dir}/outputs/spec/
 - Quality gate config from specs/quality-gates.md
 
 ## Dimensions
@@ -16,7 +16,7 @@
 
 ## Review Process
 
-1. Read all spec documents from <session>/spec/
+1. Read all spec documents from {run_dir}/outputs/spec/
 2. Load quality gate thresholds from specs/quality-gates.md
 3. Score each dimension
 4. Run cross-document validation

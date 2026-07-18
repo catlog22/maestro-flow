@@ -12,12 +12,12 @@ message_types: [state_update]
 | Input | Source | Required |
 |-------|--------|----------|
 | Session folder | Task description (Session: line) | Yes |
-| Synthesis results | <session>/synthesis/*.md files | Yes |
-| All ideas | <session>/ideas/*.md files | No (for context) |
-| All critiques | <session>/critiques/*.md files | No (for context) |
+| Synthesis results | {run_dir}/outputs/synthesis/*.md files | Yes |
+| All ideas | {run_dir}/outputs/ideas/*.md files | No (for context) |
+| All critiques | {run_dir}/outputs/critiques/*.md files | No (for context) |
 
 1. Extract session path from task description (match "Session: <path>")
-2. Glob synthesis files from <session>/synthesis/
+2. Glob synthesis files from {run_dir}/outputs/synthesis/
 3. Read all synthesis files for evaluation
 4. Optionally read ideas and critiques for full context
 
@@ -38,7 +38,7 @@ message_types: [state_update]
 - Score each dimension (1-10) with rationale
 - Overall recommendation: Strong Recommend / Recommend / Consider / Pass
 
-**Output**: Write to `<session>/evaluation/evaluation-<num>.md`
+**Output**: Write to `{run_dir}/outputs/evaluation/evaluation-<num>.md`
 - Sections: Input summary, Scoring Matrix (ranked table), Detailed Evaluation per proposal, Final Recommendation, Action Items, Risk Summary
 
 ## Phase 4: Consistency Check

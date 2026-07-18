@@ -11,8 +11,8 @@ message_types: [diag_complete, diag_progress, error]
 
 | Input | Source | Required |
 |-------|--------|----------|
-| Scan report | <session>/scan/scan-report.md | Yes |
-| .msg/meta.json | <session>/wisdom/.msg/meta.json | Yes |
+| Scan report | {run_dir}/outputs/scan/scan-report.md | Yes |
+| .msg/meta.json | {run_dir}/work/team/wisdom/.msg/meta.json | Yes |
 | Fix strategies | specs/fix-strategies.md | Yes |
 | Design standards | specs/design-standards.md | Yes |
 
@@ -105,7 +105,7 @@ Rules:
 | Dependencies valid | Dependency graph is acyclic |
 | Priority consistent | Group priority matches highest-severity issue in group |
 
-Output: `<session>/diagnosis/diagnosis-report.md`
+Output: `{run_dir}/outputs/diagnosis/diagnosis-report.md`
 
 Report structure:
 
@@ -146,7 +146,7 @@ Report structure:
 ...
 
 ## Metadata
-- Source: <session>/scan/scan-report.md
+- Source: {run_dir}/outputs/scan/scan-report.md
 - Original score: X/32
 - Timestamp: <ISO timestamp>
 ```
@@ -154,5 +154,5 @@ Report structure:
 After writing the report, send completion message:
 ```
 mcp__maestro__team_msg(session_id, role="diagnostician", type="diag_complete", content="Diagnosis complete. Root cause groups: N. Systemic: N. Fix phases: N.")
-SendMessage(participant="coordinator", message="[diagnostician] DIAG-001 complete. Root cause groups: N (P0: X, P1: X, P2: X, P3: X). Systemic: N, One-off: N. Report: <session>/diagnosis/diagnosis-report.md")
+SendMessage(participant="coordinator", message="[diagnostician] DIAG-001 complete. Root cause groups: N (P0: X, P1: X, P2: X, P3: X). Systemic: N, One-off: N. Report: {run_dir}/outputs/diagnosis/diagnosis-report.md")
 ```

@@ -45,7 +45,7 @@ Worker completed. Process and advance.
 
 4. **Review gate check** (when reviewer completes):
    - If completed task is AUDIT-* AND pipeline is full or batch:
-   - Read audit report from `<session>/audits/audit-report.json`
+   - Read audit report from `{run_dir}/outputs/audits/audit-report.json`
    - Read .msg/meta.json for fix_cycles
 
    | Verdict | fix_cycles < max | Action |
@@ -175,7 +175,7 @@ Capability gap reported mid-pipeline.
 
 1. Parse gap description
 2. Check if existing role covers it -> redirect
-3. Role count < 6 -> generate dynamic role-spec in <session>/role-specs/
+3. Role count < 6 -> generate dynamic role-spec in {run_dir}/work/team/role-specs/
 4. Create new task, spawn worker
 5. Role count >= 6 -> merge or pause
 

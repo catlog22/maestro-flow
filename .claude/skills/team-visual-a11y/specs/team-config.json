@@ -96,14 +96,14 @@
   },
 
   "session_dirs": {
-    "base": ".workflow/.team/VA-{slug}-{YYYY-MM-DD}/",
-    "color_audit": "audits/color/",
-    "typo_audit": "audits/typography/",
-    "focus_audit": "audits/focus/",
-    "remediation": "remediation/",
-    "fixes": "fixes/",
-    "re_audit": "re-audit/",
-    "evidence": "evidence/",
-    "messages": ".workflow/.team-msg/{team-name}/"
+    "base": "{run_dir}/work/team/",
+    "color_audit": "{run_dir}/outputs/audits/color/",
+    "typo_audit": "{run_dir}/outputs/audits/typography/",
+    "focus_audit": "{run_dir}/outputs/audits/focus/",
+    "remediation": "{run_dir}/outputs/remediation/",
+    "fixes": "{run_dir}/outputs/fixes/",
+    "re_audit": "{run_dir}/outputs/re-audit/",
+    "evidence": "{run_dir}/evidence/",
+    "messages": "{run_dir}/work/team/.msg/"
   }
 }

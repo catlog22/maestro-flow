@@ -419,6 +419,58 @@ def test_idempotent_update():
               up1["best_score"] == up2["best_score"])
 
 
+def test_run_dir_artifacts():
+    section("aco.py — --run-dir reads artifacts from run_dir/outputs/")
+
+    with tempfile.TemporaryDirectory() as td:
+        session = Path(td) / "session"
+        run_dir = Path(td) / "run"
+        outputs = run_dir / "outputs"
+        outputs.mkdir(parents=True)
+
+        write_config(session)
+        run_aco(session, "init")
+        run_aco(session, "select", "--iter", "1")
+
+        for i, (path, ss, sc) in enumerate([
+            (["a", "b", "c"], 0.8, 0.9),
+            (["b", "d", "e"], 0.6, 0.7),
+            (["c", "e", "a"], 0.4, 0.5),
+        ], 1):
+            decisions = [
+                {"from": path[j], "to": path[j + 1], "rationale": "r",
+                 "guided_by": "pheromone", "deviation_from_hint": False}
+                for j in range(len(path) - 1)
+            ]
+            art = {
+                "_meta": {
+                    "kind": "adversarial-swarm-ant-result",
+                    "schema": "adversarial-swarm-ant-result/1.0",
+                    "role": "evidence",
+                },
+                "schema_version": "1.0",
+                "ant_id": f"ANT-1-{i}",
+                "iteration": 1,
+                "assignment": {"start_node": path[0], "max_path_length": 3},
+                "path": path,
+                "path_decisions": decisions,
+                "self_score": ss,
+                "self_confidence": sc,
+                "evidence": [f"src/{path[-1]}.ts:{i}"],
+                "candidate_solution": {"type": "string", "summary": f"sol-{i}",
+                                       "content": str(path)},
+            }
+            (outputs / f"ant-1-{i}.json").write_text(json.dumps(art))
+
+        check("session/artifacts/ is empty",
+              not list((session / "artifacts").glob("ant-*")) if (session / "artifacts").exists() else True)
+
+        up = run_aco(session, "--run-dir", str(run_dir), "update", "--iter", "1")
+        check("update reads from run_dir/outputs/", up["status"] == "ok")
+        check("all 3 ants processed via run_dir", up["n_ants_processed"] == 3)
+        check("best_score computed", up["best_score"] > 0)
+
+
 def test_auto_discover_from_glob():
     section("aco.py — auto_discover_from glob")
 
@@ -459,6 +511,7 @@ def main():
     test_invalid_artifacts()
     test_config_validation()
     test_idempotent_update()
+    test_run_dir_artifacts()
     test_auto_discover_from_glob()
 
     print("\n" + "=" * 60)

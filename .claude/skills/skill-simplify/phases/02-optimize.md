@@ -11,7 +11,7 @@ Apply simplification rules from analysisResult to produce optimized content. Wri
 
 ## Pre-Step: Load Context
 
-Run `ccw spec load --category validation` for verification rules and acceptance criteria to validate optimization preserves functional integrity.
+Run `maestro spec load --category validation` for verification rules and acceptance criteria to validate optimization preserves functional integrity.
 
 ## Execution
 
@@ -60,7 +60,7 @@ Process `analysisResult.optimizationPlan.operations` sorted by priority:
 |----------------|--------|
 | Nested backtick template literals | Convert code block to prose description, or use 4-backtick fence |
 | Hardcoded option lists | Replace with dynamic generation: describe source of options + generation logic |
-| Workflow handoff without execution steps | Add concrete steps referencing target command's interface (e.g., pipe to `ccw issue create`) |
+| Workflow handoff without execution steps | Add concrete steps referencing the target Maestro CLI interface (e.g., `maestro issue create ... --json`) |
 | Unclosed brackets | Fix bracket matching |
 | Undefined variable references | Add declaration or link to source |
 

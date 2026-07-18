@@ -15,9 +15,9 @@ message_types: [state_update]
 
 | Input | Source | Required |
 |-------|--------|----------|
-| Architecture baseline | <session>/artifacts/architecture-baseline.json (shared) | Yes |
+| Architecture baseline | {run_dir}/outputs/architecture-baseline.json (shared) | Yes |
 | Refactoring plan / detail | Varies by mode (see below) | Yes |
-| .msg/meta.json | <session>/wisdom/.msg/meta.json | Yes |
+| .msg/meta.json | {run_dir}/work/team/wisdom/.msg/meta.json | Yes |
 
 1. Extract session path from task description
 2. **Detect branch/pipeline context** from task description:
@@ -29,13 +29,13 @@ message_types: [state_update]
 | Neither present | - | Single mode -- full validation |
 
 3. **Load architecture baseline**:
-   - Single / Fan-out: Read `<session>/artifacts/architecture-baseline.json` (shared baseline)
-   - Independent: Read `<session>/artifacts/pipelines/{P}/architecture-baseline.json`
+   - Single / Fan-out: Read `{run_dir}/outputs/architecture-baseline.json` (shared baseline)
+   - Independent: Read `{run_dir}/outputs/pipelines/{P}/architecture-baseline.json`
 
 4. **Load refactoring context**:
-   - Single: Read `<session>/artifacts/refactoring-plan.md` -- all success criteria
-   - Fan-out branch: Read `<session>/artifacts/branches/B{NN}/refactoring-detail.md` -- only this branch's criteria
-   - Independent: Read `<session>/artifacts/pipelines/{P}/refactoring-plan.md`
+   - Single: Read `{run_dir}/outputs/refactoring-plan.md` -- all success criteria
+   - Fan-out branch: Read `{run_dir}/outputs/branches/B{NN}/refactoring-detail.md` -- only this branch's criteria
+   - Independent: Read `{run_dir}/outputs/pipelines/{P}/refactoring-plan.md`
 
 5. Load .msg/meta.json for project type and refactoring scope
 6. Detect available validation tools from project:
@@ -103,12 +103,12 @@ Compare against baseline and plan criteria:
 | Dangling references | Unresolved imports detected | FAIL -> fix_required |
 
 1. Write validation results to output path:
-   - Single: `<session>/artifacts/validation-results.json`
-   - Fan-out: `<session>/artifacts/branches/B{NN}/validation-results.json`
-   - Independent: `<session>/artifacts/pipelines/{P}/validation-results.json`
+   - Single: `{run_dir}/outputs/validation-results.json`
+   - Fan-out: `{run_dir}/outputs/branches/B{NN}/validation-results.json`
+   - Independent: `{run_dir}/outputs/pipelines/{P}/validation-results.json`
    - Content: Per-dimension: name, baseline value, current value, improvement/regression, verdict; Overall verdict: PASS / WARN / FAIL; Failure details (if any)
 
-2. Update `<session>/wisdom/.msg/meta.json` under scoped namespace:
+2. Update `{run_dir}/work/team/wisdom/.msg/meta.json` under scoped namespace:
    - Single: merge `{ "validator": { verdict, improvements, regressions, build_pass, test_pass } }`
    - Fan-out: merge `{ "validator.B{NN}": { verdict, improvements, regressions, build_pass, test_pass } }`
    - Independent: merge `{ "validator.{P}": { verdict, improvements, regressions, build_pass, test_pass } }`

@@ -36,7 +36,7 @@ TASK:
   - <step 2: specific action>
   - <step 3: specific action>
 CONTEXT:
-  - Session: <session-folder>
+  - Session: {run_dir}/work/team
   - Scope: <scope>
   - Upstream artifacts: <artifact-1.md>, <artifact-2.md>
   - Key files: <file1>, <file2> (if applicable)
@@ -64,7 +64,7 @@ TASK:
   - Detect unresponsive actions (event binding issues, async handling problems)
   - Check state update patterns (mutation vs reactive updates)
 CONTEXT:
-  - Session: <session-folder>
+  - Session: {run_dir}/work/team
   - Scope: Project path: <project-path>, Framework: <framework>
   - File patterns: **/*.tsx, **/*.vue, **/*.jsx
   - Focus: UI components with user interactions
@@ -89,7 +89,7 @@ TASK:
   - Identify framework-specific anti-patterns
   - Use CLI for complex multi-file analysis when needed
 CONTEXT:
-  - Session: <session-folder>
+  - Session: {run_dir}/work/team
   - Scope: Issues from scan report
   - Upstream artifacts: {run_dir}/outputs/scan-report.md
   - State: via team_msg(operation="get_state", role="scanner")
@@ -114,7 +114,7 @@ TASK:
   - Generate framework-specific code patterns (React/Vue)
   - Use CLI for complex multi-component solutions when needed
 CONTEXT:
-  - Session: <session-folder>
+  - Session: {run_dir}/work/team
   - Scope: Issues from diagnosis report
   - Upstream artifacts: {run_dir}/outputs/diagnosis.md
   - Framework: <framework>
@@ -141,7 +141,7 @@ TASK:
   - Use CLI for complex multi-file changes, direct Edit/Write for simple changes
   - Validate syntax and file existence after each fix
 CONTEXT:
-  - Session: <session-folder>
+  - Session: {run_dir}/work/team
   - Scope: Fixes from design guide
   - Upstream artifacts: {run_dir}/outputs/design-guide.md
   - Framework: <framework>
@@ -169,7 +169,7 @@ TASK:
   - If pass rate < 95%, use CLI to generate fixes (max 5 iterations)
   - Generate test report with pass/fail counts, coverage, fix iterations
 CONTEXT:
-  - Session: <session-folder>
+  - Session: {run_dir}/work/team
   - Scope: Fixes from implementer
   - Upstream artifacts: {run_dir}/outputs/fixes/, {run_dir}/outputs/design-guide.md
   - Framework: <framework>

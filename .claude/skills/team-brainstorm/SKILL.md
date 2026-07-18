@@ -60,9 +60,9 @@ Parse `$ARGUMENTS`:
 ## Shared Constants
 
 - **Session prefix**: `BRS`
-- **Session path**: `.workflow/.team/BRS-<slug>-<date>/`
+- **Session path**: `{run_dir}/work/team/`
 - **CLI tools**: `maestro delegate --mode analysis` (read-only), `maestro delegate --mode write` (modifications)
-- **Message bus**: `mcp__maestro__team_msg(session_id=<session-id>, ...)`
+- **Message bus**: `mcp__maestro__team_msg(session_id=<run-id>, ...)`
 
 ## Worker Spawn Template
 
@@ -78,14 +78,14 @@ Agent({
   prompt: `## Role Assignment
 role: <role>
 role_spec: <skill_root>/roles/<role>/role.md
-session: <session-folder>
-session_id: <session-id>
+session: {run_dir}/work/team
+session_id: <run-id>
 team_name: brainstorm
 requirement: <topic-description>
 inner_loop: false
 
 ## Progress Milestones
-session_id: <session-id>
+session_id: <run-id>
 Report progress via team_msg at natural phase boundaries (context loaded -> core work done -> verification).
 Report blockers immediately via team_msg type="blocker".
 Report completion via team_msg type="task_complete" after final SendMessage.
@@ -108,15 +108,15 @@ Agent({
   prompt: `## Role Assignment
 role: ideator
 role_spec: <skill_root>/roles/ideator/role.md
-session: <session-folder>
-session_id: <session-id>
+session: {run_dir}/work/team
+session_id: <run-id>
 team_name: brainstorm
 requirement: <topic-description>
 agent_name: ideator-<N>
 inner_loop: false
 
 ## Progress Milestones
-session_id: <session-id>
+session_id: <run-id>
 Report progress via team_msg at natural phase boundaries (context loaded -> core work done -> verification).
 Report blockers immediately via team_msg type="blocker".
 Report completion via team_msg type="task_complete" after final SendMessage.
@@ -136,8 +136,8 @@ Execute built-in Phase 1 (task discovery, owner=ideator-<N>) -> role Phase 2-4 -
 ## Session Directory
 
 ```
-.workflow/.team/BRS-<slug>-<date>/
-├── session.json                    # Session metadata + pipeline + gc_round
+{run_dir}/work/team/
+├── team-session.json                    # Session metadata + pipeline + gc_round
 ├── task-analysis.json              # Coordinator analyze output
 ├── .msg/
 │   ├── messages.jsonl              # Message bus log
@@ -147,15 +147,15 @@ Execute built-in Phase 1 (task discovery, owner=ideator-<N>) -> role Phase 2-4 -
 │   ├── decisions.md
 │   ├── conventions.md
 │   └── issues.md
-├── ideas/                          # Ideator output
+├── {run_dir}/outputs/ideas/                          # Ideator output
 │   ├── idea-001.md
 │   └── idea-002.md
-├── critiques/                      # Challenger output
+├── {run_dir}/outputs/critiques/                      # Challenger output
 │   ├── critique-001.md
 │   └── critique-002.md
-├── synthesis/                      # Synthesizer output
+├── {run_dir}/outputs/synthesis/                      # Synthesizer output
 │   └── synthesis-001.md
-└── evaluation/                     # Evaluator output
+└── {run_dir}/outputs/evaluation/                     # Evaluator output
     └── evaluation-001.md
 ```
 

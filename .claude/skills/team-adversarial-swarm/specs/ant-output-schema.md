@@ -17,6 +17,11 @@ Inherited from team-swarm with adversarial scoring integration notes.
 
 ```json
 {
+  "_meta": {
+    "kind": "adversarial-swarm-ant-result",
+    "schema": "adversarial-swarm-ant-result/1.0",
+    "role": "evidence"
+  },
   "schema_version": "1.0",
   "ant_id": "ANT-3-2",
   "iteration": 3,
@@ -54,6 +59,7 @@ Inherited from team-swarm with adversarial scoring integration notes.
 
 | Field | Type | Required | Constraint |
 |-------|------|----------|------------|
+| `_meta` | object | yes | complete artifact metadata; `kind` = `adversarial-swarm-ant-result`, `schema` = `adversarial-swarm-ant-result/1.0` |
 | `schema_version` | string | yes | `"1.0"` |
 | `ant_id` | string | yes | matches assignment |
 | `iteration` | int | yes | matches assignment |

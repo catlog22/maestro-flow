@@ -63,8 +63,8 @@ Worker completed. Process and advance.
      - Parse audit feedback for specific issues
      - Apply targeted fixes
    CONTEXT:
-     - Session: <session-folder>
-     - Upstream artifacts: audit/audit-<NNN>.md" })
+     - Session: {run_dir}/work/team
+     - Upstream artifacts: {run_dir}/outputs/audit/audit-<NNN>.md" })
    TaskUpdate({ taskId: "DESIGN-fix-<round>", owner: "designer" })
    ```
    Then create new AUDIT task blocked by fix. Increment gc_state.round.
@@ -116,7 +116,7 @@ Pipeline Status (<pipeline-mode>):
 
 GC Rounds: 0/2
 Sync Points: 0/<expected>
-Session: <session-id>
+Session: <run-id>
 Commands: 'resume' to advance | 'check' to refresh
 ```
 
@@ -152,14 +152,14 @@ Agent({
   prompt: `## Role Assignment
 role: <role>
 role_spec: ~  or <project>/.claude/skills/team-uidesign/roles/<role>/role.md
-session: <session-folder>
-session_id: <session-id>
+session: {run_dir}/work/team
+session_id: <run-id>
 team_name: uidesign
 requirement: <task-description>
 inner_loop: false
 
 ## Progress Milestones
-session_id: <session-id>
+session_id: <run-id>
 Report progress via team_msg at natural phase boundaries (context loaded -> core work done -> verification).
 Report blockers immediately via team_msg type="blocker".
 Report completion via team_msg type="task_complete" after final SendMessage.

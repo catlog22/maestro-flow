@@ -72,10 +72,10 @@ Parse `$ARGUMENTS`:
 ## Shared Constants
 
 - **Session prefix**: `VA`
-- **Session path**: `.workflow/.team/VA-<slug>-<date>/`
+- **Session path**: `{run_dir}/work/team/`
 - **team_name**: `visual-a11y`
 - **CLI tools**: `maestro delegate --mode analysis` (read-only), `maestro delegate --mode write` (modifications)
-- **Message bus**: `mcp__maestro__team_msg(session_id=<session-id>, ...)`
+- **Message bus**: `mcp__maestro__team_msg(session_id=<run-id>, ...)`
 - **Max GC rounds**: 2
 
 ## Worker Spawn Template
@@ -92,14 +92,14 @@ Agent({
   prompt: `## Role Assignment
 role: <role>
 role_spec: <skill_root>/roles/<role>/role.md
-session: <session-folder>
-session_id: <session-id>
+session: {run_dir}/work/team
+session_id: <run-id>
 team_name: visual-a11y
 requirement: <task-description>
 inner_loop: <true|false>
 
 ## Progress Milestones
-session_id: <session-id>
+session_id: <run-id>
 Report progress via team_msg at natural phase boundaries (context loaded -> core work done -> verification).
 Report blockers immediately via team_msg type="blocker".
 Report completion via team_msg type="task_complete" after final SendMessage.
@@ -127,25 +127,25 @@ Execute built-in Phase 1 (task discovery) -> role Phase 2-4 -> built-in Phase 5 
 ## Session Directory
 
 ```
-.workflow/.team/VA-<slug>-<date>/
+{run_dir}/work/team/
 +-- .msg/
 |   +-- messages.jsonl         # Team message bus
 |   +-- meta.json              # Pipeline config + GC state
-+-- audits/
++-- {run_dir}/outputs/audits/
 |   +-- color/                 # Color auditor output
 |   |   +-- color-audit-001.md
 |   +-- typography/            # Typography auditor output
 |   |   +-- typo-audit-001.md
 |   +-- focus/                 # Focus auditor output
 |       +-- focus-audit-001.md
-+-- remediation/               # Remediation planner output
++-- {run_dir}/outputs/remediation/               # Remediation planner output
 |   +-- remediation-plan.md
-+-- fixes/                     # Fix implementer output
++-- {run_dir}/outputs/fixes/                     # Fix implementer output
 |   +-- fix-summary-001.md
-+-- re-audit/                  # Re-audit output (GC loop)
++-- {run_dir}/outputs/re-audit/                  # Re-audit output (GC loop)
 |   +-- color-audit-002.md
 |   +-- focus-audit-002.md
-+-- evidence/                  # Screenshots, traces
++-- {run_dir}/evidence/evidence/                  # Screenshots, traces
 ```
 
 ## Error Handling

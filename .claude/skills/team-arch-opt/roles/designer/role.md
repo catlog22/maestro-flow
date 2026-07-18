@@ -13,8 +13,8 @@ message_types: [state_update]
 |-------|--------|----------|
 | Architecture report | {run_dir}/outputs/architecture-report.md | Yes |
 | Architecture baseline | {run_dir}/outputs/architecture-baseline.json | Yes |
-| .msg/meta.json | <session>/wisdom/.msg/meta.json | Yes |
-| Wisdom files | <session>/wisdom/patterns.md | No |
+| .msg/meta.json | {run_dir}/work/team/wisdom/.msg/meta.json | Yes |
+| Wisdom files | {run_dir}/work/team/wisdom/patterns.md | No |
 
 1. Extract session path from task description
 2. Read architecture report -- extract ranked issue list with severities and categories
@@ -86,7 +86,7 @@ Define measurable success criteria per refactoring (target metric improvement or
    - Each refactoring must be **non-overlapping** in target files (no two REFACTOR-IDs modify the same file unless explicitly noted with conflict resolution)
    - Implementation guidance must be self-contained -- a branch refactorer should be able to work from a single REFACTOR block without reading others
 
-2. Update `<session>/wisdom/.msg/meta.json` under `designer` namespace:
+2. Update `{run_dir}/work/team/wisdom/.msg/meta.json` under `designer` namespace:
    - Read existing -> merge -> write back:
    ```json
    {
@@ -110,4 +110,4 @@ Define measurable success criteria per refactoring (target metric improvement or
    }
    ```
 
-3. If DISCUSS-REFACTOR was triggered, record discussion summary in `<session>/discussions/DISCUSS-REFACTOR.md`
+3. If DISCUSS-REFACTOR was triggered, record discussion summary in `{run_dir}/evidence/discussions/DISCUSS-REFACTOR.md`

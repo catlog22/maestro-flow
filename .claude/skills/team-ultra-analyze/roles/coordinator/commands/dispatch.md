@@ -28,11 +28,11 @@ TASK:
   - <step 2: specific action>
   - <step 3: specific action>
 CONTEXT:
-  - Session: <session-folder>
+  - Session: {run_dir}/work/team
   - Topic: <analysis-topic>
   - Perspective: <perspective or 'all'>
   - Upstream artifacts: <artifact-1>, <artifact-2>
-  - Shared memory: <session>/wisdom/.msg/meta.json
+  - Shared memory: {run_dir}/work/team/wisdom/.msg/meta.json
 EXPECTED: <deliverable path> + <quality criteria>
 CONSTRAINTS: <scope limits, focus areas>
 ---
@@ -63,12 +63,12 @@ TASK:
   - Search for code related to analysis topic
   - Collect file references, patterns, and key findings
 CONTEXT:
-  - Session: <session-folder>
+  - Session: {run_dir}/work/team
   - Topic: <topic>
   - Perspective: general
   - Dimensions: <dimensions>
-  - Shared memory: <session>/wisdom/.msg/meta.json
-EXPECTED: <session>/explorations/exploration-001.json | Structured exploration with files and findings
+  - Shared memory: {run_dir}/work/team/wisdom/.msg/meta.json
+EXPECTED: {run_dir}/work/team/explorations/exploration-001.json | Structured exploration with files and findings
 CONSTRAINTS: Focus on <topic> scope
 ---
 InnerLoop: false"
@@ -86,13 +86,13 @@ TASK:
   - Analyze from technical perspective across selected dimensions
   - Generate insights, findings, discussion points, recommendations
 CONTEXT:
-  - Session: <session-folder>
+  - Session: {run_dir}/work/team
   - Topic: <topic>
   - Perspective: technical
   - Dimensions: <dimensions>
   - Upstream artifacts: explorations/exploration-001.json
-  - Shared memory: <session>/wisdom/.msg/meta.json
-EXPECTED: <session>/analyses/analysis-001.json | Structured analysis with evidence
+  - Shared memory: {run_dir}/work/team/wisdom/.msg/meta.json
+EXPECTED: {run_dir}/outputs/analyses/analysis-001.json | Structured analysis with evidence
 CONSTRAINTS: Focus on technical perspective | <dimensions>
 ---
 InnerLoop: false"
@@ -110,11 +110,11 @@ TASK:
   - Extract themes, consolidate evidence, prioritize recommendations
   - Write conclusions and update discussion.md
 CONTEXT:
-  - Session: <session-folder>
+  - Session: {run_dir}/work/team
   - Topic: <topic>
-  - Upstream artifacts: explorations/*.json, analyses/*.json
-  - Shared memory: <session>/wisdom/.msg/meta.json
-EXPECTED: <session>/conclusions.json + discussion.md update | Final conclusions with confidence levels
+  - Upstream artifacts: explorations/*.json, {run_dir}/outputs/analyses/*.json
+  - Shared memory: {run_dir}/work/team/wisdom/.msg/meta.json
+EXPECTED: {run_dir}/outputs/conclusions.json + {run_dir}/evidence/discussion.md update | Final conclusions with confidence levels
 CONSTRAINTS: Pure integration, no new exploration
 ---
 InnerLoop: false"
@@ -140,12 +140,12 @@ TASK:
   - Collect files, patterns, findings relevant to this angle
   - Generate questions for downstream analysis
 CONTEXT:
-  - Session: <session-folder>
+  - Session: {run_dir}/work/team
   - Topic: <topic>
   - Perspective: <perspective>
   - Dimensions: <dimensions>
-  - Shared memory: <session>/wisdom/.msg/meta.json
-EXPECTED: <session>/explorations/exploration-<NNN>.json
+  - Shared memory: {run_dir}/work/team/wisdom/.msg/meta.json
+EXPECTED: {run_dir}/work/team/explorations/exploration-<NNN>.json
 CONSTRAINTS: Focus on <perspective> angle
 ---
 InnerLoop: false"
@@ -164,13 +164,13 @@ TASK:
   - Analyze from <perspective> perspective
   - Generate insights, discussion points, open questions
 CONTEXT:
-  - Session: <session-folder>
+  - Session: {run_dir}/work/team
   - Topic: <topic>
   - Perspective: <perspective>
   - Dimensions: <dimensions>
   - Upstream artifacts: explorations/exploration-<NNN>.json
-  - Shared memory: <session>/wisdom/.msg/meta.json
-EXPECTED: <session>/analyses/analysis-<NNN>.json
+  - Shared memory: {run_dir}/work/team/wisdom/.msg/meta.json
+EXPECTED: {run_dir}/outputs/analyses/analysis-<NNN>.json
 CONSTRAINTS: <perspective> perspective | <dimensions>
 ---
 InnerLoop: false"
@@ -189,13 +189,13 @@ TASK:
   - Identify convergent themes and conflicting views
   - Generate top discussion points and open questions
 CONTEXT:
-  - Session: <session-folder>
+  - Session: {run_dir}/work/team
   - Topic: <topic>
   - Round: 1
   - Type: initial
-  - Upstream artifacts: analyses/*.json
-  - Shared memory: <session>/wisdom/.msg/meta.json
-EXPECTED: <session>/discussions/discussion-round-001.json + discussion.md update
+  - Upstream artifacts: {run_dir}/outputs/analyses/*.json
+  - Shared memory: {run_dir}/work/team/wisdom/.msg/meta.json
+EXPECTED: {run_dir}/evidence/discussions/discussion-round-001.json + {run_dir}/evidence/discussion.md update
 CONSTRAINTS: Aggregate only, no new exploration
 ---
 InnerLoop: false"
@@ -236,13 +236,13 @@ TASK:
   - Execute <type> discussion strategy
   - Update discussion timeline
 CONTEXT:
-  - Session: <session-folder>
+  - Session: {run_dir}/work/team
   - Topic: <topic>
   - Round: <N>
   - Type: <deepen|direction-adjusted|specific-questions>
   - User feedback: <feedback>
-  - Shared memory: <session>/wisdom/.msg/meta.json
-EXPECTED: <session>/discussions/discussion-round-<NNN>.json
+  - Shared memory: {run_dir}/work/team/wisdom/.msg/meta.json
+EXPECTED: {run_dir}/evidence/discussions/discussion-round-<NNN>.json
 ---
 InnerLoop: false"
 })
@@ -259,12 +259,12 @@ TASK:
   - Build on previous exploration findings
   - Generate updated discussion points
 CONTEXT:
-  - Session: <session-folder>
+  - Session: {run_dir}/work/team
   - Topic: <topic>
   - Type: direction-fix
   - Adjusted focus: <adjusted_focus>
-  - Shared memory: <session>/wisdom/.msg/meta.json
-EXPECTED: <session>/analyses/analysis-fix-<N>.json
+  - Shared memory: {run_dir}/work/team/wisdom/.msg/meta.json
+EXPECTED: {run_dir}/outputs/analyses/analysis-fix-<N>.json
 ---
 InnerLoop: false"
 })

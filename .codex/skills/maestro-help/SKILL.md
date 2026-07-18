@@ -223,20 +223,20 @@ $ARGUMENTS → Parse:
 
 | 命令 | 用途 |
 |------|------|
-| `/manage issue` | Issue 管理 |
-| `/manage issue discover` | Issue 发现 |
-| `/manage knowledge knowhow` | 知识管理 |
-| `/manage knowledge capture` | 知识捕获 |
-| `/manage status` | 状态查看 |
-| `/manage knowledge wiki` | Wiki 管理 |
-| `/manage knowledge harvest` | 收获 |
-| `/manage sync rebuild` | 代码库重建 |
-| `/manage knowledge extractors` | 知识图谱提取器管理 |
-| `/manage knowledge audit` | 知识审计 |
+| `/maestro-manage issue` | Issue 管理 |
+| `/maestro-manage issue discover` | Issue 发现 |
+| `/maestro-manage knowledge knowhow` | 知识管理 |
+| `/maestro-manage knowledge capture` | 知识捕获 |
+| `/maestro-manage status` | 状态查看 |
+| `/maestro-manage knowledge wiki` | Wiki 管理 |
+| `/maestro-manage knowledge harvest` | 收获 |
+| `/maestro-manage sync rebuild` | 代码库重建 |
+| `/maestro-manage knowledge extractors` | 知识图谱提取器管理 |
+| `/maestro-manage knowledge audit` | 知识审计 |
 
 ### Odyssey 长周期循环 (odyssey)
 
-单入口 `/odyssey <intent> --mode <name>`（`--mode` 可省略，从 intent 关键词自动识别）：
+单入口 `/maestro-odyssey <intent> --mode <name>`（`--mode` 可省略，从 intent 关键词自动识别）：
 
 | 模式 | 用途 |
 |------|------|
@@ -275,7 +275,7 @@ Roadmap > Milestone > Phase > Task
   plan → execute
 
 Odyssey 长周期循环（独立路径）
-  odyssey --mode debug|improve|review|planex|ui
+  maestro-odyssey --mode debug|improve|review|planex|ui
 
 自适应引擎（高级）
   ralph → 自运行决策循环
@@ -293,13 +293,13 @@ Odyssey 长周期循环（独立路径）
 | Path E | 纯规格文档 | `blueprint "project idea"` → (供人阅读) |
 | Path F | 纯探索 | `brainstorm "idea"` → (供人决策) |
 | 快速修复 | 已知简单问题 | `quick "修复描述"` |
-| Bug 追踪 | Issue 闭环 | `/manage issue discover` → `/manage issue create` → analyze/plan/execute → close |
+| Bug 追踪 | Issue 闭环 | `/maestro-manage issue discover` → `/maestro-manage issue create` → analyze/plan/execute → close |
 | 全自动 | /maestro 入口 | `/maestro -y "任务描述"` |
 | 代码审查 | 质量管线 | `review` → `auto-test` → `test` |
 | 多 CLI 交叉验证 | Collab step | `collab "需求描述"` |
-| 长周期调试 | Odyssey 深度循环 | `/odyssey "问题描述" --mode debug` |
-| 长周期改进 | Odyssey 深度循环 | `/odyssey "改进目标" --mode improve` |
-| 需求迭代 | Odyssey 深度循环 | `/odyssey "需求描述" --mode planex` |
+| 长周期调试 | Odyssey 深度循环 | `/maestro-odyssey "问题描述" --mode debug` |
+| 长周期改进 | Odyssey 深度循环 | `/maestro-odyssey "改进目标" --mode improve` |
+| 需求迭代 | Odyssey 深度循环 | `/maestro-odyssey "需求描述" --mode planex` |
 
 > 注：Path A/B 中 `analyze 1` / `plan 1` 的数字 `1` 指 **milestone 编号**（第 1 个里程碑），下游以 milestone 为入口。
 

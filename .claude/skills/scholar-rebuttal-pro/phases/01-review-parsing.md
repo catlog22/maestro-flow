@@ -64,18 +64,9 @@ const conferenceType = workflowPreferences.conferenceType
 // Read review comments with error handling
 let reviewText
 try {
-  if (reviewCommentsPath.endsWith('.txt') || reviewCommentsPath.endsWith('.md')) {
+  if (reviewCommentsPath.endsWith('.txt') || reviewCommentsPath.endsWith('.md') || reviewCommentsPath.endsWith('.pdf')) {
+    // Read handles PDF natively (use pages parameter for PDFs over 10 pages)
     reviewText = Read(reviewCommentsPath)
-  } else if (reviewCommentsPath.endsWith('.pdf')) {
-    // Convert PDF to text first
-    const convertResult = Bash({ 
-      command: `ccws pdf-convert "${reviewCommentsPath}"`, 
-      description: "Convert PDF to markdown" 
-    })
-    if (convertResult.exitCode !== 0) {
-      throw new Error(`PDF conversion failed: ${convertResult.stderr}`)
-    }
-    reviewText = Read(reviewCommentsPath.replace('.pdf', '.md'))
   } else {
     // Inline text
     reviewText = reviewCommentsPath
@@ -93,7 +84,7 @@ try {
 ### Step 1.2: Parse and Classify with Agy CLI
 
 ```bash
-ccw cli -p "PURPOSE: Parse and classify reviewer comments by type and severity
+maestro delegate "PURPOSE: Parse and classify reviewer comments by type and severity
 
 TASK:
 • Parse comment structure (identify individual comments, reviewer IDs)
@@ -122,7 +113,7 @@ EXPECTED: JSON with {
     'typoCount': N,
     'misunderstandingCount': N
   }
-}" --tool agy --mode analysis --rule analysis-analyze-technical-document
+}" --to agy --mode analysis --rule analysis-analyze-technical-document
 ```
 
 ### Step 1.3: Generate Classification Report

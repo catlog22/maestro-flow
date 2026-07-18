@@ -41,14 +41,14 @@ When coordinator needs to execute a specific phase:
 | Manual resume | Args contain "resume" or "continue" | -> handleResume (monitor.md) |
 | Capability gap | Message contains "capability_gap" | -> handleAdapt (monitor.md) |
 | Pipeline complete | All tasks completed | -> handleComplete (monitor.md) |
-| Interrupted session | Active session in .workflow/.team/TST-* | -> Phase 0 |
+| Interrupted session | Active session in {run_dir}/work/team/ | -> Phase 0 |
 | New session | None of above | -> Phase 1 |
 
 For callback/check/resume/adapt/complete: load @commands/monitor.md, execute handler, STOP.
 
 ## Phase 0: Session Resume Check
 
-1. Scan .workflow/.team/TST-*/session.json for active/paused sessions
+1. Scan {run_dir}/work/team/team-session.json for active/paused sessions
 2. No sessions -> Phase 1
 3. Single session -> reconcile (audit list_agents, reset in_progress->pending, rebuild team, kick first ready task)
 4. Multiple -> request_user_input for selection
@@ -79,15 +79,15 @@ TEXT-LEVEL ONLY. No source code reading.
 
 1. Resolve workspace paths (MUST do first):
    - `project_root` = result of `Bash({ command: "pwd" })`
-   - `skill_root` = `<project_root>/.claude/skills/team-testing`
+   - `skill_root` = `<project_root>/.codex/skills/team-testing`
 2. Generate session ID: TST-<slug>-<date>
-3. Create session folder structure (strategy/, tests/L1-unit/, tests/L2-integration/, tests/L3-e2e/, results/, analysis/, wisdom/)
+3. Create `{run_dir}/work/team/wisdom/` and `{run_dir}/outputs/{strategy,tests/L1-unit,tests/L2-integration,tests/L3-e2e,results,analysis}/`
 4. TeamCreate with team name "testing"
 5. Read specs/pipelines.md -> select pipeline based on mode
 6. Initialize pipeline via team_msg state_update:
    ```
    mcp__maestro__team_msg({
-     operation: "log", session_id: "<id>", from: "coordinator",
+     operation: "log", session_id: "<run-id>", from: "coordinator",
      type: "state_update", summary: "Session initialized",
      data: {
        pipeline_mode: "<targeted|standard|comprehensive>",
@@ -98,7 +98,7 @@ TEXT-LEVEL ONLY. No source code reading.
      }
    })
    ```
-7. Write session.json
+7. Write team-session.json
 
 ## Phase 3: Create Task Chain
 
@@ -106,7 +106,7 @@ Delegate to @commands/dispatch.md:
 1. Read specs/pipelines.md for selected pipeline's task registry
 2. Topological sort tasks
 3. Create tasks via update_plan with blockedBy
-4. Update session.json
+4. Update team-session.json
 
 ## Phase 4: Spawn-and-Stop
 

@@ -16,8 +16,8 @@ message_types: [state_update]
 | Input | Source | Required |
 |-------|--------|----------|
 | Session path | task description (regex: `session:\s*(.+)`) | Yes |
-| .msg/meta.json | <session>/.msg/meta.json | Yes |
-| Priority matrix | <session>/assessment/priority-matrix.json | Yes |
+| .msg/meta.json | {run_dir}/work/team/.msg/meta.json | Yes |
+| Priority matrix | {run_dir}/outputs/assessment/priority-matrix.json | Yes |
 
 1. Extract session path from task description
 2. Read .msg/meta.json for debt_inventory
@@ -66,6 +66,6 @@ For CLI-assisted mode, prompt agy with debt summary requesting specific fix step
 ## Phase 4: Validate & Save
 
 1. Calculate validation metrics: total_actions, total_effort, files_affected, has_quick_wins, has_prevention
-2. Write `<session>/plan/remediation-plan.md` (markdown with per-item checklists)
-3. Write `<session>/plan/remediation-plan.json` (machine-readable)
+2. Write `{run_dir}/outputs/plan/remediation-plan.md` (markdown with per-item checklists)
+3. Write `{run_dir}/outputs/plan/remediation-plan.json` (machine-readable)
 4. Update .msg/meta.json with `remediation_plan` summary

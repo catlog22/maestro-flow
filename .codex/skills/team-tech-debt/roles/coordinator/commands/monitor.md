@@ -73,7 +73,7 @@ Worker completed. Process and advance.
 
      Fix-Verify Task Creation:
      ```
-     update_plan({ subject: "TDFIX-fix-<round>", description: "PURPOSE: Fix regressions | Session: <session>" })
+     update_plan({ subject: "TDFIX-fix-<round>", description: "PURPOSE: Fix regressions | Session: {run_dir}/work/team" })
      update_plan({ subject: "TDVAL-recheck-<round>", description: "..." })
      update_plan({ taskId: "TDVAL-recheck-<round>", addBlockedBy: ["TDFIX-fix-<round>"] })
      ```
@@ -119,7 +119,7 @@ Pipeline Status (<mode>):
   [WAIT]  TDVAL-001   (validator) -> blocked by TDFIX-001
 
 GC Rounds: 0/3
-Session: <session-id>
+Session: <run-id>
 Commands: 'resume' to advance | 'check' to refresh
 ```
 
@@ -178,7 +178,7 @@ Capability gap reported mid-pipeline.
 
 1. Parse gap description
 2. Check if existing role covers it -> redirect
-3. Role count < 5 -> generate dynamic role spec in <session>/role-specs/
+3. Role count < 5 -> generate dynamic role spec in {run_dir}/work/team/role-specs/
 4. Create new task, spawn worker
 5. Role count >= 5 -> merge or pause
 

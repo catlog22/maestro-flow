@@ -1,8 +1,8 @@
 {
   "name": "team-review",
   "description": "Code scanning, vulnerability review, optimization suggestions, and automated fix",
-  "sessionDir": ".workflow/.team-review/",
-  "msgDir": ".workflow/.team-msg/team-review/",
+  "sessionDir": "{run_dir}/work/team/",
+  "msgDir": "{run_dir}/work/team/.msg/",
   "roles": {
     "coordinator": { "prefix": "RC", "type": "orchestration", "file": "roles/coordinator/role.md" },
     "scanner":     { "prefix": "SCAN", "type": "read-only-analysis", "file": "roles/scanner/role.md" },

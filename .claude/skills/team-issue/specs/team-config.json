@@ -60,11 +60,11 @@
   "collaboration_patterns": ["CP-1", "CP-2", "CP-3", "CP-5"],
 
   "session_dirs": {
-    "base": ".workflow/.team-plan/issue/",
-    "context": ".workflow/.team-plan/issue/context-{issueId}.json",
-    "audit": ".workflow/.team-plan/issue/audit-report.json",
+    "base": "{run_dir}/work/team/",
+    "context": "{run_dir}/work/team/context-{issueId}.json",
+    "audit": "{run_dir}/outputs/audit-report.json",
     "queue": ".workflow/issues/queue/execution-queue.json",
     "solutions": ".workflow/issues/solutions/",
-    "messages": ".workflow/.team-msg/issue/"
+    "messages": "{run_dir}/work/team/.msg/"
   }
 }

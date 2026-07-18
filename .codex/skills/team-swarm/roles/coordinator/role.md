@@ -75,14 +75,14 @@ When coordinator needs to execute a phase command:
 | Manual resume | Args contain `resume` or `continue` | -> handleResume |
 | Iteration complete | All ants of current iteration reported | -> Phase 3.5 (update + converged?) |
 | Pipeline complete | aco.py converged returned true | -> Phase 4 |
-| Interrupted session | Active session exists in `.workflow/.team/TS-*` | -> Phase 0 |
+| Interrupted session | Active session exists in `{run_dir}/work/team/` | -> Phase 0 |
 | New session | None of above | -> Phase 1 |
 
 ---
 
 ## Phase 0: Session Resume Check
 
-1. Scan `.workflow/.team/TS-*/team-session.json` for `status` in {active, paused}
+1. Scan `{run_dir}/work/team/team-session.json` for `status` in {active, paused}
 2. Single session -> resume; multiple -> request_user_input
 3. Reconcile: list_agents vs session.iteration vs pheromone/current.json
 4. If interrupted mid-iteration -> reset in_progress ant tasks to pending, respawn
@@ -110,7 +110,7 @@ When coordinator needs to execute a phase command:
    - `task_space.nodes` OR `task_space.auto_discover_from`
    - `scoring.mode` ∈ {script, llm, fallback} based on user answer
    - `ant_prompt.objective` — the actual goal injected into ant role-spec at spawn
-4. Write config to `<session>/swarm-config.json`
+4. Write config to `{run_dir}/work/team/swarm-config.json`
 
 **CRITICAL**: Phase 1 does NOT call `aco.py`. It only produces the config.
 
@@ -123,14 +123,14 @@ Delegate to `@commands/init-swarm.md`:
 1. Generate session ID: `TS-<slug>-<date>` (slug from task)
 2. Create session folder structure:
    ```
-   .workflow/.team/<session-id>/
+   {run_dir}/work/team/
    ├── swarm-config.json    (from Phase 1)
    ├── pheromone/, trails/, scores/, artifacts/, wisdom/
    ├── .msg/
    └── role-binding.json    (paths to role.md files)
    ```
 3. TeamCreate with team_name = `swarm`
-4. Bash: `python <skill_root>/scripts/aco.py --session <session> init`
+4. Bash: `python <skill_root>/scripts/aco.py --session {run_dir}/work/team init`
 5. Parse stdout JSON: capture `n_nodes`, `n_edges`, `pheromone_path`
 6. Initialize team-session.json with `iteration: 0`, `status: "active"`
 7. Log state_update via team_msg with config summary
@@ -144,7 +144,7 @@ Delegate to `@commands/init-swarm.md`:
 **Per-iteration workflow** (delegate to `@commands/iterate.md`):
 
 1. Increment iteration counter: k = session.iteration + 1
-2. Bash: `python aco.py --session <session> select --iter <k>`
+2. Bash: `python aco.py --session {run_dir}/work/team select --iter <k>`
    -> returns `{assignments: [{ant_id, start_node, edge_preferences, max_path_length}, ...]}`
 3. For each assignment:
    - update_plan `ANT-<k>-<i>` with description including session path + assignment
@@ -153,8 +153,8 @@ Delegate to `@commands/init-swarm.md`:
    ```
    role: ant
    role_spec: <skill_root>/roles/ant/role.md
-   session: <session>
-   session_id: <id>
+   session: {run_dir}/work/team
+   session_id: <run-id>
    team_name: swarm
    requirement: <ant_prompt.objective> | Assignment: <full assignment JSON>
    inner_loop: false
@@ -165,9 +165,9 @@ Delegate to `@commands/init-swarm.md`:
 
 1. Verify all `ANT-<k>-*` tasks have status = completed
 2. (Optional, if `scoring.mode == "llm"`) Spawn scorer worker for iteration k, await callback
-3. Bash: `python aco.py --session <session> update --iter <k>`
+3. Bash: `python aco.py --session {run_dir}/work/team update --iter <k>`
    -> parse `{best_score, mean_score, delta, hallucinations_flagged, ...}`
-4. Bash: `python aco.py --session <session> converged`
+4. Bash: `python aco.py --session {run_dir}/work/team converged`
    -> parse `{converged, triggered_by, reason, metrics}`
 5. Update session.iteration = k, log state_update
 6. Branch:
@@ -180,12 +180,12 @@ Delegate to `@commands/init-swarm.md`:
 
 Delegate to `@commands/converge.md`:
 
-1. Bash: `python aco.py --session <session> report` -> capture best + top_k + curve
+1. Bash: `python aco.py --session {run_dir}/work/team report` -> capture best + top_k + curve
 2. Spawn analyst worker:
    ```
    role: analyst
    role_spec: <skill_root>/roles/analyst/role.md
-   requirement: synthesize swarm results | session: <session>
+   requirement: synthesize swarm results | session: {run_dir}/work/team
    ```
 3. Await analyst callback -> `best-solution.md` written
 4. Build completion report:

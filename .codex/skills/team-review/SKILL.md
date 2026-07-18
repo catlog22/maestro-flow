@@ -30,11 +30,11 @@ contract:
     exit: []
 ---
 
-> **Agent timeout**: `spawn_agent` 异步执行且无内置超时 — 除明确短任务外一律 `spawn_agent` 后立即 `wait_agent({ timeout_ms: 3600000 })`（上限 1 小时）阻塞等待，绝不依赖 30000 默认值；`timed_out: true` 且 Agent 未完成时再次 `wait_agent` 续等，不丢弃。批量场景使用 `spawn_agents_on_csv({ max_runtime_seconds: 3600, ... })`。
-
 <required_reading>
 @~/.maestro/workflows/run-mode-lite.md
 </required_reading>
+
+> **Agent timeout**: `spawn_agent` 异步执行且无内置超时 — 除明确短任务外一律 `spawn_agent` 后立即 `wait_agent({ timeout_ms: 3600000 })`（上限 1 小时）阻塞等待，绝不依赖 30000 默认值；`timed_out: true` 且 Agent 未完成时再次 `wait_agent` 续等，不丢弃。批量场景使用 `spawn_agents_on_csv({ max_runtime_seconds: 3600, ... })`。
 
 # Team Review
 
@@ -80,10 +80,10 @@ Parse `$ARGUMENTS`:
 ## Shared Constants
 
 - **Session prefix**: `RV`
-- **Session path**: `.workflow/.team/RV-<slug>-<date>/`
+- **Session path**: `{run_dir}/work/team/`
 - **Team name**: `review`
 - **CLI tools**: `maestro delegate --mode analysis` (read-only), `maestro delegate --mode write` (modifications)
-- **Message bus**: `mcp__maestro__team_msg(session_id=<session-id>, ...)`
+- **Message bus**: `mcp__maestro__team_msg(session_id=<run-id>, ...)`
 
 ## Worker Spawn Template
 
@@ -127,13 +127,13 @@ request_user_input({
 ## Session Directory
 
 ```
-.workflow/.team/RV-<slug>-<date>/
+{run_dir}/work/team/
 ├── .msg/messages.jsonl     # Team message bus
 ├── .msg/meta.json          # Session state + cross-role state
 ├── wisdom/                 # Cross-task knowledge
-├── scan/                   # Scanner output
-├── review/                 # Reviewer output
-└── fix/                    # Fixer output
+├── {run_dir}/outputs/scan/                   # Scanner output
+├── {run_dir}/outputs/review/                 # Reviewer output
+└── {run_dir}/outputs/fix/                    # Fixer output
 ```
 
 ## Specs Reference

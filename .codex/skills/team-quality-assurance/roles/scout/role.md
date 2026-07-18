@@ -17,7 +17,7 @@ message_types:
 |-------|--------|----------|
 | Task description | From task subject/description | Yes |
 | Session path | Extracted from task description | Yes |
-| .msg/meta.json | <session>/wisdom/.msg/meta.json | No |
+| .msg/meta.json | {run_dir}/work/team/wisdom/.msg/meta.json | No |
 
 1. Extract session path and target scope from task description
 2. Determine scan scope: explicit scope from task or `**/*` default
@@ -72,7 +72,7 @@ After scanning, emit context-aware trigger signals (based on detected codebase c
 ## Phase 4: Result Aggregation
 
 1. Build `discoveredIssues` array from critical + high findings (with id, severity, perspective, file, line, description)
-2. Write scan results to `<session>/scan/scan-results.json`:
+2. Write scan results to `{run_dir}/outputs/scan/scan-results.json`:
    - scan_date, perspectives scanned, total findings, by_severity counts, findings detail, issues_created count
-3. Update `<session>/wisdom/.msg/meta.json`: merge `discovered_issues` field
+3. Update `{run_dir}/work/team/wisdom/.msg/meta.json`: merge `discovered_issues` field
 4. Contribute to wisdom/issues.md if new patterns found

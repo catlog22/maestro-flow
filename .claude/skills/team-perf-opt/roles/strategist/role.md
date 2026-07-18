@@ -16,8 +16,8 @@ message_types:
 |-------|--------|----------|
 | Bottleneck report | {run_dir}/outputs/bottleneck-report.md | Yes |
 | Baseline metrics | {run_dir}/outputs/baseline-metrics.json | Yes |
-| .msg/meta.json | <session>/.msg/meta.json | Yes |
-| Wisdom files | <session>/wisdom/patterns.md | No |
+| .msg/meta.json | {run_dir}/work/team/.msg/meta.json | Yes |
+| Wisdom files | {run_dir}/work/team/wisdom/patterns.md | No |
 
 1. Extract session path from task description
 2. Read bottleneck report -- extract ranked bottleneck list with severities
@@ -86,7 +86,7 @@ Define measurable success criteria per optimization (target metric value or impr
    - Each optimization must be **non-overlapping** in target files
    - Implementation guidance must be self-contained
 
-2. Update `<session>/.msg/meta.json` under `strategist` namespace:
+2. Update `{run_dir}/work/team/.msg/meta.json` under `strategist` namespace:
    - Read existing -> merge -> write back with optimization metadata
 
-3. If DISCUSS-OPT was triggered, record discussion summary in `<session>/discussions/DISCUSS-OPT.md`
+3. If DISCUSS-OPT was triggered, record discussion summary in `{run_dir}/evidence/discussions/DISCUSS-OPT.md`

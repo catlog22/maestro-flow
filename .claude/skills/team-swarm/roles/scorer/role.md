@@ -15,7 +15,7 @@ message_types:
 ### MUST
 - Read ALL `ant-<iter>-*.json` artifacts for the target iteration
 - Apply a uniform scoring rubric across the batch (consistency over absolute correctness)
-- Produce `<session>/scores/iter-<k>-scores.json` matching the schema in specs/ant-output-schema.md
+- Produce `{run_dir}/work/team/scores/iter-<k>-scores.json` matching the schema in specs/ant-output-schema.md
 - Provide a one-line `rationale` per ant
 - Use a different model from the ant if possible (configured via maestro delegate) to reduce same-source bias
 
@@ -30,10 +30,10 @@ message_types:
 | Input | Source | Required |
 |-------|--------|----------|
 | Target iteration | Task description (`Iteration to score: <k>`) | Yes |
-| Objective | `<session>/swarm-config.json#ant_prompt.objective` | Yes |
-| Scoring rubric | `<session>/swarm-config.json#scoring.rubric` (if defined) | Optional |
+| Objective | `{run_dir}/work/team/swarm-config.json#ant_prompt.objective` | Yes |
+| Scoring rubric | `{run_dir}/work/team/swarm-config.json#scoring.rubric` (if defined) | Optional |
 | Ant artifacts | `{run_dir}/outputs/ant-<k>-*.json` | Yes |
-| Task space | `<session>/task-space.json` (for context) | Optional |
+| Task space | `{run_dir}/work/team/task-space.json` (for context) | Optional |
 
 Workflow:
 1. Extract `k` from task description
@@ -107,7 +107,7 @@ After all individual scores:
 #### Feedback Contract
 | Field | Required | Content |
 |-------|----------|---------|
-| artifacts_written | Always | `<session>/scores/iter-<k>-scores.json` |
+| artifacts_written | Always | `{run_dir}/work/team/scores/iter-<k>-scores.json` |
 | n_ants_scored | Always | int |
 | verification_method | Always | "blind_then_calibrated + range_check" |
 
@@ -124,7 +124,7 @@ After all individual scores:
 4. Confirm score range
 5. Write hallucination delta to wisdom for coordinator visibility:
    - For each ant, compute `delta = |self_score - verified_score|`
-   - If `delta > 0.4` for >50% of ants in this iter -> append warning to `<session>/wisdom/issues.md`
+   - If `delta > 0.4` for >50% of ants in this iter -> append warning to `{run_dir}/work/team/wisdom/issues.md`
 
 ### State Update
 
@@ -136,7 +136,7 @@ After all individual scores:
   "iteration": <k>,
   "n_ants_scored": <N>,
   "mean_verified_score": <float>,
-  "artifact_path": "<session>/scores/iter-<k>-scores.json",
+  "artifact_path": "{run_dir}/work/team/scores/iter-<k>-scores.json",
   "verification": "blind_scored + schema_validated"
 }
 ```

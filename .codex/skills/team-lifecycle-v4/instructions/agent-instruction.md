@@ -42,7 +42,7 @@
 
 4. **Write discovery context**:
    ```javascript
-   Write(`{session}/spec/discovery-context.json`, JSON.stringify({
+   Write(`{session}/maestro-spec/discovery-context.json`, JSON.stringify({
      problem_statement: "Users need OAuth2 authentication with SSO support",
      target_users: ["Enterprise customers", "Internal teams"],
      domain: "Authentication & Authorization",
@@ -95,8 +95,8 @@
 
 1. **Read upstream artifacts**:
    ```javascript
-   const discoveryContext = JSON.parse(Read(`{session}/spec/discovery-context.json`))
-   const productBrief = Read(`{session}/spec/product-brief.md`)  // if exists
+   const discoveryContext = JSON.parse(Read(`{session}/maestro-spec/discovery-context.json`))
+   const productBrief = Read(`{session}/maestro-spec/product-brief.md`)  // if exists
    ```
 
 2. **Generate document based on pipeline_phase**:
@@ -240,7 +240,7 @@
 
 3. **Write document to spec/ directory**:
    ```javascript
-   Write(`{session}/spec/{doc-type}.md`, documentContent)
+   Write(`{session}/maestro-spec/{doc-type}.md`, documentContent)
    ```
 
 4. **Share discoveries**:
@@ -286,9 +286,9 @@
 
 1. **Read spec artifacts**:
    ```javascript
-   const requirements = Read(`{session}/spec/requirements.md`)
-   const architecture = Read(`{session}/spec/architecture.md`)
-   const epics = Read(`{session}/spec/epics.md`)
+   const requirements = Read(`{session}/maestro-spec/requirements.md`)
+   const architecture = Read(`{session}/maestro-spec/architecture.md`)
+   const epics = Read(`{session}/maestro-spec/epics.md`)
    ```
 
 2. **Explore codebase** (use CLI analysis tools):
@@ -589,10 +589,10 @@
 
 1. **Read all spec artifacts**:
    ```javascript
-   const productBrief = Read(`{session}/spec/product-brief.md`)
-   const requirements = Read(`{session}/spec/requirements.md`)
-   const architecture = Read(`{session}/spec/architecture.md`)
-   const epics = Read(`{session}/spec/epics.md`)
+   const productBrief = Read(`{session}/maestro-spec/product-brief.md`)
+   const requirements = Read(`{session}/maestro-spec/requirements.md`)
+   const architecture = Read(`{session}/maestro-spec/architecture.md`)
+   const epics = Read(`{session}/maestro-spec/epics.md`)
    ```
 
 2. **Score 4 dimensions** (25% each):
@@ -705,7 +705,7 @@ If you hit a blocker (build fails 3x, missing dependency, ambiguous requirement)
 ```javascript
 mcp__maestro-tools__team_msg({
   operation: "log",
-  session_id: "<session_id>",
+  session_id: "<run-id>",
   from: "<task_id>",
   to: "coordinator",
   type: "blocker",
@@ -730,7 +730,7 @@ After calling `report_agent_job_result`, also log to team_msg for coordinator tr
 ```javascript
 mcp__maestro-tools__team_msg({
   operation: "log",
-  session_id: "<session_id>",
+  session_id: "<run-id>",
   from: "<task_id>",
   to: "coordinator",
   type: "task_complete",

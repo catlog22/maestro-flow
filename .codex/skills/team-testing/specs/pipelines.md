@@ -79,7 +79,7 @@ TESTGEN -> TESTRUN -> (if pass_rate < 0.95 OR coverage < target) -> TESTGEN-fix 
 ## Session Directory
 
 ```
-.workflow/.team/TST-<slug>-<YYYY-MM-DD>/
+{run_dir}/work/team/
 ├── .msg/messages.jsonl          # Message bus log
 ├── .msg/meta.json               # Session metadata
 ├── wisdom/                     # Cross-task knowledge
@@ -87,15 +87,15 @@ TESTGEN -> TESTRUN -> (if pass_rate < 0.95 OR coverage < target) -> TESTGEN-fix 
 │   ├── decisions.md
 │   ├── conventions.md
 │   └── issues.md
-├── strategy/                   # Strategist output
+├── {run_dir}/outputs/strategy/                   # Strategist output
 │   └── test-strategy.md
-├── tests/                      # Generator output
+├── {run_dir}/outputs/tests/                      # Generator output
 │   ├── L1-unit/
 │   ├── L2-integration/
 │   └── L3-e2e/
-├── results/                    # Executor output
+├── {run_dir}/outputs/results/                    # Executor output
 │   ├── run-001.json
 │   └── coverage-001.json
-└── analysis/                   # Analyst output
+└── {run_dir}/outputs/analysis/                   # Analyst output
     └── quality-report.md
 ```

@@ -29,7 +29,7 @@ If task context requires codebase knowledge, set `needs_research: true`. Phase 2
 
 - **Delegation**: Inline execution (coordinator processes directly)
 - **Mode**: Text-level analysis only (no codebase reading)
-- **Output**: `<session>/task-analysis.json`
+- **Output**: `{run_dir}/work/team/task-analysis.json`
 
 ## Phase 2: Context Loading
 
@@ -148,7 +148,7 @@ For each role, determine frontmatter and generation hints:
 
 ## Phase 4: Output
 
-Write `<session-folder>/task-analysis.json`:
+Write `{run_dir}/work/team/task-analysis.json`:
 
 ```json
 {

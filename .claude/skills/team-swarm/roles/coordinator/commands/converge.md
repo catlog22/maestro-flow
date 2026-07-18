@@ -5,7 +5,7 @@
 ### Step 1: Call aco.py report
 
 ```
-Bash: python <skill_root>/scripts/aco.py --session <session> report
+Bash: python <skill_root>/scripts/aco.py --session {run_dir}/work/team report
 ```
 
 Parse stdout JSON. Expected:
@@ -35,15 +35,15 @@ Agent({
 role: analyst
 role_spec: <skill_root>/roles/analyst/role.md
 session: <session_path>
-session_id: <session_id>
+session_id: <run-id>
 team_name: swarm
 requirement: synthesize swarm results into human-readable best-solution.md
 inner_loop: false
 
 ## Context
 Report data: {run_dir}/outputs/swarm-report.json
-Best solution: <session>/best.json
-All trails: <session>/trails/*.jsonl
+Best solution: {run_dir}/work/team/best.json
+All trails: {run_dir}/work/team/trails/*.jsonl
 Original objective: <config.ant_prompt.objective>
 
 ## Progress Milestones

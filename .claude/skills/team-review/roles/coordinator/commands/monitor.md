@@ -148,8 +148,8 @@ Agent({
   prompt: `## Role Assignment
 role: <role>
 role_spec: ~  or <project>/.claude/skills/team-review/roles/<role>/role.md
-session: <session-folder>
-session_id: <session-id>
+session: {run_dir}/work/team
+session_id: <run-id>
 team_name: review
 requirement: <task-description>
 inner_loop: <true|false>
@@ -159,7 +159,7 @@ inner_loop: <true|false>
 - Task: <subject>
 
 ## Progress Milestones
-session_id: <session-id>
+session_id: <run-id>
 Report progress via team_msg at natural phase boundaries (context loaded -> core work done -> verification).
 Report blockers immediately via team_msg type="blocker".
 Report completion via team_msg type="task_complete" after final SendMessage.
@@ -196,7 +196,7 @@ Capability gap reported mid-pipeline.
 
 1. Parse gap description
 2. Check if existing role covers it -> redirect
-3. Role count < 4 -> generate dynamic role-spec in <session>/role-specs/
+3. Role count < 4 -> generate dynamic role-spec in {run_dir}/work/team/role-specs/
 4. Create new task, spawn worker
 5. Role count >= 4 -> merge or pause
 

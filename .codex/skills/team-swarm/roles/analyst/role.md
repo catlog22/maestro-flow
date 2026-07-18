@@ -15,8 +15,8 @@ message_types:
 ## Boundaries
 
 ### MUST
-- Read `<session>/best.json`, `<session>/artifacts/swarm-report.json`, all `<session>/trails/*.jsonl`
-- Produce `<session>/artifacts/best-solution.md` as the final deliverable
+- Read `{run_dir}/work/team/best.json`, `{run_dir}/outputs/swarm-report.json`, all `{run_dir}/work/team/trails/*.jsonl`
+- Produce `{run_dir}/outputs/best-solution.md` as the final deliverable
 - Explain WHY the best path won (which decisions mattered, evidence chain)
 - Compare best vs runner-ups to surface stability vs luck
 - Document convergence story (entropy curve, when stagnation hit)
@@ -31,13 +31,13 @@ message_types:
 
 | Input | Source | Required |
 |-------|--------|----------|
-| Original objective | `<session>/swarm-config.json#ant_prompt.objective` | Yes |
-| Best solution | `<session>/best.json` | Yes |
-| Full swarm report | `<session>/artifacts/swarm-report.json` | Yes |
-| All trails | `<session>/trails/*.jsonl` | Yes |
+| Original objective | `{run_dir}/work/team/swarm-config.json#ant_prompt.objective` | Yes |
+| Best solution | `{run_dir}/work/team/best.json` | Yes |
+| Full swarm report | `{run_dir}/outputs/swarm-report.json` | Yes |
+| All trails | `{run_dir}/work/team/trails/*.jsonl` | Yes |
 | Convergence reason | swarm-report.json or `aco.py converged` output | Yes |
-| Best ant artifact | `<session>/artifacts/ant-<best.iteration>-<best.id>.json` (full evidence) | Yes |
-| Issues log | `<session>/wisdom/issues.md` | Optional |
+| Best ant artifact | `{run_dir}/outputs/ant-<best.iteration>-<best.id>.json` (full evidence) | Yes |
+| Issues log | `{run_dir}/work/team/wisdom/issues.md` | Optional |
 
 Workflow:
 1. Extract session path from task description
@@ -140,7 +140,7 @@ Interpretation: <2-3 sentences on whether the swarm converged on a genuine optim
 #### Feedback Contract
 | Field | Required | Content |
 |-------|----------|---------|
-| artifacts_written | Always | `<session>/artifacts/best-solution.md` |
+| artifacts_written | Always | `{run_dir}/outputs/best-solution.md` |
 | line_count | Always | int (informational) |
 | verification_method | Always | "cross_ref_with_best.json + evidence_verified" |
 
@@ -162,7 +162,7 @@ Interpretation: <2-3 sentences on whether the swarm converged on a genuine optim
   "task_id": "ANALYST-1",
   "role": "analyst",
   "status": "completed",
-  "artifact_path": "<session>/artifacts/best-solution.md",
+  "artifact_path": "{run_dir}/outputs/best-solution.md",
   "best_score": <float>,
   "best_ant_id": "<id>",
   "line_count": <int>,

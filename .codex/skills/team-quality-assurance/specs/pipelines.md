@@ -91,7 +91,7 @@ QAGEN -> QARUN -> (if coverage < target) -> QAGEN-fix -> QARUN-gc
 ## Session Directory
 
 ```
-.workflow/.team/QA-<slug>-<YYYY-MM-DD>/
+{run_dir}/work/team/
 ├── .msg/messages.jsonl          # Message bus log
 ├── .msg/meta.json               # Session state + cross-role state
 ├── wisdom/                     # Cross-task knowledge
@@ -99,17 +99,17 @@ QAGEN -> QARUN -> (if coverage < target) -> QAGEN-fix -> QARUN-gc
 │   ├── decisions.md
 │   ├── conventions.md
 │   └── issues.md
-├── scan/                       # Scout output
+├── {run_dir}/outputs/scan/                       # Scout output
 │   └── scan-results.json
-├── strategy/                   # Strategist output
+├── {run_dir}/outputs/strategy/                   # Strategist output
 │   └── test-strategy.md
-├── tests/                      # Generator output
+├── {run_dir}/outputs/tests/                      # Generator output
 │   ├── L1-unit/
 │   ├── L2-integration/
 │   └── L3-e2e/
-├── results/                    # Executor output
+├── {run_dir}/outputs/results/                    # Executor output
 │   ├── run-001.json
 │   └── coverage-001.json
-└── analysis/                   # Analyst output
+└── {run_dir}/outputs/analysis/                   # Analyst output
     └── quality-report.md
 ```

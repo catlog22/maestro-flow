@@ -72,12 +72,12 @@ After successful merge, use `request_user_input` to confirm knowledge persistenc
 question: "Merge 完成。是否记录本次工作经验教训？"
 options:
   - label: "记录经验"
-    description: "通过 spec add 持久化此次工作的关键洞察"
+    description: "通过 maestro-spec add 持久化此次工作的关键洞察"
   - label: "跳过"
     description: "不记录，直接完成"
 ```
 
-User selects "记录经验" → prompt for title/insight, then persist via `Skill("spec", "add learning \"<title>\" \"<insight>\" --keywords <kw1>,<kw2> --description \"<summary>\"")`. User selects "跳过" → proceed to next-step routing.
+User selects "记录经验" → prompt for title/insight, then persist via `Skill("maestro-spec", "add learning \"<title>\" \"<insight>\" --keywords <kw1>,<kw2> --description \"<summary>\"")`. User selects "跳过" → proceed to next-step routing.
 
 ### Next-step routing
 

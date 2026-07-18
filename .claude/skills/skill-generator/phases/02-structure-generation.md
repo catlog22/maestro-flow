@@ -102,13 +102,21 @@ Autonomous + Memory Strategy:
 ### Step 3: Generate SKILL.md
 
 ```javascript
+// session_mode drives Session/Run lifecycle mounting. Default 'run' for stateful
+// generators (dir + artifacts); 'none' for stateless skills.
+const sessionMode = config.session_mode || 'run';
+const requiredReading = sessionMode === 'run'
+  ? `<required_reading>\n@~/.maestro/workflows/run-mode.md\n</required_reading>\n\n`
+  : '';
+
 const skillMdTemplate = `---
 name: ${config.skill_name}
 description: ${config.description}. Triggers on ${config.triggers.map(t => `"${t}"`).join(", ")}.
 allowed-tools: ${config.allowed_tools.join(", ")}
+session-mode: ${sessionMode}
 ---
 
-# ${config.display_name}
+${requiredReading}# ${config.display_name}
 
 ${config.description}
 
@@ -128,9 +136,8 @@ ${generateExecutionFlow(config)}
 
 ## Directory Setup
 
-\`\`\`javascript
-const timestamp = new Date().toISOString().slice(0,19).replace(/[-:T]/g, '');
-const workDir = \`${config.output.location.replace('{timestamp}', '${timestamp}')}\`;
+${sessionMode === 'run' ? `> **Run lifecycle** (see \`~/.maestro/workflows/run-mode.md\`): if an orchestrator injected \`run_id\` / \`run_dir\` in the birth packet, use them and do NOT call \`maestro run create\`. Otherwise self-start: \`maestro run create ${config.skill_name} --session <YYYYMMDD-${config.skill_name}-{topic}> --intent "..."\` (session slug ASCII-only, ≤64 chars). Write formal artifacts under \`{run_dir}/outputs/\`. Close with \`maestro run check {run_id}\` → repair gates → \`maestro run complete {run_id}\`.\n\n` : ''}\`\`\`javascript
+const workDir = \`\${run_dir}/outputs\`;
 
 Bash(\`mkdir -p "\${workDir}"\`);
 ${config.execution_mode === 'sequential' ?

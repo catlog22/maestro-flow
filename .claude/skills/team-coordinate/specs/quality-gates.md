@@ -61,7 +61,7 @@ Derived from Behavioral Traits in [role-spec-template.md](role-spec-template.md)
 
 **On Fail**: Retry Phase 3 (max 2 retries). After 2 retries, report `partial_completion`.
 
-**On Review**: Proceed with warnings logged to `<session>/wisdom/issues.md`.
+**On Review**: Proceed with warnings logged to `{run_dir}/work/team/wisdom/issues.md`.
 
 ## 5. Code Review Dimensions
 

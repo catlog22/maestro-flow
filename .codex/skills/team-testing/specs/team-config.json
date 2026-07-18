@@ -83,11 +83,11 @@
   "collaboration_patterns": ["CP-1", "CP-3", "CP-5"],
 
   "session_dirs": {
-    "base": ".workflow/.team/TST-{slug}-{YYYY-MM-DD}/",
-    "strategy": "strategy/",
-    "tests": "tests/",
-    "results": "results/",
-    "analysis": "analysis/",
-    "messages": ".workflow/.team-msg/{team-name}/"
+    "base": "{run_dir}/work/team/",
+    "strategy": "{run_dir}/outputs/strategy/",
+    "tests": "{run_dir}/outputs/tests/",
+    "results": "{run_dir}/outputs/results/",
+    "analysis": "{run_dir}/outputs/analysis/",
+    "messages": "{run_dir}/work/team/.msg/"
   }
 }

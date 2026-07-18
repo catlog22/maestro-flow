@@ -59,9 +59,9 @@ Parse `$ARGUMENTS`:
 ## Shared Constants
 
 - **Session prefix**: `TLV4`
-- **Session path**: `.workflow/.team/TLV4-<slug>-<date>/`
+- **Session path**: `{run_dir}/work/team/`
 - **CLI tools**: `maestro delegate --mode analysis` (read-only), `maestro delegate --mode write` (modifications)
-- **Message bus**: `mcp__maestro__team_msg(session_id=<session-id>, ...)`
+- **Message bus**: `mcp__maestro__team_msg(session_id=<run-id>, ...)`
 
 ## Worker Spawn Template
 
@@ -77,15 +77,15 @@ Agent({
   prompt: `## Role Assignment
 role: <role>
 role_spec: <skill_root>/roles/<role>/role.md
-session: <session-folder>
-session_id: <session-id>
+session: {run_dir}/work/team
+session_id: <run-id>
 team_name: <team-name>
 requirement: <task-description>
 inner_loop: <true|false>
 run_dir: <run-dir from team-session.json run.run_dir>
 
 ## Progress Milestones
-session_id: <session-id>
+session_id: <run-id>
 Report progress via team_msg at natural phase boundaries (context loaded -> core work done -> verification).
 Report blockers immediately via team_msg type="blocker".
 Report completion via team_msg type="task_complete" after final SendMessage.
@@ -111,14 +111,14 @@ Agent({
   prompt: `## Role Assignment
 role: supervisor
 role_spec: <skill_root>/roles/supervisor/role.md
-session: <session-folder>
-session_id: <session-id>
+session: {run_dir}/work/team
+session_id: <run-id>
 team_name: <team-name>
 requirement: <task-description>
 run_dir: <run-dir from team-session.json run.run_dir>
 
 ## Progress Milestones
-session_id: <session-id>
+session_id: <run-id>
 Report progress via team_msg at natural phase boundaries (context loaded -> core work done -> verification).
 Report blockers immediately via team_msg type="blocker".
 Report completion via team_msg type="task_complete" after final SendMessage.
@@ -192,15 +192,18 @@ AskUserQuestion({
 ## Session Directory
 
 ```
-.workflow/.team/TLV4-<slug>-<date>/
-├── team-session.json           # Session state + role registry
-├── spec/                       # Spec phase outputs
-├── plan/                       # Implementation plan + TASK-*.json
-├── artifacts/                  # scratch/intermediate; formal deliverables go to {run_dir}/outputs/
-├── wisdom/                     # Cross-task knowledge
-├── explorations/               # Shared explore cache
-├── discussions/                # Discuss round records
-└── .msg/                       # Team message bus
+{run_dir}/
+├── outputs/
+│   ├── spec/                   # Spec phase outputs
+│   └── plan/                   # Implementation plan + TASK-*.json
+├── evidence/
+│   └── discussions/            # Discuss round records
+├── report.md                   # Human-readable synthesis + handoff
+└── work/team/                  # Team coordination (non-artifact)
+    ├── team-session.json       # Session state + role registry
+    ├── wisdom/                 # Cross-task knowledge
+    ├── explorations/           # Shared explore cache
+    └── .msg/                   # Team message bus
 ```
 
 ## Error Handling

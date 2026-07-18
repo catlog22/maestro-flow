@@ -12,7 +12,7 @@ message_types: [scan_complete, scan_progress, error]
 | Input | Source | Required |
 |-------|--------|----------|
 | Target files or URL | From task description | Yes |
-| .msg/meta.json | <session>/wisdom/.msg/meta.json | Yes |
+| .msg/meta.json | {run_dir}/work/team/wisdom/.msg/meta.json | Yes |
 | Anti-patterns catalog | specs/anti-patterns.md | Yes |
 | Design standards | specs/design-standards.md | Yes |
 
@@ -23,7 +23,7 @@ message_types: [scan_complete, scan_progress, error]
      - Mobile: `mcp__chrome-devtools__resize_page(width=375, height=812)` + screenshot
      - Tablet: `mcp__chrome-devtools__resize_page(width=768, height=1024)` + screenshot
      - Desktop: `mcp__chrome-devtools__resize_page(width=1440, height=900)` + screenshot
-     - Save to `<session>/evidence/before-mobile.png`, `before-tablet.png`, `before-desktop.png`
+     - Save to `{run_dir}/evidence/before-mobile.png`, `before-tablet.png`, `before-desktop.png`
    - **Component target**: Read CSS/SCSS, HTML, JS/TS/JSX/TSX files
    - **Full site target**: Glob for all frontend source files (*.css, *.scss, *.tsx, *.jsx, *.html, *.vue, *.svelte)
 4. Extract raw data for analysis:
@@ -282,7 +282,7 @@ Only score if dark mode exists. Skip and note "N/A — no dark mode" if not pres
 
 ## Phase 4: Generate Scan Report
 
-Output: `<session>/scan/scan-report.md`
+Output: `{run_dir}/outputs/scan/scan-report.md`
 
 Report structure:
 
@@ -350,5 +350,5 @@ Score: X/4
 After writing the report, send completion message:
 ```
 mcp__maestro__team_msg(session_id, role="scanner", type="scan_complete", content="Scan complete. Score: X/36. P0: N, P1: N, P2: N, P3: N issues found.")
-SendMessage(participant="coordinator", message="[scanner] SCAN-001 complete. Score: X/36 (<rating-band>). Issues: P0=N P1=N P2=N P3=N. Report: <session>/scan/scan-report.md")
+SendMessage(participant="coordinator", message="[scanner] SCAN-001 complete. Score: X/36 (<rating-band>). Issues: P0=N P1=N P2=N P3=N. Report: {run_dir}/outputs/scan/scan-report.md")
 ```

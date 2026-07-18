@@ -145,7 +145,18 @@ state.status = 'completed';
 Write(`${state.work_dir}/iteration-state.json`, JSON.stringify(state, null, 2));
 ```
 
-### Step 5.4: Display Summary to User
+### Step 5.4: Close the Run (see run-mode.md)
+
+Before reporting completion, close the Run:
+
+```bash
+maestro run check {run_id}     # repair any reported gate
+maestro run complete {run_id}
+```
+
+Report success only after `run complete` succeeds.
+
+### Step 5.5: Display Summary to User
 
 Output to user:
 
@@ -167,4 +178,4 @@ Backups: {backupDir}/
 
 - **Files**: `final-report.md`
 - **State**: `status = completed`
-- **Next**: Workflow complete. Return control to user.
+- **Next**: Run completed via `maestro run complete`. Return control to user.

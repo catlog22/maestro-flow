@@ -32,11 +32,11 @@ TASK:
   - <step 2: specific action>
   - <step 3: specific action>
 CONTEXT:
-  - Session: <session-folder>
+  - Session: {run_dir}/work/team
   - Scope: <interaction-scope>
   - Components: <component-list>
   - Upstream artifacts: <artifact-1>, <artifact-2>
-  - Shared memory: <session>/wisdom/.msg/meta.json
+  - Shared memory: {run_dir}/work/team/wisdom/.msg/meta.json
 EXPECTED: <deliverable path> + <quality criteria>
 CONSTRAINTS: <scope limits, focus areas>"
 })
@@ -65,11 +65,11 @@ TASK:
   - Audit browser API usage (IntersectionObserver, ResizeObserver, Pointer Events, Touch Events)
   - Collect reference patterns for target component type
 CONTEXT:
-  - Session: <session-folder>
+  - Session: {run_dir}/work/team
   - Scope: <interaction-scope>
   - Components: <component-list>
-  - Shared memory: <session>/wisdom/.msg/meta.json
-EXPECTED: <session>/research/*.json | All 3 research files with valid JSON
+  - Shared memory: {run_dir}/work/team/wisdom/.msg/meta.json
+EXPECTED: {run_dir}/outputs/research/*.json | All 3 research files with valid JSON
 CONSTRAINTS: Read-only analysis | Focus on <interaction-scope>"
 })
 update_plan({ taskId: "RESEARCH-001", owner: "researcher" })
@@ -87,11 +87,11 @@ TASK:
   - Design animation choreography (entry/exit/idle transitions)
   - Create touch/keyboard/mouse mapping table
 CONTEXT:
-  - Session: <session-folder>
+  - Session: {run_dir}/work/team
   - Scope: <interaction-scope>
-  - Upstream artifacts: research/*.json
-  - Shared memory: <session>/wisdom/.msg/meta.json
-EXPECTED: <session>/interaction/blueprints/<component-name>.md | Complete state machine + event map + keyboard coverage
+  - Upstream artifacts: {run_dir}/outputs/research/*.json
+  - Shared memory: {run_dir}/work/team/wisdom/.msg/meta.json
+EXPECTED: {run_dir}/outputs/interaction/blueprints/<component-name>.md | Complete state machine + event map + keyboard coverage
 CONSTRAINTS: Vanilla JS only | GPU-only animations | Progressive enhancement"
 })
 update_plan({ taskId: "INTERACT-001", addBlockedBy: ["RESEARCH-001"], owner: "interaction-designer" })
@@ -111,11 +111,11 @@ TASK:
   - Add ResizeObserver for responsive behavior
   - Add IntersectionObserver for scroll triggers (if applicable)
 CONTEXT:
-  - Session: <session-folder>
+  - Session: {run_dir}/work/team
   - Scope: <interaction-scope>
-  - Upstream artifacts: interaction/blueprints/*.md, research/*.json
-  - Shared memory: <session>/wisdom/.msg/meta.json
-EXPECTED: <session>/build/components/<name>.js + <name>.css | Zero dependencies, all states implemented
+  - Upstream artifacts: {run_dir}/outputs/interaction/blueprints/*.md, {run_dir}/outputs/research/*.json
+  - Shared memory: {run_dir}/work/team/wisdom/.msg/meta.json
+EXPECTED: {run_dir}/outputs/build/components/<name>.js + <name>.css | Zero dependencies, all states implemented
 CONSTRAINTS: No npm packages | ES modules only | No inline styles | < 5ms per frame"
 })
 update_plan({ taskId: "BUILD-001", addBlockedBy: ["INTERACT-001"], owner: "builder" })
@@ -133,11 +133,11 @@ TASK:
   - Test focus management (visible indicator, focus trap for overlays)
   - Check color contrast (foreground/background ratio)
 CONTEXT:
-  - Session: <session-folder>
+  - Session: {run_dir}/work/team
   - Scope: <interaction-scope>
-  - Upstream artifacts: build/components/*.js, build/components/*.css, interaction/blueprints/*.md
-  - Shared memory: <session>/wisdom/.msg/meta.json
-EXPECTED: <session>/a11y/a11y-audit-001.md | Per-check pass/fail with remediation suggestions
+  - Upstream artifacts: {run_dir}/outputs/build/components/*.js, {run_dir}/outputs/build/components/*.css, {run_dir}/outputs/interaction/blueprints/*.md
+  - Shared memory: {run_dir}/work/team/wisdom/.msg/meta.json
+EXPECTED: {run_dir}/outputs/a11y/a11y-audit-001.md | Per-check pass/fail with remediation suggestions
 CONSTRAINTS: Read-only analysis | GC convergence: 0 critical issues"
 })
 update_plan({ taskId: "A11Y-001", addBlockedBy: ["BUILD-001"], owner: "a11y-tester" })

@@ -119,8 +119,8 @@
   ],
 
   "session_directory": {
-    "pattern": ".workflow/.team/QA-{slug}-{date}",
-    "subdirectories": ["scan", "strategy", "results", "analysis"]
+    "pattern": "{run_dir}/work/team/",
+    "subdirectories": ["{run_dir}/outputs/scan", "{run_dir}/outputs/strategy", "{run_dir}/outputs/results", "{run_dir}/outputs/analysis"]
   },
 
   "test_layers": {

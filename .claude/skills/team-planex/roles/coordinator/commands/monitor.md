@@ -8,7 +8,7 @@ Event-driven pipeline coordination with Spawn-and-Stop pattern. Three wake-up so
 
 | Constant | Value | Description |
 |----------|-------|-------------|
-| SPAWN_MODE | background | All workers spawned via `Task(run_in_background: true)` |
+| SPAWN_MODE | background | All workers spawned via `Agent(subagent_type: "team-worker", run_in_background: true)` |
 | ONE_STEP_PER_INVOCATION | true | Coordinator does one operation then STOPS |
 | WORKER_AGENT | team-worker | All workers are team-worker agents |
 
@@ -16,7 +16,7 @@ Event-driven pipeline coordination with Spawn-and-Stop pattern. Three wake-up so
 
 | Input | Source | Required |
 |-------|--------|----------|
-| Session file | `<session-folder>/.msg/meta.json` | Yes |
+| Session file | `{run_dir}/work/team/.msg/meta.json` | Yes |
 | Task list | `TaskList()` | Yes |
 | Active workers | session.active_workers[] | Yes |
 
@@ -152,15 +152,16 @@ Collect task states from TaskList()
            prompt: `## Role Assignment
 role: <role>
 role_spec: ~  or <project>/.claude/skills/team-planex/roles/<role>/role.md
-session: <session-folder>
-session_id: <session-id>
+session: {run_dir}/work/team
+session_id: <run-id>
 team_name: <team-name>
 requirement: <task-description>
 inner_loop: true
+run_dir: <run-dir from team-session.json run.run_dir>
 execution_method: <method>
 
 ## Progress Milestones
-session_id: <session-id>
+session_id: <run-id>
 Report progress via team_msg at natural phase boundaries (context loaded -> core work done -> verification).
 Report blockers immediately via team_msg type="blocker".
 Report completion via team_msg type="task_complete" after final SendMessage.`

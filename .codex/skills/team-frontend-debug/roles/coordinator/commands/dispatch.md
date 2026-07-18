@@ -24,14 +24,14 @@ TASK:
   - <step 1>
   - <step 2>
 CONTEXT:
-  - Session: <session-folder>
+  - Session: {run_dir}/work/team
   - Base URL / Bug URL: <url>
   - Upstream artifacts: <list>
 EXPECTED: <artifact path> + <quality criteria>
 CONSTRAINTS: <scope limits>
 ---
 InnerLoop: <true|false>
-RoleSpec: ~  or <project>/.claude/skills/team-frontend-debug/roles/<role>/role.md
+RoleSpec: ~  or <project>/.codex/skills/team-frontend-debug/roles/<role>/role.md
 ```
 
 ---
@@ -50,14 +50,14 @@ TASK:
   - Classify results: pass / fail / warning
   - Compile test report with discovered issues
 CONTEXT:
-  - Session: <session-folder>
+  - Session: {run_dir}/work/team
   - Base URL: <base-url>
   - Features: <feature-list-from-task-analysis>
-EXPECTED: <session>/artifacts/TEST-001-report.md + <session>/artifacts/TEST-001-issues.json
+EXPECTED: {run_dir}/outputs/TEST-001-report.md + {run_dir}/outputs/TEST-001-issues.json
 CONSTRAINTS: Use Chrome DevTools MCP only | Do not modify any code | Test all listed features
 ---
 InnerLoop: true
-RoleSpec: ~  or <project>/.claude/skills/team-frontend-debug/roles/tester/role.md
+RoleSpec: ~  or <project>/.codex/skills/team-frontend-debug/roles/tester/role.md
 ```
 
 ### ANALYZE-001 (Test Mode): Analyze Discovered Issues
@@ -70,14 +70,14 @@ TASK:
   - Correlate console errors, network failures, DOM anomalies to source code
   - Produce consolidated RCA report covering all issues
 CONTEXT:
-  - Session: <session-folder>
-  - Upstream: <session>/artifacts/TEST-001-issues.json
-  - Test evidence: <session>/evidence/
-EXPECTED: <session>/artifacts/ANALYZE-001-rca.md with root causes for all issues
+  - Session: {run_dir}/work/team
+  - Upstream: {run_dir}/outputs/TEST-001-issues.json
+  - Test evidence: {run_dir}/evidence/
+EXPECTED: {run_dir}/outputs/ANALYZE-001-rca.md with root causes for all issues
 CONSTRAINTS: Read-only analysis | Skip low-severity warnings unless user requests
 ---
 InnerLoop: false
-RoleSpec: ~  or <project>/.claude/skills/team-frontend-debug/roles/analyzer/role.md
+RoleSpec: ~  or <project>/.codex/skills/team-frontend-debug/roles/analyzer/role.md
 ```
 
 **Conditional**: If TEST-001 reports zero issues → skip ANALYZE-001, FIX-001, VERIFY-001. Pipeline completes.
@@ -92,13 +92,13 @@ TASK:
   - Run syntax/type check after all modifications
   - Document all changes
 CONTEXT:
-  - Session: <session-folder>
-  - Upstream: <session>/artifacts/ANALYZE-001-rca.md
-EXPECTED: Modified source files + <session>/artifacts/FIX-001-changes.md
+  - Session: {run_dir}/work/team
+  - Upstream: {run_dir}/outputs/ANALYZE-001-rca.md
+EXPECTED: Modified source files + {run_dir}/outputs/FIX-001-changes.md
 CONSTRAINTS: Minimal changes per issue | Follow existing code style
 ---
 InnerLoop: true
-RoleSpec: ~  or <project>/.claude/skills/team-frontend-debug/roles/fixer/role.md
+RoleSpec: ~  or <project>/.codex/skills/team-frontend-debug/roles/fixer/role.md
 ```
 
 ### VERIFY-001 (Test Mode): Re-Test After Fix
@@ -111,15 +111,15 @@ TASK:
   - Capture evidence and compare with original
   - Report pass/fail per scenario
 CONTEXT:
-  - Session: <session-folder>
-  - Original test report: <session>/artifacts/TEST-001-report.md
-  - Fix changes: <session>/artifacts/FIX-001-changes.md
+  - Session: {run_dir}/work/team
+  - Original test report: {run_dir}/outputs/TEST-001-report.md
+  - Fix changes: {run_dir}/outputs/FIX-001-changes.md
   - Failed features: <from TEST-001-issues.json>
-EXPECTED: <session>/artifacts/VERIFY-001-report.md with pass/fail per previously-failed scenario
+EXPECTED: {run_dir}/outputs/VERIFY-001-report.md with pass/fail per previously-failed scenario
 CONSTRAINTS: Only re-test failed scenarios | Use Chrome DevTools MCP only
 ---
 InnerLoop: false
-RoleSpec: ~  or <project>/.claude/skills/team-frontend-debug/roles/verifier/role.md
+RoleSpec: ~  or <project>/.codex/skills/team-frontend-debug/roles/verifier/role.md
 ```
 
 ---
@@ -137,15 +137,15 @@ TASK:
   - If performance dimension: run performance trace
   - Package all evidence into session evidence/ directory
 CONTEXT:
-  - Session: <session-folder>
+  - Session: {run_dir}/work/team
   - Bug URL: <target-url>
   - Steps: <reproduction-steps>
   - Evidence plan: <from task-analysis.json>
-EXPECTED: <session>/evidence/ directory with all captures + reproduction report
+EXPECTED: {run_dir}/evidence/ directory with all captures + reproduction report
 CONSTRAINTS: Use Chrome DevTools MCP only | Do not modify any code
 ---
 InnerLoop: false
-RoleSpec: ~  or <project>/.claude/skills/team-frontend-debug/roles/reproducer/role.md
+RoleSpec: ~  or <project>/.codex/skills/team-frontend-debug/roles/reproducer/role.md
 ```
 
 ### ANALYZE-001 (Debug Mode): Root Cause Analysis
@@ -159,14 +159,14 @@ TASK:
   - Compare DOM snapshot against expected structure
   - Correlate findings to source code location
 CONTEXT:
-  - Session: <session-folder>
-  - Upstream: <session>/evidence/
+  - Session: {run_dir}/work/team
+  - Upstream: {run_dir}/evidence/
   - Bug description: <bug-description>
-EXPECTED: <session>/artifacts/ANALYZE-001-rca.md with root cause, file:line, fix recommendation
+EXPECTED: {run_dir}/outputs/ANALYZE-001-rca.md with root cause, file:line, fix recommendation
 CONSTRAINTS: Read-only analysis | Request more evidence if inconclusive
 ---
 InnerLoop: false
-RoleSpec: ~  or <project>/.claude/skills/team-frontend-debug/roles/analyzer/role.md
+RoleSpec: ~  or <project>/.codex/skills/team-frontend-debug/roles/analyzer/role.md
 ```
 
 ### FIX-001 (Debug Mode): Code Fix
@@ -179,13 +179,13 @@ TASK:
   - Implement fix following existing code patterns
   - Run syntax/type check on modified files
 CONTEXT:
-  - Session: <session-folder>
-  - Upstream: <session>/artifacts/ANALYZE-001-rca.md
-EXPECTED: Modified source files + <session>/artifacts/FIX-001-changes.md
+  - Session: {run_dir}/work/team
+  - Upstream: {run_dir}/outputs/ANALYZE-001-rca.md
+EXPECTED: Modified source files + {run_dir}/outputs/FIX-001-changes.md
 CONSTRAINTS: Minimal changes | Follow existing code style | No breaking changes
 ---
 InnerLoop: true
-RoleSpec: ~  or <project>/.claude/skills/team-frontend-debug/roles/fixer/role.md
+RoleSpec: ~  or <project>/.codex/skills/team-frontend-debug/roles/fixer/role.md
 ```
 
 ### VERIFY-001 (Debug Mode): Fix Verification
@@ -198,14 +198,14 @@ TASK:
   - Capture evidence and compare with original
   - Confirm bug is resolved and no regressions
 CONTEXT:
-  - Session: <session-folder>
-  - Original evidence: <session>/evidence/
-  - Fix changes: <session>/artifacts/FIX-001-changes.md
-EXPECTED: <session>/artifacts/VERIFY-001-report.md with pass/fail verdict
+  - Session: {run_dir}/work/team
+  - Original evidence: {run_dir}/evidence/
+  - Fix changes: {run_dir}/outputs/FIX-001-changes.md
+EXPECTED: {run_dir}/outputs/VERIFY-001-report.md with pass/fail verdict
 CONSTRAINTS: Use Chrome DevTools MCP only | Same steps as reproduction
 ---
 InnerLoop: false
-RoleSpec: ~  or <project>/.claude/skills/team-frontend-debug/roles/verifier/role.md
+RoleSpec: ~  or <project>/.codex/skills/team-frontend-debug/roles/verifier/role.md
 ```
 
 ---
@@ -221,7 +221,7 @@ TASK: <specific evidence requests from Analyzer>
 CONTEXT: Session + Analyzer request
 ---
 InnerLoop: false
-RoleSpec: ~  or <project>/.claude/skills/team-frontend-debug/roles/reproducer/role.md
+RoleSpec: ~  or <project>/.codex/skills/team-frontend-debug/roles/reproducer/role.md
 ```
 
 ### FIX-002 (Either Mode): Re-Fix After Failed Verification
@@ -233,7 +233,7 @@ TASK: Review VERIFY-001 failure details, apply corrective fix
 CONTEXT: Session + VERIFY-001-report.md
 ---
 InnerLoop: true
-RoleSpec: ~  or <project>/.claude/skills/team-frontend-debug/roles/fixer/role.md
+RoleSpec: ~  or <project>/.codex/skills/team-frontend-debug/roles/fixer/role.md
 ```
 
 ## Conditional Skip Rules

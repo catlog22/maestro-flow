@@ -10,12 +10,12 @@
 |-------|--------|----------|
 | User requirement | From coordinator Phase 1 | Yes |
 | Session folder | From coordinator Phase 2 | Yes |
-| Pipeline mode | From session.json `pipeline` | Yes |
-| Industry config | From session.json `industry` | Yes |
+| Pipeline mode | From team-session.json `pipeline` | Yes |
+| Industry config | From team-session.json `industry` | Yes |
 
-1. Load user requirement and design scope from session.json
+1. Load user requirement and design scope from team-session.json
 2. Load pipeline stage definitions from specs/pipelines.md
-3. Read `pipeline` and `industry` from session.json
+3. Read `pipeline` and `industry` from team-session.json
 
 ## Phase 3: Task Chain Creation (Mode-Branched)
 
@@ -32,11 +32,11 @@ TASK:
   - <step 2: specific action>
   - <step 3: specific action>
 CONTEXT:
-  - Session: <session-folder>
+  - Session: {run_dir}/work/team
   - Scope: <design-scope>
   - Industry: <industry>
   - Upstream artifacts: <artifact-1>, <artifact-2>
-  - Shared memory: <session>/wisdom/.msg/meta.json
+  - Shared memory: {run_dir}/work/team/wisdom/.msg/meta.json
 EXPECTED: <deliverable path> + <quality criteria>
 CONSTRAINTS: <scope limits, focus areas>"
 })
@@ -66,11 +66,11 @@ TASK:
   - Assess accessibility baseline (WCAG level, ARIA coverage)
   - Retrieve design intelligence via ui-ux-pro-max
 CONTEXT:
-  - Session: <session-folder>
+  - Session: {run_dir}/work/team
   - Scope: <design-scope>
   - Industry: <industry>
-  - Shared memory: <session>/wisdom/.msg/meta.json
-EXPECTED: <session>/research/*.json | All 4 research files with valid JSON
+  - Shared memory: {run_dir}/work/team/wisdom/.msg/meta.json
+EXPECTED: {run_dir}/outputs/research/*.json | All 4 research files with valid JSON
 CONSTRAINTS: Read-only analysis | Focus on <design-scope>"
 })
 update_plan({ taskId: "RESEARCH-001", owner: "researcher" })
@@ -87,12 +87,12 @@ TASK:
   - Ensure accessibility spec (role, ARIA, keyboard, focus)
   - Reference design intelligence recommendations
 CONTEXT:
-  - Session: <session-folder>
+  - Session: {run_dir}/work/team
   - Scope: <design-scope>
   - Industry: <industry>
-  - Upstream artifacts: research/*.json
-  - Shared memory: <session>/wisdom/.msg/meta.json
-EXPECTED: <session>/design/design-tokens.json + component-specs/*.md | Complete token system + spec
+  - Upstream artifacts: {run_dir}/outputs/research/*.json
+  - Shared memory: {run_dir}/work/team/wisdom/.msg/meta.json
+EXPECTED: {run_dir}/outputs/design/design-tokens.json + component-specs/*.md | Complete token system + spec
 CONSTRAINTS: Follow W3C Design Tokens Format | All color tokens need light/dark"
 })
 update_plan({ taskId: "DESIGN-001", addBlockedBy: ["RESEARCH-001"], owner: "designer" })
@@ -109,12 +109,12 @@ TASK:
   - Verify component states and ARIA spec
   - Check against design intelligence anti-patterns
 CONTEXT:
-  - Session: <session-folder>
+  - Session: {run_dir}/work/team
   - Scope: <design-scope>
   - Industry: <industry>
-  - Upstream artifacts: design/design-tokens.json, design/component-specs/*.md
-  - Shared memory: <session>/wisdom/.msg/meta.json
-EXPECTED: <session>/audit/audit-001.md | 5-dimension scored report
+  - Upstream artifacts: {run_dir}/outputs/design/design-tokens.json, {run_dir}/outputs/design/component-specs/*.md
+  - Shared memory: {run_dir}/work/team/wisdom/.msg/meta.json
+EXPECTED: {run_dir}/outputs/audit/audit-001.md | 5-dimension scored report
 CONSTRAINTS: Read-only analysis | GC convergence: score >= 8 and 0 critical"
 })
 update_plan({ taskId: "AUDIT-001", addBlockedBy: ["DESIGN-001"], owner: "reviewer" })
@@ -131,12 +131,12 @@ TASK:
   - Add ARIA attributes and keyboard navigation
   - Validate no hardcoded values
 CONTEXT:
-  - Session: <session-folder>
+  - Session: {run_dir}/work/team
   - Scope: <design-scope>
   - Industry: <industry>
-  - Upstream artifacts: design/design-tokens.json, design/component-specs/*.md, audit/audit-001.md
-  - Shared memory: <session>/wisdom/.msg/meta.json
-EXPECTED: <session>/build/**/* | Component + tokens CSS/TS + tests
+  - Upstream artifacts: {run_dir}/outputs/design/design-tokens.json, {run_dir}/outputs/design/component-specs/*.md, {run_dir}/outputs/audit/audit-001.md
+  - Shared memory: {run_dir}/work/team/wisdom/.msg/meta.json
+EXPECTED: {run_dir}/outputs/build/**/* | Component + tokens CSS/TS + tests
 CONSTRAINTS: Use var(--token-name) only | Follow project patterns"
 })
 update_plan({ taskId: "BUILD-001", addBlockedBy: ["AUDIT-001"], owner: "implementer" })

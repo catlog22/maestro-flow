@@ -12,8 +12,8 @@ message_types: [state_update]
 | Input | Source | Required |
 |-------|--------|----------|
 | Session path | task description (regex: `session:\s*(.+)`) | Yes |
-| .msg/meta.json | <session>/.msg/meta.json | Yes |
-| Fix log | <session>/fixes/fix-log.json | No |
+| .msg/meta.json | {run_dir}/work/team/.msg/meta.json | Yes |
+| Fix log | {run_dir}/outputs/fixes/fix-log.json | No |
 
 1. Extract session path from task description
 2. Read .msg/meta.json for: worktree.path, debt_inventory, fix_results, debt_score_before
@@ -71,6 +71,6 @@ Execute 4-layer validation (all commands in worktree):
 ## Phase 4: Compare & Report
 
 1. Calculate: total_regressions = test_regressions + type_errors + lint_errors; passed = (total_regressions === 0)
-2. Write `<session>/validation/validation-report.json` with: validation_date, passed, regressions, checks (per-check status), debt_score_before, debt_score_after, improvement_percentage
+2. Write `{run_dir}/outputs/validation/validation-report.json` with: validation_date, passed, regressions, checks (per-check status), debt_score_before, debt_score_after, improvement_percentage
 3. Update .msg/meta.json with `validation_results` and `debt_score_after`
 4. Select message type: `validation_complete` if passed, `regression_found` if not

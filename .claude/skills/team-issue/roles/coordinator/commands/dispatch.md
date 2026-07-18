@@ -6,12 +6,12 @@
 |-------|--------|----------|
 | Requirement | From coordinator Phase 1 | Yes |
 | Session folder | From coordinator Phase 2 | Yes |
-| Pipeline mode | From session.json mode | Yes |
-| Issue IDs | From session.json issue_ids | Yes |
-| Execution method | From session.json execution_method | Yes |
-| Code review | From session.json code_review | No |
+| Pipeline mode | From team-session.json mode | Yes |
+| Issue IDs | From team-session.json issue_ids | Yes |
+| Execution method | From team-session.json execution_method | Yes |
+| Code review | From team-session.json code_review | No |
 
-1. Load requirement, pipeline mode, issue IDs, and execution method from session.json
+1. Load requirement, pipeline mode, issue IDs, and execution method from team-session.json
 2. Determine task chain from pipeline mode
 
 ## Task Description Template
@@ -27,7 +27,7 @@ TASK:
   - <step 2>
   - <step 3>
 CONTEXT:
-  - Session: <session-folder>
+  - Session: {run_dir}/work/team
   - Issue IDs: <issue-id-list>
   - Upstream artifacts: <artifact-list>
 EXPECTED: <deliverable path> + <quality criteria>
@@ -58,13 +58,13 @@ TaskCreate({
   subject: "EXPLORE-001",
   description: "PURPOSE: Analyze issue context and map codebase impact | Success: Context report with relevant files and dependencies
 TASK:
-  - Load issue details via ccw issue status
+  - Load issue details via `Bash("maestro issue status <issueId> --json")`
   - Explore codebase for relevant files and patterns
   - Assess complexity and impact scope
 CONTEXT:
-  - Session: <session-folder>
+  - Session: {run_dir}/work/team
   - Issue IDs: <issue-id-list>
-EXPECTED: <session>/explorations/context-<issueId>.json with relevant files, dependencies, and impact assessment
+EXPECTED: {run_dir}/work/team/explorations/context-<issueId>.json with relevant files, dependencies, and impact assessment
 CONSTRAINTS: Exploration and analysis only, no solution design
 ---
 InnerLoop: false"
@@ -82,10 +82,10 @@ TASK:
   - Generate solution plan via CLI
   - Bind solution to issue
 CONTEXT:
-  - Session: <session-folder>
+  - Session: {run_dir}/work/team
   - Issue IDs: <issue-id-list>
-  - Upstream artifacts: explorations/context-<issueId>.json
-EXPECTED: <session>/solutions/solution-<issueId>.json with solution plan and task list
+  - Upstream artifacts: {run_dir}/work/team/explorations/context-<issueId>.json
+EXPECTED: {run_dir}/outputs/solutions/solution-<issueId>.json with solution plan and task list
 CONSTRAINTS: Solution design only, no code implementation
 ---
 InnerLoop: false"
@@ -103,10 +103,10 @@ TASK:
   - Detect file conflicts between solutions
   - Produce ordered execution queue with DAG-based parallel groups
 CONTEXT:
-  - Session: <session-folder>
+  - Session: {run_dir}/work/team
   - Issue IDs: <issue-id-list>
-  - Upstream artifacts: solutions/solution-<issueId>.json
-EXPECTED: .workflow/issues/queue/execution-queue.json with queue, conflicts, parallel groups
+  - Upstream artifacts: {run_dir}/outputs/solutions/solution-<issueId>.json
+EXPECTED: {run_dir}/outputs/queue/execution-queue.json with queue, conflicts, parallel groups
 CONSTRAINTS: Queue formation only, no implementation
 ---
 InnerLoop: false"
@@ -125,10 +125,10 @@ TASK:
   - Run tests and verify implementation
   - Commit changes
 CONTEXT:
-  - Session: <session-folder>
+  - Session: {run_dir}/work/team
   - Issue IDs: <issue-id-list>
-  - Upstream artifacts: explorations/context-<issueId>.json, solutions/solution-<issueId>.json, queue/execution-queue.json
-EXPECTED: <session>/builds/ with implementation results, tests passing
+  - Upstream artifacts: {run_dir}/work/team/explorations/context-<issueId>.json, {run_dir}/outputs/solutions/solution-<issueId>.json, {run_dir}/outputs/queue/execution-queue.json
+EXPECTED: {run_dir}/outputs/builds/ with implementation results, tests passing
 CONSTRAINTS: Follow solution plan, no scope creep
 ---
 InnerLoop: false
@@ -154,10 +154,10 @@ TASK:
   - Score across 3 dimensions: technical feasibility (40%), risk (30%), completeness (30%)
   - Produce verdict: approved (>=80), concerns (60-79), rejected (<60)
 CONTEXT:
-  - Session: <session-folder>
+  - Session: {run_dir}/work/team
   - Issue IDs: <issue-id-list>
-  - Upstream artifacts: explorations/context-<issueId>.json, solutions/solution-<issueId>.json
-EXPECTED: <session>/audits/audit-report.json with per-issue scores and overall verdict
+  - Upstream artifacts: {run_dir}/work/team/explorations/context-<issueId>.json, {run_dir}/outputs/solutions/solution-<issueId>.json
+EXPECTED: {run_dir}/outputs/audits/audit-report.json with per-issue scores and overall verdict
 CONSTRAINTS: Review only, do not modify solutions
 ---
 InnerLoop: false"
@@ -193,9 +193,9 @@ TASK:
   - Explore codebase for relevant files
   - Assess complexity and impact scope
 CONTEXT:
-  - Session: <session-folder>
+  - Session: {run_dir}/work/team
   - Issue IDs: <issueId>
-EXPECTED: <session>/explorations/context-<issueId>.json
+EXPECTED: {run_dir}/work/team/explorations/context-<issueId>.json
 CONSTRAINTS: Single issue scope, exploration only
 ---
 InnerLoop: false"
@@ -214,10 +214,10 @@ TASK:
   - Generate solution plan
   - Bind solution
 CONTEXT:
-  - Session: <session-folder>
+  - Session: {run_dir}/work/team
   - Issue IDs: <issueId>
-  - Upstream artifacts: explorations/context-<issueId>.json
-EXPECTED: <session>/solutions/solution-<issueId>.json
+  - Upstream artifacts: {run_dir}/work/team/explorations/context-<issueId>.json
+EXPECTED: {run_dir}/outputs/solutions/solution-<issueId>.json
 CONSTRAINTS: Solution design only
 ---
 InnerLoop: false"
@@ -235,10 +235,10 @@ TASK:
   - Score each solution across 3 dimensions
   - Produce per-issue verdicts and overall verdict
 CONTEXT:
-  - Session: <session-folder>
+  - Session: {run_dir}/work/team
   - Issue IDs: <all-issue-ids>
-  - Upstream artifacts: explorations/*.json, solutions/*.json
-EXPECTED: <session>/audits/audit-report.json with batch results
+  - Upstream artifacts: {run_dir}/work/team/explorations/*.json, {run_dir}/outputs/solutions/*.json
+EXPECTED: {run_dir}/outputs/audits/audit-report.json with batch results
 CONSTRAINTS: Review only
 ---
 InnerLoop: false"
@@ -268,10 +268,10 @@ TASK:
   - Execute implementation via <execution_method>
   - Run tests, commit
 CONTEXT:
-  - Session: <session-folder>
+  - Session: {run_dir}/work/team
   - Issue IDs: <issueId>
-  - Upstream artifacts: explorations/context-<issueId>.json, solutions/solution-<issueId>.json, queue/execution-queue.json
-EXPECTED: <session>/builds/ with results
+  - Upstream artifacts: {run_dir}/work/team/explorations/context-<issueId>.json, {run_dir}/outputs/solutions/solution-<issueId>.json, {run_dir}/outputs/queue/execution-queue.json
+EXPECTED: {run_dir}/outputs/builds/ with results
 CONSTRAINTS: Follow solution plan
 ---
 InnerLoop: false
@@ -297,11 +297,11 @@ TASK:
   - Design alternative approach addressing concerns
   - Re-bind revised solution
 CONTEXT:
-  - Session: <session-folder>
+  - Session: {run_dir}/work/team
   - Issue IDs: <rejected-issue-ids>
-  - Upstream artifacts: audits/audit-report.json
+  - Upstream artifacts: {run_dir}/outputs/audits/audit-report.json
   - Reviewer feedback: <rejection-reasons>
-EXPECTED: <session>/solutions/solution-<issueId>.json (revised)
+EXPECTED: {run_dir}/outputs/solutions/solution-<issueId>.json (revised)
 CONSTRAINTS: Address reviewer concerns specifically
 ---
 InnerLoop: false"
@@ -319,10 +319,10 @@ TASK:
   - Re-evaluate previously rejected dimensions
   - Produce updated verdict
 CONTEXT:
-  - Session: <session-folder>
+  - Session: {run_dir}/work/team
   - Issue IDs: <rejected-issue-ids>
-  - Upstream artifacts: solutions/solution-<issueId>.json (revised), audits/audit-report.json
-EXPECTED: <session>/audits/audit-report.json (updated)
+  - Upstream artifacts: {run_dir}/outputs/solutions/solution-<issueId>.json (revised), {run_dir}/outputs/audits/audit-report.json
+EXPECTED: {run_dir}/outputs/audits/audit-report.json (updated)
 CONSTRAINTS: Focus on previously rejected dimensions
 ---
 InnerLoop: false"

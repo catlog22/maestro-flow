@@ -44,14 +44,14 @@ When coordinator needs to execute a command (analyze, dispatch, monitor):
 | Manual resume | Args contain "resume" or "continue" | -> handleResume (monitor.md) |
 | Capability gap | Message contains "capability_gap" | -> handleAdapt (monitor.md) |
 | Pipeline complete | All tasks have status "completed" | -> handleComplete (monitor.md) |
-| Interrupted session | Active/paused session exists in .workflow/.team/MD-* | -> Phase 0 |
+| Interrupted session | Active/paused session exists in {run_dir}/work/team/ | -> Phase 0 |
 | New session | None of above | -> Phase 1 |
 
 For callback/check/resume/adapt/complete: load `@commands/monitor.md`, execute matched handler, STOP.
 
 ## Phase 0: Session Resume Check
 
-1. Scan `.workflow/.team/MD-*/.msg/meta.json` for active/paused sessions
+1. Scan `{run_dir}/work/team/.msg/meta.json` for active/paused sessions
 2. No sessions -> Phase 1
 3. Single session -> reconcile (audit list_agents, reset in_progress->pending, rebuild team, kick first ready task)
 4. Multiple -> request_user_input for selection
@@ -93,18 +93,18 @@ TEXT-LEVEL ONLY. No source code reading.
 
 1. Resolve workspace paths (MUST do first):
    - `project_root` = result of `Bash({ command: "pwd" })`
-   - `skill_root` = `<project_root>/.claude/skills/team-motion-design`
+   - `skill_root` = `<project_root>/.codex/skills/team-motion-design`
 2. Generate session ID: `MD-<slug>-<YYYY-MM-DD>`
 3. Create session folder structure:
    ```
-   .workflow/.team/MD-<slug>-<date>/research/perf-traces/
-   .workflow/.team/MD-<slug>-<date>/choreography/sequences/
-   .workflow/.team/MD-<slug>-<date>/animations/keyframes/
-   .workflow/.team/MD-<slug>-<date>/animations/orchestrators/
-   .workflow/.team/MD-<slug>-<date>/testing/traces/
-   .workflow/.team/MD-<slug>-<date>/testing/reports/
-   .workflow/.team/MD-<slug>-<date>/wisdom/
-   .workflow/.team/MD-<slug>-<date>/.msg/
+   {run_dir}/outputs/research/perf-traces/
+   {run_dir}/outputs/choreography/sequences/
+   {run_dir}/outputs/animations/keyframes/
+   {run_dir}/outputs/animations/orchestrators/
+   {run_dir}/outputs/testing/traces/
+   {run_dir}/outputs/testing/reports/
+   {run_dir}/work/team/wisdom/
+   {run_dir}/work/team/.msg/
    ```
 4. Initialize `.msg/meta.json` via team_msg state_update with pipeline metadata
 5. TeamCreate(team_name="motion-design")
@@ -135,14 +135,14 @@ Delegate to `@commands/monitor.md#handleSpawnNext`:
 
 | Deliverable | Path |
 |-------------|------|
-| Animation Inventory | <session>/research/animation-inventory.json |
-| Performance Baseline | <session>/research/performance-baseline.json |
-| Easing Catalog | <session>/research/easing-catalog.json |
-| Motion Tokens | <session>/choreography/motion-tokens.json |
-| Choreography Sequences | <session>/choreography/sequences/*.md |
-| CSS Keyframes | <session>/animations/keyframes/*.css |
-| JS Orchestrators | <session>/animations/orchestrators/*.js |
-| Performance Reports | <session>/testing/reports/perf-report-*.md |
+| Animation Inventory | {run_dir}/outputs/research/animation-inventory.json |
+| Performance Baseline | {run_dir}/outputs/research/performance-baseline.json |
+| Easing Catalog | {run_dir}/outputs/research/easing-catalog.json |
+| Motion Tokens | {run_dir}/outputs/choreography/motion-tokens.json |
+| Choreography Sequences | {run_dir}/outputs/choreography/sequences/*.md |
+| CSS Keyframes | {run_dir}/outputs/animations/keyframes/*.css |
+| JS Orchestrators | {run_dir}/outputs/animations/orchestrators/*.js |
+| Performance Reports | {run_dir}/outputs/testing/reports/perf-report-*.md |
 
 3. Calculate: completed_tasks, gc_rounds, perf_score, final_fps
 4. Output pipeline summary with [coordinator] prefix

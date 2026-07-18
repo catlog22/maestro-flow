@@ -6,12 +6,12 @@
 |-------|--------|----------|
 | User requirement | From coordinator Phase 1 | Yes |
 | Session folder | From coordinator Phase 2 | Yes |
-| Pipeline mode | From session.json `pipeline_mode` | Yes |
-| Industry | From session.json `industry` | Yes |
-| Constraints | From session.json `constraints` | No |
+| Pipeline mode | From team-session.json `pipeline_mode` | Yes |
+| Industry | From team-session.json `industry` | Yes |
+| Constraints | From team-session.json `constraints` | No |
 
-1. Load user requirement and scope from session.json
-2. Load pipeline mode (page / feature / system) from session.json
+1. Load user requirement and scope from team-session.json
+2. Load pipeline mode (page / feature / system) from team-session.json
 3. Load industry and constraints for task descriptions
 
 ## Phase 3: Task Chain Creation
@@ -29,11 +29,11 @@ TASK:
   - <step 2: specific action>
   - <step 3: specific action>
 CONTEXT:
-  - Session: <session-folder>
+  - Session: {run_dir}/work/team
   - Industry: <industry>
   - Scope: <scope>
   - Upstream artifacts: <artifact-1>, <artifact-2>
-  - Shared memory: <session>/.msg/meta.json
+  - Shared memory: {run_dir}/work/team/.msg/meta.json
 EXPECTED: <deliverable path> + <quality criteria>
 CONSTRAINTS: <scope limits, focus areas>"
 })
@@ -63,11 +63,11 @@ TASK:
   - Analyze existing codebase patterns
   - Compile design-intelligence.json and requirements.md
 CONTEXT:
-  - Session: <session-folder>
+  - Session: {run_dir}/work/team
   - Industry: <industry>
   - Scope: <scope>
-  - Shared memory: <session>/.msg/meta.json
-EXPECTED: <session>/analysis/design-intelligence.json + requirements.md | Structured design data
+  - Shared memory: {run_dir}/work/team/.msg/meta.json
+EXPECTED: {run_dir}/outputs/analysis/design-intelligence.json + requirements.md | Structured design data
 CONSTRAINTS: Read-only analysis | No code modifications"
 })
 TaskUpdate({ taskId: "ANALYZE-001", owner: "analyst" })
@@ -84,12 +84,12 @@ TASK:
   - Define component architecture and specs
   - Generate project structure
 CONTEXT:
-  - Session: <session-folder>
+  - Session: {run_dir}/work/team
   - Industry: <industry>
   - Scope: full
   - Upstream artifacts: design-intelligence.json, requirements.md
-  - Shared memory: <session>/.msg/meta.json
-EXPECTED: <session>/architecture/design-tokens.json + component-specs/ + project-structure.md
+  - Shared memory: {run_dir}/work/team/.msg/meta.json
+EXPECTED: {run_dir}/outputs/architecture/design-tokens.json + component-specs/ + project-structure.md
 CONSTRAINTS: Use ui-ux-pro-max recommendations for token values | Support light/dark mode"
 })
 TaskUpdate({ taskId: "ARCH-001", addBlockedBy: ["ANALYZE-001"], owner: "architect" })
@@ -106,11 +106,11 @@ TASK:
   - Implement components following specs and coding standards
   - Self-validate: no hardcoded colors, cursor-pointer, focus styles, responsive
 CONTEXT:
-  - Session: <session-folder>
+  - Session: {run_dir}/work/team
   - Industry: <industry>
   - Scope: full
   - Upstream artifacts: design-tokens.json, component-specs/, project-structure.md
-  - Shared memory: <session>/.msg/meta.json
+  - Shared memory: {run_dir}/work/team/.msg/meta.json
 EXPECTED: src/styles/tokens.css + component files | Design-token compliant code
 CONSTRAINTS: Use CSS variables from tokens | Mobile-first responsive | WCAG AA"
 })
@@ -128,12 +128,12 @@ TASK:
   - Calculate weighted score and determine verdict
   - Write audit report
 CONTEXT:
-  - Session: <session-folder>
+  - Session: {run_dir}/work/team
   - Industry: <industry>
   - Review type: code-review
   - Upstream artifacts: design-intelligence.json, design-tokens.json, src/**
-  - Shared memory: <session>/.msg/meta.json
-EXPECTED: <session>/qa/audit-001.md | Weighted score + verdict + categorized issues
+  - Shared memory: {run_dir}/work/team/.msg/meta.json
+EXPECTED: {run_dir}/outputs/qa/audit-001.md | Weighted score + verdict + categorized issues
 CONSTRAINTS: Read-only review | No code modifications"
 })
 TaskUpdate({ taskId: "QA-001", addBlockedBy: ["DEV-001"], owner: "qa" })

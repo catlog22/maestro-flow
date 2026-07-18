@@ -16,11 +16,11 @@ message_types: [state_update]
 | Input | Source | Required |
 |-------|--------|----------|
 | Session folder | Task description (Session: line) | Yes |
-| Topic | <session>/.msg/meta.json | Yes |
-| Angles | <session>/.msg/meta.json | Yes |
-| GC Round | <session>/.msg/meta.json | Yes |
-| Previous critique | <session>/critiques/*.md | For revision tasks only |
-| Previous ideas | <session>/.msg/meta.json generated_ideas | No |
+| Topic | {run_dir}/work/team/.msg/meta.json | Yes |
+| Angles | {run_dir}/work/team/.msg/meta.json | Yes |
+| GC Round | {run_dir}/work/team/.msg/meta.json | Yes |
+| Previous critique | {run_dir}/outputs/critiques/*.md | For revision tasks only |
+| Previous ideas | {run_dir}/work/team/.msg/meta.json generated_ideas | No |
 
 1. Extract session path from task description (match "Session: <path>")
 2. Read .msg/meta.json for topic, angles, gc_round
@@ -32,7 +32,7 @@ message_types: [state_update]
 | Otherwise | Initial Generation |
 
 4. If GC Revision mode:
-   - Glob critique files from <session>/critiques/
+   - Glob critique files from {run_dir}/outputs/critiques/
    - Read latest critique for revision context
 5. Read previous ideas from .msg/meta.json generated_ideas state
 
@@ -55,7 +55,7 @@ message_types: [state_update]
 - Revise ideas with revision rationale
 - Replace unsalvageable ideas with new alternatives
 
-**Output**: Write to `<session>/ideas/idea-<num>.md`
+**Output**: Write to `{run_dir}/outputs/ideas/idea-<num>.md`
 - Sections: Topic, Angles, Mode, [Revision Context if applicable], Ideas list, Summary
 
 ## Phase 4: Self-Review

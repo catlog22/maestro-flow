@@ -131,7 +131,7 @@ Version: v{current} → v{target}
 Backup:  .workflow/state.json.backup-v{current}-{timestamp}
 
 Next steps:
-  /manage status  -- Verify project state
+  /maestro-manage status  -- Verify project state
   /maestro        -- Continue workflow
 ```
 
@@ -161,6 +161,6 @@ Next steps:
 ### Next-step routing
 | Condition | Suggestion |
 |-----------|-----------|
-| Update complete | `/manage status` to verify project state |
+| Update complete | `/maestro-manage status` to verify project state |
 | Want to continue workflow | `/maestro` |
 </completion>

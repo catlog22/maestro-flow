@@ -102,7 +102,7 @@ Use Agy CLI to simulate three perspectives discussing each major issue:
 ```bash
 # For each major issue, run multi-perspective analysis
 for issue in majorIssues:
-  ccw cli -p "PURPOSE: Simulate multi-perspective discussion on reviewer comment to develop robust response strategy
+  maestro delegate "PURPOSE: Simulate multi-perspective discussion on reviewer comment to develop robust response strategy
 
 PERSPECTIVES:
 1. Author Perspective: How can we most effectively respond to this concern? What evidence do we have? What experiments can we add?
@@ -145,7 +145,7 @@ EXPECTED: JSON with {
     'priority': '...',
     'sourceStrategyId': 0
   }
-}" --tool agy --mode analysis --rule analysis-review-architecture
+}" --to agy --mode analysis --rule analysis-review-architecture
 ```
 
 **Alternative: Use team-ultra-analyze skill**

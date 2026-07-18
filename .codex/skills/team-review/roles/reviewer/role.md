@@ -17,13 +17,13 @@ message_types:
 |-------|--------|----------|
 | Task description | From task subject/description | Yes |
 | Session path | Extracted from task description | Yes |
-| Scan results | <session>/scan/scan-results.json | Yes |
-| .msg/meta.json | <session>/.msg/meta.json | No |
+| Scan results | {run_dir}/outputs/scan/scan-results.json | Yes |
+| .msg/meta.json | {run_dir}/work/team/.msg/meta.json | No |
 
 1. Extract session path, input path, dimensions from task description
-2. Load review specs: Run `ccw spec load --category review` for review standards, checklists, and approval gates
+2. Load review specs: Run `ccw maestro-spec load --category review` for review standards, checklists, and approval gates
 3. Load scan results. If missing or empty -> report clean, complete immediately
-3. Load wisdom files from `<session>/wisdom/`
+3. Load wisdom files from `{run_dir}/work/team/wisdom/`
 4. Triage findings into two buckets:
 
 | Bucket | Criteria | Action |
@@ -52,7 +52,7 @@ Build prompt per group requesting 6 enrichment fields per finding:
 - `fix_complexity`: low / medium / high
 - `fix_dependencies`: finding IDs that must be fixed first
 
-Execute via `maestro delegate --role review --mode analysis --rule analysis-diagnose-bug-root-cause`. Parse JSON array responses, merge with originals (CLI-enriched replace originals, unenriched get defaults). Write `<session>/review/enriched-findings.json`.
+Execute via `maestro delegate --role review --mode analysis --rule analysis-diagnose-bug-root-cause`. Parse JSON array responses, merge with originals (CLI-enriched replace originals, unenriched get defaults). Write `{run_dir}/outputs/review/enriched-findings.json`.
 
 ## Phase 4: Report Generation
 
@@ -62,7 +62,7 @@ Execute via `maestro delegate --role review --mode analysis --rule analysis-diag
    - **Root cause groups**: cluster findings sharing related_findings -> identify primary
    - **Optimization suggestions**: from root cause groups + standalone enriched findings
 3. Compute metrics: by_dimension, by_severity, dimension_severity_matrix, fixable_count, auto_fixable_count
-4. Write `<session>/review/review-report.json`: `{review_id, review_date, findings[], critical_files[], optimization_suggestions[], root_cause_groups[], summary}`
-5. Write `<session>/review/review-report.md`: Executive summary, metrics matrix (dimension x severity), critical/high findings table, critical files list, optimization suggestions, recommended fix scope
-6. Update `<session>/.msg/meta.json` with review summary
-7. Contribute discoveries to `<session>/wisdom/` files
+4. Write `{run_dir}/outputs/review/review-report.json`: `{review_id, review_date, findings[], critical_files[], optimization_suggestions[], root_cause_groups[], summary}`
+5. Write `{run_dir}/outputs/review/review-report.md`: Executive summary, metrics matrix (dimension x severity), critical/high findings table, critical files list, optimization suggestions, recommended fix scope
+6. Update `{run_dir}/work/team/.msg/meta.json` with review summary
+7. Contribute discoveries to `{run_dir}/work/team/wisdom/` files

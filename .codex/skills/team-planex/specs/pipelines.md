@@ -73,8 +73,8 @@ callback <-- executor impl_complete ---------------------+
 
 | Input Pattern | Type | Action |
 |--------------|------|--------|
-| `ISS-\d{8}-\d{6}` pattern | Issue IDs | Use directly |
-| `--text '...'` flag | Text requirement | Create issues via `ccw issue create` |
+| `ISS-\d{8}-\d{3}` pattern | Issue IDs | Use directly |
+| `--text '...'` flag | Text requirement | Create issues via `maestro issue create` |
 | `--plan <path>` flag | Plan file | Read file, parse phases, batch create issues |
 
 ## Checkpoints

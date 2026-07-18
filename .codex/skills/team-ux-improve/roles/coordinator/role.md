@@ -44,14 +44,14 @@ When coordinator needs to execute a command (analyze, dispatch, monitor):
 | Manual resume | Args contain "resume" or "continue" | -> handleResume (monitor.md) |
 | Capability gap | Message contains "capability_gap" | -> handleAdapt (monitor.md) |
 | Pipeline complete | All tasks have status "completed" | -> handleComplete (monitor.md) |
-| Interrupted session | Active/paused session exists in .workflow/.team/ux-improve-* | -> Phase 0 |
+| Interrupted session | Active/paused session exists in {run_dir}/work/team/ | -> Phase 0 |
 | New session | None of above | -> Phase 1 |
 
 For callback/check/resume/adapt/complete: load `@commands/monitor.md`, execute matched handler, STOP.
 
 ## Phase 0: Session Resume Check
 
-1. Scan `.workflow/.team/ux-improve-*/.msg/meta.json` for active/paused sessions
+1. Scan `{run_dir}/work/team/.msg/meta.json` for active/paused sessions
 2. No sessions -> Phase 1
 3. Single session -> reconcile (audit list_agents, reset in_progress->pending, rebuild team, kick first ready task)
 4. Multiple -> request_user_input for selection
@@ -71,17 +71,17 @@ TEXT-LEVEL ONLY. No source code reading.
 
 1. Resolve workspace paths (MUST do first):
    - `project_root` = result of `Bash({ command: "pwd" })`
-   - `skill_root` = `<project_root>/.claude/skills/team-ux-improve`
+   - `skill_root` = `<project_root>/.codex/skills/team-ux-improve`
 2. Generate session ID: `ux-improve-<timestamp>`
 3. Create session folder structure:
    ```
-   .workflow/.team/ux-improve-<timestamp>/
+   {run_dir}/work/team/
    ├── .msg/
    ├── artifacts/
    ├── explorations/
    └── wisdom/contributions/
    ```
-4. **Wisdom Initialization**: Copy `<skill_root>/wisdom/` to `<session>/wisdom/`
+4. **Wisdom Initialization**: Copy `<skill_root>/wisdom/` to `{run_dir}/work/team/wisdom/`
 5. Initialize `.msg/meta.json` via team_msg state_update with pipeline metadata
 6. TeamCreate(team_name="ux-improve")
 7. Do NOT spawn workers yet - deferred to Phase 4
@@ -107,13 +107,13 @@ Delegate to `@commands/monitor.md#handleSpawnNext`:
 
 | Deliverable | Path |
 |-------------|------|
-| Scan Report | <session>/artifacts/scan-report.md |
-| Diagnosis | <session>/artifacts/diagnosis.md |
-| Design Guide | <session>/artifacts/design-guide.md |
-| Fix Files | <session>/artifacts/fixes/ |
-| Test Report | <session>/artifacts/test-report.md |
+| Scan Report | {run_dir}/outputs/scan-report.md |
+| Diagnosis | {run_dir}/outputs/diagnosis.md |
+| Design Guide | {run_dir}/outputs/design-guide.md |
+| Fix Files | {run_dir}/outputs/fixes/ |
+| Test Report | {run_dir}/outputs/test-report.md |
 
-3. **Wisdom Consolidation**: Check `<session>/wisdom/contributions/` for worker contributions
+3. **Wisdom Consolidation**: Check `{run_dir}/work/team/wisdom/contributions/` for worker contributions
    - If contributions exist -> request_user_input to merge to permanent wisdom
    - If approved -> copy to `<skill_root>/wisdom/`
 

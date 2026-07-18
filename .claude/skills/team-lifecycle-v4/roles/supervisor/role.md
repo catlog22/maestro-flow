@@ -41,7 +41,7 @@ Load ALL available context for comprehensive supervision:
 
 ### Step 1: Message Bus Analysis
 ```
-team_msg(operation="list", session_id=<session_id>)
+team_msg(operation="list", session_id=<run-id>)
 ```
 - Collect all messages since session start
 - Group by: type, from, error count
@@ -61,7 +61,7 @@ team_msg(operation="get_state")  // all roles
 - DO NOT deep-read entire documents — scan headings + key sections only
 
 ### Step 4: Wisdom Loading
-- Read `<session>/wisdom/*.md` for accumulated team knowledge
+- Read `{run_dir}/work/team/wisdom/*.md` for accumulated team knowledge
 - Check for contradictions between wisdom entries and current artifacts
 
 ## Phase 3: Supervision Checks

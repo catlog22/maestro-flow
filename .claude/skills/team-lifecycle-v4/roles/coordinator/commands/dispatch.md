@@ -20,7 +20,7 @@ TASK:
   - <step 1>
   - <step 2>
 CONTEXT:
-  - Session: <session-folder>
+  - Session: {run_dir}/work/team
   - Upstream artifacts: <list>
   - Key files: <list>
 EXPECTED: <artifact path> + <quality criteria>

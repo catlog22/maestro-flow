@@ -57,7 +57,7 @@ For callback/check/resume/complete: load `@commands/monitor.md` and execute matc
 ### Router Implementation
 
 1. **Load session context** (if exists):
-   - Scan `.workflow/.team/PERF-OPT-*/.msg/meta.json` for active/paused sessions
+   - Scan `{run_dir}/work/team/.msg/meta.json` for active/paused sessions
    - If found, extract session folder path, status, and `parallel_mode`
 
 2. **Parse $ARGUMENTS** for detection keywords
@@ -73,7 +73,7 @@ For callback/check/resume/complete: load `@commands/monitor.md` and execute matc
 
 Triggered when an active/paused session is detected on coordinator entry.
 
-1. Load session.json from detected session folder
+1. Load team-session.json from detected session folder
 2. Audit task list: `list_agents()`
 3. Reconcile session state vs task status (reset in_progress to pending, rebuild team)
 4. Spawn workers for ready tasks -> Phase 4 coordination loop
@@ -94,9 +94,9 @@ Triggered when an active/paused session is detected on coordinator entry.
 
 1. Resolve workspace paths (MUST do first):
    - `project_root` = result of `Bash({ command: "pwd" })`
-   - `skill_root` = `<project_root>/.claude/skills/team-perf-opt`
+   - `skill_root` = `<project_root>/.codex/skills/team-perf-opt`
 2. Create session directory with artifacts/, explorations/, wisdom/, discussions/ subdirs
-3. Write session.json with extended fields (parallel_mode, max_branches, branches, fix_cycles)
+3. Write team-session.json with extended fields (parallel_mode, max_branches, branches, fix_cycles)
 4. Initialize meta.json with pipeline metadata via team_msg
 5. Call `TeamCreate({ team_name: "perf-opt" })`
 

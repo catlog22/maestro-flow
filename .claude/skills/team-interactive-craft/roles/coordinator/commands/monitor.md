@@ -65,7 +65,7 @@ Worker completed. Process and advance.
      - Parse a11y audit feedback for specific issues
      - Apply targeted fixes to component JS/CSS
    CONTEXT:
-     - Session: <session-folder>
+     - Session: {run_dir}/work/team
      - Upstream artifacts: a11y/a11y-audit-<NNN>.md" })
    TaskUpdate({ taskId: "BUILD-fix-<round>", owner: "builder" })
    ```
@@ -116,7 +116,7 @@ Pipeline Status (<pipeline-mode>):
   [WAIT]  A11Y-001          (a11y-tester)            -> blocked by BUILD-001
 
 GC Rounds: 0/2
-Session: <session-id>
+Session: <run-id>
 Commands: 'resume' to advance | 'check' to refresh
 ```
 
@@ -152,14 +152,14 @@ Agent({
   prompt: `## Role Assignment
 role: <role>
 role_spec: <project>/.claude/skills/team-interactive-craft/roles/<role>/role.md
-session: <session-folder>
-session_id: <session-id>
+session: {run_dir}/work/team
+session_id: <run-id>
 team_name: interactive-craft
 requirement: <task-description>
 inner_loop: <true|false>
 
 ## Progress Milestones
-session_id: <session-id>
+session_id: <run-id>
 Report progress via team_msg at natural phase boundaries (context loaded -> core work done -> verification).
 Report blockers immediately via team_msg type="blocker".
 Report completion via team_msg type="task_complete" after final SendMessage.

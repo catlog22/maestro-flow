@@ -15,8 +15,8 @@ message_types: [state_update]
 | Session path | Extracted from task description | Yes |
 | Target (URL or file paths) | From task description CONTEXT | Yes |
 | WCAG level (AA/AAA) | From task description CONTEXT | Yes |
-| .msg/meta.json | <session>/.msg/meta.json | No |
-| Previous audit (re-audit) | <session>/audits/focus/focus-audit-*.md | Only for FOCUS-002+ |
+| .msg/meta.json | {run_dir}/work/team/.msg/meta.json | No |
+| Previous audit (re-audit) | {run_dir}/outputs/audits/focus/focus-audit-*.md | Only for FOCUS-002+ |
 
 1. Extract session path, target, and WCAG level from task description
 2. Determine audit type from subject: FOCUS-001 -> initial audit, FOCUS-002+ -> re-audit (verification)
@@ -147,7 +147,7 @@ Per specs/focus-patterns.md:
 
 ## Phase 4: Report Generation & Output
 
-1. Write audit report to `<session>/audits/focus/focus-audit-{NNN}.md` (or `<session>/re-audit/focus-audit-{NNN}.md` for re-audits):
+1. Write audit report to `{run_dir}/outputs/audits/focus/focus-audit-{NNN}.md` (or `{run_dir}/outputs/re-audit/focus-audit-{NNN}.md` for re-audits):
 
 ```markdown
 # Focus & Keyboard Accessibility Audit - {NNN}
@@ -216,5 +216,5 @@ Per specs/focus-patterns.md:
 | ... | FAIL (no outline) | PASS (2px solid) | FIXED |
 ```
 
-3. Update `<session>/.msg/meta.json` under `focus-auditor` namespace:
+3. Update `{run_dir}/work/team/.msg/meta.json` under `focus-auditor` namespace:
    - Read existing -> merge `{ "focus-auditor": { audit_id, total_elements, pass_count, fail_count, critical_count, high_count, skip_link_present, focus_traps_valid, timestamp } }` -> write back

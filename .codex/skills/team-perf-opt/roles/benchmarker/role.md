@@ -15,9 +15,9 @@ message_types:
 
 | Input | Source | Required |
 |-------|--------|----------|
-| Baseline metrics | <session>/artifacts/baseline-metrics.json (shared) | Yes |
+| Baseline metrics | {run_dir}/outputs/baseline-metrics.json (shared) | Yes |
 | Optimization plan / detail | Varies by mode (see below) | Yes |
-| .msg/meta.json | <session>/.msg/meta.json | Yes |
+| .msg/meta.json | {run_dir}/work/team/.msg/meta.json | Yes |
 
 1. Extract session path from task description
 2. **Detect branch/pipeline context** from task description:
@@ -29,13 +29,13 @@ message_types:
 | Neither present | - | Single mode -- full benchmark |
 
 3. **Load baseline metrics**:
-   - Single / Fan-out: Read `<session>/artifacts/baseline-metrics.json` (shared baseline)
-   - Independent: Read `<session>/artifacts/pipelines/{P}/baseline-metrics.json`
+   - Single / Fan-out: Read `{run_dir}/outputs/baseline-metrics.json` (shared baseline)
+   - Independent: Read `{run_dir}/outputs/pipelines/{P}/baseline-metrics.json`
 
 4. **Load optimization context**:
-   - Single: Read `<session>/artifacts/optimization-plan.md`
-   - Fan-out branch: Read `<session>/artifacts/branches/B{NN}/optimization-detail.md`
-   - Independent: Read `<session>/artifacts/pipelines/{P}/optimization-plan.md`
+   - Single: Read `{run_dir}/outputs/optimization-plan.md`
+   - Fan-out branch: Read `{run_dir}/outputs/branches/B{NN}/optimization-detail.md`
+   - Independent: Read `{run_dir}/outputs/pipelines/{P}/optimization-plan.md`
 
 5. Load .msg/meta.json for project type and optimization scope
 6. Detect available benchmark tools from project:
@@ -84,5 +84,5 @@ Compare against baseline and plan criteria:
 | Plan criteria not met | Any criterion not satisfied | FAIL -> fix_required |
 
 1. Write benchmark results to output path (scoped by branch/pipeline/single)
-2. Update `<session>/.msg/meta.json` under scoped namespace
+2. Update `{run_dir}/work/team/.msg/meta.json` under scoped namespace
 3. If verdict is FAIL, include detailed feedback in message for FIX task creation

@@ -71,8 +71,8 @@ Worker completed. Process and advance.
      - Optimize will-change usage
      - Verify reduced-motion fallback completeness
    CONTEXT:
-     - Session: <session-folder>
-     - Upstream artifacts: testing/reports/perf-report-<NNN>.md" })
+     - Session: {run_dir}/work/team
+     - Upstream artifacts: {run_dir}/outputs/testing/reports/perf-report-<NNN>.md" })
    update_plan({ taskId: "ANIM-fix-<round>", owner: "animator" })
    ```
    Then create new MTEST task blocked by fix. Increment gc_state.round.
@@ -123,7 +123,7 @@ Pipeline Status (<pipeline-mode>):
 
 GC Rounds: 0/2
 Performance Gate: pending
-Session: <session-id>
+Session: <run-id>
 Commands: 'resume' to advance | 'check' to refresh
 ```
 

@@ -39,7 +39,7 @@ When coordinator needs to execute a command:
 | Status check | Args contain "check" or "status" | -> handleCheck (monitor.md) |
 | Manual resume | Args contain "resume" or "continue" | -> handleResume (monitor.md) |
 | Add tasks | Args contain "add" | -> handleAdd |
-| Interrupted session | Active/paused session exists in `.workflow/.team/PEX-*` | -> Phase 0 |
+| Interrupted session | Active/paused session exists in `{run_dir}/work/team/` | -> Phase 0 |
 | New session | None of above | -> Phase 1 |
 
 For callback/check/resume: load `@commands/monitor.md` and execute the appropriate handler, then STOP.
@@ -54,7 +54,7 @@ For callback/check/resume: load `@commands/monitor.md` and execute the appropria
 
 ## Phase 0: Session Resume Check
 
-1. Scan `.workflow/.team/PEX-*/.msg/meta.json` for sessions with status "active" or "paused"
+1. Scan `{run_dir}/work/team/.msg/meta.json` for sessions with status "active" or "paused"
 2. No sessions -> Phase 1
 3. Single session -> resume (Session Reconciliation)
 4. Multiple sessions -> AskUserQuestion for selection
@@ -84,14 +84,15 @@ TEXT-LEVEL ONLY. No source code reading.
    - `project_root` = result of `Bash({ command: "pwd" })`
    - `skill_root` = `<project_root>/.claude/skills/team-planex`
 2. Generate session ID: `PEX-<slug>-<date>`
-3. Create session folder: `.workflow/.team/<session-id>/`
+3. Create session folder: `{run_dir}/work/team/`
 4. Create subdirectories: `wisdom/` (planner solutions go to `{run_dir}/outputs/solutions/`)
 5. Call `TeamCreate` with team name (default: "planex")
 6. Initialize wisdom files (learnings.md, decisions.md, conventions.md, issues.md)
-7. Initialize meta.json with pipeline metadata:
+7. Write `team-session.json` (coordination state + `run` block — see Run Lifecycle Integration below)
+8. Initialize meta.json with pipeline metadata:
 ```typescript
 mcp__maestro__team_msg({
-  operation: "log", session_id: "<id>", from: "coordinator",
+  operation: "log", session_id: "<run-id>", from: "coordinator",
   type: "state_update", summary: "Session initialized",
   data: {
     pipeline_mode: "plan-execute",
@@ -108,13 +109,16 @@ mcp__maestro__team_msg({
 
 After session folder creation and before role-spec generation:
 
+**Session-state file split**: `{run_dir}/work/team/team-session.json` holds coordination state (`run` block, roles, status); `.msg/meta.json` stays a pure message-bus/state_update log. Both are written — team-worker fallback resolves `run_dir` from `team-session.json.run`.
+
 1. **Resolve Run** (birth-packet first): if the dispatch context already carries `run_id` / `run_dir` (injected by an orchestrator), store them in `team-session.json` and skip create — a second create mints an empty duplicate Run. Otherwise: `maestro run create team-planex --session <slug> --intent "<task summary>"`
    - Slug format: `YYYYMMDD-team-planex-<topic>` (ASCII, ≤64 chars)
-   - Store returned `run_id` and `run_dir` in `team-session.json`:
-     ```json
-     "run": { "run_id": "<id>", "run_dir": "<path>" }
-     ```
-2. **Resume**: Read `team-session.json.run.run_id` → `maestro run check <run_id>` (idempotent). If status=sealed, create a new run and update the field.
+2. **Write `team-session.json`**: create `{run_dir}/work/team/team-session.json` with the returned `run_id` / `run_dir`, session_id, team_name, status="active":
+   ```json
+   { "session_id": "PEX-<slug>-<date>", "team_name": "planex", "status": "active",
+     "run": { "run_id": "<id>", "run_dir": "<path>" } }
+   ```
+3. **Resume**: Read `team-session.json.run.run_id` → `maestro run check <run_id>` (idempotent). If status=sealed, create a new run and update the field.
 
 ## Phase 3: Create Task Chain
 

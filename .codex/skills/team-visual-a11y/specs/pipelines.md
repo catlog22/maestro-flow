@@ -91,10 +91,10 @@ After re-audit fan-in (COLOR-002 + FOCUS-002 both complete):
 
 | Task | Output Path |
 |------|-------------|
-| COLOR-001 | <session>/audits/color/color-audit-001.md |
-| TYPO-001 | <session>/audits/typography/typo-audit-001.md |
-| FOCUS-001 | <session>/audits/focus/focus-audit-001.md |
-| REMED-001 | <session>/remediation/remediation-plan.md |
-| FIX-001 | Modified source files + <session>/fixes/fix-summary-001.md |
-| COLOR-002 | <session>/re-audit/color-audit-002.md |
-| FOCUS-002 | <session>/re-audit/focus-audit-002.md |
+| COLOR-001 | {run_dir}/outputs/audits/color/color-audit-001.md |
+| TYPO-001 | {run_dir}/outputs/audits/typography/typo-audit-001.md |
+| FOCUS-001 | {run_dir}/outputs/audits/focus/focus-audit-001.md |
+| REMED-001 | {run_dir}/outputs/remediation/remediation-plan.md |
+| FIX-001 | Modified source files + {run_dir}/outputs/fixes/fix-summary-001.md |
+| COLOR-002 | {run_dir}/outputs/re-audit/color-audit-002.md |
+| FOCUS-002 | {run_dir}/outputs/re-audit/focus-audit-002.md |

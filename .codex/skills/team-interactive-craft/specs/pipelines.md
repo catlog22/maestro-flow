@@ -81,7 +81,7 @@ Interactive craft pipeline modes and task registry.
 
 | Task | Output Path |
 |------|-------------|
-| RESEARCH-001 | <session>/research/*.json |
-| INTERACT-* | <session>/interaction/blueprints/*.md |
-| BUILD-* | <session>/build/components/*.js + *.css |
-| A11Y-* | <session>/a11y/a11y-audit-*.md |
+| RESEARCH-001 | {run_dir}/outputs/research/*.json |
+| INTERACT-* | {run_dir}/outputs/interaction/blueprints/*.md |
+| BUILD-* | {run_dir}/outputs/build/components/*.js + *.css |
+| A11Y-* | {run_dir}/outputs/a11y/a11y-audit-*.md |

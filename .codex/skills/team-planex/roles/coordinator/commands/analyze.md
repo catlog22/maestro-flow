@@ -8,7 +8,7 @@
 
 | Input Pattern | Type | Action |
 |--------------|------|--------|
-| `ISS-\d{8}-\d{6}` pattern | Issue IDs | Use directly |
+| `ISS-\d{8}-\d{3}` pattern | Issue IDs | Use directly |
 | `--text '...'` flag | Text requirement | Create issues via CLI |
 | `--plan <path>` flag | Plan file | Read file, parse phases |
 
@@ -34,7 +34,7 @@
 
 ## Output
 
-Write <session>/task-analysis.json:
+Write {run_dir}/work/team/task-analysis.json:
 ```json
 {
   "task_description": "<original>",

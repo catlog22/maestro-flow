@@ -16,7 +16,7 @@
 
 ## Golden Sample Reference
 
-Read the golden sample at `~  or <project>/.claude/skills/team-lifecycle-v4/` for each file type before generating. This ensures pattern fidelity.
+Read the golden sample at `~  or <project>/.codex/skills/team-lifecycle-v4/` for each file type before generating. This ensures pattern fidelity.
 
 ## Step 3.1: Generate Coordinator
 
@@ -62,7 +62,7 @@ On each invocation, detect current state and route:
 
 ## Phase 0: Session Resume
 
-If `.workflow/.team/${teamConfig.sessionPrefix}-*/team-session.json` exists:
+If `{run_dir}/work/team/team-session.json` exists:
 - Load session state, verify team, reconcile task status
 - Route to appropriate handler based on current state
 
@@ -309,7 +309,7 @@ For each additional spec in `teamConfig.specs` (beyond pipelines), generate doma
 
 For each template in `teamConfig.templates`:
 
-1. Check if golden sample has matching template at `~  or <project>/.claude/skills/team-lifecycle-v4/templates/`
+1. Check if golden sample has matching template at `~  or <project>/.codex/skills/team-lifecycle-v4/templates/`
 2. If exists: copy and adapt for new domain
 3. If not: generate domain-appropriate template structure
 

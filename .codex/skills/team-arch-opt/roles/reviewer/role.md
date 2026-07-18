@@ -18,7 +18,7 @@ message_types: [state_update]
 | Refactoring code changes | From REFACTOR task artifacts / git diff | Yes |
 | Refactoring plan / detail | Varies by mode (see below) | Yes |
 | Validation results | Varies by mode (see below) | No |
-| .msg/meta.json | <session>/wisdom/.msg/meta.json | Yes |
+| .msg/meta.json | {run_dir}/work/team/wisdom/.msg/meta.json | Yes |
 
 1. Extract session path from task description
 2. **Detect branch/pipeline context** from task description:
@@ -30,9 +30,9 @@ message_types: [state_update]
 | Neither present | - | Single mode -- review all refactoring changes |
 
 3. **Load refactoring context by mode**:
-   - Single: Read `<session>/artifacts/refactoring-plan.md`
-   - Fan-out branch: Read `<session>/artifacts/branches/B{NN}/refactoring-detail.md`
-   - Independent: Read `<session>/artifacts/pipelines/{P}/refactoring-plan.md`
+   - Single: Read `{run_dir}/outputs/refactoring-plan.md`
+   - Fan-out branch: Read `{run_dir}/outputs/branches/B{NN}/refactoring-detail.md`
+   - Independent: Read `{run_dir}/outputs/pipelines/{P}/refactoring-plan.md`
 
 4. Load .msg/meta.json for scoped refactorer namespace:
    - Single: `refactorer` namespace
@@ -41,9 +41,9 @@ message_types: [state_update]
 
 5. Identify changed files from refactorer context -- read ONLY files modified by this branch/pipeline
 6. If validation results available, read from scoped path:
-   - Single: `<session>/artifacts/validation-results.json`
-   - Fan-out: `<session>/artifacts/branches/B{NN}/validation-results.json`
-   - Independent: `<session>/artifacts/pipelines/{P}/validation-results.json`
+   - Single: `{run_dir}/outputs/validation-results.json`
+   - Fan-out: `{run_dir}/outputs/branches/B{NN}/validation-results.json`
+   - Independent: `{run_dir}/outputs/pipelines/{P}/validation-results.json`
 
 ## Phase 3: Multi-Dimension Review
 
@@ -100,14 +100,14 @@ Classify overall verdict based on findings:
 | REJECT | Has Critical findings or fundamental approach flaw | Send fix_required + flag for designer escalation |
 
 1. Write review report to scoped output path:
-   - Single: `<session>/artifacts/review-report.md`
-   - Fan-out: `<session>/artifacts/branches/B{NN}/review-report.md`
-   - Independent: `<session>/artifacts/pipelines/{P}/review-report.md`
+   - Single: `{run_dir}/outputs/review-report.md`
+   - Fan-out: `{run_dir}/outputs/branches/B{NN}/review-report.md`
+   - Independent: `{run_dir}/outputs/pipelines/{P}/review-report.md`
    - Content: Per-dimension findings with severity, file:line, description; Overall verdict with rationale; Specific fix instructions for REVISE/REJECT verdicts
 
-2. Update `<session>/wisdom/.msg/meta.json` under scoped namespace:
+2. Update `{run_dir}/work/team/wisdom/.msg/meta.json` under scoped namespace:
    - Single: merge `{ "reviewer": { verdict, finding_count, critical_count, dimensions_reviewed } }`
    - Fan-out: merge `{ "reviewer.B{NN}": { verdict, finding_count, critical_count, dimensions_reviewed } }`
    - Independent: merge `{ "reviewer.{P}": { verdict, finding_count, critical_count, dimensions_reviewed } }`
 
-3. If DISCUSS-REVIEW was triggered, record discussion summary in `<session>/discussions/DISCUSS-REVIEW.md` (or `DISCUSS-REVIEW-B{NN}.md` for branch-scoped discussions)
+3. If DISCUSS-REVIEW was triggered, record discussion summary in `{run_dir}/evidence/discussions/DISCUSS-REVIEW.md` (or `DISCUSS-REVIEW-B{NN}.md` for branch-scoped discussions)

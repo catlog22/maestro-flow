@@ -32,11 +32,11 @@ contract:
     exit: []
 ---
 
-> **Agent timeout**: `spawn_agent` 异步执行且无内置超时 — 除明确短任务外一律 `spawn_agent` 后立即 `wait_agent({ timeout_ms: 3600000 })`（上限 1 小时）阻塞等待，绝不依赖 30000 默认值；`timed_out: true` 且 Agent 未完成时再次 `wait_agent` 续等，不丢弃。批量场景使用 `spawn_agents_on_csv({ max_runtime_seconds: 3600, ... })`。
-
 <required_reading>
 @~/.maestro/workflows/run-mode-lite.md
 </required_reading>
+
+> **Agent timeout**: `spawn_agent` 异步执行且无内置超时 — 除明确短任务外一律 `spawn_agent` 后立即 `wait_agent({ timeout_ms: 3600000 })`（上限 1 小时）阻塞等待，绝不依赖 30000 默认值；`timed_out: true` 且 Agent 未完成时再次 `wait_agent` 续等，不丢弃。批量场景使用 `spawn_agents_on_csv({ max_runtime_seconds: 3600, ... })`。
 
 # Frontend Debug Team
 
@@ -101,16 +101,16 @@ Parse `$ARGUMENTS`:
 ## Shared Constants
 
 - **Session prefix**: `TFD`
-- **Session path**: `.workflow/.team/TFD-<slug>-<date>/`
+- **Session path**: `{run_dir}/work/team/`
 - **CLI tools**: `maestro delegate --mode analysis` (read-only), `maestro delegate --mode write` (modifications)
-- **Message bus**: `mcp__maestro__team_msg(session_id=<session-id>, ...)`
+- **Message bus**: `mcp__maestro__team_msg(session_id=<run-id>, ...)`
 
 ## Workspace Resolution
 
 Coordinator MUST resolve paths at Phase 2 before TeamCreate:
 
 1. Run `Bash({ command: "pwd" })` → capture `project_root` (absolute path)
-2. `skill_root = <project_root>/.claude/skills/team-frontend-debug`
+2. `skill_root = <project_root>/.codex/skills/team-frontend-debug`
 3. Store in `team-session.json`:
    ```json
    { "project_root": "/abs/path/to/project", "skill_root": "/abs/path/to/skill" }
@@ -187,9 +187,9 @@ request_user_input({
 ## Session Directory
 
 ```
-.workflow/.team/TFD-<slug>-<date>/
+{run_dir}/work/team/
 ├── team-session.json           # Session state + role registry
-├── evidence/                   # Screenshots, snapshots, network logs
+├── {run_dir}/evidence/evidence/                   # Screenshots, snapshots, network logs
 ├── artifacts/                  # Test reports, RCA reports, patches, verification reports
 ├── wisdom/                     # Cross-task debug knowledge
 └── .msg/                       # Team message bus

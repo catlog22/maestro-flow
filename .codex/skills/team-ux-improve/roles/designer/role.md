@@ -13,8 +13,8 @@ message_types: [state_update]
 
 ## Phase 2: Context & Pattern Loading
 
-1. Load diagnosis report from `<session>/artifacts/diagnosis.md`
-2. Load diagnoser state via `team_msg(operation="get_state", session_id=<session-id>, role="diagnoser")`
+1. Load diagnosis report from `{run_dir}/outputs/diagnosis.md`
+2. Load diagnoser state via `team_msg(operation="get_state", session_id=<run-id>, role="diagnoser")`
 3. Detect framework from project structure
 4. Load framework-specific patterns:
 
@@ -25,9 +25,9 @@ message_types: [state_update]
 
 ### Wisdom Input
 
-1. Read `<session>/wisdom/patterns/ui-feedback.md` for established feedback design patterns
-2. Read `<session>/wisdom/patterns/state-management.md` for state handling patterns
-3. Read `<session>/wisdom/principles/general-ux.md` for UX design principles
+1. Read `{run_dir}/work/team/wisdom/patterns/ui-feedback.md` for established feedback design patterns
+2. Read `{run_dir}/work/team/wisdom/patterns/state-management.md` for state handling patterns
+3. Read `{run_dir}/work/team/wisdom/principles/general-ux.md` for UX design principles
 4. Apply patterns when designing solutions for identified issues
 
 ### Complex Design (use CLI)
@@ -135,17 +135,17 @@ Reference `specs/design-standards.md` for target standards.
 
 ## Phase 4: Design Document Generation
 
-1. Generate implementation guide for each issue and write to `<session>/artifacts/design-guide.md`
+1. Generate implementation guide for each issue and write to `{run_dir}/outputs/design-guide.md`
 
 ### Wisdom Contribution
 
 If novel design patterns created:
-1. Write new patterns to `<session>/wisdom/contributions/designer-pattern-<timestamp>.md`
+1. Write new patterns to `{run_dir}/work/team/wisdom/contributions/designer-pattern-<timestamp>.md`
 2. Format: Problem context, solution design, implementation hints, trade-offs
 
 3. Share state via team_msg:
    ```
-   team_msg(operation="log", session_id=<session-id>, from="designer",
+   team_msg(operation="log", session_id=<run-id>, from="designer",
             type="state_update", data={
               designed_solutions: <count>,
               framework: <framework>,

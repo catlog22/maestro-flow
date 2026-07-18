@@ -18,7 +18,7 @@ Persist the current execution state (phase, step, pending tasks) to state.md so 
 
 | Parameter | Source | Description |
 |-----------|--------|-------------|
-| `sessionFolder` | From coordinator | Session artifact directory |
+| `sessionFolder` | From coordinator | Canonical `{run_dir}` root |
 | `currentPhase` | From monitor loop | Phase number at pause time |
 | `currentStep` | From monitor loop | Step within phase (plan/exec/verify/gap_closure) |
 | `gapIteration` | From monitor loop | Current gap closure iteration (0 = none) |
@@ -28,7 +28,7 @@ Persist the current execution state (phase, step, pending tasks) to state.md so 
 ### Step 1: Capture Current State
 
 ```javascript
-const state = Read(`${sessionFolder}/state.md`)
+const state = Read(`${sessionFolder}/work/team/state.md`)
 const timestamp = new Date().toISOString().slice(0, 19)
 
 // Capture pending task states
@@ -42,7 +42,7 @@ const pendingTasks = allTasks.filter(t =>
 
 ```javascript
 // Find the current phase status line and update it
-Edit(`${sessionFolder}/state.md`, {
+Edit(`${sessionFolder}/work/team/state.md`, {
   old_string: `- Status: in_progress`,
   new_string: `- Status: paused
 - Paused At: ${timestamp}
@@ -60,7 +60,7 @@ mcp__maestro__team_msg({
   operation: "log", session_id: sessionId,
   from: "coordinator", to: "all",
   type: "phase_paused",
-  data: { ref: `${sessionFolder}/state.md` }
+  data: { ref: `${sessionFolder}/work/team/state.md` }
 })
 ```
 
@@ -82,7 +82,7 @@ To resume: spawn_agent({ task_name: "team_roadmap_dev", message: "Execute skill 
 
 | Artifact | Path | Description |
 |----------|------|-------------|
-| state.md | `{sessionFolder}/state.md` | Updated with paused status and resume coordinates |
+| state.md | `{sessionFolder}/work/team/state.md` | Updated with paused status and resume coordinates |
 
 ## Error Handling
 

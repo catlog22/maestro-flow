@@ -113,7 +113,7 @@ Quality Validation Input:
 Use Agy CLI to perform comprehensive quality validation:
 
 ```bash
-ccw cli -p "PURPOSE: Validate academic rebuttal quality across multiple dimensions (completeness, professionalism, persuasiveness, evidence strength)
+maestro delegate "PURPOSE: Validate academic rebuttal quality across multiple dimensions (completeness, professionalism, persuasiveness, evidence strength)
 
 REBUTTAL DOCUMENT:
 ${rebuttalContent}
@@ -198,7 +198,7 @@ EXPECTED: JSON with {
     {'priority': 1, 'issue': '...', 'action': '...', 'impact': 'high|medium|low'}
   ],
   'summary': '...'
-}" --tool agy --mode analysis --rule analysis-review-code-quality
+}" --to agy --mode analysis --rule analysis-review-code-quality
 ```
 
 ### Step 5.3: Parse Validation Results

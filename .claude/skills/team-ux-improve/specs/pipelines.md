@@ -46,7 +46,7 @@ UX improvement pipeline modes and task registry.
 
 ## Wisdom System
 
-Workers contribute learnings to `<session>/wisdom/contributions/`. On pipeline completion, coordinator asks user to merge approved contributions to permanent wisdom at `~  or <project>/.claude/skills/team-ux-improve/wisdom/`.
+Workers contribute learnings to `{run_dir}/work/team/wisdom/contributions/`. On pipeline completion, coordinator asks user to merge approved contributions to permanent wisdom at `~  or <project>/.claude/skills/team-ux-improve/wisdom/`.
 
 | Directory | Purpose |
 |-----------|---------|

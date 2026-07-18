@@ -48,14 +48,14 @@ When coordinator needs to execute a specific phase:
 | Manual resume | Args contain "resume" or "continue" | -> handleResume (monitor.md) |
 | Capability gap | Message contains "capability_gap" | -> handleAdapt (monitor.md) |
 | Pipeline complete | All tasks completed | -> handleComplete (monitor.md) |
-| Interrupted session | Active session in .workflow/.team/TISL-* | -> Phase 0 |
+| Interrupted session | Active session in {run_dir}/work/team/ | -> Phase 0 |
 | New session | None of above | -> Phase 1 |
 
 For callback/check/resume/consensus/adapt/complete: load `@commands/monitor.md`, execute handler, STOP.
 
 ## Phase 0: Session Resume Check
 
-1. Scan `.workflow/.team/TISL-*/session.json` for active/paused sessions
+1. Scan `{run_dir}/work/team/team-session.json` for active/paused sessions
 2. No sessions -> Phase 1
 3. Single session -> reconcile (audit list_agents, reset in_progress->pending, rebuild team, spawn first ready task)
 4. Multiple -> request_user_input for selection
@@ -69,9 +69,9 @@ TEXT-LEVEL ONLY. No source code reading.
 | Pattern | Extraction |
 |---------|------------|
 | `GH-\d+` | GitHub issue ID |
-| `ISS-\d{8}-\d{6}` | Local issue ID |
+| `ISS-\d{8}-\d{3}` | Local issue ID |
 | `--mode=<mode>` | Explicit mode override |
-| `--all-pending` | Load all pending issues via `Bash("ccw issue list --status registered,pending --json")` |
+| `--all-pending` | Load open/legacy pending issues via `exec_command({ cmd: "maestro issue list --status \"open,registered,pending\" --json" })` |
 
 2. If no issue IDs found -> request_user_input for clarification
 
@@ -99,18 +99,18 @@ TEXT-LEVEL ONLY. No source code reading.
 
 1. Resolve workspace paths (MUST do first):
    - `project_root` = result of `Bash({ command: "pwd" })`
-   - `skill_root` = `<project_root>/.claude/skills/team-issue`
+   - `skill_root` = `<project_root>/.codex/skills/team-issue`
 2. Generate session ID: `TISL-<issue-slug>-<date>`
 3. Create session folder structure:
    ```
-   Bash("mkdir -p .workflow/.team/TISL-<slug>-<date>/{explorations,solutions,audits,queue,builds,wisdom,.msg}")
+   Bash("mkdir -p {run_dir}/work/team/{explorations,queue,wisdom,.msg} {run_dir}/outputs/{solutions,audits,builds}")
    ```
 4. TeamCreate with team name `issue`
-5. Write session.json with pipeline_mode, issue_ids, execution_method, fix_cycles=0, max_fix_cycles=2
+5. Write team-session.json with pipeline_mode, issue_ids, execution_method, fix_cycles=0, max_fix_cycles=2
 6. Initialize meta.json via team_msg state_update:
    ```
    mcp__maestro__team_msg({
-     operation: "log", session_id: "<id>", from: "coordinator",
+     operation: "log", session_id: "<run-id>", from: "coordinator",
      type: "state_update", summary: "Session initialized",
      data: { pipeline_mode: "<mode>", pipeline_stages: ["explorer","planner","reviewer","integrator","implementer"], team_name: "issue", issue_ids: [...], fix_cycles: 0 }
    })
@@ -120,9 +120,9 @@ TEXT-LEVEL ONLY. No source code reading.
 ## Phase 3: Create Task Chain
 
 Delegate to @commands/dispatch.md:
-1. Read pipeline mode and issue IDs from session.json
+1. Read pipeline mode and issue IDs from team-session.json
 2. Create tasks for selected pipeline with correct blockedBy
-3. Update session.json with task count
+3. Update team-session.json with task count
 
 ## Phase 4: Spawn-and-Stop
 
@@ -139,11 +139,11 @@ Delegate to @commands/monitor.md#handleSpawnNext:
 
 | Deliverable | Path |
 |-------------|------|
-| Context Reports | <session>/explorations/context-*.json |
-| Solution Plans | <session>/solutions/solution-*.json |
-| Audit Reports | <session>/audits/audit-report.json |
+| Context Reports | {run_dir}/work/team/explorations/context-*.json |
+| Solution Plans | {run_dir}/outputs/solutions/solution-*.json |
+| Audit Reports | {run_dir}/outputs/audits/audit-report.json |
 | Execution Queue | .workflow/issues/queue/execution-queue.json |
-| Build Results | <session>/builds/ |
+| Build Results | {run_dir}/outputs/builds/ |
 
 3. Output pipeline summary: issue count, pipeline mode, fix cycles used, issues resolved
 

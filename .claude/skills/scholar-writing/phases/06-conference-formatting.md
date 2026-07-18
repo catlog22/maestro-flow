@@ -245,14 +245,22 @@ Report to user:
 
 ## Output
 
-- **File**: `outputDir/main.tex` (or conference-specific name) -- complete manuscript
-- **File**: `outputDir/main.pdf` -- compiled PDF
-- **File**: `outputDir/references.bib` -- verified bibliography
+- **File**: `outputDir/main.tex` (or conference-specific name) -- complete manuscript (paper workspace)
+- **File**: `outputDir/main.pdf` -- compiled PDF (paper workspace)
+- **File**: `outputDir/references.bib` -- verified bibliography (paper workspace)
+- **Run**: Write the delivery manifest (paths above + verification/page status + remaining action items) to `{run_dir}/report.md`, and the delivery-paths list to `{run_dir}/outputs/`. See run-mode.md.
 - **TodoWrite**: Mark Phase 6 completed
 
 ## Completion
 
-The paper writing workflow is complete. The user now has:
+Close the Run before declaring completion (see run-mode.md):
+
+```bash
+maestro run check {run_id}     # repair any reported gate
+maestro run complete {run_id}
+```
+
+Report completion only after `run complete` succeeds. The user then has:
 1. A complete LaTeX manuscript formatted for their target conference
 2. A verified bibliography
 3. A list of any remaining action items

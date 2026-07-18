@@ -2,7 +2,7 @@
 
 # Dynamic Role-Spec Template
 
-Template used by coordinator to generate lightweight worker role-spec files at runtime. Each generated role-spec is written to `<session>/role-specs/<role-name>.md`.
+Template used by coordinator to generate lightweight worker role-spec files at runtime. Each generated role-spec is written to `{run_dir}/work/team/role-specs/<role-name>.md`.
 
 **Key difference from v1**: Role-specs contain ONLY Phase 2-4 domain logic + YAML frontmatter. All shared behavior (Phase 1 Task Discovery, Phase 5 Report/Fast-Advance, Message Bus, Consensus, Inner Loop) is built into the `team-worker` agent.
 

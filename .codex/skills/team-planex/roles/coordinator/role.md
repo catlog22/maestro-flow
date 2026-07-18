@@ -39,7 +39,7 @@ When coordinator needs to execute a command:
 | Status check | Args contain "check" or "status" | -> handleCheck (monitor.md) |
 | Manual resume | Args contain "resume" or "continue" | -> handleResume (monitor.md) |
 | Add tasks | Args contain "add" | -> handleAdd |
-| Interrupted session | Active/paused session exists in `.workflow/.team/PEX-*` | -> Phase 0 |
+| Interrupted session | Active/paused session exists in `{run_dir}/work/team/` | -> Phase 0 |
 | New session | None of above | -> Phase 1 |
 
 For callback/check/resume: load `@commands/monitor.md` and execute the appropriate handler, then STOP.
@@ -54,7 +54,7 @@ For callback/check/resume: load `@commands/monitor.md` and execute the appropria
 
 ## Phase 0: Session Resume Check
 
-1. Scan `.workflow/.team/PEX-*/.msg/meta.json` for sessions with status "active" or "paused"
+1. Scan `{run_dir}/work/team/.msg/meta.json` for sessions with status "active" or "paused"
 2. No sessions -> Phase 1
 3. Single session -> resume (Session Reconciliation)
 4. Multiple sessions -> request_user_input for selection
@@ -82,16 +82,16 @@ TEXT-LEVEL ONLY. No source code reading.
 
 1. Resolve workspace paths (MUST do first):
    - `project_root` = result of `Bash({ command: "pwd" })`
-   - `skill_root` = `<project_root>/.claude/skills/team-planex`
+   - `skill_root` = `<project_root>/.codex/skills/team-planex`
 2. Generate session ID: `PEX-<slug>-<date>`
-3. Create session folder: `.workflow/.team/<session-id>/`
+3. Create session folder: `{run_dir}/work/team/`
 4. Create subdirectories: `artifacts/solutions/`, `wisdom/`
 5. Call `TeamCreate` with team name (default: "planex")
 6. Initialize wisdom files (learnings.md, decisions.md, conventions.md, issues.md)
 7. Initialize meta.json with pipeline metadata:
 ```typescript
 mcp__maestro__team_msg({
-  operation: "log", session_id: "<id>", from: "coordinator",
+  operation: "log", session_id: "<run-id>", from: "coordinator",
   type: "state_update", summary: "Session initialized",
   data: {
     pipeline_mode: "plan-execute",

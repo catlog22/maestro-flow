@@ -40,11 +40,11 @@ contract:
     exit: []
 ---
 
-> **Agent timeout**: `spawn_agent` 异步执行且无内置超时 — 除明确短任务外一律 `spawn_agent` 后立即 `wait_agent({ timeout_ms: 3600000 })`（上限 1 小时）阻塞等待，绝不依赖 30000 默认值；`timed_out: true` 且 Agent 未完成时再次 `wait_agent` 续等，不丢弃。批量场景使用 `spawn_agents_on_csv({ max_runtime_seconds: 3600, ... })`。
-
 <required_reading>
 @~/.maestro/workflows/run-mode-lite.md
 </required_reading>
+
+> **Agent timeout**: `spawn_agent` 异步执行且无内置超时 — 除明确短任务外一律 `spawn_agent` 后立即 `wait_agent({ timeout_ms: 3600000 })`（上限 1 小时）阻塞等待，绝不依赖 30000 默认值；`timed_out: true` 且 Agent 未完成时再次 `wait_agent` 续等，不丢弃。批量场景使用 `spawn_agents_on_csv({ max_runtime_seconds: 3600, ... })`。
 
 # Team UI Polish
 
@@ -99,9 +99,9 @@ Parse `$ARGUMENTS`:
 ## Shared Constants
 
 - **Session prefix**: `UIP`
-- **Session path**: `.workflow/.team/UIP-<slug>-<date>/`
+- **Session path**: `{run_dir}/work/team/`
 - **CLI tools**: `maestro delegate --mode analysis` (read-only), `maestro delegate --mode write` (modifications)
-- **Message bus**: `mcp__maestro__team_msg(session_id=<session-id>, ...)`
+- **Message bus**: `mcp__maestro__team_msg(session_id=<run-id>, ...)`
 - **Max GC rounds**: 2
 
 ## Worker Spawn Template
@@ -131,19 +131,19 @@ spawn_agent({ task_name: "<role>", message: "Spawn <role> worker for <task-id>",
 ## Session Directory
 
 ```
-.workflow/.team/UIP-<slug>-<date>/
+{run_dir}/work/team/
 +-- .msg/
 |   +-- messages.jsonl         # Team message bus
 |   +-- meta.json              # Pipeline config + GC state
-+-- scan/                      # Scanner output
++-- {run_dir}/outputs/scan/                      # Scanner output
 |   +-- scan-report.md
-+-- diagnosis/                 # Diagnostician output
++-- {run_dir}/outputs/diagnosis/                 # Diagnostician output
 |   +-- diagnosis-report.md
-+-- optimization/              # Optimizer output
++-- {run_dir}/outputs/optimization/              # Optimizer output
 |   +-- fix-log.md
-+-- verification/              # Verifier output
++-- {run_dir}/outputs/verification/              # Verifier output
 |   +-- verify-report.md
-+-- evidence/                  # Screenshots (before/after)
++-- {run_dir}/evidence/evidence/                  # Screenshots (before/after)
 |   +-- *.png
 +-- wisdom/                    # Cross-task knowledge
 ```

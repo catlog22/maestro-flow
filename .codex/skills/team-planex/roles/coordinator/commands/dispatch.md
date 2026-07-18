@@ -30,7 +30,7 @@ update_plan({
 
 Input type: <issues|text|plan>
 Input: <raw-input>
-Session: <session-folder>
+Session: {run_dir}/work/team
 Execution method: <agent|codex|agy>
 
 ## Instructions
@@ -54,8 +54,8 @@ update_plan({
   description: `Implement solution for issue <issueId>.
 
 Issue ID: <issueId>
-Solution file: <session-folder>/artifacts/solutions/<issueId>.json
-Session: <session-folder>
+Solution file: {run_dir}/work/team/artifacts/solutions/<issueId>.json
+Session: {run_dir}/work/team
 Execution method: <agent|codex|agy>
 
 InnerLoop: true`,
@@ -74,7 +74,7 @@ update_plan({
 
 Input type: <issues|text|plan>
 Input: <new-input>
-Session: <session-folder>
+Session: {run_dir}/work/team
 Execution method: <execution-method>
 
 InnerLoop: true`,

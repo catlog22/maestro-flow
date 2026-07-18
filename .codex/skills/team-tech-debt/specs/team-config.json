@@ -123,7 +123,7 @@
   },
 
   "session_directory": {
-    "pattern": ".workflow/.team/TD-{slug}-{date}",
-    "subdirectories": ["scan", "assessment", "plan", "fixes", "validation"]
+    "pattern": "{run_dir}/work/team/",
+    "subdirectories": ["{run_dir}/outputs/scan", "{run_dir}/outputs/assessment", "{run_dir}/outputs/plan", "{run_dir}/outputs/fixes", "{run_dir}/outputs/validation"]
   }
 }

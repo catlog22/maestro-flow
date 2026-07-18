@@ -95,14 +95,13 @@ Rebuttal Writing Configuration:
 > 2. Full protocol (Step 4.X — 4.4) is in active memory, not just sentinel
 > If only sentinel remains → `Read("phases/04-rebuttal-writing.md")` now.
 
-Load template from claude-scholar or custom templates:
+Load template from the skill-local `templates/` directory (paths relative to the skill root, same convention as phase file reads):
 
 ```javascript
 // Template search paths
 const templatePaths = [
-  `G:/github_lib/claude-scholar/skills/review-response/references/${templateId}-template.md`,
-  `d:/ccws/.workflow/参考文档1/${templateId}-template.md`,
-  `d:/ccws/.workflow/参考文档1/discussion.md` // Fallback to generic discussion template
+  `templates/${templateId}-template.md`, // skill-local, user may add conference-specific templates
+  `templates/discussion.md`              // Fallback to generic discussion template
 ]
 
 let templateContent = null

@@ -11,10 +11,10 @@ message_types: [state_update]
 
 | Input | Source | Required |
 |-------|--------|----------|
-| Research artifacts | <session>/research/*.json | Yes |
-| Design intelligence | <session>/research/design-intelligence.json | Yes |
-| .msg/meta.json | <session>/wisdom/.msg/meta.json | Yes |
-| Audit feedback | <session>/audit/audit-*.md | Only for GC fix tasks |
+| Research artifacts | {run_dir}/outputs/research/*.json | Yes |
+| Design intelligence | {run_dir}/outputs/research/design-intelligence.json | Yes |
+| .msg/meta.json | {run_dir}/work/team/wisdom/.msg/meta.json | Yes |
+| Audit feedback | {run_dir}/outputs/audit/audit-*.md | Only for GC fix tasks |
 
 1. Extract session path from task description
 2. Read research findings: design-system-analysis.json, component-inventory.json, accessibility-audit.json
@@ -37,7 +37,7 @@ message_types: [state_update]
 - Integrate design intelligence: recommended.colors -> color tokens, recommended.typography -> font stacks
 - Document anti-patterns from design intelligence for implementer reference
 - Output categories must include: color, typography, spacing, shadow, border, breakpoint, motion_easing, motion_duration, motion_stagger
-- Output: `<session>/design/design-tokens.json`
+- Output: `{run_dir}/outputs/design/design-tokens.json`
 
 **Component Specification (DESIGN-002)**:
 - Define component specs consuming design tokens
@@ -55,7 +55,7 @@ message_types: [state_update]
 - UX Writing: button labels (verb+object), error message templates (what+why+fix), empty state copy pattern, loading text pattern. Reference `specs/ux-writing.md`
 - Dark Mode: if light+dark tokens, ensure dark mode follows rules: lighter surfaces for depth, reduced font weight, desaturated accents
 - Elevation: specify z-index layer for overlay/popup components using semantic scale (reference `specs/design-standards.md` Elevation)
-- Output: `<session>/design/component-specs/{component-name}.md`
+- Output: `{run_dir}/outputs/design/component-specs/{component-name}.md`
 
 **GC Fix Mode (DESIGN-fix-N)**:
 - Parse audit feedback for specific issues
@@ -87,5 +87,5 @@ message_types: [state_update]
 | reduced_motion | Reduced motion strategy documented |
 | ux_writing_specified | Button labels are verb+object, error/empty/loading text patterns defined |
 
-3. Update `<session>/wisdom/.msg/meta.json` under `designer` namespace:
+3. Update `{run_dir}/work/team/wisdom/.msg/meta.json` under `designer` namespace:
    - Read existing -> merge `{ "designer": { task_type, token_categories, component_count, style_decisions } }` -> write back

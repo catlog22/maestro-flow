@@ -17,7 +17,7 @@ message_types:
 |-------|--------|----------|
 | Task description | From task subject/description | Yes |
 | Session path | Extracted from task description | Yes |
-| .msg/meta.json | <session>/.msg/meta.json | No |
+| .msg/meta.json | {run_dir}/work/team/.msg/meta.json | No |
 
 1. Extract session path and target scope from task description
 2. Detect project type by scanning for framework markers:
@@ -68,14 +68,14 @@ After profiling, scan findings for context-aware trigger signals (based on detec
 
 ## Phase 4: Report Generation
 
-1. Write baseline metrics to `<session>/artifacts/baseline-metrics.json`:
+1. Write baseline metrics to `{run_dir}/outputs/baseline-metrics.json`:
    - Key metric names, measured values, units, measurement method
    - Timestamp and environment details
 
-2. Write bottleneck report to `<session>/artifacts/bottleneck-report.md`:
+2. Write bottleneck report to `{run_dir}/outputs/bottleneck-report.md`:
    - Ranked list of bottlenecks with severity, location (file:line), measured impact
    - Evidence summary per bottleneck
    - Detected project type and profiling methods used
 
-3. Update `<session>/.msg/meta.json` under `profiler` namespace:
+3. Update `{run_dir}/work/team/.msg/meta.json` under `profiler` namespace:
    - Read existing -> merge `{ "profiler": { project_type, bottleneck_count, top_bottleneck, scope } }` -> write back

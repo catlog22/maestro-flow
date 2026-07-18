@@ -71,7 +71,7 @@ Worker completed. Process and advance.
      - Parse a11y audit feedback for specific issues
      - Apply targeted fixes to component JS/CSS
    CONTEXT:
-     - Session: <session-folder>
+     - Session: {run_dir}/work/team
      - Upstream artifacts: a11y/a11y-audit-<NNN>.md" })
    update_plan({ taskId: "BUILD-fix-<round>", owner: "builder" })
    ```
@@ -122,7 +122,7 @@ Pipeline Status (<pipeline-mode>):
   [WAIT]  A11Y-001          (a11y-tester)            -> blocked by BUILD-001
 
 GC Rounds: 0/2
-Session: <session-id>
+Session: <run-id>
 Commands: 'resume' to advance | 'check' to refresh
 ```
 

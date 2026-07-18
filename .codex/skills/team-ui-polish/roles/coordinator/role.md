@@ -43,14 +43,14 @@ When coordinator needs to execute a command (analyze, dispatch, monitor):
 | Manual resume | Args contain "resume" or "continue" | -> handleResume (monitor.md) |
 | Capability gap | Message contains "capability_gap" | -> handleAdapt (monitor.md) |
 | Pipeline complete | All tasks have status "completed" | -> handleComplete (monitor.md) |
-| Interrupted session | Active/paused session exists in .workflow/.team/UIP-* | -> Phase 0 |
+| Interrupted session | Active/paused session exists in {run_dir}/work/team/ | -> Phase 0 |
 | New session | None of above | -> Phase 1 |
 
 For callback/check/resume/adapt/complete: load `@commands/monitor.md`, execute matched handler, STOP.
 
 ## Phase 0: Session Resume Check
 
-1. Scan `.workflow/.team/UIP-*/.msg/meta.json` for active/paused sessions
+1. Scan `{run_dir}/work/team/.msg/meta.json` for active/paused sessions
 2. No sessions -> Phase 1
 3. Single session -> reconcile (audit list_agents, reset in_progress->pending, rebuild team, kick first ready task)
 4. Multiple -> request_user_input for selection
@@ -93,17 +93,17 @@ TEXT-LEVEL ONLY. No source code reading.
 
 1. Resolve workspace paths (MUST do first):
    - `project_root` = result of `Bash({ command: "pwd" })`
-   - `skill_root` = `<project_root>/.claude/skills/team-ui-polish`
+   - `skill_root` = `<project_root>/.codex/skills/team-ui-polish`
 2. Generate session ID: `UIP-<slug>-<YYYY-MM-DD>`
 3. Create session folder structure:
    ```
-   .workflow/.team/UIP-<slug>-<date>/scan/
-   .workflow/.team/UIP-<slug>-<date>/diagnosis/
-   .workflow/.team/UIP-<slug>-<date>/optimization/
-   .workflow/.team/UIP-<slug>-<date>/verification/
-   .workflow/.team/UIP-<slug>-<date>/evidence/
-   .workflow/.team/UIP-<slug>-<date>/wisdom/
-   .workflow/.team/UIP-<slug>-<date>/.msg/
+   {run_dir}/outputs/scan/
+   {run_dir}/outputs/diagnosis/
+   {run_dir}/outputs/optimization/
+   {run_dir}/outputs/verification/
+   {run_dir}/evidence/
+   {run_dir}/work/team/wisdom/
+   {run_dir}/work/team/.msg/
    ```
 4. Initialize `.msg/meta.json` via team_msg state_update with pipeline metadata
 5. TeamCreate(team_name="ui-polish")
@@ -134,11 +134,11 @@ Delegate to `@commands/monitor.md#handleSpawnNext`:
 
 | Deliverable | Path |
 |-------------|------|
-| Scan Report | <session>/scan/scan-report.md |
-| Diagnosis Report | <session>/diagnosis/diagnosis-report.md |
-| Optimization Log | <session>/optimization/fix-log.md |
-| Verification Report | <session>/verification/verify-report.md |
-| Before/After Screenshots | <session>/evidence/*.png |
+| Scan Report | {run_dir}/outputs/scan/scan-report.md |
+| Diagnosis Report | {run_dir}/outputs/diagnosis/diagnosis-report.md |
+| Optimization Log | {run_dir}/outputs/optimization/fix-log.md |
+| Verification Report | {run_dir}/outputs/verification/verify-report.md |
+| Before/After Screenshots | {run_dir}/evidence/*.png |
 
 3. Calculate summary:
    - `issues_found`: total from scan report

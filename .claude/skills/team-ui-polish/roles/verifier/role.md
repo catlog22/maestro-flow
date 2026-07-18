@@ -11,9 +11,9 @@ message_types: [verify_passed, verify_failed, fix_required, error]
 
 | Input | Source | Required |
 |-------|--------|----------|
-| Original scan report | <session>/scan/scan-report.md | Yes |
-| Fix log | <session>/optimization/fix-log.md | Yes |
-| .msg/meta.json | <session>/wisdom/.msg/meta.json | Yes |
+| Original scan report | {run_dir}/outputs/scan/scan-report.md | Yes |
+| Fix log | {run_dir}/outputs/optimization/fix-log.md | Yes |
+| .msg/meta.json | {run_dir}/work/team/wisdom/.msg/meta.json | Yes |
 | Anti-patterns catalog | specs/anti-patterns.md | Yes |
 | Design standards | specs/design-standards.md | Yes |
 | Scoring guide | specs/scoring-guide.md | Yes |
@@ -31,7 +31,7 @@ Apply the same 8-dimension scan as the scanner role (reference roles/scanner/rol
 
 If Chrome DevTools available:
 - Take screenshots at same 3 viewports (mobile 375px, tablet 768px, desktop 1440px)
-- Save to `<session>/evidence/after-mobile.png`, `after-tablet.png`, `after-desktop.png`
+- Save to `{run_dir}/evidence/after-mobile.png`, `after-tablet.png`, `after-desktop.png`
 
 ### Step 2: Calculate Score Delta
 
@@ -74,7 +74,7 @@ Classify regressions:
 
 ## Phase 4: Generate Verification Report
 
-Output: `<session>/verification/verify-report.md`
+Output: `{run_dir}/outputs/verification/verify-report.md`
 
 ```markdown
 # Verification Report
@@ -108,13 +108,13 @@ Output: `<session>/verification/verify-report.md`
 <per-dimension improvement details>
 
 ## Screenshots
-- Before: <session>/evidence/before-*.png
-- After: <session>/evidence/after-*.png
+- Before: {run_dir}/evidence/before-*.png
+- After: {run_dir}/evidence/after-*.png
 <or "Chrome DevTools not available" if no screenshots>
 
 ## Metadata
-- Original scan: <session>/scan/scan-report.md
-- Fix log: <session>/optimization/fix-log.md
+- Original scan: {run_dir}/outputs/scan/scan-report.md
+- Fix log: {run_dir}/outputs/optimization/fix-log.md
 - GC round: <round number>
 - Timestamp: <ISO timestamp>
 ```
@@ -124,17 +124,17 @@ After writing the report, send signal-appropriate message:
 **If verify_passed**:
 ```
 mcp__maestro__team_msg(session_id, role="verifier", type="verify_passed", content="Verification passed. Score: before X/32 -> after Y/32 (+N). No regressions.")
-SendMessage(participant="coordinator", message="[verifier] VERIFY-001 passed. Score: X/32 -> Y/32 (+N). No regressions. Report: <session>/verification/verify-report.md")
+SendMessage(participant="coordinator", message="[verifier] VERIFY-001 passed. Score: X/32 -> Y/32 (+N). No regressions. Report: {run_dir}/outputs/verification/verify-report.md")
 ```
 
 **If verify_failed**:
 ```
 mcp__maestro__team_msg(session_id, role="verifier", type="verify_failed", content="Verification failed. N non-critical regressions found. Score: X/32 -> Y/32.")
-SendMessage(participant="coordinator", message="[verifier] VERIFY-001 failed. N regressions (non-critical). Score: X/32 -> Y/32. Report: <session>/verification/verify-report.md")
+SendMessage(participant="coordinator", message="[verifier] VERIFY-001 failed. N regressions (non-critical). Score: X/32 -> Y/32. Report: {run_dir}/outputs/verification/verify-report.md")
 ```
 
 **If fix_required**:
 ```
 mcp__maestro__team_msg(session_id, role="verifier", type="fix_required", content="Fix required. N critical regressions. Score dropped: X/32 -> Y/32.")
-SendMessage(participant="coordinator", message="[verifier] VERIFY-001 fix_required. N critical regressions. Score: X/32 -> Y/32 (DROPPED). Report: <session>/verification/verify-report.md")
+SendMessage(participant="coordinator", message="[verifier] VERIFY-001 fix_required. N critical regressions. Score: X/32 -> Y/32 (DROPPED). Report: {run_dir}/outputs/verification/verify-report.md")
 ```

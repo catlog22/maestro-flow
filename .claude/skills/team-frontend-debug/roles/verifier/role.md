@@ -61,8 +61,8 @@ Capture same evidence types as original reproduction:
 
 | Evidence | Tool | Save To |
 |----------|------|---------|
-| Screenshot | `take_screenshot({ filePath: "<session>/evidence/verify-screenshot.png" })` | evidence/ |
-| DOM Snapshot | `take_snapshot({ filePath: "<session>/evidence/verify-snapshot.txt" })` | evidence/ |
+| Screenshot | `take_screenshot({ filePath: "{run_dir}/evidence/verify-screenshot.png" })` | evidence/ |
+| DOM Snapshot | `take_snapshot({ filePath: "{run_dir}/evidence/verify-snapshot.txt" })` | evidence/ |
 | Console Messages | `list_console_messages({ types: ["error", "warn"] })` | In-memory |
 | Network Requests | `list_network_requests({ resourceTypes: ["xhr", "fetch"] })` | In-memory |
 

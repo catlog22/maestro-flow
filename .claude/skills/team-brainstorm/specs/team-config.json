@@ -76,11 +76,11 @@
   "collaboration_patterns": ["CP-1", "CP-3", "CP-7"],
 
   "session_dirs": {
-    "base": ".workflow/.team/BRS-{slug}-{YYYY-MM-DD}/",
-    "ideas": "ideas/",
-    "critiques": "critiques/",
-    "synthesis": "synthesis/",
-    "evaluation": "evaluation/",
-    "messages": ".workflow/.team-msg/{team-name}/"
+    "base": "{run_dir}/work/team/",
+    "ideas": "{run_dir}/outputs/ideas/",
+    "critiques": "{run_dir}/outputs/critiques/",
+    "synthesis": "{run_dir}/outputs/synthesis/",
+    "evaluation": "{run_dir}/outputs/evaluation/",
+    "messages": "{run_dir}/work/team/.msg/"
   }
 }

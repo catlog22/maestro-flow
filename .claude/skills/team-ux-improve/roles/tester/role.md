@@ -20,15 +20,15 @@ message_types: [state_update]
 
 2. Get changed files from implementer state:
    ```
-   team_msg(operation="get_state", session_id=<session-id>, role="implementer")
+   team_msg(operation="get_state", session_id=<run-id>, role="implementer")
    ```
 
 3. Load test strategy from design guide
 
 ### Wisdom Input
 
-1. Read `<session>/wisdom/anti-patterns/common-ux-pitfalls.md` for common issues to test
-2. Read `<session>/wisdom/patterns/ui-feedback.md` for expected feedback behaviors to verify
+1. Read `{run_dir}/work/team/wisdom/anti-patterns/common-ux-pitfalls.md` for common issues to test
+2. Read `{run_dir}/work/team/wisdom/patterns/ui-feedback.md` for expected feedback behaviors to verify
 3. Use wisdom to design comprehensive test cases covering known edge cases
 
 ## Phase 3: Test Generation & Execution
@@ -62,14 +62,14 @@ Iterative test-fix cycle (max 5 iterations):
 ### Wisdom Contribution
 
 If new edge cases or test patterns discovered:
-1. Write test findings to `<session>/wisdom/contributions/tester-edge-cases-<timestamp>.md`
+1. Write test findings to `{run_dir}/work/team/wisdom/contributions/tester-edge-cases-<timestamp>.md`
 2. Format: Edge case description, test scenario, expected behavior, actual behavior
 
 Write report to `{run_dir}/outputs/test-report.md`.
 
 Share state via team_msg:
 ```
-team_msg(operation="log", session_id=<session-id>, from="tester",
+team_msg(operation="log", session_id=<run-id>, from="tester",
          type="state_update", data={
            total_tests: <count>,
            passed: <count>,

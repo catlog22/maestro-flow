@@ -80,6 +80,6 @@ Zero-dependency rules for all interactive components built by this team. These c
 
 | File | Purpose | Location |
 |------|---------|----------|
-| `{name}.js` | ES module component class | `<session>/build/components/` |
-| `{name}.css` | Component styles with custom properties | `<session>/build/components/` |
-| `demo.html` | Optional: standalone demo page | `<session>/build/components/` |
+| `{name}.js` | ES module component class | `{run_dir}/outputs/build/components/` |
+| `{name}.css` | Component styles with custom properties | `{run_dir}/outputs/build/components/` |
+| `demo.html` | Optional: standalone demo page | `{run_dir}/outputs/build/components/` |

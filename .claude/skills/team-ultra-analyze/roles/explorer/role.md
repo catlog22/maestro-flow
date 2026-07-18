@@ -16,7 +16,7 @@ message_types:
 | Task description | From task subject/description | Yes |
 | Session path | Extracted from task description | Yes |
 
-1. Load debug specs: Run `ccw spec load --category debug` for known issues and root-cause notes
+1. Load debug specs: Run `maestro spec load --category debug` for known issues and root-cause notes
 2. Extract session path, topic, perspective, dimensions from task description:
 
 | Field | Pattern | Default |
@@ -74,7 +74,7 @@ CONSTRAINTS: Focus on <perspective> angle
 | Has relevant_files | Array length > 0 | Trigger ACE supplementary search |
 | Has key_findings | Array length > 0 | Note partial results, proceed |
 
-Write validated exploration to `<session>/explorations/exploration-<num>.json`.
+Write validated exploration to `{run_dir}/work/team/explorations/exploration-<num>.json`.
 
-Update `<session>/wisdom/.msg/meta.json` under `explorer` namespace:
+Update `{run_dir}/work/team/wisdom/.msg/meta.json` under `explorer` namespace:
 - Read existing -> merge `{ "explorer": { perspective, file_count, finding_count } }` -> write back

@@ -16,9 +16,9 @@ message_types:
 
 | Input | Source | Required |
 |-------|--------|----------|
-| Task JSONs | <session>/phase-{N}/.task/IMPL-*.json | Yes |
-| Summaries | <session>/phase-{N}/summary-*.md | Yes |
-| Wisdom | <session>/wisdom/ | No |
+| Task JSONs | {run_dir}/outputs/phase-{N}/.task/IMPL-*.json | Yes |
+| Summaries | {run_dir}/outputs/phase-{N}/summary-*.md | Yes |
+| Wisdom | {run_dir}/work/team/wisdom/ | No |
 
 1. Glob IMPL-*.json files, extract convergence criteria from each task
 2. Glob summary-*.md files, parse frontmatter (task, affects, provides)
@@ -52,7 +52,7 @@ Collect all gaps from partial/failed tasks with structured format:
 2. Determine overall status:
    - `passed` if gaps.length === 0
    - `gaps_found` otherwise
-3. Write `<session>/phase-{N}/verification.md`:
+3. Write `{run_dir}/outputs/phase-{N}/verification.md`:
 
 ```yaml
 ---

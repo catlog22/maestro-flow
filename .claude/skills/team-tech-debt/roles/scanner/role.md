@@ -13,10 +13,10 @@ message_types: [state_update]
 |-------|--------|----------|
 | Scan scope | task description (regex: `scope:\s*(.+)`) | No (default: `**/*`) |
 | Session path | task description (regex: `session:\s*(.+)`) | Yes |
-| .msg/meta.json | <session>/.msg/meta.json | Yes |
+| .msg/meta.json | {run_dir}/work/team/.msg/meta.json | Yes |
 
 1. Extract session path and scan scope from task description
-2. Load debug specs: Run `ccw spec load --category debug` for known issues, workarounds, and root-cause notes
+2. Load debug specs: Run `maestro spec load --category debug` for known issues, workarounds, and root-cause notes
 3. Read .msg/meta.json for team context
 3. Detect project type and framework:
 
@@ -84,5 +84,5 @@ After multi-dimension scan, emit context-aware trigger signals (based on detecte
 
 1. Deduplicate findings across Fan-out layers (file:line key), merge cross-references
 2. Sort by severity (cross-referenced items boosted)
-3. Write `<session>/scan/debt-inventory.json` with scan_date, dimensions, total_items, by_dimension, by_severity, items
+3. Write `{run_dir}/outputs/scan/debt-inventory.json` with scan_date, dimensions, total_items, by_dimension, by_severity, items
 4. Update .msg/meta.json with `debt_inventory` array and `debt_score_before` count

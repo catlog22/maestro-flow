@@ -33,7 +33,7 @@ Results: 1-2 page, 3-4 feature, 5+ system
 
 ## Output
 
-Write <session>/task-analysis.json:
+Write {run_dir}/work/team/task-analysis.json:
 ```json
 {
   "task_description": "<original>",

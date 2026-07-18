@@ -77,7 +77,7 @@ mcp__chrome-devtools__type_text({ text: "typed content", submitKey: "Enter" })
 ### Screenshot
 ```
 // Full viewport
-mcp__chrome-devtools__take_screenshot({ filePath: "<session>/evidence/screenshot.png" })
+mcp__chrome-devtools__take_screenshot({ filePath: "{run_dir}/evidence/screenshot.png" })
 
 // Full page
 mcp__chrome-devtools__take_screenshot({ filePath: "<path>", fullPage: true })
@@ -95,7 +95,7 @@ mcp__chrome-devtools__take_snapshot()
 mcp__chrome-devtools__take_snapshot({ verbose: true })
 
 // Save to file
-mcp__chrome-devtools__take_snapshot({ filePath: "<session>/evidence/snapshot.txt" })
+mcp__chrome-devtools__take_snapshot({ filePath: "{run_dir}/evidence/snapshot.txt" })
 ```
 
 ### Console Messages
@@ -134,7 +134,7 @@ mcp__chrome-devtools__performance_start_trace({ reload: true, autoStop: true })
 mcp__chrome-devtools__performance_start_trace({ reload: false, autoStop: false })
 
 // Stop and save
-mcp__chrome-devtools__performance_stop_trace({ filePath: "<session>/evidence/trace.json" })
+mcp__chrome-devtools__performance_stop_trace({ filePath: "{run_dir}/evidence/trace.json" })
 ```
 
 ## 4. Script Execution

@@ -21,13 +21,13 @@
 
 | Input | Source | Required |
 |-------|--------|----------|
-| Session state | `<session>/session.json` | Yes |
+| Session state | `{run_dir}/work/team/team-session.json` | Yes |
 | Task list | `list_agents()` | Yes |
 | Trigger event | From Entry Router detection | Yes |
-| Pipeline mode | From session.json `pipeline_mode` | Yes |
-| Discussion round | From session.json `discussion_round` | Yes |
+| Pipeline mode | From team-session.json `pipeline_mode` | Yes |
+| Discussion round | From team-session.json `discussion_round` | Yes |
 
-1. Load session.json for current state, `pipeline_mode`, `discussion_round`
+1. Load team-session.json for current state, `pipeline_mode`, `discussion_round`
 2. Run `list_agents()` to get current task statuses
 3. Identify trigger event type from Entry Router
 4. Compute max discussion rounds from pipeline mode:
@@ -90,7 +90,7 @@ discussion_round = session.discussion_round || 0
 discussion_round++
 
 // Update session state
-Update session.json: discussion_round = discussion_round
+Update team-session.json: discussion_round = discussion_round
 
 // Check if discussion loop applies
 IF pipeline_mode === 'quick':
@@ -140,12 +140,12 @@ TASK:
   - Execute <type> discussion strategy
   - Update discussion timeline
 CONTEXT:
-  - Session: <session-folder>
+  - Session: {run_dir}/work/team
   - Topic: <topic>
   - Round: <N>
   - Type: <deepen|direction-adjusted|specific-questions>
-  - Shared memory: <session>/wisdom/.msg/meta.json
-EXPECTED: <session>/discussions/discussion-round-<NNN>.json
+  - Shared memory: {run_dir}/work/team/wisdom/.msg/meta.json
+EXPECTED: {run_dir}/evidence/discussions/discussion-round-<NNN>.json
 ---
 InnerLoop: false"
 })
@@ -162,12 +162,12 @@ TASK:
   - Build on previous exploration findings
   - Generate updated discussion points
 CONTEXT:
-  - Session: <session-folder>
+  - Session: {run_dir}/work/team
   - Topic: <topic>
   - Type: direction-fix
   - Adjusted focus: <adjusted_focus>
-  - Shared memory: <session>/wisdom/.msg/meta.json
-EXPECTED: <session>/analyses/analysis-fix-<N>.json
+  - Shared memory: {run_dir}/work/team/wisdom/.msg/meta.json
+EXPECTED: {run_dir}/outputs/analyses/analysis-fix-<N>.json
 ---
 InnerLoop: false"
 })
@@ -187,11 +187,11 @@ TASK:
   - Extract themes, consolidate evidence, prioritize recommendations
   - Write conclusions and update discussion.md
 CONTEXT:
-  - Session: <session-folder>
+  - Session: {run_dir}/work/team
   - Topic: <topic>
-  - Upstream artifacts: explorations/*.json, analyses/*.json, discussions/*.json
-  - Shared memory: <session>/wisdom/.msg/meta.json
-EXPECTED: <session>/conclusions.json + discussion.md update
+  - Upstream artifacts: explorations/*.json, {run_dir}/outputs/analyses/*.json, discussions/*.json
+  - Shared memory: {run_dir}/work/team/wisdom/.msg/meta.json
+EXPECTED: {run_dir}/outputs/conclusions.json + {run_dir}/evidence/discussion.md update
 CONSTRAINTS: Pure integration, no new exploration
 ---
 InnerLoop: false"
@@ -294,7 +294,7 @@ Pipeline Status (<mode> mode):
 
 Discussion Rounds: 0/<max>
 Pipeline Mode: <mode>
-Session: <session-id>
+Session: <run-id>
 ```
 
 Output status -- do NOT advance pipeline.
@@ -327,7 +327,7 @@ Triggered when all pipeline tasks are completed.
 
 After every handler execution **except handleComplete**:
 
-1. Update session.json with current state:
+1. Update team-session.json with current state:
    - `discussion_round`: current round count
    - `last_event`: event type and timestamp
    - `active_tasks`: list of in-progress task IDs

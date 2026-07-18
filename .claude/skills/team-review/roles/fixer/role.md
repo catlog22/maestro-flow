@@ -15,9 +15,9 @@ message_types:
 |-------|--------|----------|
 | Task description | From task subject/description | Yes |
 | Session path | Extracted from task description | Yes |
-| Fix manifest | <session>/fix/fix-manifest.json | Yes |
-| Review report | <session>/review/review-report.json | Yes |
-| .msg/meta.json | <session>/.msg/meta.json | No |
+| Fix manifest | {run_dir}/outputs/fix/fix-manifest.json | Yes |
+| Review report | {run_dir}/outputs/review/review-report.json | Yes |
+| .msg/meta.json | {run_dir}/work/team/.msg/meta.json | No |
 
 1. Extract session path, input path from task description
 2. Load manifest (scope, source report path) and review report (findings with enrichment)
@@ -25,7 +25,7 @@ message_types:
 4. If 0 fixable -> report complete immediately
 5. Detect quick path: findings <= 5 AND no cross-file dependencies
 6. Detect verification tools: tsc (tsconfig.json), eslint (package.json), jest (package.json), pytest (pyproject.toml), semgrep (semgrep available)
-7. Load wisdom files from `<session>/wisdom/`
+7. Load wisdom files from `{run_dir}/work/team/wisdom/`
 
 ## Phase 3: Plan + Execute
 
@@ -35,7 +35,7 @@ message_types:
 3. Topological sort within each group (respect fix_dependencies, append cycles at end)
 4. Sort groups by max severity (critical first)
 5. Determine execution path: quick_path (<=5 findings, <=1 group) or standard
-6. Write `<session>/fix/fix-plan.json`: `{plan_id, quick_path, groups[{id, files[], findings[], max_severity}], execution_order[], total_findings, total_groups}`
+6. Write `{run_dir}/outputs/fix/fix-plan.json`: `{plan_id, quick_path, groups[{id, files[], findings[], max_severity}], execution_order[], total_findings, total_groups}`
 
 ### 3B: Execute Fixes
 **Quick path**: Single code-developer agent for all findings.
@@ -52,7 +52,7 @@ Agent prompt includes: finding list (dependency-sorted), file contents (truncate
 Agent returns JSON: `{results:[{id, status: fixed|failed|skipped, file, error?}]}`
 Fallback: check git diff per file if no structured output.
 
-Write `<session>/fix/execution-results.json`: `{fixed[], failed[], skipped[]}`
+Write `{run_dir}/outputs/fix/execution-results.json`: `{fixed[], failed[], skipped[]}`
 
 ## Phase 4: Post-Fix Verification
 
@@ -67,8 +67,8 @@ Write `<session>/fix/execution-results.json`: `{fixed[], failed[], skipped[]}`
 | semgrep | `semgrep --config auto <files> --json` | 0 results |
 
 2. If verification fails critically -> rollback last batch
-3. Write `<session>/fix/verify-results.json`
-4. Generate `<session>/fix/fix-summary.json`: `{fix_id, fix_date, scope, total, fixed, failed, skipped, fix_rate, verification}`
-5. Generate `<session>/fix/fix-summary.md` (human-readable)
-6. Update `<session>/.msg/meta.json` with fix results
-7. Contribute discoveries to `<session>/wisdom/` files
+3. Write `{run_dir}/outputs/fix/verify-results.json`
+4. Generate `{run_dir}/outputs/fix/fix-summary.json`: `{fix_id, fix_date, scope, total, fixed, failed, skipped, fix_rate, verification}`
+5. Generate `{run_dir}/outputs/fix/fix-summary.md` (human-readable)
+6. Update `{run_dir}/work/team/.msg/meta.json` with fix results
+7. Contribute discoveries to `{run_dir}/work/team/wisdom/` files

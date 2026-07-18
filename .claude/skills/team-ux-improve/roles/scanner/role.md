@@ -31,9 +31,9 @@ message_types: [state_update]
 
 ### Wisdom Input
 
-1. Read `<session>/wisdom/anti-patterns/common-ux-pitfalls.md` if available
+1. Read `{run_dir}/work/team/wisdom/anti-patterns/common-ux-pitfalls.md` if available
 2. Use anti-patterns to identify known UX issues during scanning
-3. Check `<session>/wisdom/patterns/ui-feedback.md` for expected feedback patterns
+3. Check `{run_dir}/work/team/wisdom/patterns/ui-feedback.md` for expected feedback patterns
 
 ### Complex Analysis (use CLI)
 
@@ -117,7 +117,7 @@ For each component file:
 3. Generate structured report and write to `{run_dir}/outputs/scan-report.md`
 4. Share state via team_msg:
    ```
-   team_msg(operation="log", session_id=<session-id>, from="scanner",
+   team_msg(operation="log", session_id=<run-id>, from="scanner",
             type="state_update", data={
               total_issues: <count>,
               high: <count>, medium: <count>, low: <count>,
@@ -129,5 +129,5 @@ For each component file:
 ### Wisdom Contribution
 
 If novel UX issues discovered that aren't in anti-patterns:
-1. Write findings to `<session>/wisdom/contributions/scanner-issues-<timestamp>.md`
+1. Write findings to `{run_dir}/work/team/wisdom/contributions/scanner-issues-<timestamp>.md`
 2. Format: Issue description, detection criteria, affected components

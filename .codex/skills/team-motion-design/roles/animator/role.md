@@ -15,13 +15,13 @@ message_types: [state_update]
 
 | Input | Source | Required |
 |-------|--------|----------|
-| Motion tokens | <session>/choreography/motion-tokens.json | Yes |
-| Choreography sequences | <session>/choreography/sequences/*.md | Yes (component/page) |
-| Research artifacts | <session>/research/*.json | Yes |
+| Motion tokens | {run_dir}/outputs/choreography/motion-tokens.json | Yes |
+| Choreography sequences | {run_dir}/outputs/choreography/sequences/*.md | Yes (component/page) |
+| Research artifacts | {run_dir}/outputs/research/*.json | Yes |
 | GPU constraints | specs/gpu-constraints.md | Yes |
 | Reduced motion spec | specs/reduced-motion.md | Yes |
-| Performance report | <session>/testing/reports/perf-report-*.md | Only for GC fix tasks |
-| .msg/meta.json | <session>/wisdom/.msg/meta.json | Yes |
+| Performance report | {run_dir}/outputs/testing/reports/perf-report-*.md | Only for GC fix tasks |
+| .msg/meta.json | {run_dir}/work/team/wisdom/.msg/meta.json | Yes |
 
 1. Extract session path from task description
 2. Read motion tokens from choreography/motion-tokens.json
@@ -29,7 +29,7 @@ message_types: [state_update]
 4. Read research artifacts for existing animation context
 5. Read GPU constraints and reduced motion specs
 6. Detect task type from subject: "token" -> Token CSS, "section" -> Section animation, "fix" -> GC fix
-7. If GC fix task: read latest performance report from testing/reports/
+7. If GC fix task: read latest performance report from {run_dir}/outputs/testing/reports/
 
 ## Phase 3: Implementation Execution
 
@@ -37,7 +37,7 @@ message_types: [state_update]
 
 Generate CSS custom properties and utility classes:
 
-**File: `<session>/animations/keyframes/motion-tokens.css`**:
+**File: `{run_dir}/outputs/animations/keyframes/motion-tokens.css`**:
 ```css
 :root {
   /* Easing functions */
@@ -67,7 +67,7 @@ Generate CSS custom properties and utility classes:
 }
 ```
 
-**File: `<session>/animations/keyframes/utility-animations.css`**:
+**File: `{run_dir}/outputs/animations/keyframes/utility-animations.css`**:
 - `@keyframes fade-in` (opacity 0->1)
 - `@keyframes fade-up` (opacity 0->1, translateY 20px->0)
 - `@keyframes fade-down` (opacity 0->1, translateY -20px->0)
@@ -82,13 +82,13 @@ Generate CSS custom properties and utility classes:
 
 For each section or component defined in choreography sequences:
 
-**CSS @keyframes** (`<session>/animations/keyframes/<name>.css`):
+**CSS @keyframes** (`{run_dir}/outputs/animations/keyframes/<name>.css`):
 - Define @keyframes consuming motion tokens via `var(--ease-out)`, `var(--duration-slow)`
 - Use `will-change: transform, opacity` on animated elements (remove after animation via JS)
 - Only animate compositor-safe properties: transform (translate, scale, rotate), opacity, filter
 - NEVER animate: width, height, top, left, margin, padding, border, color, background-color
 
-**JS Orchestrator** (`<session>/animations/orchestrators/<name>.js`):
+**JS Orchestrator** (`{run_dir}/outputs/animations/orchestrators/<name>.js`):
 ```javascript
 // IntersectionObserver-based scroll trigger
 const observer = new IntersectionObserver((entries) => {
@@ -192,5 +192,5 @@ This achieves smooth height animation using only grid layout changes (compositor
 | reduced_motion_js | `matchMedia('(prefers-reduced-motion: reduce)')` check present |
 | cleanup | will-change removed after animation completes (if applicable) |
 
-3. Update `<session>/wisdom/.msg/meta.json` under `animator` namespace:
+3. Update `{run_dir}/work/team/wisdom/.msg/meta.json` under `animator` namespace:
    - Read existing -> merge `{ "animator": { task_type, keyframe_count, orchestrator_count, uses_intersection_observer, has_parallax, has_stagger } }` -> write back

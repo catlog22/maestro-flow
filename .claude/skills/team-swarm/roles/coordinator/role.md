@@ -75,19 +75,20 @@ When coordinator needs to execute a phase command:
 | Manual resume | Args contain `resume` or `continue` | -> handleResume |
 | Iteration complete | All ants of current iteration reported | -> Phase 3.5 (update + converged?) |
 | Pipeline complete | aco.py converged returned true | -> Phase 4 |
-| Interrupted session | Active session exists in `.workflow/.team/TS-*` | -> Phase 0 |
+| Interrupted session | Active session exists in `{run_dir}/work/team/` | -> Phase 0 |
 | New session | None of above | -> Phase 1 |
 
 ---
 
 ## Phase 0: Session Resume Check
 
-1. Scan `.workflow/.team/TS-*/team-session.json` for `status` in {active, paused}
-2. Single session -> resume; multiple -> AskUserQuestion
-3. Reconcile: TaskList vs session.iteration vs pheromone/current.json
-4. If interrupted mid-iteration -> reset in_progress ant tasks to pending, respawn
-5. If iteration was complete but update not run -> call `aco.py update` for that iter
-6. Resume Phase 3 loop at current iteration
+1. **Exact Run locator first**: when the birth packet supplies `run_id` / `run_dir`, inspect only `{run_dir}/work/team/team-session.json`. An exact `run_dir` contains at most one team session; do not scan sibling Runs and do not enter a multiple-candidate branch.
+2. Reconcile the exact candidate through the runtime lifecycle adapter before resuming: canonical Run status, broker-backed live agents, non-terminal team tasks, and the ordered activity clock (message/task -> meta -> sidecar -> legacy filesystem fallback).
+3. Resume only a verified matching `team-swarm` session whose canonical lifecycle is `active` or `paused`. Reconcile TaskList vs `session.iteration` vs `pheromone/current.json` before dispatching any worker.
+4. **Locator-less legacy recovery**: enumerate and rank candidates through the runtime resume ranker, then show the ranked evidence with AskUserQuestion. Never select candidate index 0 implicitly; ties, `stale_candidate`, `unknown`, or `inconsistent` health always require an explicit choice.
+5. `stale_candidate` is derived health, never a lifecycle and never cleanup eligibility. An operator may explicitly resume an active/paused stale candidate after reviewing evidence, or request an audited transition to `abandoned`; TTL alone must not persist abandonment or delete state.
+6. Abandonment and cleanup are separate confirmed operations. Abandon only after rechecking Run status, live agents, non-terminal tasks, and activity; cleanup requires a second confirmation and may remove only `{run_dir}/work/team`, never `run.json`, `outputs/`, artifacts, evidence, or Session metadata.
+7. If interrupted mid-iteration, reset in_progress ant tasks to pending and respawn. If the iteration completed but update did not run, call `aco.py update` for that iteration, then resume Phase 3.
 
 ---
 
@@ -110,7 +111,7 @@ When coordinator needs to execute a phase command:
    - `task_space.nodes` OR `task_space.auto_discover_from`
    - `scoring.mode` ∈ {script, llm, fallback} based on user answer
    - `ant_prompt.objective` — the actual goal injected into ant role-spec at spawn
-4. Write config to `<session>/swarm-config.json`
+4. Write config to `{run_dir}/work/team/swarm-config.json`
 
 **CRITICAL**: Phase 1 does NOT call `aco.py`. It only produces the config.
 
@@ -123,14 +124,14 @@ Delegate to `@commands/init-swarm.md`:
 1. Generate session ID: `TS-<slug>-<date>` (slug from task)
 2. Create session folder structure:
    ```
-   .workflow/.team/<session-id>/
+   {run_dir}/work/team/
    ├── swarm-config.json    (from Phase 1)
    ├── pheromone/, trails/, scores/, artifacts/, wisdom/
    ├── .msg/
    └── role-binding.json    (paths to role.md files)
    ```
 3. TeamCreate with team_name = `swarm`
-4. Bash: `python <skill_root>/scripts/aco.py --session <session> init`
+4. Bash: `python <skill_root>/scripts/aco.py --session {run_dir}/work/team init`
 5. Parse stdout JSON: capture `n_nodes`, `n_edges`, `pheromone_path`
 6. Initialize team-session.json with `iteration: 0`, `status: "active"`
 7. Log state_update via team_msg with config summary
@@ -145,7 +146,7 @@ After session folder creation and before role-spec generation:
      ```json
      "run": { "run_id": "<id>", "run_dir": "<path>" }
      ```
-2. **Resume**: Read `team-session.json.run.run_id` → `maestro run check <run_id>` (idempotent). If status=sealed, create a new run and update the field.
+2. **Resume**: Read `team-session.json.run.run_id` → `maestro run check <run_id>` (idempotent). If status=sealed, create a new run and update the field. If `run.run_id` is missing, resolve in order: birth-packet injection, then `<session>/artifacts/`; if all are absent, fail closed — report session corruption and do NOT create a new Run.
 
 ---
 
@@ -156,7 +157,7 @@ After session folder creation and before role-spec generation:
 **Per-iteration workflow** (delegate to `@commands/iterate.md`):
 
 1. Increment iteration counter: k = session.iteration + 1
-2. Bash: `python aco.py --session <session> select --iter <k>`
+2. Bash: `python aco.py --session {run_dir}/work/team select --iter <k>`
    -> returns `{assignments: [{ant_id, start_node, edge_preferences, max_path_length}, ...]}`
 3. For each assignment:
    - TaskCreate `ANT-<k>-<i>` with description including session path + assignment
@@ -165,8 +166,8 @@ After session folder creation and before role-spec generation:
    ```
    role: ant
    role_spec: <skill_root>/roles/ant/role.md
-   session: <session>
-   session_id: <id>
+   session: {run_dir}/work/team
+   session_id: <run-id>
    team_name: swarm
    requirement: <ant_prompt.objective> | Assignment: <full assignment JSON>
    inner_loop: false
@@ -177,9 +178,9 @@ After session folder creation and before role-spec generation:
 
 1. Verify all `ANT-<k>-*` tasks have status = completed
 2. (Optional, if `scoring.mode == "llm"`) Spawn scorer worker for iteration k, await callback
-3. Bash: `python aco.py --session <session> update --iter <k>`
+3. Bash: `python aco.py --session {run_dir}/work/team --run-dir <run_dir> update --iter <k>`
    -> parse `{best_score, mean_score, delta, hallucinations_flagged, ...}`
-4. Bash: `python aco.py --session <session> converged`
+4. Bash: `python aco.py --session {run_dir}/work/team converged`
    -> parse `{converged, triggered_by, reason, metrics}`
 5. Update session.iteration = k, log state_update
 6. Branch:
@@ -192,12 +193,12 @@ After session folder creation and before role-spec generation:
 
 Delegate to `@commands/converge.md`:
 
-1. Bash: `python aco.py --session <session> report` -> capture best + top_k + curve
+1. Bash: `python aco.py --session {run_dir}/work/team report` -> capture best + top_k + curve
 2. Spawn analyst worker:
    ```
    role: analyst
    role_spec: <skill_root>/roles/analyst/role.md
-   requirement: synthesize swarm results | session: <session>
+   requirement: synthesize swarm results | session: {run_dir}/work/team
    ```
 3. Await analyst callback -> `best-solution.md` written
 4. Build completion report:

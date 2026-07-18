@@ -40,7 +40,7 @@ Results: 0-1 Low (quick), 2-3 Medium (deep), 4+ High (full)
 
 ## Output
 
-Write <session>/task-analysis.json:
+Write {run_dir}/work/team/task-analysis.json:
 ```json
 {
   "task_description": "<original>",

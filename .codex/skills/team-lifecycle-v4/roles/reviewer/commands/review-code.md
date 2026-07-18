@@ -29,7 +29,7 @@
 
 ## Output
 
-Write review report to <session>/artifacts/review-report.md:
+Write review report to {run_dir}/outputs/review-report.md:
 - Per-dimension scores
 - Issue list with file:line references
 - Verdict with justification

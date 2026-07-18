@@ -10,7 +10,7 @@ Inherited from team-swarm — ACO math is identical.
 ## File Layout
 
 ```
-<session>/pheromone/
+{run_dir}/work/team/pheromone/
 ├── current.json         # latest state, overwritten each iteration
 ├── history/
 │   ├── 1.json           # snapshot after iteration 1

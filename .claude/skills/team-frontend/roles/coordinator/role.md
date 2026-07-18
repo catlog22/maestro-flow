@@ -41,14 +41,14 @@ When coordinator needs to execute a command:
 | Status check | Args contain "check" or "status" | -> handleCheck (monitor.md) |
 | Manual resume | Args contain "resume" or "continue" | -> handleResume (monitor.md) |
 | Pipeline complete | All tasks completed | -> handleComplete (monitor.md) |
-| Interrupted session | Active/paused session in .workflow/.team/FE-* | -> Phase 0 |
+| Interrupted session | Active/paused session in {run_dir}/work/team/ | -> Phase 0 |
 | New session | None of above | -> Phase 1 |
 
 For callback/check/resume/complete: load @commands/monitor.md, execute handler, STOP.
 
 ## Phase 0: Session Resume Check
 
-1. Scan `.workflow/.team/FE-*/.msg/meta.json` for active/paused sessions
+1. Scan `{run_dir}/work/team/.msg/meta.json` for active/paused sessions
 2. No sessions -> Phase 1
 3. Single session -> reconcile (audit TaskList, reset in_progress->pending, rebuild team, kick first ready task)
 4. Multiple -> AskUserQuestion for selection
@@ -91,7 +91,7 @@ TEXT-LEVEL ONLY. No source code reading.
 3. Generate session ID: `FE-<slug>-<YYYY-MM-DD>`
 4. Create session folder structure:
 ```
-mkdir -p .workflow/.team/<session-id>/{.msg,wisdom,analysis,architecture,qa,build}
+mkdir -p {run_dir}/work/team/{.msg,wisdom} {run_dir}/outputs/{analysis,architecture,qa,build}
 ```
 5. TeamCreate with team name: `TeamCreate({ team_name: "frontend" })`
 6. Read specs/pipelines.md -> select pipeline based on scope
@@ -99,7 +99,7 @@ mkdir -p .workflow/.team/<session-id>/{.msg,wisdom,analysis,architecture,qa,buil
 8. Initialize meta.json with pipeline metadata:
 ```typescript
 mcp__maestro__team_msg({
-  operation: "log", session_id: "<id>", from: "coordinator",
+  operation: "log", session_id: "<run-id>", from: "coordinator",
   type: "state_update", summary: "Session initialized",
   data: {
     pipeline_mode: "<page|feature|system>",
@@ -111,7 +111,7 @@ mcp__maestro__team_msg({
   }
 })
 ```
-9. Write session.json
+9. Write team-session.json
 
 ### Run Lifecycle Integration
 
@@ -123,14 +123,14 @@ After session folder creation and before role-spec generation:
      ```json
      "run": { "run_id": "<id>", "run_dir": "<path>" }
      ```
-2. **Resume**: Read `team-session.json.run.run_id` → `maestro run check <run_id>` (idempotent). If status=sealed, create a new run and update the field.
+2. **Resume**: Read `team-session.json.run.run_id` → `maestro run check <run_id>` (idempotent). If status=sealed, create a new run and update the field. If `run.run_id` is missing, resolve in order: birth-packet injection, then `<session>/artifacts/`; if all are absent, fail closed — report session corruption and do NOT create a new Run.
 
 ## Phase 3: Task Chain Creation
 
 Delegate to @commands/dispatch.md:
 1. Read specs/pipelines.md for selected pipeline task registry
 2. Create tasks via TaskCreate, then set blockedBy via TaskUpdate
-3. Update session.json
+3. Update team-session.json
 
 ## Phase 4: Spawn-and-Stop
 
@@ -147,12 +147,12 @@ Delegate to @commands/monitor.md#handleSpawnNext:
 
 | Deliverable | Path |
 |-------------|------|
-| Design Intelligence | <session>/analysis/design-intelligence.json |
-| Requirements | <session>/analysis/requirements.md |
-| Design Tokens | <session>/architecture/design-tokens.json |
-| Component Specs | <session>/architecture/component-specs/ |
-| Project Structure | <session>/architecture/project-structure.md |
-| QA Audits | <session>/qa/audit-*.md |
+| Design Intelligence | {run_dir}/outputs/analysis/design-intelligence.json |
+| Requirements | {run_dir}/outputs/analysis/requirements.md |
+| Design Tokens | {run_dir}/outputs/architecture/design-tokens.json |
+| Component Specs | {run_dir}/outputs/architecture/component-specs/ |
+| Project Structure | {run_dir}/outputs/architecture/project-structure.md |
+| QA Audits | {run_dir}/outputs/qa/audit-*.md |
 
 3. Output pipeline summary: task count, duration, QA scores
 4. Execute completion action per session.completion_action:

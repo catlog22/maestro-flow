@@ -68,8 +68,8 @@ Worker completed. Process and advance.
      - Parse verification feedback for specific regressions
      - Apply targeted fixes for regression issues only
    CONTEXT:
-     - Session: <session-folder>
-     - Upstream artifacts: verification/verify-report.md" })
+     - Session: {run_dir}/work/team
+     - Upstream artifacts: {run_dir}/outputs/verification/verify-report.md" })
    update_plan({ taskId: "OPT-fix-<round>", owner: "optimizer" })
    ```
    Then create new VERIFY task blocked by OPT-fix. Increment gc_state.round.
@@ -120,7 +120,7 @@ Pipeline Status (<pipeline-mode>):
 
 GC Rounds: 0/2
 Score: <before-score>/32 -> pending
-Session: <session-id>
+Session: <run-id>
 Commands: 'resume' to advance | 'check' to refresh
 ```
 

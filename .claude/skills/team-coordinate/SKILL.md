@@ -42,9 +42,9 @@ Universal team coordination skill: analyze task -> generate role-specs -> dispat
 | Constant | Value |
 |----------|-------|
 | Session prefix | `TC` |
-| Session path | `.workflow/.team/TC-<slug>-<date>/` |
+| Session path | `{run_dir}/work/team/` |
 | Worker agent | `team-worker` |
-| Message bus | `mcp__maestro__team_msg(session_id=<session-id>, ...)` |
+| Message bus | `mcp__maestro__team_msg(session_id=<run-id>, ...)` |
 | CLI analysis | `maestro delegate --mode analysis` |
 | CLI write | `maestro delegate --mode write` |
 | Max roles | 5 |
@@ -64,7 +64,7 @@ Only coordinator is statically registered. All other roles are dynamic, stored a
 | Role | File | Type |
 |------|------|------|
 | coordinator | [roles/coordinator/role.md](roles/coordinator/role.md) | built-in orchestrator |
-| (dynamic) | `<session>/role-specs/<role-name>.md` | runtime-generated role-spec |
+| (dynamic) | `{run_dir}/work/team/role-specs/<role-name>.md` | runtime-generated role-spec |
 
 ### CLI Tool Usage
 
@@ -123,15 +123,15 @@ Agent({
   run_in_background: true,
   prompt: `## Role Assignment
 role: <role>
-role_spec: <session-folder>/role-specs/<role>.md
-session: <session-folder>
-session_id: <session-id>
+role_spec: {run_dir}/work/team/role-specs/<role>.md
+session: {run_dir}/work/team
+session_id: <run-id>
 team_name: <team-name>
 requirement: <task-description>
 inner_loop: <true|false>
 
 ## Progress Milestones
-session_id: <session-id>
+session_id: <run-id>
 Report progress via team_msg at natural phase boundaries (context loaded -> core work done -> verification).
 Report blockers immediately via team_msg type="blocker".
 Report completion via team_msg type="task_complete" after final SendMessage.
@@ -190,26 +190,28 @@ AskUserQuestion({
 ## Session Directory
 
 ```
-.workflow/.team/TC-<slug>-<date>/
-+-- team-session.json           # Session state + dynamic role registry
-+-- task-analysis.json          # Phase 1 output: capabilities, dependency graph
-+-- role-specs/                 # Dynamic role-spec definitions (generated Phase 2)
-|   +-- <role-1>.md             # Lightweight: frontmatter + Phase 2-4 only
-|   +-- <role-2>.md
-+-- artifacts/                  # Legacy; formal deliverables → {run_dir}/outputs/
+{run_dir}/
++-- outputs/                    # Formal worker deliverables
 |   +-- <artifact>.md
-+-- .msg/                       # Team message bus + state
-|   +-- messages.jsonl          # Message log
-|   +-- meta.json               # Session metadata + cross-role state
-+-- wisdom/                     # Cross-task knowledge
-|   +-- learnings.md
-|   +-- decisions.md
-|   +-- issues.md
-+-- explorations/               # Shared explore cache
-|   +-- cache-index.json
-|   +-- explore-<angle>.json
-+-- discussions/                # Inline discuss records
++-- evidence/discussions/       # Inline discuss records
 |   +-- <round>.md
++-- report.md                   # Human-readable synthesis + handoff
++-- work/team/                  # Team coordination (non-artifact)
+    +-- team-session.json       # Session state + dynamic role registry
+    +-- task-analysis.json      # Phase 1 output: capabilities, dependency graph
+    +-- role-specs/             # Dynamic role-spec definitions (generated Phase 2)
+    |   +-- <role-1>.md         # Lightweight: frontmatter + Phase 2-4 only
+    |   +-- <role-2>.md
+    +-- .msg/                   # Team message bus + state
+    |   +-- messages.jsonl      # Message log
+    |   +-- meta.json           # Session metadata + cross-role state
+    +-- wisdom/                 # Cross-task knowledge
+    |   +-- learnings.md
+    |   +-- decisions.md
+    |   +-- issues.md
+    +-- explorations/           # Shared explore cache
+        +-- cache-index.json
+        +-- explore-<angle>.json
 ```
 
 ### team-session.json Schema
@@ -247,7 +249,7 @@ AskUserQuestion({
 
 Coordinator supports `resume` / `continue` for interrupted sessions:
 
-1. Scan `.workflow/.team/TC-*/team-session.json` for active/paused sessions
+1. Scan `{run_dir}/work/team/team-session.json` for active/paused sessions
 2. Multiple matches -> AskUserQuestion for selection
 3. Audit TaskList -> reconcile session state <-> task status
 4. Reset in_progress -> pending (interrupted tasks)

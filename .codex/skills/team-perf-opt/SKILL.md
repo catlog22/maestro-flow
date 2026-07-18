@@ -31,11 +31,11 @@ contract:
     exit: []
 ---
 
-> **Agent timeout**: `spawn_agent` 异步执行且无内置超时 — 除明确短任务外一律 `spawn_agent` 后立即 `wait_agent({ timeout_ms: 3600000 })`（上限 1 小时）阻塞等待，绝不依赖 30000 默认值；`timed_out: true` 且 Agent 未完成时再次 `wait_agent` 续等，不丢弃。批量场景使用 `spawn_agents_on_csv({ max_runtime_seconds: 3600, ... })`。
-
 <required_reading>
 @~/.maestro/workflows/run-mode-lite.md
 </required_reading>
+
+> **Agent timeout**: `spawn_agent` 异步执行且无内置超时 — 除明确短任务外一律 `spawn_agent` 后立即 `wait_agent({ timeout_ms: 3600000 })`（上限 1 小时）阻塞等待，绝不依赖 30000 默认值；`timed_out: true` 且 Agent 未完成时再次 `wait_agent` 续等，不丢弃。批量场景使用 `spawn_agents_on_csv({ max_runtime_seconds: 3600, ... })`。
 
 # Team Performance Optimization
 
@@ -100,10 +100,10 @@ Parse `$ARGUMENTS`:
 ## Shared Constants
 
 - **Session prefix**: `PERF-OPT`
-- **Session path**: `.workflow/.team/PERF-OPT-<slug>-<date>/`
+- **Session path**: `{run_dir}/work/team/`
 - **Team name**: `perf-opt`
 - **CLI tools**: `maestro delegate --mode analysis` (read-only), `maestro delegate --mode write` (modifications)
-- **Message bus**: `mcp__maestro__team_msg(session_id=<session-id>, ...)`
+- **Message bus**: `mcp__maestro__team_msg(session_id=<run-id>, ...)`
 
 ## Worker Spawn Template
 
@@ -130,8 +130,8 @@ spawn_agent({ task_name: "<role>", message: "Spawn <role> worker", fork_turns: "
 ## Session Directory
 
 ```
-.workflow/.team/PERF-OPT-<slug>-<date>/
-+-- session.json                    # Session metadata + status + parallel_mode
+{run_dir}/work/team/
++-- team-session.json                    # Session metadata + status + parallel_mode
 +-- artifacts/
 |   +-- baseline-metrics.json       # Profiler: before-optimization metrics
 |   +-- bottleneck-report.md        # Profiler: ranked bottleneck findings
@@ -142,7 +142,7 @@ spawn_agent({ task_name: "<role>", message: "Spawn <role> worker", fork_turns: "
 |   +-- pipelines/A/...             # Independent pipeline artifacts
 +-- explorations/                   # Shared explore cache
 +-- wisdom/patterns.md              # Discovered patterns and conventions
-+-- discussions/                    # Discussion records
++-- {run_dir}/evidence/discussions/                    # Discussion records
 +-- .msg/messages.jsonl             # Team message bus
 +-- .msg/meta.json                  # Session metadata
 ```

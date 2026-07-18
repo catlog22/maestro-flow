@@ -123,6 +123,11 @@ cp -r "${state.backup_dir}/${targetSkill.name}-backup"/* "${targetSkill.path}/"
 
   Write(`${workDir}/tuning-summary.md`, summary);
 
+  // Close the Run before declaring completion (see run-mode.md):
+  //   maestro run check {run_id}     → repair any reported gate
+  //   maestro run complete {run_id}
+  // Mark status 'completed' only after `run complete` succeeds.
+
   // Update final state
   return {
     stateUpdates: {

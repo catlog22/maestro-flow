@@ -12,11 +12,11 @@ message_types: [state_update]
 | Input | Source | Required |
 |-------|--------|----------|
 | Session folder | Task description (Session: line) | Yes |
-| Ideas | <session>/ideas/*.md files | Yes |
-| Previous critiques | <session>/.msg/meta.json critique_insights | No |
+| Ideas | {run_dir}/outputs/ideas/*.md files | Yes |
+| Previous critiques | {run_dir}/work/team/.msg/meta.json critique_insights | No |
 
 1. Extract session path from task description (match "Session: <path>")
-2. Glob idea files from <session>/ideas/
+2. Glob idea files from {run_dir}/outputs/ideas/
 3. Read all idea files for analysis
 4. Read .msg/meta.json critique_insights to avoid repeating past challenges
 
@@ -47,7 +47,7 @@ message_types: [state_update]
 | Any CRITICAL or HIGH severity | REVISION_NEEDED |
 | All MEDIUM or lower | CONVERGED |
 
-**Output**: Write to `<session>/critiques/critique-<num>.md`
+**Output**: Write to `{run_dir}/outputs/critiques/critique-<num>.md`
 - Sections: Ideas Reviewed, Per-idea challenges with severity, Summary table with counts, GC Signal
 
 ## Phase 4: Severity Summary

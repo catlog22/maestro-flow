@@ -7,14 +7,14 @@
 | User requirement | From coordinator Phase 1 | Yes |
 | Session folder | From coordinator Phase 2 | Yes |
 | Pipeline definition | From SKILL.md Pipeline Definitions | Yes |
-| Parallel mode | From session.json `parallel_mode` | Yes |
-| Max branches | From session.json `max_branches` | Yes |
-| Independent targets | From session.json `independent_targets` (independent mode only) | Conditional |
+| Parallel mode | From team-session.json `parallel_mode` | Yes |
+| Max branches | From team-session.json `max_branches` | Yes |
+| Independent targets | From team-session.json `independent_targets` (independent mode only) | Conditional |
 
-1. Load user requirement and refactoring scope from session.json
+1. Load user requirement and refactoring scope from team-session.json
 2. Load pipeline stage definitions from SKILL.md Task Metadata Registry
-3. Read `parallel_mode` and `max_branches` from session.json
-4. For `independent` mode: read `independent_targets` array from session.json
+3. Read `parallel_mode` and `max_branches` from team-session.json
+4. For `independent` mode: read `independent_targets` array from team-session.json
 
 ## Phase 3: Task Chain Creation (Mode-Branched)
 
@@ -31,11 +31,11 @@ TASK:
   - <step 2: specific action>
   - <step 3: specific action>
 CONTEXT:
-  - Session: <session-folder>
+  - Session: {run_dir}/work/team
   - Scope: <refactoring-scope>
   - Branch: <branch-id or 'none'>
   - Upstream artifacts: <artifact-1>, <artifact-2>
-  - Shared memory: <session>/wisdom/.msg/meta.json
+  - Shared memory: {run_dir}/work/team/wisdom/.msg/meta.json
 EXPECTED: <deliverable path> + <quality criteria>
 CONSTRAINTS: <scope limits, focus areas>
 ---
@@ -70,10 +70,10 @@ TASK:
   - Execute analysis across relevant dimensions (dependencies, coupling, cohesion, layering, duplication, dead code)
   - Collect baseline metrics and rank architecture issues by severity
 CONTEXT:
-  - Session: <session-folder>
+  - Session: {run_dir}/work/team
   - Scope: <refactoring-scope>
   - Branch: none
-  - Shared memory: <session>/wisdom/.msg/meta.json
+  - Shared memory: {run_dir}/work/team/wisdom/.msg/meta.json
 EXPECTED: {run_dir}/outputs/architecture-baseline.json + {run_dir}/outputs/architecture-report.md | Quantified metrics with evidence
 CONSTRAINTS: Focus on <refactoring-scope> | Analyze before any changes
 ---
@@ -93,11 +93,11 @@ TASK:
   - Prioritize by impact/effort ratio, define success criteria
   - Each refactoring MUST have a unique REFACTOR-ID (REFACTOR-001, REFACTOR-002, ...) with non-overlapping target files
 CONTEXT:
-  - Session: <session-folder>
+  - Session: {run_dir}/work/team
   - Scope: <refactoring-scope>
   - Branch: none
   - Upstream artifacts: architecture-baseline.json, architecture-report.md
-  - Shared memory: <session>/wisdom/.msg/meta.json
+  - Shared memory: {run_dir}/work/team/wisdom/.msg/meta.json
 EXPECTED: {run_dir}/outputs/refactoring-plan.md | Priority-ordered with structural improvement targets, discrete REFACTOR-IDs
 CONSTRAINTS: Focus on highest-impact refactorings | Risk assessment required | Non-overlapping file targets per REFACTOR-ID
 ---
@@ -117,11 +117,11 @@ TASK:
   - Update all import references for moved/renamed modules
   - Validate changes compile and pass existing tests
 CONTEXT:
-  - Session: <session-folder>
+  - Session: {run_dir}/work/team
   - Scope: <refactoring-scope>
   - Branch: none
   - Upstream artifacts: refactoring-plan.md
-  - Shared memory: <session>/wisdom/.msg/meta.json
+  - Shared memory: {run_dir}/work/team/wisdom/.msg/meta.json
 EXPECTED: Modified source files + validation passing | Refactorings applied without regressions
 CONSTRAINTS: Preserve existing behavior | Update all references | Follow code conventions
 ---
@@ -142,11 +142,11 @@ TASK:
   - Compare dependency metrics against baseline
   - Verify API compatibility (no dangling references)
 CONTEXT:
-  - Session: <session-folder>
+  - Session: {run_dir}/work/team
   - Scope: <refactoring-scope>
   - Branch: none
   - Upstream artifacts: architecture-baseline.json, refactoring-plan.md
-  - Shared memory: <session>/wisdom/.msg/meta.json
+  - Shared memory: {run_dir}/work/team/wisdom/.msg/meta.json
 EXPECTED: {run_dir}/outputs/validation-results.json | Per-dimension validation with verdicts
 CONSTRAINTS: Must compare against baseline | Flag any regressions or broken imports
 ---
@@ -165,11 +165,11 @@ TASK:
   - Review across 5 dimensions: correctness, pattern consistency, completeness, migration safety, best practices
   - Issue verdict: APPROVE, REVISE, or REJECT with actionable feedback
 CONTEXT:
-  - Session: <session-folder>
+  - Session: {run_dir}/work/team
   - Scope: <refactoring-scope>
   - Branch: none
   - Upstream artifacts: refactoring-plan.md, validation-results.json (if available)
-  - Shared memory: <session>/wisdom/.msg/meta.json
+  - Shared memory: {run_dir}/work/team/wisdom/.msg/meta.json
 EXPECTED: {run_dir}/outputs/review-report.md | Per-dimension findings with severity
 CONSTRAINTS: Focus on refactoring changes only | Provide specific file:line references
 ---
@@ -229,10 +229,10 @@ TASK:
   - Execute architecture analysis focused on auth module
   - Collect baseline metrics and rank auth module issues
 CONTEXT:
-  - Session: <session-folder>
+  - Session: {run_dir}/work/team
   - Scope: refactor auth module
   - Pipeline: A
-  - Shared memory: <session>/wisdom/.msg/meta.json (namespace: analyzer.A)
+  - Shared memory: {run_dir}/work/team/wisdom/.msg/meta.json (namespace: analyzer.A)
 EXPECTED: {run_dir}/outputs/pipelines/A/architecture-baseline.json + architecture-report.md
 CONSTRAINTS: Focus on auth module scope
 ---
@@ -259,7 +259,7 @@ TaskUpdate({ taskId: "ANALYZE-A01", owner: "analyzer" })
 | count <= 2 | Switch to `single` mode -- create REFACTOR-001, VALIDATE-001, REVIEW-001 (standard single pipeline) |
 | count >= 3 | Switch to `fan-out` mode -- create branch tasks below |
 
-4. Update session.json with resolved `parallel_mode` (auto -> single or fan-out)
+4. Update team-session.json with resolved `parallel_mode` (auto -> single or fan-out)
 
 5. **Fan-out branch creation** (when count >= 3 or forced fan-out):
    - Truncate to `max_branches` if `refactoring_count > max_branches` (keep top N by priority)
@@ -286,10 +286,10 @@ TASK:
   - Update all import references for moved/renamed modules
   - Validate changes compile and pass existing tests
 CONTEXT:
-  - Session: <session-folder>
+  - Session: {run_dir}/work/team
   - Branch: B{NN}
   - Upstream artifacts: branches/B{NN}/refactoring-detail.md
-  - Shared memory: <session>/wisdom/.msg/meta.json (namespace: refactorer.B{NN})
+  - Shared memory: {run_dir}/work/team/wisdom/.msg/meta.json (namespace: refactorer.B{NN})
 EXPECTED: Modified source files for REFACTOR-{NNN} only
 CONSTRAINTS: Only implement this branch's refactoring | Do not touch files outside REFACTOR-{NNN} scope
 ---
@@ -306,10 +306,10 @@ TASK:
   - Validate build, tests, dependency metrics, and API compatibility
   - Compare against baseline, check for regressions
 CONTEXT:
-  - Session: <session-folder>
+  - Session: {run_dir}/work/team
   - Branch: B{NN}
   - Upstream artifacts: architecture-baseline.json, branches/B{NN}/refactoring-detail.md
-  - Shared memory: <session>/wisdom/.msg/meta.json (namespace: validator.B{NN})
+  - Shared memory: {run_dir}/work/team/wisdom/.msg/meta.json (namespace: validator.B{NN})
 EXPECTED: {run_dir}/outputs/branches/B{NN}/validation-results.json
 CONSTRAINTS: Only validate this branch's changes
 ---
@@ -326,10 +326,10 @@ TASK:
   - Review across 5 dimensions for this branch's changes only
   - Issue verdict: APPROVE, REVISE, or REJECT
 CONTEXT:
-  - Session: <session-folder>
+  - Session: {run_dir}/work/team
   - Branch: B{NN}
   - Upstream artifacts: branches/B{NN}/refactoring-detail.md
-  - Shared memory: <session>/wisdom/.msg/meta.json (namespace: reviewer.B{NN})
+  - Shared memory: {run_dir}/work/team/wisdom/.msg/meta.json (namespace: reviewer.B{NN})
 EXPECTED: {run_dir}/outputs/branches/B{NN}/review-report.md
 CONSTRAINTS: Only review this branch's changes
 ---
@@ -339,7 +339,7 @@ BranchId: B{NN}"
 TaskUpdate({ taskId: "REVIEW-B{NN}", addBlockedBy: ["REFACTOR-B{NN}"], owner: "reviewer" })
 ```
 
-7. Update session.json:
+7. Update team-session.json:
    - `branches`: array of branch IDs (["B01", "B02", ...])
    - `fix_cycles`: object keyed by branch ID, all initialized to 0
 
@@ -356,7 +356,7 @@ Verify task chain integrity:
 | No circular dependencies | Trace dependency graph | Acyclic |
 | Task IDs use correct prefixes | Pattern check | Match naming rules per mode |
 | Structured descriptions complete | Each has PURPOSE/TASK/CONTEXT/EXPECTED/CONSTRAINTS | All present |
-| Branch/Pipeline IDs consistent | Cross-check with session.json | Match |
+| Branch/Pipeline IDs consistent | Cross-check with team-session.json | Match |
 
 ### Naming Rules Summary
 

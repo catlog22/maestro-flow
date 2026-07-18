@@ -8,7 +8,7 @@ Event-driven pipeline coordination with Spawn-and-Stop pattern for team-executor
 
 | Constant | Value | Description |
 |----------|-------|-------------|
-| SPAWN_MODE | background | All workers spawned via `Task(run_in_background: true)` |
+| SPAWN_MODE | background | All workers spawned via `Agent(subagent_type: "team-worker", run_in_background: true)` |
 | ONE_STEP_PER_INVOCATION | true | Executor does one operation then STOPS |
 | FAST_ADVANCE_AWARE | true | Workers may skip executor for simple linear successors |
 | ROLE_GENERATION | disabled | handleAdapt cannot generate new role-specs |
@@ -18,7 +18,7 @@ Event-driven pipeline coordination with Spawn-and-Stop pattern for team-executor
 
 | Input | Source | Required |
 |-------|--------|----------|
-| Session file | `<session-folder>/team-session.json` | Yes |
+| Session file | `{run_dir}/work/team/team-session.json` | Yes |
 | Task list | `TaskList()` | Yes |
 | Active workers | session.active_workers[] | Yes |
 | Role registry | session.roles[] | Yes |
@@ -126,7 +126,7 @@ Ready tasks found?
       |   +- YES -> SKIP spawn (existing worker picks it up)
       |   +- NO -> normal spawn below
       +- TaskUpdate -> in_progress
-      +- team_msg log -> task_unblocked (session_id=<session-id>)
+      +- team_msg log -> task_unblocked (session_id=<run-id>)
       +- Spawn team-worker (see spawn tool call below)
       +- Add to session.active_workers
       Update session file -> output summary -> STOP
@@ -143,9 +143,9 @@ Agent({
   run_in_background: true,
   prompt: `## Role Assignment
 role: <role>
-role_spec: <session-folder>/role-specs/<role>.md
-session: <session-folder>
-session_id: <session-id>
+role_spec: {run_dir}/work/team/role-specs/<role>.md
+session: {run_dir}/work/team
+session_id: <run-id>
 team_name: <team-name>
 requirement: <task-description>
 inner_loop: <true|false>
@@ -162,6 +162,12 @@ Pipeline complete. Execute completion action.
 
 ```
 All tasks completed (no pending, no in_progress)
+  +- Run lifecycle completion (the upstream team-coordinate Run must be sealed here):
+  |   - Read run_id from team-session.json.run.run_id (created upstream, not by executor)
+  |   - Write {run_dir}/report.md with frontmatter (verdict/summary/concerns)
+  |   - Run `maestro run complete <run_id>`
+  |   - If complete fails: fix the blocking gate and retry once; still failing -> do NOT archive/clean - keep the team active (status=paused) and report the blocking gate
+  |
   +- Generate pipeline summary (deliverables, stats, duration)
   +- Read session.completion_action:
       |

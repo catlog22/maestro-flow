@@ -13,7 +13,7 @@ message_types: [state_update]
 |-------|--------|----------|
 | Task description | From task subject/description | Yes |
 | Session path | Extracted from task description | Yes |
-| .msg/meta.json | <session>/wisdom/.msg/meta.json | No |
+| .msg/meta.json | {run_dir}/work/team/wisdom/.msg/meta.json | No |
 
 1. Extract session path and target scope from task description
 2. Detect project type and tech stack from package.json or equivalent:
@@ -46,27 +46,27 @@ Execute 4 analysis streams:
 - Find component library usage (MUI, Ant Design, shadcn, custom)
 - Check dark mode implementation quality: surface hierarchy, font weight adjustments, accent desaturation
 - Check z-index patterns: arbitrary values vs semantic scale
-- Output: `<session>/research/design-system-analysis.json`
+- Output: `{run_dir}/outputs/research/design-system-analysis.json`
 
 **Stream 2 -- Component Inventory**:
 - Find all UI component files; identify props/API surface
 - Identify states supported (hover, focus, disabled, etc.)
 - Check accessibility attributes (ARIA labels, roles)
 - Map inter-component dependencies and usage counts
-- Output: `<session>/research/component-inventory.json`
+- Output: `{run_dir}/outputs/research/component-inventory.json`
 
 **Stream 3 -- Accessibility Baseline**:
 - Check ARIA attribute usage patterns, keyboard navigation support
 - Assess color contrast ratios (if design tokens found)
 - Find focus management and semantic HTML patterns
-- Output: `<session>/research/accessibility-audit.json`
+- Output: `{run_dir}/outputs/research/accessibility-audit.json`
 
 **Stream 4 -- Design Intelligence (ui-ux-pro-max)**:
 - Call `Skill(skill="ui-ux-pro-max", args="<industry> <keywords> --design-system")` for design system recommendations
 - Call `Skill(skill="ui-ux-pro-max", args="accessibility animation responsive --domain ux")` for UX guidelines
 - Call `Skill(skill="ui-ux-pro-max", args="<keywords> --stack <detected-stack>")` for stack guidelines
 - Degradation: when unavailable, use LLM general knowledge, mark `_source: "llm-general-knowledge"`
-- Output: `<session>/research/design-intelligence.json`
+- Output: `{run_dir}/outputs/research/design-intelligence.json`
 
 **Stream 5 -- Visual Quality Baseline**:
 - Scan for AI slop tells (reference `specs/anti-patterns.md`): check for P1 items (AI color palette, gradient text, glassmorphism, all-buttons-primary, pure black/white)
@@ -77,7 +77,7 @@ Execute 4 analysis streams:
 - Check interaction states: count distinct states per interactive component (target: 8 per `specs/design-standards.md`)
 - Check UX writing quality: generic button labels (OK/Submit/Cancel), error messages without fix guidance, empty states without actions
 - Check dark mode: pure black backgrounds, non-desaturated accents, same font weights as light
-- Output: `<session>/research/visual-quality-baseline.json`
+- Output: `{run_dir}/outputs/research/visual-quality-baseline.json`
 
 Compile research summary metrics: design_system_exists, styling_approach, total_components, accessibility_level, design_intelligence_source, anti_patterns_count, visual_quality_score.
 
@@ -95,5 +95,5 @@ Compile research summary metrics: design_system_exists, styling_approach, total_
 
 2. If any file missing or invalid, re-run corresponding stream
 
-3. Update `<session>/wisdom/.msg/meta.json` under `researcher` namespace:
+3. Update `{run_dir}/work/team/wisdom/.msg/meta.json` under `researcher` namespace:
    - Read existing -> merge `{ "researcher": { detected_stack, component_count, wcag_level, di_source, scope } }` -> write back

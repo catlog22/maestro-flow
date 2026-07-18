@@ -20,7 +20,7 @@ message_types:
 | Optimization code changes | From IMPL task artifacts / git diff | Yes |
 | Optimization plan / detail | Varies by mode (see below) | Yes |
 | Benchmark results | Varies by mode (see below) | No |
-| .msg/meta.json | <session>/.msg/meta.json | Yes |
+| .msg/meta.json | {run_dir}/work/team/.msg/meta.json | Yes |
 
 1. Extract session path from task description
 2. **Detect branch/pipeline context** from task description:
@@ -32,9 +32,9 @@ message_types:
 | Neither present | - | Single mode -- review all optimization changes |
 
 3. **Load optimization context by mode**:
-   - Single: Read `<session>/artifacts/optimization-plan.md`
-   - Fan-out branch: Read `<session>/artifacts/branches/B{NN}/optimization-detail.md`
-   - Independent: Read `<session>/artifacts/pipelines/{P}/optimization-plan.md`
+   - Single: Read `{run_dir}/outputs/optimization-plan.md`
+   - Fan-out branch: Read `{run_dir}/outputs/branches/B{NN}/optimization-detail.md`
+   - Independent: Read `{run_dir}/outputs/pipelines/{P}/optimization-plan.md`
 
 4. Load .msg/meta.json for scoped optimizer namespace
 5. Identify changed files from optimizer context -- read ONLY files modified by this branch/pipeline
@@ -70,5 +70,5 @@ Classify overall verdict based on findings:
 | REJECT | Has Critical findings or fundamental approach flaw | Send fix_required + flag for strategist escalation |
 
 1. Write review report to scoped output path (single/fan-out/independent)
-2. Update `<session>/.msg/meta.json` under scoped namespace
+2. Update `{run_dir}/work/team/.msg/meta.json` under scoped namespace
 3. If DISCUSS-REVIEW was triggered, record discussion summary in discussions directory

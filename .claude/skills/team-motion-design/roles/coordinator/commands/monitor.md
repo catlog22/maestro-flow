@@ -65,8 +65,8 @@ Worker completed. Process and advance.
      - Optimize will-change usage
      - Verify reduced-motion fallback completeness
    CONTEXT:
-     - Session: <session-folder>
-     - Upstream artifacts: testing/reports/perf-report-<NNN>.md" })
+     - Session: {run_dir}/work/team
+     - Upstream artifacts: {run_dir}/outputs/testing/reports/perf-report-<NNN>.md" })
    TaskUpdate({ taskId: "ANIM-fix-<round>", owner: "animator" })
    ```
    Then create new MTEST task blocked by fix. Increment gc_state.round.
@@ -117,7 +117,7 @@ Pipeline Status (<pipeline-mode>):
 
 GC Rounds: 0/2
 Performance Gate: pending
-Session: <session-id>
+Session: <run-id>
 Commands: 'resume' to advance | 'check' to refresh
 ```
 
@@ -153,14 +153,14 @@ Agent({
   prompt: `## Role Assignment
 role: <role>
 role_spec: ~  or <project>/.claude/skills/team-motion-design/roles/<role>/role.md
-session: <session-folder>
-session_id: <session-id>
+session: {run_dir}/work/team
+session_id: <run-id>
 team_name: motion-design
 requirement: <task-description>
 inner_loop: <true|false>
 
 ## Progress Milestones
-session_id: <session-id>
+session_id: <run-id>
 Report progress via team_msg at natural phase boundaries (context loaded -> core work done -> verification).
 Report blockers immediately via team_msg type="blocker".
 Report completion via team_msg type="task_complete" after final SendMessage.

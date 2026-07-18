@@ -11,11 +11,11 @@ message_types: [state_update]
 
 | Input | Source | Required |
 |-------|--------|----------|
-| Built components | <session>/build/components/*.js, *.css | Yes |
-| Interaction blueprints | <session>/interaction/blueprints/*.md | Yes |
-| Research artifacts | <session>/research/browser-api-audit.json | No |
-| Previous audits | <session>/a11y/a11y-audit-*.md | Only for GC re-audit |
-| .msg/meta.json | <session>/wisdom/.msg/meta.json | Yes |
+| Built components | {run_dir}/outputs/build/components/*.js, *.css | Yes |
+| Interaction blueprints | {run_dir}/outputs/interaction/blueprints/*.md | Yes |
+| Research artifacts | {run_dir}/outputs/research/browser-api-audit.json | No |
+| Previous audits | {run_dir}/outputs/a11y/a11y-audit-*.md | Only for GC re-audit |
+| .msg/meta.json | {run_dir}/work/team/wisdom/.msg/meta.json | Yes |
 
 1. Extract session path from task description
 2. Read all built component files (JS + CSS)
@@ -112,7 +112,7 @@ Score: count(pass) / count(total_checks) * 10
 
 ## Phase 4: Report & Output
 
-1. Write audit report to `<session>/a11y/a11y-audit-{NNN}.md`:
+1. Write audit report to `{run_dir}/outputs/a11y/a11y-audit-{NNN}.md`:
 
 ```markdown
 # A11y Audit Report - {NNN}
@@ -153,5 +153,5 @@ Score: count(pass) / count(total_checks) * 10
 - New issues: [list]
 ```
 
-2. Update `<session>/wisdom/.msg/meta.json` under `a11y-tester` namespace:
+2. Update `{run_dir}/work/team/wisdom/.msg/meta.json` under `a11y-tester` namespace:
    - Read existing -> merge `{ "a11y-tester": { audit_id, score, critical_count, high_count, signal, timestamp } }` -> write back

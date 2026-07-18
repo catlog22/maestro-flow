@@ -79,7 +79,7 @@ TESTGEN -> TESTRUN -> (if pass_rate < 0.95 OR coverage < target) -> TESTGEN-fix 
 ## Session Directory
 
 ```
-.workflow/.team/TST-<slug>-<YYYY-MM-DD>/
+{run_dir}/work/team/
 ├── .msg/messages.jsonl          # Message bus log
 ├── .msg/meta.json               # Session metadata
 ├── wisdom/                     # Cross-task knowledge

@@ -7,7 +7,7 @@ Pheromone matrix structure, update formula, evaporation rule. Authoritative spec
 ## File Layout
 
 ```
-<session>/pheromone/
+{run_dir}/work/team/pheromone/
 ├── current.json         # latest state, overwritten each iteration
 ├── history/
 │   ├── 1.json           # snapshot after iteration 1

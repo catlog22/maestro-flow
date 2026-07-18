@@ -15,8 +15,8 @@ message_types: [state_update]
 | Session path | Extracted from task description | Yes |
 | Target (URL or file paths) | From task description CONTEXT | Yes |
 | WCAG level (AA/AAA) | From task description CONTEXT | Yes |
-| .msg/meta.json | <session>/.msg/meta.json | No |
-| Previous audit (re-audit) | <session>/audits/color/color-audit-*.md | Only for COLOR-002+ |
+| .msg/meta.json | {run_dir}/work/team/.msg/meta.json | No |
+| Previous audit (re-audit) | {run_dir}/outputs/audits/color/color-audit-*.md | Only for COLOR-002+ |
 
 1. Extract session path, target, and WCAG level from task description
 2. Determine audit type from subject: COLOR-001 -> initial audit, COLOR-002+ -> re-audit (verification)
@@ -45,7 +45,7 @@ Extract all color values from target:
 **Runtime analysis** (if Chrome DevTools available):
 - `mcp__chrome-devtools__navigate_page({ url: "<target-url>" })`
 - `mcp__chrome-devtools__evaluate_script({ expression: "..." })` with getComputedStyle to extract rendered colors from key elements (body, headings, links, buttons, inputs)
-- `mcp__chrome-devtools__take_screenshot({})` for visual evidence -> save to `<session>/evidence/`
+- `mcp__chrome-devtools__take_screenshot({})` for visual evidence -> save to `{run_dir}/evidence/`
 
 ### Step 2: Contrast Ratio Calculation
 
@@ -117,7 +117,7 @@ If dark mode exists (media query or data-attribute):
 
 ## Phase 4: Report Generation & Output
 
-1. Write audit report to `<session>/audits/color/color-audit-{NNN}.md` (or `<session>/re-audit/color-audit-{NNN}.md` for re-audits):
+1. Write audit report to `{run_dir}/outputs/audits/color/color-audit-{NNN}.md` (or `{run_dir}/outputs/re-audit/color-audit-{NNN}.md` for re-audits):
 
 ```markdown
 # Color Accessibility Audit - {NNN}
@@ -172,5 +172,5 @@ If dark mode exists (media query or data-attribute):
 | ... | X.X:1 FAIL | Y.Y:1 PASS | FIXED |
 ```
 
-3. Update `<session>/.msg/meta.json` under `color-auditor` namespace:
+3. Update `{run_dir}/work/team/.msg/meta.json` under `color-auditor` namespace:
    - Read existing -> merge `{ "color-auditor": { audit_id, total_combinations, pass_count, fail_count, critical_count, high_count, timestamp } }` -> write back

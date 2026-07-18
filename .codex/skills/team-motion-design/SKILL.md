@@ -40,11 +40,11 @@ contract:
     exit: []
 ---
 
-> **Agent timeout**: `spawn_agent` 异步执行且无内置超时 — 除明确短任务外一律 `spawn_agent` 后立即 `wait_agent({ timeout_ms: 3600000 })`（上限 1 小时）阻塞等待，绝不依赖 30000 默认值；`timed_out: true` 且 Agent 未完成时再次 `wait_agent` 续等，不丢弃。批量场景使用 `spawn_agents_on_csv({ max_runtime_seconds: 3600, ... })`。
-
 <required_reading>
 @~/.maestro/workflows/run-mode-lite.md
 </required_reading>
+
+> **Agent timeout**: `spawn_agent` 异步执行且无内置超时 — 除明确短任务外一律 `spawn_agent` 后立即 `wait_agent({ timeout_ms: 3600000 })`（上限 1 小时）阻塞等待，绝不依赖 30000 默认值；`timed_out: true` 且 Agent 未完成时再次 `wait_agent` 续等，不丢弃。批量场景使用 `spawn_agents_on_csv({ max_runtime_seconds: 3600, ... })`。
 
 # Team Motion Design
 
@@ -98,9 +98,9 @@ Parse `$ARGUMENTS`:
 ## Shared Constants
 
 - **Session prefix**: `MD`
-- **Session path**: `.workflow/.team/MD-<slug>-<date>/`
+- **Session path**: `{run_dir}/work/team/`
 - **CLI tools**: `maestro delegate --mode analysis` (read-only), `maestro delegate --mode write` (modifications)
-- **Message bus**: `mcp__maestro__team_msg(session_id=<session-id>, ...)`
+- **Message bus**: `mcp__maestro__team_msg(session_id=<run-id>, ...)`
 - **Max GC rounds**: 2
 
 ## Worker Spawn Template
@@ -128,22 +128,22 @@ spawn_agent({ task_name: "<role>", message: "Spawn <role> worker for <task-id>",
 ## Session Directory
 
 ```
-.workflow/.team/MD-<slug>-<date>/
+{run_dir}/work/team/
 +-- .msg/
 |   +-- messages.jsonl         # Team message bus
 |   +-- meta.json              # Pipeline config + GC state
-+-- research/                  # Motion researcher output
++-- {run_dir}/outputs/research/                  # Motion researcher output
 |   +-- perf-traces/           # Chrome DevTools performance traces
 |   +-- animation-inventory.json
 |   +-- performance-baseline.json
 |   +-- easing-catalog.json
-+-- choreography/              # Choreographer output
++-- {run_dir}/outputs/choreography/              # Choreographer output
 |   +-- motion-tokens.json
 |   +-- sequences/             # Scroll choreography sequences
-+-- animations/                # Animator output
++-- {run_dir}/outputs/animations/                # Animator output
 |   +-- keyframes/             # CSS @keyframes files
 |   +-- orchestrators/         # JS animation orchestrators
-+-- testing/                   # Motion tester output
++-- {run_dir}/outputs/testing/                   # Motion tester output
 |   +-- traces/                # Performance trace data
 |   +-- reports/               # Performance reports
 +-- wisdom/                    # Cross-task knowledge

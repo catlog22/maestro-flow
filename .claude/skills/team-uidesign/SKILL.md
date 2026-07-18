@@ -61,9 +61,9 @@ Parse `$ARGUMENTS`:
 ## Shared Constants
 
 - **Session prefix**: `UDS`
-- **Session path**: `.workflow/.team/UDS-<slug>-<date>/`
+- **Session path**: `{run_dir}/work/team/`
 - **CLI tools**: `maestro delegate --mode analysis` (read-only), `maestro delegate --mode write` (modifications)
-- **Message bus**: `mcp__maestro__team_msg(session_id=<session-id>, ...)`
+- **Message bus**: `mcp__maestro__team_msg(session_id=<run-id>, ...)`
 - **Max GC rounds**: 2
 
 ## Worker Spawn Template
@@ -80,14 +80,14 @@ Agent({
   prompt: `## Role Assignment
 role: <role>
 role_spec: <skill_root>/roles/<role>/role.md
-session: <session-folder>
-session_id: <session-id>
+session: {run_dir}/work/team
+session_id: <run-id>
 team_name: uidesign
 requirement: <task-description>
 inner_loop: false
 
 ## Progress Milestones
-session_id: <session-id>
+session_id: <run-id>
 Report progress via team_msg at natural phase boundaries (context loaded -> core work done -> verification).
 Report blockers immediately via team_msg type="blocker".
 Report completion via team_msg type="task_complete" after final SendMessage.
@@ -115,23 +115,23 @@ Execute built-in Phase 1 (task discovery) -> role Phase 2-4 -> built-in Phase 5 
 ## Session Directory
 
 ```
-.workflow/.team/UDS-<slug>-<date>/
+{run_dir}/work/team/
 ├── .msg/
 │   ├── messages.jsonl         # Team message bus
 │   └── meta.json              # Pipeline config + GC state
-├── research/                  # Researcher output
+├── {run_dir}/outputs/research/                  # Researcher output
 │   ├── design-system-analysis.json
 │   ├── component-inventory.json
 │   ├── accessibility-audit.json
 │   ├── design-intelligence.json
 │   └── visual-quality-baseline.json
-├── design/                    # Designer output
+├── {run_dir}/outputs/design/                    # Designer output
 │   ├── design-tokens.json
 │   ├── component-specs/
 │   └── layout-specs/
-├── audit/                     # Reviewer output
+├── {run_dir}/outputs/audit/                     # Reviewer output
 │   └── audit-*.md
-├── build/                     # Implementer output
+├── {run_dir}/outputs/build/                     # Implementer output
 │   ├── token-files/
 │   └── component-files/
 └── wisdom/                    # Cross-task knowledge

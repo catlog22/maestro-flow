@@ -62,8 +62,8 @@ Worker completed. Process and advance.
      - Parse verification feedback for specific regressions
      - Apply targeted fixes for regression issues only
    CONTEXT:
-     - Session: <session-folder>
-     - Upstream artifacts: verification/verify-report.md" })
+     - Session: {run_dir}/work/team
+     - Upstream artifacts: {run_dir}/outputs/verification/verify-report.md" })
    TaskUpdate({ taskId: "OPT-fix-<round>", owner: "optimizer" })
    ```
    Then create new VERIFY task blocked by OPT-fix. Increment gc_state.round.
@@ -114,7 +114,7 @@ Pipeline Status (<pipeline-mode>):
 
 GC Rounds: 0/2
 Score: <before-score>/32 -> pending
-Session: <session-id>
+Session: <run-id>
 Commands: 'resume' to advance | 'check' to refresh
 ```
 
@@ -150,14 +150,14 @@ Agent({
   prompt: `## Role Assignment
 role: <role>
 role_spec: <project>/.claude/skills/team-ui-polish/roles/<role>/role.md
-session: <session-folder>
-session_id: <session-id>
+session: {run_dir}/work/team
+session_id: <run-id>
 team_name: ui-polish
 requirement: <task-description>
 inner_loop: <true|false>
 
 ## Progress Milestones
-session_id: <session-id>
+session_id: <run-id>
 Report progress via team_msg at natural phase boundaries (context loaded -> core work done -> verification).
 Report blockers immediately via team_msg type="blocker".
 Report completion via team_msg type="task_complete" after final SendMessage.

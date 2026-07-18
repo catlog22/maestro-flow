@@ -14,6 +14,16 @@
 
 ## Execution
 
+### Step 1.0: Establish Run (see run-mode.md)
+
+If an orchestrator injected `run_id` / `run_dir` in the birth packet, use them and do NOT call `maestro run create`. Otherwise self-start:
+
+```bash
+maestro run create skill-iter-tune --session <YYYYMMDD-skill-iter-tune-{topic}> --intent "<short phrase>"
+```
+
+Session slug is ASCII-only, ≤64 chars (topic derived from the target skill name). Retain the returned `run_id` and `run_dir`; the `{run_dir}/outputs/...` workspace below is created under it.
+
 ### Step 1.1: Parse Input
 
 Parse `$ARGUMENTS` to extract skill paths and test scenario.

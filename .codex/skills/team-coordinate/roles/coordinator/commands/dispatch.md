@@ -26,8 +26,8 @@ Create task chains from dynamic dependency graphs. Builds pipelines from the tas
 
 | Input | Source | Required |
 |-------|--------|----------|
-| Task analysis | `<session-folder>/task-analysis.json` | Yes |
-| Session file | `<session-folder>/team-session.json` | Yes |
+| Task analysis | `{run_dir}/work/team/task-analysis.json` | Yes |
+| Session file | `{run_dir}/work/team/team-session.json` | Yes |
 | Role registry | `team-session.json#roles` | Yes |
 | Scope | User requirements description | Yes |
 
@@ -49,15 +49,15 @@ TASK:
   - <step 2>
   - <step 3>
 CONTEXT:
-  - Session: <session-folder>
+  - Session: {run_dir}/work/team
   - Upstream artifacts: <artifact-1.md>, <artifact-2.md>
   - Key files: <file1>, <file2>
-  - Shared state: team_msg(operation="get_state", session_id=<session-id>)
+  - Shared state: team_msg(operation="get_state", session_id=<run-id>)
 EXPECTED: <deliverable path> + <quality criteria>
 CONSTRAINTS: <scope limits>
 ---
 InnerLoop: <true|false>
-RoleSpec: <session-folder>/role-specs/<role-name>.md"
+RoleSpec: {run_dir}/work/team/role-specs/<role-name>.md"
 })
 update_plan({ taskId: "<PREFIX>-<NNN>", addBlockedBy: [<dependency-list from graph>], owner: "<role-name>" })
 ```
@@ -76,15 +76,15 @@ TASK:
   - <step 2 from task-analysis.json#tasks[].steps[]>
   - <step 3 from task-analysis.json#tasks[].steps[]>
 CONTEXT:
-  - Session: <session-folder>
+  - Session: {run_dir}/work/team
   - Upstream artifacts: <comma-separated list from task-analysis.json#tasks[].upstream_artifacts[]>
   - Key files: <comma-separated list from task-analysis.json#tasks[].key_files[]>
-  - Shared state: team_msg(operation="get_state", session_id=<session-id>)
+  - Shared state: team_msg(operation="get_state", session_id=<run-id>)
 EXPECTED: <artifact path from task-analysis.json#capabilities[].artifacts[]> + <quality criteria based on capability type>
 CONSTRAINTS: <constraints from task-analysis.json#tasks[].constraints>
 ---
 InnerLoop: <true|false>
-RoleSpec: <session-folder>/role-specs/<role-name>.md
+RoleSpec: {run_dir}/work/team/role-specs/<role-name>.md
 ```
 
 **Field Mapping**:
@@ -111,7 +111,7 @@ RoleSpec: <session-folder>/role-specs/<role-name>.md
 | No circular deps | Topological sort succeeds without cycle |
 | All owners valid | Every task owner exists in team-session.json#roles |
 | All blockedBy valid | Every blockedBy references an existing task subject |
-| Session reference | Every task description contains `Session: <session-folder>` |
+| Session reference | Every task description contains `Session: {run_dir}/work/team` |
 | RoleSpec reference | Every task description contains `RoleSpec: <path>` |
 
 ## Phase 4: Validation

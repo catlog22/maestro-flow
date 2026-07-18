@@ -106,8 +106,8 @@
   ],
 
   "session_directory": {
-    "pattern": ".workflow/.team/UAN-{slug}-{date}",
-    "subdirectories": ["explorations", "analyses", "discussions"]
+    "pattern": "{run_dir}/work/team/",
+    "subdirectories": ["{run_dir}/work/team/explorations", "{run_dir}/outputs/analyses", "{run_dir}/evidence/discussions"]
   },
 
   "analysis_dimensions": {

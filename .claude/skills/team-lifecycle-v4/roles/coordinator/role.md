@@ -42,14 +42,14 @@ When coordinator needs to execute a specific phase:
 | Manual resume | Args contain "resume" or "continue" | -> handleResume (monitor.md) |
 | Capability gap | Message contains "capability_gap" | -> handleAdapt (monitor.md) |
 | Pipeline complete | All tasks completed | -> handleComplete (monitor.md) |
-| Interrupted session | Active session in .workflow/.team/TLV4-* | -> Phase 0 |
+| Interrupted session | Active session in {run_dir}/work/team/ | -> Phase 0 |
 | New session | None of above | -> Phase 1 |
 
 For callback/check/resume/adapt/complete: load @commands/monitor.md, execute handler, STOP.
 
 ## Phase 0: Session Resume Check
 
-1. Scan .workflow/.team/TLV4-*/team-session.json for active/paused sessions
+1. Scan {run_dir}/work/team/team-session.json for active/paused sessions
 2. No sessions -> Phase 1
 3. Single session -> reconcile:
    a. Audit TaskList, reset in_progress->pending
@@ -84,7 +84,7 @@ TEXT-LEVEL ONLY. No source code reading.
 8. Initialize pipeline via team_msg state_update:
    ```
    mcp__maestro__team_msg({
-     operation: "log", session_id: "<id>", from: "coordinator",
+     operation: "log", session_id: "<run-id>", from: "coordinator",
      type: "state_update", summary: "Session initialized",
      data: { pipeline_mode: "<mode>", pipeline_stages: [...], team_name: "<name>" }
    })

@@ -14,7 +14,7 @@ message_types: [state_update]
 | Refactoring code changes | From REFACTOR task artifacts / git diff | Yes |
 | Refactoring plan / detail | Varies by mode (see below) | Yes |
 | Validation results | Varies by mode (see below) | No |
-| .msg/meta.json | <session>/wisdom/.msg/meta.json | Yes |
+| .msg/meta.json | {run_dir}/work/team/wisdom/.msg/meta.json | Yes |
 
 1. Extract session path from task description
 2. **Detect branch/pipeline context** from task description:
@@ -101,9 +101,9 @@ Classify overall verdict based on findings:
    - Independent: `{run_dir}/outputs/pipelines/{P}/review-report.md`
    - Content: Per-dimension findings with severity, file:line, description; Overall verdict with rationale; Specific fix instructions for REVISE/REJECT verdicts
 
-2. Update `<session>/wisdom/.msg/meta.json` under scoped namespace:
+2. Update `{run_dir}/work/team/wisdom/.msg/meta.json` under scoped namespace:
    - Single: merge `{ "reviewer": { verdict, finding_count, critical_count, dimensions_reviewed } }`
    - Fan-out: merge `{ "reviewer.B{NN}": { verdict, finding_count, critical_count, dimensions_reviewed } }`
    - Independent: merge `{ "reviewer.{P}": { verdict, finding_count, critical_count, dimensions_reviewed } }`
 
-3. If DISCUSS-REVIEW was triggered, record discussion summary in `<session>/discussions/DISCUSS-REVIEW.md` (or `DISCUSS-REVIEW-B{NN}.md` for branch-scoped discussions)
+3. If DISCUSS-REVIEW was triggered, record discussion summary in `{run_dir}/evidence/discussions/DISCUSS-REVIEW.md` (or `DISCUSS-REVIEW-B{NN}.md` for branch-scoped discussions)

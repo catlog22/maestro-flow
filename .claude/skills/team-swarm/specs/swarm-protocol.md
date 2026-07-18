@@ -46,7 +46,7 @@ Master protocol document for team-swarm: defines how the LLM coordinator and Pyt
 
 ```
 [Coordinator] init phase
-  └─> python aco.py init --config <session>/swarm-config.json
+  └─> python aco.py init --config {run_dir}/work/team/swarm-config.json
        └─> writes pheromone/current.json + task-space.json
 
 [Coordinator] iteration k (k = 1..K):
@@ -74,7 +74,7 @@ Master protocol document for team-swarm: defines how the LLM coordinator and Pyt
 ## Script ↔ Coordinator Contract
 
 All scripts MUST:
-- Read from `<session>/...` (session path passed via `--session` flag)
+- Read from `{run_dir}/work/team/...` (session path passed via `--session` flag)
 - Write JSON to stdout for coordinator parsing (no prose)
 - Use exit code 0 = success, 1 = error, 2 = config invalid
 - Be idempotent: calling `update` twice for same iteration is safe

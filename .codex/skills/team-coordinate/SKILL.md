@@ -33,11 +33,11 @@ contract:
     exit: []
 ---
 
-> **Agent timeout**: `spawn_agent` 异步执行且无内置超时 — 除明确短任务外一律 `spawn_agent` 后立即 `wait_agent({ timeout_ms: 3600000 })`（上限 1 小时）阻塞等待，绝不依赖 30000 默认值；`timed_out: true` 且 Agent 未完成时再次 `wait_agent` 续等，不丢弃。批量场景使用 `spawn_agents_on_csv({ max_runtime_seconds: 3600, ... })`。
-
 <required_reading>
 @~/.maestro/workflows/run-mode-lite.md
 </required_reading>
+
+> **Agent timeout**: `spawn_agent` 异步执行且无内置超时 — 除明确短任务外一律 `spawn_agent` 后立即 `wait_agent({ timeout_ms: 3600000 })`（上限 1 小时）阻塞等待，绝不依赖 30000 默认值；`timed_out: true` 且 Agent 未完成时再次 `wait_agent` 续等，不丢弃。批量场景使用 `spawn_agents_on_csv({ max_runtime_seconds: 3600, ... })`。
 
 # Team Coordinate 
 
@@ -72,9 +72,9 @@ Universal team coordination skill: analyze task -> generate role-specs -> dispat
 | Constant | Value |
 |----------|-------|
 | Session prefix | `TC` |
-| Session path | `.workflow/.team/TC-<slug>-<date>/` |
+| Session path | `{run_dir}/work/team/` |
 | Worker agent | `team-worker` |
-| Message bus | `mcp__maestro__team_msg(session_id=<session-id>, ...)` |
+| Message bus | `mcp__maestro__team_msg(session_id=<run-id>, ...)` |
 | CLI analysis | `maestro delegate --mode analysis` |
 | CLI write | `maestro delegate --mode write` |
 | Max roles | 5 |
@@ -94,7 +94,7 @@ Only coordinator is statically registered. All other roles are dynamic, stored a
 | Role | File | Type |
 |------|------|------|
 | coordinator | [roles/coordinator/role.md](roles/coordinator/role.md) | built-in orchestrator |
-| (dynamic) | `<session>/role-specs/<role-name>.md` | runtime-generated role-spec |
+| (dynamic) | `{run_dir}/work/team/role-specs/<role-name>.md` | runtime-generated role-spec |
 
 ### CLI Tool Usage
 
@@ -197,7 +197,7 @@ request_user_input({
 ## Session Directory
 
 ```
-.workflow/.team/TC-<slug>-<date>/
+{run_dir}/work/team/
 +-- team-session.json           # Session state + dynamic role registry
 +-- task-analysis.json          # Phase 1 output: capabilities, dependency graph
 +-- role-specs/                 # Dynamic role-spec definitions (generated Phase 2)
@@ -215,7 +215,7 @@ request_user_input({
 +-- explorations/               # Shared explore cache
 |   +-- cache-index.json
 |   +-- explore-<angle>.json
-+-- discussions/                # Inline discuss records
++-- {run_dir}/evidence/discussions/                # Inline discuss records
 |   +-- <round>.md
 ```
 
@@ -254,7 +254,7 @@ request_user_input({
 
 Coordinator supports `resume` / `continue` for interrupted sessions:
 
-1. Scan `.workflow/.team/TC-*/team-session.json` for active/paused sessions
+1. Scan `{run_dir}/work/team/team-session.json` for active/paused sessions
 2. Multiple matches -> request_user_input for selection
 3. Audit list_agents -> reconcile session state <-> task status
 4. Reset in_progress -> pending (interrupted tasks)

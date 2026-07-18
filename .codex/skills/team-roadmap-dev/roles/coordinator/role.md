@@ -79,7 +79,7 @@ For callback/check/resume/complete: load `@commands/monitor.md` and execute matc
 ### Router Implementation
 
 1. **Load session context** (if exists):
-   - Scan `.workflow/.team/RD-*/.msg/meta.json` for active/paused sessions
+   - Scan `{run_dir}/work/team/.msg/meta.json` for active/paused sessions
    - If found, extract session folder path, status, and pipeline mode
 
 2. **Parse $ARGUMENTS** for detection keywords:
@@ -137,7 +137,7 @@ Before every send_message, log via `mcp__maestro__team_msg`:
 ```
 mcp__maestro__team_msg({
   operation: "log",
-  session_id: <session-id>,
+  session_id: <run-id>,
   from: "coordinator",
   to: <target-role>,
   type: <message-type>,
@@ -148,7 +148,7 @@ mcp__maestro__team_msg({
 **CLI fallback** (when MCP unavailable):
 
 ```
-Bash("ccw team log --session-id <session-id> --from coordinator --type <type> --json")
+Bash("ccw team log --session-id <run-id> --from coordinator --type <type> --json")
 ```
 
 ---
@@ -171,8 +171,8 @@ Bash("ccw team log --session-id <session-id> --from coordinator --type <type> --
 | File not found | Invoke `spawn_agent({ task_name: "workflow:init", message: "Execute skill workflow:init" })` |
 
 4. Load project context from project-tech.json
-5. Create session directory: `.workflow/.team/RD-<slug>-<date>/`
-6. Initialize state.md with project reference, current position, task description
+5. Bind `sessionFolder = {run_dir}` and create team state directory `{run_dir}/work/team/`
+6. Initialize `{run_dir}/work/team/state.md` with project reference, current position, task description
 
 **Success**: Session directory created, state.md initialized.
 
@@ -190,7 +190,7 @@ Delegate to `@commands/roadmap-discuss.md`:
 | 4 | Produce config.json with session settings |
 | 5 | Update state.md with roadmap reference |
 
-**Produces**: `<session>/roadmap.md`, `<session>/config.json`
+**Produces**: `{run_dir}/outputs/roadmap.md`, `{run_dir}/work/team/config.json`
 
 **Command**: [commands/roadmap-discuss.md](commands/roadmap-discuss.md)
 
@@ -202,7 +202,7 @@ Delegate to `@commands/roadmap-discuss.md`:
 
 1. Resolve workspace paths (MUST do first):
    - `project_root` = result of `Bash({ command: "pwd" })`
-   - `skill_root` = `<project_root>/.claude/skills/team-roadmap-dev`
+   - `skill_root` = `<project_root>/.codex/skills/team-roadmap-dev`
 
 2. Call `TeamCreate({ team_name: "roadmap-dev" })`
 
@@ -211,7 +211,7 @@ Delegate to `@commands/roadmap-discuss.md`:
 // Use team_msg to write pipeline metadata to .msg/meta.json
 mcp__maestro__team_msg({
   operation: "log",
-  session_id: "<session-id>",
+  session_id: "<run-id>",
   from: "coordinator",
   type: "state_update",
   summary: "Session initialized",
@@ -232,7 +232,7 @@ mcp__maestro__team_msg({
 | 1 | Read roadmap.md for phase definitions |
 | 2 | Create PLAN-101 task for first phase |
 | 3 | Set proper owner and dependencies |
-| 4 | Include `Session: <session-folder>` in task description |
+| 4 | Include `Session: {run_dir}/work/team` in task description |
 
 **Produces**: PLAN-101 task created, workers spawned
 

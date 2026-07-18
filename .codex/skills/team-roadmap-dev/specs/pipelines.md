@@ -90,6 +90,6 @@ Phase N: PLAN-N01 --> EXEC-N01 --> VERIFY-N01
 
 | Prefix | Role | Role Spec | Inner Loop |
 |--------|------|-----------|------------|
-| PLAN | planner | `~  or <project>/.claude/skills/team-roadmap-dev/roles/planner/role.md` | true |
-| EXEC | executor | `~  or <project>/.claude/skills/team-roadmap-dev/roles/executor/role.md` | true |
-| VERIFY | verifier | `~  or <project>/.claude/skills/team-roadmap-dev/roles/verifier/role.md` | true |
+| PLAN | planner | `~  or <project>/.codex/skills/team-roadmap-dev/roles/planner/role.md` | true |
+| EXEC | executor | `~  or <project>/.codex/skills/team-roadmap-dev/roles/executor/role.md` | true |
+| VERIFY | verifier | `~  or <project>/.codex/skills/team-roadmap-dev/roles/verifier/role.md` | true |

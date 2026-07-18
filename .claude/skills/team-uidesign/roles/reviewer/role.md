@@ -11,11 +11,11 @@ message_types: [state_update]
 
 | Input | Source | Required |
 |-------|--------|----------|
-| Design artifacts | <session>/design/*.json, <session>/design/component-specs/*.md | Yes |
-| Design intelligence | <session>/research/design-intelligence.json | Yes |
+| Design artifacts | {run_dir}/outputs/design/*.json, {run_dir}/outputs/design/component-specs/*.md | Yes |
+| Design intelligence | {run_dir}/outputs/research/design-intelligence.json | Yes |
 | Audit history | .msg/meta.json -> reviewer namespace | No |
-| Build artifacts | <session>/build/**/* | Only for final audit |
-| .msg/meta.json | <session>/wisdom/.msg/meta.json | Yes |
+| Build artifacts | {run_dir}/outputs/build/**/* | Only for final audit |
+| .msg/meta.json | {run_dir}/work/team/wisdom/.msg/meta.json | Yes |
 
 1. Extract session path from task description
 2. Detect audit type from subject: "token" -> Token audit, "component" -> Component audit, "final" -> Final audit, "sync" -> Sync point audit
@@ -54,7 +54,7 @@ Score 8 dimensions on 0-4 scale (reference `specs/scoring-guide.md`). Total: 0-3
 
 ## Phase 4: Report & Output
 
-1. Write audit report to `<session>/audit/audit-{NNN}.md`:
+1. Write audit report to `{run_dir}/outputs/audit/audit-{NNN}.md`:
    - Summary: overall score (out of 32), signal, rating band (Excellent/Good/Acceptable/Poor/Critical)
    - Sync Point Status (if applicable): PASSED/BLOCKED
    - 8-Dimension Scores table: Anti-AI-Slop, Color Quality, Typography Quality, Spacing & Layout, Motion & Animation, Interaction States, Visual Hierarchy, Responsive (each 0-4 with weight and weighted score)
@@ -63,5 +63,5 @@ Score 8 dimensions on 0-4 scale (reference `specs/scoring-guide.md`). Total: 0-3
    - GC Loop Status: signal, action required
    - Trend analysis (if audit_history exists): improving/stable/declining
 
-2. Update `<session>/wisdom/.msg/meta.json` under `reviewer` namespace:
+2. Update `{run_dir}/work/team/wisdom/.msg/meta.json` under `reviewer` namespace:
    - Read existing -> merge `{ "reviewer": { audit_id, score, critical_count, signal, is_sync_point, audit_type, timestamp } }` -> write back

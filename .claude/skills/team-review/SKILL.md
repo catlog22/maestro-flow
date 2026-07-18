@@ -53,10 +53,10 @@ Parse `$ARGUMENTS`:
 ## Shared Constants
 
 - **Session prefix**: `RV`
-- **Session path**: `.workflow/.team/RV-<slug>-<date>/`
+- **Session path**: `{run_dir}/work/team/`
 - **Team name**: `review`
 - **CLI tools**: `maestro delegate --mode analysis` (read-only), `maestro delegate --mode write` (modifications)
-- **Message bus**: `mcp__maestro__team_msg(session_id=<session-id>, ...)`
+- **Message bus**: `mcp__maestro__team_msg(session_id=<run-id>, ...)`
 
 ## Worker Spawn Template
 
@@ -72,14 +72,14 @@ Agent({
   prompt: `## Role Assignment
 role: <role>
 role_spec: <skill_root>/roles/<role>/role.md
-session: <session-folder>
-session_id: <session-id>
+session: {run_dir}/work/team
+session_id: <run-id>
 team_name: review
 requirement: <task-description>
 inner_loop: <true|false>
 
 ## Progress Milestones
-session_id: <session-id>
+session_id: <run-id>
 Report progress via team_msg at natural phase boundaries (context loaded -> core work done -> verification).
 Report blockers immediately via team_msg type="blocker".
 Report completion via team_msg type="task_complete" after final SendMessage.
@@ -123,13 +123,16 @@ AskUserQuestion({
 ## Session Directory
 
 ```
-.workflow/.team/RV-<slug>-<date>/
-├── .msg/messages.jsonl     # Team message bus
-├── .msg/meta.json          # Session state + cross-role state
-├── wisdom/                 # Cross-task knowledge
-├── scan/                   # Scanner output
-├── review/                 # Reviewer output
-└── fix/                    # Fixer output
+{run_dir}/
+├── outputs/
+│   ├── scan/               # Scanner output
+│   ├── review/             # Reviewer output
+│   └── fix/                # Fixer output
+├── report.md              # Human-readable synthesis + handoff
+└── work/team/             # Team coordination (non-artifact)
+    ├── .msg/messages.jsonl # Team message bus
+    ├── .msg/meta.json      # Message-bus state + cross-role state
+    └── wisdom/             # Cross-task knowledge
 ```
 
 ## Specs Reference

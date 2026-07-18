@@ -18,9 +18,9 @@ message_types:
 | Task description | From task subject/description | Yes |
 | Session path | Extracted from task description | Yes |
 | Review type | Extracted from task description | No (default: code-review) |
-| Design intelligence | <session>/analysis/design-intelligence.json | No |
-| Design tokens | <session>/architecture/design-tokens.json | No |
-| .msg/meta.json | <session>/.msg/meta.json | No |
+| Design intelligence | {run_dir}/outputs/analysis/design-intelligence.json | No |
+| Design tokens | {run_dir}/outputs/architecture/design-tokens.json | No |
+| .msg/meta.json | {run_dir}/work/team/.msg/meta.json | No |
 
 1. Extract session path and review type from task description
 2. Load design intelligence (for anti-patterns, must-have rules)
@@ -30,8 +30,8 @@ message_types:
 
 | Type | Files to Review |
 |------|-----------------|
-| architecture-review | `<session>/architecture/**/*` |
-| token-review | `<session>/architecture/**/*` |
+| architecture-review | `{run_dir}/outputs/architecture/**/*` |
+| token-review | `{run_dir}/outputs/architecture/**/*` |
 | code-review | `src/**/*.{tsx,jsx,vue,svelte,html,css}` |
 | final | `src/**/*.{tsx,jsx,vue,svelte,html,css}` |
 
@@ -74,6 +74,6 @@ message_types:
 | Verdict determined | Score calculated | Verdict assigned |
 | Issues categorized | Severity labels | All issues have severity |
 
-Write audit report to `<session>/qa/audit-<NNN>.md` with: summary, dimension scores, issues by severity, passed dimensions.
+Write audit report to `{run_dir}/outputs/qa/audit-<NNN>.md` with: summary, dimension scores, issues by severity, passed dimensions.
 
 Update .msg/meta.json: append to `qa_history` array.

@@ -4,7 +4,7 @@
   "team_display_name": "UX Improve",
   "team_purpose": "Systematically discover and fix UI/UX interaction issues including unresponsive buttons, missing feedback, and state refresh problems",
   "skill_name": "team-ux-improve",
-  "skill_path": "~  or <project>/.claude/skills/team-ux-improve/",
+  "skill_path": "~  or <project>/.codex/skills/team-ux-improve/",
   "worker_agent": "team-worker",
   "pipeline_type": "Standard",
   "completion_action": "interactive",

@@ -44,14 +44,14 @@ When coordinator needs to execute a command (analyze, dispatch, monitor):
 | Manual resume | Args contain "resume" or "continue" | -> handleResume (monitor.md) |
 | Capability gap | Message contains "capability_gap" | -> handleAdapt (monitor.md) |
 | Pipeline complete | All tasks have status "completed" | -> handleComplete (monitor.md) |
-| Interrupted session | Active/paused session exists in .workflow/.team/UDS-* | -> Phase 0 |
+| Interrupted session | Active/paused session exists in {run_dir}/work/team/ | -> Phase 0 |
 | New session | None of above | -> Phase 1 |
 
 For callback/check/resume/adapt/complete: load `@commands/monitor.md`, execute matched handler, STOP.
 
 ## Phase 0: Session Resume Check
 
-1. Scan `.workflow/.team/UDS-*/.msg/meta.json` for active/paused sessions
+1. Scan `{run_dir}/work/team/.msg/meta.json` for active/paused sessions
 2. No sessions -> Phase 1
 3. Single session -> reconcile (audit list_agents, reset in_progress->pending, rebuild team, kick first ready task)
 4. Multiple -> request_user_input for selection
@@ -93,18 +93,18 @@ TEXT-LEVEL ONLY. No source code reading.
 
 1. Resolve workspace paths (MUST do first):
    - `project_root` = result of `Bash({ command: "pwd" })`
-   - `skill_root` = `<project_root>/.claude/skills/team-uidesign`
+   - `skill_root` = `<project_root>/.codex/skills/team-uidesign`
 2. Generate session ID: `UDS-<slug>-<YYYY-MM-DD>`
 3. Create session folder structure:
    ```
-   .workflow/.team/UDS-<slug>-<date>/research/
-   .workflow/.team/UDS-<slug>-<date>/design/component-specs/
-   .workflow/.team/UDS-<slug>-<date>/design/layout-specs/
-   .workflow/.team/UDS-<slug>-<date>/audit/
-   .workflow/.team/UDS-<slug>-<date>/build/token-files/
-   .workflow/.team/UDS-<slug>-<date>/build/component-files/
-   .workflow/.team/UDS-<slug>-<date>/wisdom/
-   .workflow/.team/UDS-<slug>-<date>/.msg/
+   {run_dir}/outputs/research/
+   {run_dir}/outputs/design/component-specs/
+   {run_dir}/outputs/design/layout-specs/
+   {run_dir}/outputs/audit/
+   {run_dir}/outputs/build/token-files/
+   {run_dir}/outputs/build/component-files/
+   {run_dir}/work/team/wisdom/
+   {run_dir}/work/team/.msg/
    ```
 4. Initialize `.msg/meta.json` via team_msg state_update with pipeline metadata
 5. TeamCreate(team_name="uidesign")
@@ -135,15 +135,15 @@ Delegate to `@commands/monitor.md#handleSpawnNext`:
 
 | Deliverable | Path |
 |-------------|------|
-| Design System Analysis | <session>/research/design-system-analysis.json |
-| Component Inventory | <session>/research/component-inventory.json |
-| Accessibility Audit | <session>/research/accessibility-audit.json |
-| Design Intelligence | <session>/research/design-intelligence.json |
-| Design Tokens | <session>/design/design-tokens.json |
-| Component Specs | <session>/design/component-specs/*.md |
-| Audit Reports | <session>/audit/audit-*.md |
-| Token Files | <session>/build/token-files/* |
-| Component Files | <session>/build/component-files/* |
+| Design System Analysis | {run_dir}/outputs/research/design-system-analysis.json |
+| Component Inventory | {run_dir}/outputs/research/component-inventory.json |
+| Accessibility Audit | {run_dir}/outputs/research/accessibility-audit.json |
+| Design Intelligence | {run_dir}/outputs/research/design-intelligence.json |
+| Design Tokens | {run_dir}/outputs/design/design-tokens.json |
+| Component Specs | {run_dir}/outputs/design/component-specs/*.md |
+| Audit Reports | {run_dir}/outputs/audit/audit-*.md |
+| Token Files | {run_dir}/outputs/build/token-files/* |
+| Component Files | {run_dir}/outputs/build/component-files/* |
 
 3. Calculate: completed_tasks, gc_rounds, sync_points_passed, final_audit_score
 4. Output pipeline summary with [coordinator] prefix

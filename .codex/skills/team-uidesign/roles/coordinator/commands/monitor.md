@@ -69,8 +69,8 @@ Worker completed. Process and advance.
      - Parse audit feedback for specific issues
      - Apply targeted fixes
    CONTEXT:
-     - Session: <session-folder>
-     - Upstream artifacts: audit/audit-<NNN>.md" })
+     - Session: {run_dir}/work/team
+     - Upstream artifacts: {run_dir}/outputs/audit/audit-<NNN>.md" })
    update_plan({ taskId: "DESIGN-fix-<round>", owner: "designer" })
    ```
    Then create new AUDIT task blocked by fix. Increment gc_state.round.
@@ -122,7 +122,7 @@ Pipeline Status (<pipeline-mode>):
 
 GC Rounds: 0/2
 Sync Points: 0/<expected>
-Session: <session-id>
+Session: <run-id>
 Commands: 'resume' to advance | 'check' to refresh
 ```
 

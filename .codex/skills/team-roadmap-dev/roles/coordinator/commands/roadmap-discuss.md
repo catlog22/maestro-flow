@@ -21,7 +21,7 @@ Direct interaction via request_user_input. No delegation to workers or CLI tools
 
 | Parameter | Source | Description |
 |-----------|--------|-------------|
-| `sessionFolder` | From coordinator Phase 1 | Session artifact directory |
+| `sessionFolder` | From coordinator Phase 1 | Canonical `{run_dir}` root |
 | `taskDescription` | From coordinator Phase 1 | User's original task description |
 | `projectTech` | Loaded in Phase 1 | Parsed project-tech.json |
 | `projectGuidelines` | Loaded in Phase 1 | Parsed specs/*.md (nullable) |
@@ -182,7 +182,7 @@ request_user_input({
 #### roadmap.md
 
 ```javascript
-Write(`${sessionFolder}/roadmap.md`, roadmapContent)
+Write(`${sessionFolder}/outputs/roadmap.md`, roadmapContent)
 ```
 
 **roadmap.md format**:
@@ -234,7 +234,7 @@ Depth: {depth}
 #### config.json
 
 ```javascript
-Write(`${sessionFolder}/config.json`, JSON.stringify({
+Write(`${sessionFolder}/work/team/config.json`, JSON.stringify({
   mode: mode,           // "interactive" | "yolo" | "custom"
   depth: depth,         // "quick" | "standard" | "comprehensive"
   auto_advance: mode === "yolo",
@@ -265,7 +265,7 @@ Write(`${sessionFolder}/config.json`, JSON.stringify({
 
 ```javascript
 // Transition Phase 0 → Phase 1
-Edit(`${sessionFolder}/state.md`, {
+Edit(`${sessionFolder}/work/team/state.md`, {
   old_string: "- Phase: 0 (Roadmap Discussion)\n- Status: initializing",
   new_string: `- Phase: 1\n- Status: ready_to_dispatch\n- Roadmap: confirmed (${phaseCount} phases)\n- Mode: ${mode}\n- Depth: ${depth}`
 })
@@ -275,9 +275,9 @@ Edit(`${sessionFolder}/state.md`, {
 
 | Artifact | Path | Description |
 |----------|------|-------------|
-| roadmap.md | `{sessionFolder}/roadmap.md` | Phased plan with REQ-IDs and success criteria |
-| config.json | `{sessionFolder}/config.json` | Execution preferences |
-| state.md | `{sessionFolder}/state.md` | Updated with phase transition |
+| roadmap.md | `{sessionFolder}/outputs/roadmap.md` | Phased plan with REQ-IDs and success criteria |
+| config.json | `{sessionFolder}/work/team/config.json` | Execution preferences |
+| state.md | `{sessionFolder}/work/team/state.md` | Updated with phase transition |
 
 ## Error Handling
 

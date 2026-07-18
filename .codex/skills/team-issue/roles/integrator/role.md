@@ -15,18 +15,18 @@ message_types: [queue_ready, conflict_found, error]
 
 | Input | Source | Required |
 |-------|--------|----------|
-| Issue IDs | Task description (GH-\d+ or ISS-\d{8}-\d{6}) | Yes |
-| Bound solutions | `ccw issue solutions <id> --json` | Yes |
-| wisdom meta | <session>/wisdom/.msg/meta.json | No |
+| Issue IDs | Task description (GH-\d+ or ISS-\d{8}-\d{3}) | Yes |
+| Solution artifacts | `{run_dir}/outputs/solutions/solution-<issueId>.json` | Yes |
+| wisdom meta | {run_dir}/work/team/wisdom/.msg/meta.json | No |
 
 1. Extract issue IDs from task description via regex
-2. Verify all issues have bound solutions:
+2. Verify all issues have Run solution artifacts:
 
 ```
-Bash("ccw issue solutions <issueId> --json")
+Read("{run_dir}/outputs/solutions/solution-<issueId>.json")
 ```
 
-3. Check for unbound issues:
+3. Check for issues without solution artifacts:
 
 | Condition | Action |
 |-----------|--------|
@@ -82,5 +82,5 @@ Read(".workflow/issues/queue/execution-queue.json")
 
 **Queue metrics for report**: queue size, parallel group count, resolved conflict count, execution order list.
 
-Update `<session>/wisdom/.msg/meta.json` under `integrator` namespace:
+Update `{run_dir}/work/team/wisdom/.msg/meta.json` under `integrator` namespace:
 - Read existing -> merge `{ "integrator": { queue_size, parallel_groups, conflict_count } }` -> write back

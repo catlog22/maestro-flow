@@ -18,7 +18,7 @@ message_types:
 |-------|--------|----------|
 | Task description | From task subject/description | Yes |
 | Session path | Extracted from task description | Yes |
-| Exploration results | `<session>/explorations/*.json` | Yes |
+| Exploration results | `{run_dir}/work/team/explorations/*.json` | Yes |
 
 1. Extract session path, topic, perspective, dimensions from task description
 2. Detect direction-fix mode: `type:\s*direction-fix` with `adjusted_focus:\s*(.+)`
@@ -78,7 +78,7 @@ After analysis, emit context-aware trigger signals (based on detected codebase c
 
 ## Phase 4: Result Aggregation
 
-Write analysis output to `<session>/analyses/analysis-<num>.json`:
+Write analysis output to `{run_dir}/outputs/analyses/analysis-<num>.json`:
 
 ```json
 {
@@ -94,5 +94,5 @@ Write analysis output to `<session>/analyses/analysis-<num>.json`:
 }
 ```
 
-Update `<session>/wisdom/.msg/meta.json` under `analyst` namespace:
+Update `{run_dir}/work/team/wisdom/.msg/meta.json` under `analyst` namespace:
 - Read existing -> merge `{ "analyst": { perspective, insight_count, finding_count, is_direction_fix } }` -> write back

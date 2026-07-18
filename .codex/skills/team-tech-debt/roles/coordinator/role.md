@@ -43,14 +43,14 @@ When coordinator needs to execute a command (analyze, dispatch, monitor):
 | Status check | Arguments contain "check" or "status" | -> handleCheck (monitor.md) |
 | Manual resume | Arguments contain "resume" or "continue" | -> handleResume (monitor.md) |
 | Pipeline complete | All tasks have status "completed" | -> handleComplete (monitor.md) |
-| Interrupted session | Active/paused session exists in .workflow/.team/TD-* | -> Phase 0 |
+| Interrupted session | Active/paused session exists in {run_dir}/work/team/ | -> Phase 0 |
 | New session | None of above | -> Phase 1 |
 
 For callback/check/resume/complete: load `@commands/monitor.md`, execute matched handler, STOP.
 
 ## Phase 0: Session Resume Check
 
-1. Scan `.workflow/.team/TD-*/.msg/meta.json` for active/paused sessions
+1. Scan `{run_dir}/work/team/.msg/meta.json` for active/paused sessions
 2. No sessions -> Phase 1
 3. Single session -> reconcile (audit list_agents, reset in_progress->pending, rebuild team, kick first ready task)
 4. Multiple -> request_user_input for selection
@@ -78,9 +78,9 @@ TEXT-LEVEL ONLY. No source code reading.
 
 1. Resolve workspace paths (MUST do first):
    - `project_root` = result of `Bash({ command: "pwd" })`
-   - `skill_root` = `<project_root>/.claude/skills/team-tech-debt`
+   - `skill_root` = `<project_root>/.codex/skills/team-tech-debt`
 2. Generate session ID: `TD-<slug>-<YYYY-MM-DD>`
-3. Create session folder structure (scan/, assessment/, plan/, fixes/, validation/, wisdom/)
+3. Create `{run_dir}/work/team/wisdom/` and formal directories `{run_dir}/outputs/{scan,assessment,plan,fixes,validation}/`
 4. Initialize .msg/meta.json via team_msg state_update with pipeline metadata
 5. TeamCreate(team_name="tech-debt")
 6. Do NOT spawn workers yet - deferred to Phase 4

@@ -15,11 +15,11 @@ message_types: [state_update]
 
 | Input | Source | Required |
 |-------|--------|----------|
-| Design tokens | <session>/design/design-tokens.json | Yes (token build) |
-| Component specs | <session>/design/component-specs/*.md | Yes (component build) |
-| Design intelligence | <session>/research/design-intelligence.json | Yes |
-| Latest audit report | <session>/audit/audit-*.md | No |
-| .msg/meta.json | <session>/wisdom/.msg/meta.json | Yes |
+| Design tokens | {run_dir}/outputs/design/design-tokens.json | Yes (token build) |
+| Component specs | {run_dir}/outputs/design/component-specs/*.md | Yes (component build) |
+| Design intelligence | {run_dir}/outputs/research/design-intelligence.json | Yes |
+| Latest audit report | {run_dir}/outputs/audit/audit-*.md | No |
+| .msg/meta.json | {run_dir}/work/team/wisdom/.msg/meta.json | Yes |
 
 1. Extract session path from task description
 2. Detect build type from subject: "token" -> Token implementation, "component" -> Component implementation
@@ -32,7 +32,7 @@ message_types: [state_update]
 
 **Token Implementation (BUILD-001)**:
 - Convert design tokens to production code
-- Output files in `<session>/build/token-files/`:
+- Output files in `{run_dir}/outputs/build/token-files/`:
   - `tokens.css`: CSS custom properties with `:root` (light) and `[data-theme="dark"]` selectors, plus `@media (prefers-color-scheme: dark)` fallback
   - `tokens.ts`: TypeScript constants and types for programmatic access with autocomplete support
   - `README.md`: Token usage guide
@@ -53,7 +53,7 @@ message_types: [state_update]
 
 **Component Implementation (BUILD-002)**:
 - Implement component code from design specifications
-- Per-component output in `<session>/build/component-files/`:
+- Per-component output in `{run_dir}/outputs/build/component-files/`:
   - `{ComponentName}.tsx`: React/Vue/Svelte component (match detected stack)
   - `{ComponentName}.css`: Styles consuming tokens via `var(--token-name)` only
   - `{ComponentName}.test.tsx`: Basic render + state tests
@@ -92,5 +92,5 @@ message_types: [state_update]
 | reduced_motion_present | `@media (prefers-reduced-motion: reduce)` exists in stylesheets |
 | touch_targets | Interactive elements >= 44x44px (min-width/min-height or padding) |
 
-3. Update `<session>/wisdom/.msg/meta.json` under `implementer` namespace:
+3. Update `{run_dir}/work/team/wisdom/.msg/meta.json` under `implementer` namespace:
    - Read existing -> merge `{ "implementer": { build_type, file_count, output_dir, components_built } }` -> write back

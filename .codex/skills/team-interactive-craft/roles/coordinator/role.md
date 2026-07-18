@@ -44,14 +44,14 @@ When coordinator needs to execute a command (analyze, dispatch, monitor):
 | Manual resume | Args contain "resume" or "continue" | -> handleResume (monitor.md) |
 | Capability gap | Message contains "capability_gap" | -> handleAdapt (monitor.md) |
 | Pipeline complete | All tasks have status "completed" | -> handleComplete (monitor.md) |
-| Interrupted session | Active/paused session exists in .workflow/.team/IC-* | -> Phase 0 |
+| Interrupted session | Active/paused session exists in {run_dir}/work/team/ | -> Phase 0 |
 | New session | None of above | -> Phase 1 |
 
 For callback/check/resume/adapt/complete: load `@commands/monitor.md`, execute matched handler, STOP.
 
 ## Phase 0: Session Resume Check
 
-1. Scan `.workflow/.team/IC-*/.msg/meta.json` for active/paused sessions
+1. Scan `{run_dir}/work/team/.msg/meta.json` for active/paused sessions
 2. No sessions -> Phase 1
 3. Single session -> reconcile (audit list_agents, reset in_progress->pending, rebuild team, kick first ready task)
 4. Multiple -> request_user_input for selection
@@ -95,16 +95,16 @@ TEXT-LEVEL ONLY. No source code reading.
 
 1. Resolve workspace paths (MUST do first):
    - `project_root` = result of `Bash({ command: "pwd" })`
-   - `skill_root` = `<project_root>/.claude/skills/team-interactive-craft`
+   - `skill_root` = `<project_root>/.codex/skills/team-interactive-craft`
 2. Generate session ID: `IC-<slug>-<YYYY-MM-DD>`
 3. Create session folder structure:
    ```
-   .workflow/.team/IC-<slug>-<date>/research/
-   .workflow/.team/IC-<slug>-<date>/interaction/blueprints/
-   .workflow/.team/IC-<slug>-<date>/build/components/
-   .workflow/.team/IC-<slug>-<date>/a11y/
-   .workflow/.team/IC-<slug>-<date>/wisdom/
-   .workflow/.team/IC-<slug>-<date>/.msg/
+   {run_dir}/outputs/research/
+   {run_dir}/outputs/interaction/blueprints/
+   {run_dir}/outputs/build/components/
+   {run_dir}/outputs/a11y/
+   {run_dir}/work/team/wisdom/
+   {run_dir}/work/team/.msg/
    ```
 4. Initialize `.msg/meta.json` via team_msg state_update with pipeline metadata
 5. TeamCreate(team_name="interactive-craft")
@@ -135,13 +135,13 @@ Delegate to `@commands/monitor.md#handleSpawnNext`:
 
 | Deliverable | Path |
 |-------------|------|
-| Interaction Inventory | <session>/research/interaction-inventory.json |
-| Browser API Audit | <session>/research/browser-api-audit.json |
-| Pattern Reference | <session>/research/pattern-reference.json |
-| Interaction Blueprints | <session>/interaction/blueprints/*.md |
-| Component JS Files | <session>/build/components/*.js |
-| Component CSS Files | <session>/build/components/*.css |
-| A11y Audit Reports | <session>/a11y/a11y-audit-*.md |
+| Interaction Inventory | {run_dir}/outputs/research/interaction-inventory.json |
+| Browser API Audit | {run_dir}/outputs/research/browser-api-audit.json |
+| Pattern Reference | {run_dir}/outputs/research/pattern-reference.json |
+| Interaction Blueprints | {run_dir}/outputs/interaction/blueprints/*.md |
+| Component JS Files | {run_dir}/outputs/build/components/*.js |
+| Component CSS Files | {run_dir}/outputs/build/components/*.css |
+| A11y Audit Reports | {run_dir}/outputs/a11y/a11y-audit-*.md |
 
 3. Calculate: completed_tasks, gc_rounds, a11y_score, components_built
 4. Output pipeline summary with [coordinator] prefix

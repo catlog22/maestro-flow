@@ -2,12 +2,8 @@
 name: workflow-skill-designer
 description: Meta-skill for designing orchestrator+phases structured workflow skills. Creates SKILL.md coordinator with progressive phase loading, TodoWrite patterns, and data flow. Triggers on "design workflow skill", "create workflow skill", "workflow skill designer".
 allowed-tools: Agent, AskUserQuestion, TodoWrite, Read, Write, Edit, Bash, Glob, Grep
-session-mode: run
+session-mode: none
 ---
-
-<required_reading>
-@~/.maestro/workflows/run-mode.md
-</required_reading>
 
 # Workflow Skill Designer
 
@@ -318,6 +314,7 @@ When converting from command format to skill format:
 | `examples` | _(removed)_ | Examples moved to inline documentation |
 | `allowed-tools` | `allowed-tools` | Expand wildcards: `Skill(*)` → `Skill`, add commonly needed tools |
 | `group` | _(removed)_ | Embedded in `name` prefix |
+| _(none)_ | `session-mode` | Add: `run` if the skill creates a Run / writes `{run_dir}` artifacts, else `none`. When `run`, also add the run-mode.md `<required_reading>` block. |
 
 ## Orchestrator Content Mapping
 
@@ -363,7 +360,13 @@ What goes into SKILL.md vs what goes into phase files:
 name: {skill-name}
 description: {description}. Triggers on "{trigger1}", "{trigger2}".
 allowed-tools: {tools}
+session-mode: {run|none}
 ---
+
+<!-- Include only when session-mode: run -->
+<required_reading>
+@~/.maestro/workflows/run-mode.md
+</required_reading>
 
 # {Title}
 
@@ -475,7 +478,7 @@ When `workflowPreferences.autoYes === true`: {auto-mode behavior}.
 ## Output
 
 - **Variable**: `{variableName}` (e.g., `sessionId`)
-- **File**: `{output file path}`
+- **File**: `{run_dir}/outputs/{artifact}` — formal artifacts go under `{run_dir}/outputs/`; synthesis to `{run_dir}/report.md`, scratch to `{run_dir}/work/` (session-mode: run only). See run-mode.md.
 - **TodoWrite**: Mark Phase N completed, Phase N+1 in_progress
 
 ## Next Phase

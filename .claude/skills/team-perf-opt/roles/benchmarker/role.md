@@ -16,7 +16,7 @@ message_types:
 |-------|--------|----------|
 | Baseline metrics | {run_dir}/outputs/baseline-metrics.json (shared) | Yes |
 | Optimization plan / detail | Varies by mode (see below) | Yes |
-| .msg/meta.json | <session>/.msg/meta.json | Yes |
+| .msg/meta.json | {run_dir}/work/team/.msg/meta.json | Yes |
 
 1. Extract session path from task description
 2. **Detect branch/pipeline context** from task description:
@@ -83,5 +83,5 @@ Compare against baseline and plan criteria:
 | Plan criteria not met | Any criterion not satisfied | FAIL -> fix_required |
 
 1. Write benchmark results to output path (scoped by branch/pipeline/single)
-2. Update `<session>/.msg/meta.json` under scoped namespace
+2. Update `{run_dir}/work/team/.msg/meta.json` under scoped namespace
 3. If verdict is FAIL, include detailed feedback in message for FIX task creation

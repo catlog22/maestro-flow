@@ -19,7 +19,7 @@ message_types:
 | Optimization code changes | From IMPL task artifacts / git diff | Yes |
 | Optimization plan / detail | Varies by mode (see below) | Yes |
 | Benchmark results | Varies by mode (see below) | No |
-| .msg/meta.json | <session>/.msg/meta.json | Yes |
+| .msg/meta.json | {run_dir}/work/team/.msg/meta.json | Yes |
 
 1. Extract session path from task description
 2. **Detect branch/pipeline context** from task description:
@@ -69,5 +69,5 @@ Classify overall verdict based on findings:
 | REJECT | Has Critical findings or fundamental approach flaw | Send fix_required + flag for strategist escalation |
 
 1. Write review report to scoped output path (single/fan-out/independent)
-2. Update `<session>/.msg/meta.json` under scoped namespace
+2. Update `{run_dir}/work/team/.msg/meta.json` under scoped namespace
 3. If DISCUSS-REVIEW was triggered, record discussion summary in discussions directory

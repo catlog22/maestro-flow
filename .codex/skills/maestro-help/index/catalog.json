@@ -22,19 +22,19 @@
     {"name": "plan", "command": "plan", "type": "step", "category": "pipeline", "description": "任务规划 — 支持 --from analyze:ANL-xxx 直达、碰撞检测、gap 修复计划", "source": "~/.maestro/workflows/plan.md"},
     {"name": "execute", "command": "execute", "type": "step", "category": "pipeline", "description": "任务执行 — wave 并行执行、delegate 编排、内置验证门", "source": "~/.maestro/workflows/execute.md"},
 
-    {"name": "manage-status", "command": "/manage status", "category": "manage", "description": "状态查看 — 项目和工作流状态总览", "source": "../../commands/manage.md"},
-    {"name": "manage-issue", "command": "/manage issue", "category": "manage", "description": "Issue 管理 — CRUD 操作、状态追踪", "source": "../../commands/manage.md"},
-    {"name": "manage-issue-discover", "command": "/manage issue discover", "category": "manage", "description": "Issue 发现 — 按提示词或代码分析自动发现问题", "source": "../../commands/manage.md"},
-    {"name": "manage-knowledge-knowhow", "command": "/manage knowledge knowhow", "category": "manage", "description": "知识管理 — knowhow 条目查询和管理", "source": "../../commands/manage.md"},
-    {"name": "manage-knowledge-capture", "command": "/manage knowledge capture", "category": "manage", "description": "知识捕获 — 从会话中捕获非显而易见的知识", "source": "../../commands/manage.md"},
-    {"name": "manage-knowledge-harvest", "command": "/manage knowledge harvest", "category": "manage", "description": "收获 — 从工作流产物中提取可复用资产", "source": "../../commands/manage.md"},
-    {"name": "manage-knowledge-wiki", "command": "/manage knowledge wiki", "category": "manage", "description": "Wiki 管理 — 知识图谱条目操作（health/search/cleanup/connect/digest）", "source": "../../commands/manage.md"},
-    {"name": "manage-knowledge-audit", "command": "/manage knowledge audit", "category": "manage", "description": "知识审计 — 审查 spec/knowhow/artifact 三存储的一致性与新鲜度", "source": "../../commands/manage.md"},
-    {"name": "manage-knowledge-extractors", "command": "/manage knowledge extractors", "category": "manage", "description": "知识图谱提取器管理 — 自动生成 KG 提取规则", "source": "../../commands/manage.md"},
-    {"name": "manage-knowledge-domain", "command": "/manage knowledge domain", "category": "manage", "description": "领域术语注册 — 添加领域词条到 glossary", "source": "../../commands/manage.md"},
-    {"name": "manage-sync-codebase", "command": "/manage sync codebase", "category": "manage", "description": "代码库文档增量同步 — git diff → 影响追踪 → 刷新 codebase 文档", "source": "../../commands/manage.md"},
-    {"name": "manage-sync-rebuild", "command": "/manage sync rebuild", "category": "manage", "description": "代码库重建 — 全量重建代码库文档", "source": "../../commands/manage.md"},
-    {"name": "manage-sync-drift", "command": "/manage sync drift", "category": "manage", "description": "产物漂移检测与重对齐", "source": "../../commands/manage.md"},
+    {"name": "maestro-manage-status", "command": "/maestro-manage status", "category": "manage", "description": "状态查看 — 项目和工作流状态总览", "source": "../../commands/maestro-manage.md"},
+    {"name": "maestro-manage-issue", "command": "/maestro-manage issue", "category": "manage", "description": "Issue 管理 — CRUD 操作、状态追踪", "source": "../../commands/maestro-manage.md"},
+    {"name": "maestro-manage-issue-discover", "command": "/maestro-manage issue discover", "category": "manage", "description": "Issue 发现 — 按提示词或代码分析自动发现问题", "source": "../../commands/maestro-manage.md"},
+    {"name": "maestro-manage-knowledge-knowhow", "command": "/maestro-manage knowledge knowhow", "category": "manage", "description": "知识管理 — knowhow 条目查询和管理", "source": "../../commands/maestro-manage.md"},
+    {"name": "maestro-manage-knowledge-capture", "command": "/maestro-manage knowledge capture", "category": "manage", "description": "知识捕获 — 从会话中捕获非显而易见的知识", "source": "../../commands/maestro-manage.md"},
+    {"name": "maestro-manage-knowledge-harvest", "command": "/maestro-manage knowledge harvest", "category": "manage", "description": "收获 — 从工作流产物中提取可复用资产", "source": "../../commands/maestro-manage.md"},
+    {"name": "maestro-manage-knowledge-wiki", "command": "/maestro-manage knowledge wiki", "category": "manage", "description": "Wiki 管理 — 知识图谱条目操作（health/search/cleanup/connect/digest）", "source": "../../commands/maestro-manage.md"},
+    {"name": "maestro-manage-knowledge-audit", "command": "/maestro-manage knowledge audit", "category": "manage", "description": "知识审计 — 审查 spec/knowhow/artifact 三存储的一致性与新鲜度", "source": "../../commands/maestro-manage.md"},
+    {"name": "maestro-manage-knowledge-extractors", "command": "/maestro-manage knowledge extractors", "category": "manage", "description": "知识图谱提取器管理 — 自动生成 KG 提取规则", "source": "../../commands/maestro-manage.md"},
+    {"name": "maestro-manage-knowledge-domain", "command": "/maestro-manage knowledge domain", "category": "manage", "description": "领域术语注册 — 添加领域词条到 glossary", "source": "../../commands/maestro-manage.md"},
+    {"name": "maestro-manage-sync-codebase", "command": "/maestro-manage sync codebase", "category": "manage", "description": "代码库文档增量同步 — git diff → 影响追踪 → 刷新 codebase 文档", "source": "../../commands/maestro-manage.md"},
+    {"name": "maestro-manage-sync-rebuild", "command": "/maestro-manage sync rebuild", "category": "manage", "description": "代码库重建 — 全量重建代码库文档", "source": "../../commands/maestro-manage.md"},
+    {"name": "maestro-manage-sync-drift", "command": "/maestro-manage sync drift", "category": "manage", "description": "产物漂移检测与重对齐", "source": "../../commands/maestro-manage.md"},
 
     {"name": "review", "command": "review", "type": "step", "category": "quality", "description": "代码审查 — 多维度代码质量检查", "source": "~/.maestro/workflows/review.md"},
     {"name": "auto-test", "command": "auto-test", "type": "step", "category": "quality", "description": "自动测试 — 智能路由 spec/gap/code 测试", "source": "~/.maestro/workflows/auto-test.md"},
@@ -44,15 +44,15 @@
     {"name": "quality-refactor", "command": "/quality-refactor", "category": "quality", "description": "代码重构 — 结构优化和模式改进", "source": "../../commands/quality-refactor.md"},
     {"name": "security-audit", "command": "/security-audit", "category": "quality", "description": "OWASP/STRIDE 安全审计", "source": "../../commands/security-audit.md"},
 
-    {"name": "spec-setup", "command": "/spec setup", "category": "spec", "description": "Spec 初始化 — 创建项目规范文件", "source": "../../commands/spec.md"},
-    {"name": "spec-load", "command": "/spec load", "category": "spec", "description": "Spec 加载 — 按关键词加载规范条目", "source": "../../commands/spec.md"},
-    {"name": "spec-add", "command": "/spec add", "category": "spec", "description": "Spec 录入 — 添加新的规范条目", "source": "../../commands/spec.md"},
-    {"name": "spec-remove", "command": "/spec remove", "category": "spec", "description": "Spec 移除 — 删除已有规范条目", "source": "../../commands/spec.md"},
+    {"name": "maestro-spec-setup", "command": "/maestro-spec setup", "category": "spec", "description": "Spec 初始化 — 创建项目规范文件", "source": "../../commands/maestro-spec.md"},
+    {"name": "maestro-spec-load", "command": "/maestro-spec load", "category": "spec", "description": "Spec 加载 — 按关键词加载规范条目", "source": "../../commands/maestro-spec.md"},
+    {"name": "maestro-spec-add", "command": "/maestro-spec add", "category": "spec", "description": "Spec 录入 — 添加新的规范条目", "source": "../../commands/maestro-spec.md"},
+    {"name": "maestro-spec-remove", "command": "/maestro-spec remove", "category": "spec", "description": "Spec 移除 — 删除已有规范条目", "source": "../../commands/maestro-spec.md"},
 
-    {"name": "learn-follow", "command": "/learn follow", "category": "learn", "description": "跟读学习 — 引导式阅读，段落级提问提取模式", "source": "../../commands/learn.md"},
-    {"name": "learn-investigate", "command": "/learn investigate", "category": "learn", "description": "系统探究 — 假设驱动地调查问题", "source": "../../commands/learn.md"},
-    {"name": "learn-decompose", "command": "/learn decompose", "category": "learn", "description": "模式拆解 — 将复杂模式分解为可复用组件", "source": "../../commands/learn.md"},
-    {"name": "learn-consult", "command": "/learn consult", "category": "learn", "description": "多视角分析 — 多 CLI 交叉验证观点（second opinion）", "source": "../../commands/learn.md"},
+    {"name": "maestro-learn-follow", "command": "/maestro-learn follow", "category": "learn", "description": "跟读学习 — 引导式阅读，段落级提问提取模式", "source": "../../commands/maestro-learn.md"},
+    {"name": "maestro-learn-investigate", "command": "/maestro-learn investigate", "category": "learn", "description": "系统探究 — 假设驱动地调查问题", "source": "../../commands/maestro-learn.md"},
+    {"name": "maestro-learn-decompose", "command": "/maestro-learn decompose", "category": "learn", "description": "模式拆解 — 将复杂模式分解为可复用组件", "source": "../../commands/maestro-learn.md"},
+    {"name": "maestro-learn-consult", "command": "/maestro-learn consult", "category": "learn", "description": "多视角分析 — 多 CLI 交叉验证观点（second opinion）", "source": "../../commands/maestro-learn.md"},
 
     {"name": "maestro-fork", "command": "/maestro-fork", "category": "worktree", "description": "Worktree 分叉 — 基于 milestone 创建隔离开发环境", "source": "../../commands/maestro-fork.md"},
     {"name": "maestro-merge", "command": "/maestro-merge", "category": "worktree", "description": "Worktree 合并 — 同步变更回主线", "source": "../../commands/maestro-merge.md"},
@@ -63,7 +63,7 @@
 
     {"name": "maestro-impeccable", "command": "/maestro-impeccable", "category": "ui", "description": "UI 生产 — 设计系统生成 + impeccable 链式编排 + 质量门控 + --codify 从代码提取设计系统", "source": "../../commands/maestro-impeccable.md"},
 
-    {"name": "odyssey", "command": "/odyssey", "category": "odyssey", "description": "长周期迭代闭环 — 单入口五模式 (debug|improve|planex|review|ui)：考古/审计 → 修复 → 验证 → 泛化 → 发现 → 知识持久化", "source": "../../commands/odyssey.md"}
+    {"name": "maestro-odyssey", "command": "/maestro-odyssey", "category": "odyssey", "description": "长周期迭代闭环 — 单入口五模式 (debug|improve|planex|review|ui)：考古/审计 → 修复 → 验证 → 泛化 → 发现 → 知识持久化", "source": "../../commands/maestro-odyssey.md"}
   ],
   "skills": [
     {"name": "workflow-skill-designer", "category": "meta", "description": "Meta-skill: 设计 orchestrator+phases 结构的工作流 skill", "source": "../workflow-skill-designer/SKILL.md"},
@@ -220,7 +220,7 @@
       "D_small_fix": "plan → execute",
       "E_spec_only": "blueprint → (供人阅读)",
       "F_explore_only": "brainstorm → (供人决策)",
-      "G_odyssey_deep": "odyssey --mode debug|improve|review|planex|ui"
+      "G_odyssey_deep": "maestro-odyssey --mode debug|improve|review|planex|ui"
     },
     "main_pipeline": {
       "name": "主干管线",
@@ -235,7 +235,7 @@
     },
     "issue_loop": {
       "name": "Issue 闭环",
-      "phases": ["manage issue discover", "manage issue create", "analyze --gaps", "plan --gaps", "execute", "manage issue close"]
+      "phases": ["maestro-manage issue discover", "maestro-manage issue create", "analyze --gaps", "plan --gaps", "execute", "maestro-manage issue close"]
     },
     "init_paths": {
       "name": "初始化路径",
@@ -246,7 +246,7 @@
     "odyssey": {
       "name": "Odyssey 长周期循环",
       "description": "自主循环直到完成 — 适用于需要考古、诊断、修复、泛化、知识持久化的深度任务",
-      "commands": ["odyssey --mode debug", "odyssey --mode improve", "odyssey --mode review", "odyssey --mode planex", "odyssey --mode ui"]
+      "commands": ["maestro-odyssey --mode debug", "maestro-odyssey --mode improve", "maestro-odyssey --mode review", "maestro-odyssey --mode planex", "maestro-odyssey --mode ui"]
     }
   }
 }

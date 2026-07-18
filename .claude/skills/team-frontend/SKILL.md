@@ -62,9 +62,9 @@ Parse `$ARGUMENTS`:
 ## Shared Constants
 
 - **Session prefix**: `FE`
-- **Session path**: `.workflow/.team/FE-<slug>-<date>/`
+- **Session path**: `{run_dir}/work/team/`
 - **CLI tools**: `maestro delegate --mode analysis` (read-only), `maestro delegate --mode write` (modifications)
-- **Message bus**: `mcp__maestro__team_msg(session_id=<session-id>, ...)`
+- **Message bus**: `mcp__maestro__team_msg(session_id=<run-id>, ...)`
 
 ## Worker Spawn Template
 
@@ -80,14 +80,14 @@ Agent({
   prompt: `## Role Assignment
 role: <role>
 role_spec: <skill_root>/roles/<role>/role.md
-session: <session-folder>
-session_id: <session-id>
+session: {run_dir}/work/team
+session_id: <run-id>
 team_name: frontend
 requirement: <task-description>
 inner_loop: <true|false>
 
 ## Progress Milestones
-session_id: <session-id>
+session_id: <run-id>
 Report progress via team_msg at natural phase boundaries (context loaded -> core work done -> verification).
 Report blockers immediately via team_msg type="blocker".
 Report completion via team_msg type="task_complete" after final SendMessage.
@@ -107,22 +107,22 @@ Execute built-in Phase 1 (task discovery) -> role Phase 2-4 -> built-in Phase 5 
 ## Session Directory
 
 ```
-.workflow/.team/FE-<slug>-<YYYY-MM-DD>/
+{run_dir}/work/team/
 ├── .msg/
 │   ├── messages.jsonl          # Message bus log
 │   └── meta.json               # Session state + cross-role state
 ├── task-analysis.json          # Coordinator analyze output
 ├── wisdom/                     # Cross-task knowledge
-├── analysis/                   # Analyst output
+├── {run_dir}/outputs/analysis/                   # Analyst output
 │   ├── design-intelligence.json
 │   └── requirements.md
-├── architecture/               # Architect output
+├── {run_dir}/outputs/architecture/               # Architect output
 │   ├── design-tokens.json
 │   ├── component-specs/
 │   └── project-structure.md
-├── qa/                         # QA output
+├── {run_dir}/outputs/qa/                         # QA output
 │   └── audit-<NNN>.md
-└── build/                      # Developer output
+└── {run_dir}/outputs/build/                      # Developer output
 ```
 
 ## Specs Reference

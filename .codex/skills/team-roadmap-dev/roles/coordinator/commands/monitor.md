@@ -19,9 +19,9 @@
 
 | Prefix | Role | Role Spec | inner_loop |
 |--------|------|-----------|------------|
-| PLAN | planner | `~  or <project>/.claude/skills/team-roadmap-dev/roles/planner/role.md` | true (cli_tools: agy --mode analysis) |
-| EXEC | executor | `~  or <project>/.claude/skills/team-roadmap-dev/roles/executor/role.md` | true (cli_tools: agy --mode write) |
-| VERIFY | verifier | `~  or <project>/.claude/skills/team-roadmap-dev/roles/verifier/role.md` | true |
+| PLAN | planner | `~  or <project>/.codex/skills/team-roadmap-dev/roles/planner/role.md` | true (cli_tools: agy --mode analysis) |
+| EXEC | executor | `~  or <project>/.codex/skills/team-roadmap-dev/roles/executor/role.md` | true (cli_tools: agy --mode write) |
+| VERIFY | verifier | `~  or <project>/.codex/skills/team-roadmap-dev/roles/verifier/role.md` | true |
 
 ### Pipeline Structure
 
@@ -49,17 +49,17 @@ session.coordinates = {
 
 | Input | Source | Required |
 |-------|--------|----------|
-| Session file | `<session-folder>/.msg/meta.json` | Yes |
+| Session file | `{run_dir}/work/team/.msg/meta.json` | Yes |
 | Task list | `list_agents()` | Yes |
 | Active workers | session.active_workers[] | Yes |
 | Coordinates | session.coordinates | Yes |
-| Config | `<session-folder>/config.json` | Yes |
-| State | `<session-folder>/state.md` | Yes |
+| Config | `{run_dir}/work/team/config.json` | Yes |
+| State | `{run_dir}/work/team/state.md` | Yes |
 
 ```
 Load session state:
-  1. Read <session-folder>/.msg/meta.json -> session
-  2. Read <session-folder>/config.json -> config
+  1. Read {run_dir}/work/team/.msg/meta.json -> session
+  2. Read {run_dir}/work/team/config.json -> config
   3. list_agents() -> allTasks
   4. Extract coordinates from session (current_phase, gap_iteration, step)
   5. Extract active_workers[] from session (default: [])
@@ -118,7 +118,7 @@ Receive callback from [<role>]
   |   |   +- VERIFY-* completed:
   |   |       +- Update coordinates.step = "verify_done"
   |   |       +- Read verification result from:
-  |   |       |   <session-folder>/phase-<N>/verification.md
+  |   |       |   {run_dir}/outputs/phase-<N>/verification.md
   |   |       +- Parse gaps from verification
   |   |       +- Gaps found?
   |   |           +- NO -> Phase passed
@@ -232,7 +232,7 @@ Ready tasks found?
       |   EXEC-*   -> executor
       |   VERIFY-* -> verifier
       +- update_plan -> in_progress
-      +- team_msg log -> task_unblocked (team_session_id=<session-id>)
+      +- team_msg log -> task_unblocked (team_session_id=<run-id>)
       +- Spawn team-worker (see spawn call below)
       +- Add to session.active_workers
       +- Update session file

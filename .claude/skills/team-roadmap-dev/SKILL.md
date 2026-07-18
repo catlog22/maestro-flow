@@ -67,10 +67,10 @@ Parse `$ARGUMENTS`:
 ## Shared Constants
 
 - **Session prefix**: `RD`
-- **Session path**: `.workflow/.team/RD-<slug>-<date>/`
+- **Session path**: `{run_dir}/work/team/`
 - **Team name**: `roadmap-dev`
 - **CLI tools**: `maestro delegate --mode analysis` (read-only), `maestro delegate --mode write` (modifications)
-- **Message bus**: `mcp__maestro__team_msg(session_id=<session-id>, ...)`
+- **Message bus**: `mcp__maestro__team_msg(session_id=<run-id>, ...)`
 
 ## Worker Spawn Template
 
@@ -86,14 +86,14 @@ Agent({
   prompt: `## Role Assignment
 role: <role>
 role_spec: <skill_root>/roles/<role>/role.md
-session: <session-folder>
-session_id: <session-id>
+session: {run_dir}/work/team
+session_id: <run-id>
 team_name: roadmap-dev
 requirement: <task-description>
 inner_loop: true
 
 ## Progress Milestones
-session_id: <session-id>
+session_id: <run-id>
 Report progress via team_msg at natural phase boundaries (context loaded -> core work done -> verification).
 Report blockers immediately via team_msg type="blocker".
 Report completion via team_msg type="task_complete" after final SendMessage.
@@ -115,25 +115,25 @@ Execute built-in Phase 1 (task discovery) -> role Phase 2-4 -> built-in Phase 5 
 ## Session Directory
 
 ```
-.workflow/.team/RD-<slug>-<date>/
-+-- roadmap.md                 # Phase plan with requirements and success criteria
-+-- state.md                   # Living memory (concise)
-+-- config.json                # Session settings (mode, depth, gates)
-+-- wisdom/                    # Cross-task knowledge accumulation
+{run_dir}/
++-- outputs/roadmap.md         # Phase plan with requirements and success criteria
++-- work/team/state.md         # Living memory (concise)
++-- work/team/config.json      # Session settings (mode, depth, gates)
++-- work/team/wisdom/          # Cross-task knowledge accumulation
 |   +-- learnings.md
 |   +-- decisions.md
 |   +-- conventions.md
 |   +-- issues.md
-+-- phase-1/                   # Per-phase artifacts
++-- outputs/phase-1/           # Per-phase artifacts
 |   +-- context.md
 |   +-- IMPL_PLAN.md
 |   +-- TODO_LIST.md
 |   +-- .task/IMPL-*.json
 |   +-- summary-*.md
 |   +-- verification.md
-+-- phase-N/
++-- outputs/phase-N/
 |   +-- ...
-+-- .msg/
++-- work/team/.msg/
     +-- messages.jsonl          # Team message bus log
     +-- meta.json               # Session metadata + shared state
 ```

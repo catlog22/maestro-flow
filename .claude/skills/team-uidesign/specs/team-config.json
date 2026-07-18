@@ -97,11 +97,11 @@
   },
 
   "session_dirs": {
-    "base": ".workflow/.team/UDS-{slug}-{YYYY-MM-DD}/",
-    "research": "research/",
-    "design": "design/",
-    "audit": "audit/",
-    "build": "build/",
-    "messages": ".workflow/.team-msg/{team-name}/"
+    "base": "{run_dir}/work/team/",
+    "research": "{run_dir}/outputs/research/",
+    "design": "{run_dir}/outputs/design/",
+    "audit": "{run_dir}/outputs/audit/",
+    "build": "{run_dir}/outputs/build/",
+    "messages": "{run_dir}/work/team/.msg/"
   }
 }

@@ -70,7 +70,7 @@ GC loop: MTEST-001 -> ANIM-fix-1 -> MTEST-002 (max 2 rounds)
 
 | Task | Output Path |
 |------|-------------|
-| MRESEARCH-001 | <session>/research/*.json |
-| CHOREO-001 | <session>/choreography/motion-tokens.json + sequences/*.md |
-| ANIM-* | <session>/animations/keyframes/*.css + orchestrators/*.js |
-| MTEST-* | <session>/testing/reports/perf-report-{NNN}.md |
+| MRESEARCH-001 | {run_dir}/outputs/research/*.json |
+| CHOREO-001 | {run_dir}/outputs/choreography/motion-tokens.json + sequences/*.md |
+| ANIM-* | {run_dir}/outputs/animations/keyframes/*.css + orchestrators/*.js |
+| MTEST-* | {run_dir}/outputs/testing/reports/perf-report-{NNN}.md |

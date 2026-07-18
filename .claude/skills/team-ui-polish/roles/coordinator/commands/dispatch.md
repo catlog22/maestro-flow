@@ -29,11 +29,11 @@ TASK:
   - <step 2: specific action>
   - <step 3: specific action>
 CONTEXT:
-  - Session: <session-folder>
+  - Session: {run_dir}/work/team
   - Target: <url|component-path|full_site>
   - Dimension filters: <all | specific dimensions>
   - Upstream artifacts: <artifact-1>, <artifact-2>
-  - Shared memory: <session>/wisdom/.msg/meta.json
+  - Shared memory: {run_dir}/work/team/wisdom/.msg/meta.json
 EXPECTED: <deliverable path> + <quality criteria>
 CONSTRAINTS: <scope limits, focus areas>"
 })
@@ -63,11 +63,11 @@ TASK:
   - Score all 8 dimensions: anti-patterns, color, typography, spacing, motion, interaction, hierarchy, responsive
   - Generate issue inventory with file:line locations and severity
 CONTEXT:
-  - Session: <session-folder>
+  - Session: {run_dir}/work/team
   - Target: <target>
   - Dimension filters: all
-  - Shared memory: <session>/wisdom/.msg/meta.json
-EXPECTED: <session>/scan/scan-report.md | 8-dimension scored report with issue inventory
+  - Shared memory: {run_dir}/work/team/wisdom/.msg/meta.json
+EXPECTED: {run_dir}/outputs/scan/scan-report.md | 8-dimension scored report with issue inventory
 CONSTRAINTS: Read-only analysis | Reference specs/anti-patterns.md and specs/design-standards.md"
 })
 TaskUpdate({ taskId: "SCAN-001", owner: "scanner" })
@@ -84,10 +84,10 @@ TASK:
   - Build fix dependency graph (which fixes must come first)
   - Prioritize by severity (P0 -> P1 -> P2 -> P3)
 CONTEXT:
-  - Session: <session-folder>
-  - Upstream artifacts: scan/scan-report.md
-  - Shared memory: <session>/wisdom/.msg/meta.json
-EXPECTED: <session>/diagnosis/diagnosis-report.md | Root cause groups with fix strategies and dependency graph
+  - Session: {run_dir}/work/team
+  - Upstream artifacts: {run_dir}/outputs/scan/scan-report.md
+  - Shared memory: {run_dir}/work/team/wisdom/.msg/meta.json
+EXPECTED: {run_dir}/outputs/diagnosis/diagnosis-report.md | Root cause groups with fix strategies and dependency graph
 CONSTRAINTS: Read-only analysis | Reference specs/fix-strategies.md"
 })
 TaskUpdate({ taskId: "DIAG-001", addBlockedBy: ["SCAN-001"], owner: "diagnostician" })
@@ -115,11 +115,11 @@ TASK:
   - Follow Impeccable fix strategies per dimension
   - Self-validate: no regressions, code compiles/lints
 CONTEXT:
-  - Session: <session-folder>
+  - Session: {run_dir}/work/team
   - Dimension filters: <targeted dimensions>
-  - Upstream artifacts: scan/scan-report.md, diagnosis/diagnosis-report.md
-  - Shared memory: <session>/wisdom/.msg/meta.json
-EXPECTED: Modified source files + <session>/optimization/fix-log.md | Each fix documented with before/after
+  - Upstream artifacts: {run_dir}/outputs/scan/scan-report.md, {run_dir}/outputs/diagnosis/diagnosis-report.md
+  - Shared memory: {run_dir}/work/team/wisdom/.msg/meta.json
+EXPECTED: Modified source files + {run_dir}/outputs/optimization/fix-log.md | Each fix documented with before/after
 CONSTRAINTS: Only fix targeted dimensions | Reference specs/fix-strategies.md and specs/design-standards.md"
 })
 TaskUpdate({ taskId: "OPT-001", addBlockedBy: ["DIAG-001"], owner: "optimizer" })
@@ -136,10 +136,10 @@ TASK:
   - Check for regressions (new issues introduced by fixes)
   - Take after screenshots if Chrome DevTools available
 CONTEXT:
-  - Session: <session-folder>
-  - Upstream artifacts: scan/scan-report.md, optimization/fix-log.md
-  - Shared memory: <session>/wisdom/.msg/meta.json
-EXPECTED: <session>/verification/verify-report.md | Before/after comparison with regression check
+  - Session: {run_dir}/work/team
+  - Upstream artifacts: {run_dir}/outputs/scan/scan-report.md, {run_dir}/outputs/optimization/fix-log.md
+  - Shared memory: {run_dir}/work/team/wisdom/.msg/meta.json
+EXPECTED: {run_dir}/outputs/verification/verify-report.md | Before/after comparison with regression check
 CONSTRAINTS: Read-only verification | Signal fix_required if regressions found"
 })
 TaskUpdate({ taskId: "VERIFY-001", addBlockedBy: ["OPT-001"], owner: "verifier" })
@@ -166,10 +166,10 @@ TASK:
   - Apply targeted fixes for regression issues only
   - Self-validate before reporting
 CONTEXT:
-  - Session: <session-folder>
-  - Upstream artifacts: verification/verify-report.md, optimization/fix-log.md
-  - Shared memory: <session>/wisdom/.msg/meta.json
-EXPECTED: Updated source files + appended <session>/optimization/fix-log.md
+  - Session: {run_dir}/work/team
+  - Upstream artifacts: {run_dir}/outputs/verification/verify-report.md, {run_dir}/outputs/optimization/fix-log.md
+  - Shared memory: {run_dir}/work/team/wisdom/.msg/meta.json
+EXPECTED: Updated source files + appended {run_dir}/outputs/optimization/fix-log.md
 CONSTRAINTS: Fix regressions only, do not expand scope"
 })
 TaskUpdate({ taskId: "OPT-fix-<round>", owner: "optimizer" })

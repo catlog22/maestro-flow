@@ -7,10 +7,10 @@
 | Channel | Scope | Mechanism | When to Use |
 |---------|-------|-----------|-------------|
 | **Artifacts** | Producer -> Consumer | Write to `{run_dir}/outputs/<name>.md`, consumer reads in Phase 2 | Structured deliverables (reports, plans, specs) |
-| **State Updates** | Cross-role | `team_msg(operation="log", type="state_update", data={...})` / `team_msg(operation="get_state", session_id=<session-id>)` | Key findings, decisions, metadata (small, structured data) |
-| **Wisdom** | Cross-task | Append to `<session>/wisdom/{learnings,decisions,conventions,issues}.md` | Patterns, conventions, risks discovered during execution |
+| **State Updates** | Cross-role | `team_msg(operation="log", type="state_update", data={...})` / `team_msg(operation="get_state", session_id=<run-id>)` | Key findings, decisions, metadata (small, structured data) |
+| **Wisdom** | Cross-task | Append to `{run_dir}/work/team/wisdom/{learnings,decisions,conventions,issues}.md` | Patterns, conventions, risks discovered during execution |
 | **Context Accumulator** | Intra-role (inner loop) | In-memory array, passed to each subsequent task in same-prefix loop | Prior task summaries within same role's inner loop |
-| **Exploration Cache** | Cross-role | `<session>/explorations/cache-index.json` + per-angle JSON | Codebase discovery results, prevents duplicate exploration |
+| **Exploration Cache** | Cross-role | `{run_dir}/work/team/explorations/cache-index.json` + per-angle JSON | Codebase discovery results, prevents duplicate exploration |
 
 ## 2. Context Loading Protocol (Phase 2)
 
@@ -19,10 +19,10 @@ Every role MUST load context in this order before starting work.
 | Step | Action | Required |
 |------|--------|----------|
 | 1 | Extract session path from task description | Yes |
-| 2 | `team_msg(operation="get_state", session_id=<session-id>)` | Yes |
+| 2 | `team_msg(operation="get_state", session_id=<run-id>)` | Yes |
 | 3 | Read artifact files from upstream state's `ref` paths | Yes |
-| 4 | Read `<session>/wisdom/*.md` if exists | Yes |
-| 5 | Check `<session>/explorations/cache-index.json` before new exploration | If exploring |
+| 4 | Read `{run_dir}/work/team/wisdom/*.md` if exists | Yes |
+| 5 | Check `{run_dir}/work/team/explorations/cache-index.json` before new exploration | If exploring |
 | 6 | For inner_loop roles: load context_accumulator from prior tasks | If inner_loop |
 
 **Loading rules**:
@@ -70,14 +70,14 @@ Sent via `team_msg(type="state_update")` on task completion.
 
 **Write state** (namespaced by role):
 ```
-team_msg(operation="log", session_id=<session-id>, from=<role>, type="state_update", data={
+team_msg(operation="log", session_id=<run-id>, from=<role>, type="state_update", data={
   "<role_name>": { "key_findings": [...], "scope": "..." }
 })
 ```
 
 **Read state**:
 ```
-team_msg(operation="get_state", session_id=<session-id>)
+team_msg(operation="get_state", session_id=<run-id>)
 // Returns merged state from all state_update messages
 ```
 
@@ -87,10 +87,10 @@ Prevents redundant research across tasks and discussion rounds.
 
 | Step | Action |
 |------|--------|
-| 1 | Read `<session>/explorations/cache-index.json` |
+| 1 | Read `{run_dir}/work/team/explorations/cache-index.json` |
 | 2 | If angle already explored, read cached result from `explore-<angle>.json` |
 | 3 | If not cached, perform exploration |
-| 4 | Write result to `<session>/explorations/explore-<angle>.json` |
+| 4 | Write result to `{run_dir}/work/team/explorations/explore-<angle>.json` |
 | 5 | Update `cache-index.json` with new entry |
 
 **cache-index.json format**:

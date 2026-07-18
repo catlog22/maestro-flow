@@ -11,12 +11,12 @@ message_types: [opt_complete, opt_progress, error]
 
 | Input | Source | Required |
 |-------|--------|----------|
-| Scan report | <session>/scan/scan-report.md | Yes |
-| Diagnosis report | <session>/diagnosis/diagnosis-report.md | Yes |
-| .msg/meta.json | <session>/wisdom/.msg/meta.json | Yes |
+| Scan report | {run_dir}/outputs/scan/scan-report.md | Yes |
+| Diagnosis report | {run_dir}/outputs/diagnosis/diagnosis-report.md | Yes |
+| .msg/meta.json | {run_dir}/work/team/wisdom/.msg/meta.json | Yes |
 | Fix strategies | specs/fix-strategies.md | Yes |
 | Design standards | specs/design-standards.md | Yes |
-| Verification feedback | <session>/verification/verify-report.md | Only for GC fix tasks |
+| Verification feedback | {run_dir}/outputs/verification/verify-report.md | Only for GC fix tasks |
 
 1. Extract session path from task description
 2. Read diagnosis report: parse root cause groups, fix dependency graph, recommended fix order
@@ -183,7 +183,7 @@ Target: Root cause groups tagged with responsive dimension.
 | No positive findings broken | Items from scan report "Positive Findings" section still intact |
 | Fix log complete | Every applied fix documented |
 
-2. Write fix log: `<session>/optimization/fix-log.md`
+2. Write fix log: `{run_dir}/outputs/optimization/fix-log.md`
 
 ```markdown
 # Optimization Fix Log
@@ -212,12 +212,12 @@ Target: Root cause groups tagged with responsive dimension.
 - <positive findings that were intentionally kept>
 
 ## Metadata
-- Source diagnosis: <session>/diagnosis/diagnosis-report.md
+- Source diagnosis: {run_dir}/outputs/diagnosis/diagnosis-report.md
 - Timestamp: <ISO timestamp>
 ```
 
 3. Send completion message:
 ```
 mcp__maestro__team_msg(session_id, role="optimizer", type="opt_complete", content="Optimization complete. Fixes applied: N. Files modified: N. Categories: <list>.")
-SendMessage(participant="coordinator", message="[optimizer] OPT-001 complete. Applied N fixes across N files. Categories: <list>. Log: <session>/optimization/fix-log.md")
+SendMessage(participant="coordinator", message="[optimizer] OPT-001 complete. Applied N fixes across N files. Categories: <list>. Log: {run_dir}/outputs/optimization/fix-log.md")
 ```

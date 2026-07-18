@@ -59,7 +59,7 @@ Defines how the SKILL.md coordinator, Python ACO controller, and modular Workflo
 ## Script ↔ Coordinator Contract
 
 Same as team-swarm. All scripts:
-- Read from `<session>/...` (via `--session` flag)
+- Read from `{run_dir}/work/team/...` (via `--session` flag)
 - Emit JSON to stdout
 - Exit 0 = success, 1 = error, 2 = config invalid
 - Idempotent: calling update twice for same iteration is safe

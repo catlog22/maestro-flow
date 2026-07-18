@@ -164,5 +164,5 @@ Completion report
 
 ## Related Commands
 
-**上游**: `maestro-impeccable --codify`, `learn decompose`, 或任何生成 manifest 的 skill
+**上游**: `maestro-impeccable --codify`, `maestro-learn decompose`, 或任何生成 manifest 的 skill
 **后续**: `maestro wiki list --category coding`, `maestro load --type spec --keyword <slug>`

@@ -13,7 +13,7 @@ message_types:
 ## Boundaries
 
 ### MUST
-- Read `<session>/best.json`, `{run_dir}/outputs/swarm-report.json`, all `<session>/trails/*.jsonl`
+- Read `{run_dir}/work/team/best.json`, `{run_dir}/outputs/swarm-report.json`, all `{run_dir}/work/team/trails/*.jsonl`
 - Produce `{run_dir}/outputs/best-solution.md` as the final deliverable
 - Explain WHY the best path won (which decisions mattered, evidence chain)
 - Compare best vs runner-ups to surface stability vs luck
@@ -29,13 +29,13 @@ message_types:
 
 | Input | Source | Required |
 |-------|--------|----------|
-| Original objective | `<session>/swarm-config.json#ant_prompt.objective` | Yes |
-| Best solution | `<session>/best.json` | Yes |
+| Original objective | `{run_dir}/work/team/swarm-config.json#ant_prompt.objective` | Yes |
+| Best solution | `{run_dir}/work/team/best.json` | Yes |
 | Full swarm report | `{run_dir}/outputs/swarm-report.json` | Yes |
-| All trails | `<session>/trails/*.jsonl` | Yes |
+| All trails | `{run_dir}/work/team/trails/*.jsonl` | Yes |
 | Convergence reason | swarm-report.json or `aco.py converged` output | Yes |
 | Best ant artifact | `{run_dir}/outputs/ant-<best.iteration>-<best.id>.json` (full evidence) | Yes |
-| Issues log | `<session>/wisdom/issues.md` | Optional |
+| Issues log | `{run_dir}/work/team/wisdom/issues.md` | Optional |
 
 Workflow:
 1. Extract session path from task description

@@ -18,13 +18,13 @@ message_types:
 |-------|--------|----------|
 | Task description | From task subject/description | Yes |
 | Session path | Extracted from task description | Yes |
-| .msg/meta.json | <session>/wisdom/.msg/meta.json | Yes |
+| .msg/meta.json | {run_dir}/work/team/wisdom/.msg/meta.json | Yes |
 | Test strategy | meta.json -> test_strategy | Yes |
 | Generated tests | meta.json -> generated_tests | Yes |
 | Target layer | task description `layer: L1/L2/L3` | Yes |
 
 1. Extract session path and target layer from task description
-2. Load validation specs: Run `ccw spec load --category quality` for verification rules and acceptance criteria
+2. Load validation specs: Run `ccw maestro-spec load --category quality` for verification rules and acceptance criteria
 3. Read .msg/meta.json for strategy and generated test file list
 3. Detect test command by framework:
 
@@ -58,7 +58,7 @@ Per iteration:
 ## Phase 4: Result Analysis & Output
 
 1. Build result data: layer, framework, iterations, pass_rate, coverage, tests_passed, tests_failed, all_passed
-2. Save results to `<session>/results/run-<layer>.json`
-3. Save last test output to `<session>/results/output-<layer>.txt`
-4. Update `<session>/wisdom/.msg/meta.json` under `execution_results[layer]` and top-level `execution_results.pass_rate`, `execution_results.coverage`
+2. Save results to `{run_dir}/outputs/results/run-<layer>.json`
+3. Save last test output to `{run_dir}/outputs/results/output-<layer>.txt`
+4. Update `{run_dir}/work/team/wisdom/.msg/meta.json` under `execution_results[layer]` and top-level `execution_results.pass_rate`, `execution_results.coverage`
 5. Message type: `tests_passed` if all_passed, else `tests_failed`

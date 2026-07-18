@@ -13,12 +13,12 @@ message_types: [state_update]
 |-------|--------|----------|
 | Task description | From task subject/description | Yes |
 | Session path | Extracted from task description | Yes |
-| Remediation plan | <session>/remediation/remediation-plan.md | Yes |
-| Color audit report | <session>/audits/color/color-audit-001.md | Yes |
-| Focus audit report | <session>/audits/focus/focus-audit-001.md | Yes |
-| Typography audit report | <session>/audits/typography/typo-audit-001.md | Yes |
-| .msg/meta.json | <session>/.msg/meta.json | Yes |
-| Re-audit reports (GC loop) | <session>/re-audit/*.md | Only for FIX-002+ |
+| Remediation plan | {run_dir}/outputs/remediation/remediation-plan.md | Yes |
+| Color audit report | {run_dir}/outputs/audits/color/color-audit-001.md | Yes |
+| Focus audit report | {run_dir}/outputs/audits/focus/focus-audit-001.md | Yes |
+| Typography audit report | {run_dir}/outputs/audits/typography/typo-audit-001.md | Yes |
+| .msg/meta.json | {run_dir}/work/team/.msg/meta.json | Yes |
+| Re-audit reports (GC loop) | {run_dir}/outputs/re-audit/*.md | Only for FIX-002+ |
 
 1. Extract session path from task description
 2. Read remediation plan -- this is the primary work instruction
@@ -194,7 +194,7 @@ Apply fixes in priority order: Critical -> High -> Medium -> Low.
 | Skip link | Verify skip link element exists, CSS hides then shows on focus |
 | Focus trap | Verify dialog has focus management code |
 
-2. Write fix summary to `<session>/fixes/fix-summary-{NNN}.md`:
+2. Write fix summary to `{run_dir}/outputs/fixes/fix-summary-{NNN}.md`:
 
 ```markdown
 # Fix Summary - {NNN}
@@ -240,5 +240,5 @@ Apply fixes in priority order: Critical -> High -> Medium -> Low.
 - [ ] Typography: {n}/{total} compliant
 ```
 
-3. Update `<session>/.msg/meta.json` under `fix-implementer` namespace:
+3. Update `{run_dir}/work/team/.msg/meta.json` under `fix-implementer` namespace:
    - Read existing -> merge `{ "fix-implementer": { fix_id, total_fixes, critical_fixed, high_fixed, medium_fixed, files_modified, timestamp } }` -> write back

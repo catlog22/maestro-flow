@@ -12,8 +12,8 @@ message_types: [state_update]
 | Input | Source | Required |
 |-------|--------|----------|
 | Session path | task description (regex: `session:\s*(.+)`) | Yes |
-| .msg/meta.json | <session>/.msg/meta.json | Yes |
-| Debt inventory | meta.json:debt_inventory OR <session>/scan/debt-inventory.json | Yes |
+| .msg/meta.json | {run_dir}/work/team/.msg/meta.json | Yes |
+| Debt inventory | meta.json:debt_inventory OR {run_dir}/outputs/scan/debt-inventory.json | Yes |
 
 1. Extract session path from task description
 2. Read .msg/meta.json for team context
@@ -71,5 +71,5 @@ After assessment, emit context-aware trigger signals (based on detected codebase
 
 1. Build matrix structure: evaluation_date, total_items, by_quadrant (grouped), summary (counts per quadrant)
 2. Sort within each quadrant by impact_score descending
-3. Write `<session>/assessment/priority-matrix.json`
+3. Write `{run_dir}/outputs/assessment/priority-matrix.json`
 4. Update .msg/meta.json with `priority_matrix` summary and evaluated `debt_inventory`

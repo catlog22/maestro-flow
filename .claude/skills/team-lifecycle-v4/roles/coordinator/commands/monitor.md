@@ -50,7 +50,7 @@ Worker completed. Process and advance.
 
 When PLAN-001 completes, coordinator creates IMPL tasks based on complexity:
 
-1. Read `<session>/plan/plan.json` → extract `complexity`, `tasks[]`
+1. Read `{run_dir}/outputs/plan/plan.json` → extract `complexity`, `tasks[]`
 2. Route by complexity (per specs/pipelines.md §6):
 
 | Complexity | Action |
@@ -70,7 +70,7 @@ When PLAN-001 completes, coordinator creates IMPL tasks based on complexity:
 
 When PLAN-001 completes, coordinator creates IMPL tasks based on complexity:
 
-1. Read `<session>/plan/plan.json` → extract `complexity`, `tasks[]`
+1. Read `{run_dir}/outputs/plan/plan.json` → extract `complexity`, `tasks[]`
 2. Route by complexity (per specs/pipelines.md §6):
 
 | Complexity | Action |
@@ -198,7 +198,7 @@ Capability gap reported mid-pipeline.
 
 1. Parse gap description
 2. Check if existing role covers it -> redirect
-3. Role count < 5 -> generate dynamic role-spec in <session>/role-specs/
+3. Role count < 5 -> generate dynamic role-spec in {run_dir}/work/team/role-specs/
 4. Create new task, spawn worker
 5. Role count >= 5 -> merge or pause
 

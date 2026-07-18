@@ -97,7 +97,7 @@ Pipeline Status (standard):
   [WAIT]  IMPL-001    (implementer) -> blocked by DESIGN-001
   [WAIT]  TEST-001    (tester)      -> blocked by IMPL-001
 
-Session: <session-id>
+Session: <run-id>
 Commands: 'resume' to advance | 'check' to refresh
 ```
 
