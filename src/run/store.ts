@@ -16,10 +16,13 @@ import type { z } from 'zod';
 import { safeRename } from '../utils/state-schema.js';
 import {
   artifactRegistrySchema,
-  commandRunSchema,
+  commandRunReadSchema,
+  commandRunV11Schema,
   evidenceStoreSchema,
   gateRegistrySchema,
+  normalizeCommandRun,
   sessionStateSchema,
+  targetPlatformSchema,
   type ArtifactRegistry,
   type CommandRun,
   type EvidenceStore,
@@ -181,7 +184,11 @@ export class SessionStore {
   }
 
   readRun(sessionId: string, runId: string): CommandRun {
-    return this.readValidated(join(this.runDir(sessionId, runId), 'run.json'), commandRunSchema);
+    const raw = this.readValidated(join(this.runDir(sessionId, runId), 'run.json'), commandRunReadSchema);
+    if (raw.schema_version === 'command-run/1.1') return raw;
+    const session = this.readValidated(join(this.sessionDir(sessionId), 'session.json'), sessionStateSchema);
+    const executorPlatform = targetPlatformSchema.safeParse(session.orchestration.executor?.platform);
+    return normalizeCommandRun(raw, executorPlatform.success ? executorPlatform.data : 'claude');
   }
 
   update<T>(sessionId: string, mutator: (draft: SessionBundle, tx: StoreTransaction) => T): T {
@@ -352,11 +359,11 @@ export class StoreTransaction {
   }
 
   writeRun(run: CommandRun): void {
-    commandRunSchema.parse(run);
+    commandRunV11Schema.parse(run);
     this.writes.push({
       path: join(this.store.runDir(this.sessionId, run.run_id), 'run.json'),
       value: run,
-      schema: commandRunSchema,
+      schema: commandRunV11Schema,
     });
   }
 

@@ -4,7 +4,7 @@
  * Tracks which keywords and entries have already been injected in the current session
  * to prevent duplicate injection when the same keyword appears in multiple prompts.
  *
- * Bridge file: {tmpdir}/maestro-spec-kw-{sessionId}.json
+ * Bridge file: {tmpdir}/spec-kw-{sessionId}.json
  */
 
 import { readFileSync, writeFileSync, existsSync } from 'node:fs';

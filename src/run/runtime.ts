@@ -37,12 +37,16 @@ import {
   buildIntentSection,
   buildBoundaryContractSection,
   buildProgressSection,
+  buildSignalsSection,
 } from './inject.js';
 import { SessionStore, type SessionBundle } from './store.js';
+import { createGateRegistry } from './defaults.js';
 import {
   nextPendingDecisionIndex,
   nextPendingIndex,
+  issueRetryToken,
 } from './chain.js';
+import { canonicalRunDir, resolveRunContext, resolveTargetPlatform } from './context.js';
 import { checkLease, claimLease, type LeaseClaim } from './lease.js';
 import { validateSessionId } from './ids.js';
 import {
@@ -77,6 +81,13 @@ export interface AnchorSection {
   intent: string | null;
   boundary_contract: string | null;
   progress: string | null;
+  signals: string | null;
+}
+
+export interface NamedGateBlocker {
+  gate_id: string;
+  title: string;
+  status: Gate['status'];
 }
 
 export interface CreateRunOptions {
@@ -85,9 +96,16 @@ export interface CreateRunOptions {
   sessionId?: string;
   intent?: string;
   args?: string[];
-  parentRunId?: string;
+  /** Explicit platform for first creation; persisted and immutable on re-attach. */
+  platform?: TargetPlatform;
+  /** Opaque token issued by a needs-retry transition. */
+  retryToken?: string;
   /** Atomically bind the new Run to this pending chain step. */
   chainStepId?: string;
+  /** Preflight revision from `run next`, revalidated inside the SessionStore lock. */
+  expectedActivityRevision?: number;
+  /** Preflight identity revision from `run next`, revalidated inside the SessionStore lock. */
+  expectedIdentityRevision?: number;
   /** Lease claim validated and persisted with the chain binding. */
   leaseClaim?: LeaseClaim;
 }
@@ -96,9 +114,21 @@ export interface CreateRunResult {
   session_id: string;
   run_id: string;
   run_dir: string;
+  chain_step_id: string | null;
+  resolved_platform: TargetPlatform;
   upstream: Record<string, RunUpstream>;
   entry_gates: GateSummary;
+  entry_blockers: NamedGateBlocker[];
   next: { command: string; reason: string };
+}
+
+export interface RebindRunResult {
+  session_id: string;
+  run_id: string;
+  old_content_hash: string;
+  content_hash: string;
+  contract_hash: string;
+  audit_path: string;
 }
 
 export interface SealSessionResult {
@@ -137,6 +167,8 @@ export interface CompleteRunResult extends CheckRunResult {
   sealed: boolean;
   primary_artifact_id: string | null;
   artifact_ids: string[];
+  /** Suggest-only post-completion action; never allocates or executes another Run. */
+  next_action?: CompleteNextSuggestion;
   /** Present when completeRun atomically applied a chain verdict. */
   chain_transition?: {
     step_id: string;
@@ -184,10 +216,16 @@ export interface SkillContentResult {
 export interface BriefRunResult {
   session_id: string;
   run_id: string;
+  run_dir: string;
+  chain_step_id: string | null;
+  resolved_platform: TargetPlatform;
   status: CommandRun['status'];
   command: string;
   goal: string;
+  /** Verbatim invocation arguments persisted on the Run. */
+  args: string[];
   gates: GateSummary;
+  prepare: { path: string; content: string } | null;
   workflow: { path: string; content: string } | null;
   run_mode: { path: string; summary: string } | null;
   /** Prepare-declared deferred-reading refs (path + when). Manifest only. */
@@ -200,8 +238,65 @@ export interface BriefRunResult {
   prev_handoff: PrevHandoff | null;
   /** Session anchor grounding (Intent / Boundary Contract / Execution Progress). */
   anchor: AnchorSection;
+  /** Additive, independently executable read model; persistence stays command-run/1.1. */
+  execution_contract: ExecutionContractView;
   /** Next lifecycle verb pointer, closing next→brief→check→complete. */
   next: { command: string; reason: string };
+}
+
+export interface ExecutionContractView {
+  schema_version: 'execution-contract/1.0';
+  command: string;
+  invocation: { args: string[] };
+  guidance: {
+    prepare_path: string | null;
+    workflow_path: string | null;
+    run_mode_path: string | null;
+  };
+  inputs: Array<{
+    kind: string;
+    alias: string | null;
+    required: boolean;
+    require_status: 'sealed' | null;
+    resolved: RunUpstream | null;
+  }>;
+  outputs: {
+    declared: Array<{
+      kind: string;
+      alias: string | null;
+      primary: boolean;
+      path: string | null;
+      schema: string | null;
+    }>;
+    actual: BriefRunResult['outputs'];
+  };
+  gates: {
+    registry_revision: number;
+    items: Array<{
+      gate_id: string;
+      title: string;
+      scope: Gate['scope'];
+      status: Gate['status'];
+      required: boolean;
+      blocking: boolean;
+    }>;
+  };
+  freshness: {
+    captured_at: string;
+    run_context_identity_revision: number;
+    session_identity_revision: number;
+    session_activity_revision: number;
+    identity_current: boolean;
+    command_contract_hash: string | null;
+  };
+}
+
+export interface CompleteNextSuggestion {
+  suggest_only: true;
+  action: 'repair_run' | 'resolve_session' | 'dispatch_next' | 'evaluate_decision' | 'seal_session';
+  command: string | null;
+  reason: string;
+  preconditions: string[];
 }
 
 export interface CompleteRunOptions {
@@ -249,7 +344,7 @@ export interface CompleteVerdictResult {
   /** Session status after the verdict (paused on blocked, unchanged otherwise). */
   session_status: SessionState['status'];
   /** Next-step pointer closing the loop back to `run next` / decide / seal. */
-  next: { command: string; reason: string };
+  next: CompleteNextSuggestion;
   /** The underlying seal result (run gates, artifacts, warnings, errors). */
   seal: CompleteRunResult;
 }
@@ -268,6 +363,26 @@ const explicitGateCheckSchema = gateSchema.shape.check;
 
 function sha256(value: string): string {
   return createHash('sha256').update(value).digest('hex');
+}
+
+function stableJson(value: unknown): string {
+  const normalize = (item: unknown): unknown => {
+    if (Array.isArray(item)) return item.map(normalize);
+    if (item && typeof item === 'object') {
+      return Object.fromEntries(
+        Object.entries(item as Record<string, unknown>)
+          .filter(([, child]) => child !== undefined)
+          .sort(([left], [right]) => left.localeCompare(right))
+          .map(([key, child]) => [key, normalize(child)]),
+      );
+    }
+    return item;
+  };
+  return JSON.stringify(normalize(value));
+}
+
+function contractHash(contract: CommandContract): string {
+  return sha256(stableJson(contract));
 }
 
 function dateId(): string {
@@ -480,11 +595,14 @@ function handoffByLatestCompleted(store: SessionStore, session: SessionState): P
 function buildAnchorSections(store: SessionStore, session: SessionState): AnchorSection {
   const chain = session.orchestration.chain;
   const completed = chain.filter(s => (s.status === 'completed' || s.status === 'sealed') && s.run_id);
+  const completedHandoffs: Handoff[] = [];
   const recent = completed.slice(-5).map(s => {
     let summary: string | null = null;
     if (s.run_id) {
       try {
-        summary = store.readRun(session.session_id, s.run_id).handoff?.summary ?? null;
+        const handoff = store.readRun(session.session_id, s.run_id).handoff;
+        summary = handoff?.summary ?? null;
+        if (handoff) completedHandoffs.push(handoff);
       } catch {
         summary = null;
       }
@@ -508,6 +626,10 @@ function buildAnchorSections(store: SessionStore, session: SessionState): Anchor
     intent: buildIntentSection(session.intent),
     boundary_contract: buildBoundaryContractSection(session.boundary_contract),
     progress,
+    signals: buildSignalsSection({
+      caveats: completedHandoffs.flatMap(handoff => handoff.concerns).slice(-3),
+      deferred: completedHandoffs.flatMap(handoff => handoff.next.map(item => item.reason || item.command)).slice(-5),
+    }),
   };
 }
 
@@ -732,12 +854,73 @@ function gateSummary(registry: GateRegistry, ids: string[]): GateSummary {
   return summary;
 }
 
-function contractForRun(projectRoot: string, run: CommandRun): CommandContract {
+function contractForRun(
+  projectRoot: string,
+  run: CommandRun,
+): { contract: CommandContract; warning: string | null } {
   const source = resolveCommandSource(projectRoot, run.command.name);
-  if (source.contentHash !== run.command.content_hash) {
-    throw new Error(`Command definition changed after run creation: ${run.command.name}`);
+  const currentContractHash = contractHash(source.contract);
+  if (run.command.contract_hash) {
+    if (currentContractHash !== run.command.contract_hash) {
+      throw new Error(
+        `Command lifecycle contract changed after run creation: ${run.command.name} `
+        + `(expected ${run.command.contract_hash}, got ${currentContractHash})`,
+      );
+    }
+    return {
+      contract: source.contract,
+      warning: source.contentHash === run.command.content_hash
+        ? null
+        : `Command prompt changed after run creation: ${run.command.name}; lifecycle contract is unchanged`,
+    };
   }
-  return source.contract;
+  if (source.contentHash !== run.command.content_hash) {
+    throw new Error(
+      `Command definition changed after run creation: ${run.command.name}; `
+      + `legacy Run has no contract_hash. Rebind prompt-only drift with: `
+      + `maestro run rebind ${run.run_id} --session ${run.session_id} --reason "<reason>"`,
+    );
+  }
+  return { contract: source.contract, warning: null };
+}
+
+function gateContractShape(gate: Gate): string {
+  return stableJson({
+    key: gate.key,
+    title: gate.title,
+    scope: gate.scope,
+    run_id: gate.run_id,
+    required: gate.required,
+    blocking: gate.blocking,
+    applicable_modes: gate.applicable_modes,
+    check: gate.check,
+  });
+}
+
+function assertRebindCompatible(
+  registry: GateRegistry,
+  run: CommandRun,
+  contract: CommandContract,
+): void {
+  const unrecoverableProduce = contract.produces.find(produce => produce.path || produce.primary);
+  if (unrecoverableProduce) {
+    throw new Error(
+      `Cannot rebind: legacy Run cannot prove path/primary compatibility for produce ${unrecoverableProduce.kind}; `
+      + 'create a retry Run instead',
+    );
+  }
+  const expectedRegistry = createGateRegistry();
+  const expectedIds = registerRunGates(expectedRegistry, contract, run.run_id, run.sequence);
+  if (stableJson(expectedIds) !== stableJson(run.gate_ids)) {
+    throw new Error('Cannot rebind: current lifecycle contract produces a different Run gate set');
+  }
+  for (const id of expectedIds) {
+    const expected = expectedRegistry.gates[id];
+    const actual = registry.gates[id];
+    if (!actual || gateContractShape(actual) !== gateContractShape(expected)) {
+      throw new Error(`Cannot rebind: registered gate ${id} differs from the current lifecycle contract`);
+    }
+  }
 }
 
 function scanSummary(scan: ArtifactScanResult): CheckRunResult['artifacts'] {
@@ -801,38 +984,124 @@ export function createRun(options: CreateRunOptions): CreateRunResult {
 
   return store.update(sessionId, (bundle, tx) => {
     let boundStep: SessionState['orchestration']['chain'][number] | null = null;
-    if (options.chainStepId) {
+    let chainStepId = options.chainStepId;
+    if (options.retryToken && !chainStepId) {
+      const retryStep = bundle.session.orchestration.chain.find(
+        step => step.pending_retry?.token === options.retryToken,
+      );
+      if (!retryStep) throw new Error('invalid, expired, or already-consumed retry token');
+      chainStepId = retryStep.step_id;
+    }
+    if (chainStepId) {
+      if (bundle.session.status !== 'running') {
+        throw new Error(`Session ${sessionId} is ${bundle.session.status}; chain dispatch requires running status`);
+      }
+      if (
+        options.expectedActivityRevision !== undefined
+        && bundle.session.activity_revision !== options.expectedActivityRevision
+      ) {
+        throw new Error(
+          `Session ${sessionId} changed after run-next preflight `
+          + `(expected activity_revision ${options.expectedActivityRevision}, got ${bundle.session.activity_revision})`,
+        );
+      }
+      if (
+        options.expectedIdentityRevision !== undefined
+        && bundle.session.identity_revision !== options.expectedIdentityRevision
+      ) {
+        throw new Error(
+          `Session ${sessionId} identity changed after run-next preflight `
+          + `(expected identity_revision ${options.expectedIdentityRevision}, got ${bundle.session.identity_revision})`,
+        );
+      }
+      if (bundle.session.active_run_id) {
+        throw new Error(`Session ${sessionId} already has active Run ${bundle.session.active_run_id}`);
+      }
       const conflict = checkLease(bundle.session.orchestration.lease, options.leaseClaim ?? {});
       if (conflict) throw new Error(conflict);
       const running = bundle.session.orchestration.chain.find(step => step.status === 'running');
       if (running) throw new Error(`chain step already running: ${running.step_id}`);
-      boundStep = bundle.session.orchestration.chain.find(step => step.step_id === options.chainStepId) ?? null;
-      if (!boundStep) throw new Error(`chain step not found: ${options.chainStepId}`);
+      boundStep = bundle.session.orchestration.chain.find(step => step.step_id === chainStepId) ?? null;
+      if (!boundStep) throw new Error(`chain step not found: ${chainStepId}`);
       if (boundStep.status !== 'pending') {
         throw new Error(`chain step ${boundStep.step_id} is ${boundStep.status}, not pending`);
       }
       if (boundStep.decision_ref) throw new Error(`chain step ${boundStep.step_id} is a decision node`);
+      if (boundStep.command !== options.command) {
+        throw new Error(`chain step ${boundStep.step_id} expects command ${boundStep.command}, got ${options.command}`);
+      }
+      const boundIndex = bundle.session.orchestration.chain.findIndex(step => step.step_id === boundStep!.step_id);
+      const earlierDecision = bundle.session.orchestration.chain
+        .slice(0, boundIndex)
+        .find(step => {
+          if (!step.decision_ref) return false;
+          const point = bundle.session.orchestration.decision_points
+            .find(item => item.point_id === step.decision_ref);
+          const stepTerminal = step.status === 'sealed' || step.status === 'completed';
+          return !stepTerminal || point?.status !== 'passed';
+        });
+      if (earlierDecision) {
+        const point = bundle.session.orchestration.decision_points
+          .find(item => item.point_id === earlierDecision.decision_ref);
+        throw new Error(
+          `earlier decision ${earlierDecision.decision_ref} is ${point?.status ?? 'pending'} `
+          + `and gates chain step ${boundStep.step_id}`,
+        );
+      }
     }
 
     const freshState = projectState(options.projectRoot);
     const sequence = nextSequence(store, sessionId);
     const runId = `${dateId()}-${String(sequence).padStart(3, '0')}-${slug(options.command, 'run')}`;
+    const now = localISO();
+    const resolvedPlatform = resolveTargetPlatform(options.platform, undefined, bundle.session);
+    let parentRunId: string | null = null;
+    if (boundStep?.pending_retry) {
+      const pending = boundStep.pending_retry;
+      if (!options.retryToken) throw new Error(`chain step ${boundStep.step_id} requires its pending retry token`);
+      if (pending.token !== options.retryToken) throw new Error('retry token does not match the requested chain step');
+      if (pending.session_id !== sessionId) throw new Error(`retry token belongs to Session ${pending.session_id}`);
+      if (pending.chain_step_id !== boundStep.step_id) throw new Error('retry token chain step mismatch');
+      if (pending.command !== options.command) throw new Error(`retry token is for command ${pending.command}`);
+      if (Date.parse(pending.expires_at) <= Date.now()) throw new Error('retry token has expired');
+      const parent = tx.readRun(pending.parent_run_id);
+      if (parent.session_id !== sessionId) throw new Error(`retry parent belongs to Session ${parent.session_id}`);
+      if (parent.command.name !== options.command) throw new Error('retry parent command mismatch');
+      if (parent.chain_step_id !== boundStep.step_id) throw new Error('retry parent chain step mismatch');
+      if (parent.sequence >= sequence) throw new Error('retry parent must precede the replacement Run');
+      if (!parent.retry_fence || parent.retry_fence.token !== pending.token) {
+        throw new Error('retry parent fence does not match the pending token');
+      }
+      if (parent.retry_fence.consumed_at) throw new Error('retry token was already consumed');
+      parent.retry_fence.consumed_at = now;
+      boundStep.pending_retry = null;
+      parentRunId = parent.run_id;
+      tx.writeRun(parent);
+    } else if (options.retryToken) {
+      throw new Error('invalid, expired, or already-consumed retry token');
+    }
     const runDir = ensureRunShell(store, sessionId, runId);
     const gateIds = registerRunGates(bundle.gates, source.contract, runId, sequence);
     const upstream = collectUpstream(sessionId, bundle.artifacts, source.contract);
-    const now = localISO();
     const run: CommandRun = {
-      schema_version: 'command-run/1.0',
+      schema_version: 'command-run/1.1',
       session_id: sessionId,
       run_id: runId,
       sequence,
-      parent_run_id: options.parentRunId ?? null,
+      parent_run_id: parentRunId,
+      chain_step_id: boundStep?.step_id ?? null,
+      resolved_platform: resolvedPlatform,
+      goal_binding: null,
+      checkpoint_expectation: null,
+      checkpoint: null,
+      retry_fence: null,
       command: {
         name: options.command,
         version: '1.0',
         source_path: source.relativePath,
         content_hash: source.contentHash,
         resolved_prompt_hash: sha256(source.raw),
+        contract_hash: contractHash(source.contract),
       },
       status: 'running',
       input: {
@@ -863,6 +1132,10 @@ export function createRun(options: CreateRunOptions): CreateRunResult {
     }
     summarizeRegistry(bundle.gates);
     const entrySummary = gateSummary(bundle.gates, gateIds.filter(id => bundle.gates.gates[id]?.scope === 'entry'));
+    const entryBlockers = entrySummary.blocking.slice(0, 5).map(gateId => {
+      const gate = bundle.gates.gates[gateId]!;
+      return { gate_id: gateId, title: gate.title, status: gate.status };
+    });
     if (entrySummary.blocking.length > 0) run.status = 'blocked';
 
     bundle.session.active_run_id = runId;
@@ -878,7 +1151,7 @@ export function createRun(options: CreateRunOptions): CreateRunResult {
     tx.writeRun(run);
     const nextState = ensureSessionProjection(freshState, projectSessionEntry(bundle.session));
     tx.writeJson(join(store.workflowRoot, 'state.json'), nextState);
-    const runDirRel = `.workflow/sessions/${sessionId}/runs/${runId}`;
+    const runDirRel = canonicalRunDir(store, sessionId, runId);
     const hasWorkflow = resolveStepContent(options.projectRoot, options.command).workflow !== null;
     const readyReason = hasWorkflow
       ? 'load the workflow execution manual, execute it, then run: maestro run check → maestro run complete'
@@ -887,8 +1160,11 @@ export function createRun(options: CreateRunOptions): CreateRunResult {
       session_id: sessionId,
       run_id: runId,
       run_dir: runDirRel,
+      chain_step_id: run.chain_step_id,
+      resolved_platform: run.resolved_platform,
       upstream,
       entry_gates: entrySummary,
+      entry_blockers: entryBlockers,
       next: {
         command: `maestro run brief ${runId}`,
         reason: entrySummary.blocking.length > 0
@@ -910,8 +1186,8 @@ function buildFinishChecklist(projectRoot: string, run: CommandRun, frontmatter:
   if (!frontmatter.summary.trim()) {
     lines.push('report.md handoff frontmatter is empty — fill summary (plus concerns/decisions) before completing; the sealed handoff is derived from it.');
   }
-  lines.push('Record new knowledge before sealing: constraints/rules → `maestro spec add`, reusable recipes/pitfalls → `/manage knowledge capture`; skip only if nothing new was learned.');
-  lines.push('Mark every spec/knowhow entry this Run contradicted: replaced by a better rule → `maestro spec add ... --json` then `maestro spec supersede <old-sid> --by <new-sid>`; both sides defensible → `maestro spec conflict mark <file> <line> --note "<reason>"` and let `/manage knowledge audit` adjudicate. Never seal with a known-stale entry unmarked.');
+  lines.push('Record new knowledge before sealing: constraints/rules → `maestro spec add`, reusable recipes/pitfalls → `/maestro-manage knowledge capture`; skip only if nothing new was learned.');
+  lines.push('Mark every spec/knowhow entry this Run contradicted: replaced by a better rule → `maestro spec add ... --json` then `maestro spec supersede <old-sid> --by <new-sid>`; both sides defensible → `maestro spec conflict mark <file> <line> --note "<reason>"` and let `/maestro-manage knowledge audit` adjudicate. Never seal with a known-stale entry unmarked.');
   lines.push('Pick the verdict honestly: `done` (clean) or `done-with-concerns` (works but carries caveats — list every caveat in concerns).');
   lines.push(...resolveStepContent(projectRoot, run.command.name).finish);
   return lines;
@@ -944,8 +1220,13 @@ function checkNext(
 export function checkRun(projectRoot: string, runId: string, sessionId?: string): CheckRunResult {
   const store = new SessionStore(projectRoot);
   const located = store.findRun(runId, sessionId);
-  const contract = contractForRun(projectRoot, located.run);
-  const scan = scanOutputs(store.runDir(located.sessionId, runId), store.sessionDir(located.sessionId), contract);
+  const resolvedContract = contractForRun(projectRoot, located.run);
+  const scan = scanOutputs(
+    store.runDir(located.sessionId, runId),
+    store.sessionDir(located.sessionId),
+    resolvedContract.contract,
+  );
+  if (resolvedContract.warning) scan.warnings.unshift(resolvedContract.warning);
   const frontmatter = readReportFrontmatter(store.runDir(located.sessionId, runId));
 
   if (located.run.status === 'sealed') {
@@ -988,6 +1269,56 @@ export function checkRun(projectRoot: string, runId: string, sessionId?: string)
       errors: scan.errors,
       next: checkNext(located.sessionId, runId, run.status, clean),
       ...(clean ? { finish: buildFinishChecklist(projectRoot, run, frontmatter) } : {}),
+    };
+  });
+}
+
+export function rebindRunCommand(
+  projectRoot: string,
+  runId: string,
+  reason: string,
+  sessionId?: string,
+): RebindRunResult {
+  const normalizedReason = reason.trim();
+  if (!normalizedReason) throw new Error('Rebind requires a non-empty reason');
+  const store = new SessionStore(projectRoot);
+  const located = store.findRun(runId, sessionId);
+  const source = resolveCommandSource(projectRoot, located.run.command.name);
+  const nextContractHash = contractHash(source.contract);
+
+  return store.update(located.sessionId, (bundle, tx) => {
+    const run = tx.readRun(runId);
+    if (run.status === 'sealed') throw new Error(`Run ${runId} is sealed and immutable`);
+    if (run.command.contract_hash) {
+      throw new Error(`Run ${runId} already has contract_hash and does not require legacy rebind`);
+    }
+    assertRebindCompatible(bundle.gates, run, source.contract);
+
+    const oldContentHash = run.command.content_hash;
+    run.command.source_path = source.relativePath;
+    run.command.content_hash = source.contentHash;
+    run.command.resolved_prompt_hash = sha256(source.raw);
+    run.command.contract_hash = nextContractHash;
+    tx.writeRun(run);
+
+    const auditPath = join(store.runDir(located.sessionId, runId), 'command-rebind.json');
+    tx.writeJson(auditPath, {
+      schema_version: 'command-rebind/1.0',
+      run_id: runId,
+      command: run.command.name,
+      reason: normalizedReason,
+      old_content_hash: oldContentHash,
+      content_hash: source.contentHash,
+      contract_hash: nextContractHash,
+      rebound_at: localISO(),
+    });
+    return {
+      session_id: located.sessionId,
+      run_id: runId,
+      old_content_hash: oldContentHash,
+      content_hash: source.contentHash,
+      contract_hash: nextContractHash,
+      audit_path: relative(projectRoot, auditPath).replaceAll('\\', '/'),
     };
   });
 }
@@ -1211,10 +1542,10 @@ function mergeDecisionsIntoHandoff(handoff: Handoff, decisions: string[]): void 
 
 function applyChainVerdict(
   session: SessionState,
-  runId: string,
+  run: CommandRun,
   verdict: CompletionVerdict,
 ): NonNullable<CompleteRunResult['chain_transition']> | null {
-  const index = session.orchestration.chain.findIndex(step => step.run_id === runId);
+  const index = session.orchestration.chain.findIndex(step => step.run_id === run.run_id);
   if (index < 0) return null;
   const step = session.orchestration.chain[index];
   let retry: NonNullable<CompleteRunResult['chain_transition']>['retry'] = null;
@@ -1227,6 +1558,7 @@ function applyChainVerdict(
       const current = step.retry ?? { count: 0, max: 2 };
       const next = { count: current.count + 1, max: current.max };
       step.retry = next;
+      issueRetryToken(session.session_id, step, run);
       step.status = 'pending';
       step.run_id = null;
       retry = { ...next, exhausted: next.count >= next.max };
@@ -1249,10 +1581,11 @@ export function completeRun(
   const store = new SessionStore(projectRoot);
   const located = store.findRun(runId, sessionId);
   if (located.run.status === 'sealed') throw new Error(`Run ${runId} is sealed and immutable`);
-  const contract = contractForRun(projectRoot, located.run);
+  const resolvedContract = contractForRun(projectRoot, located.run);
   const runDir = store.runDir(located.sessionId, runId);
   const sessionDir = store.sessionDir(located.sessionId);
-  const scan = scanOutputs(runDir, sessionDir, contract);
+  const scan = scanOutputs(runDir, sessionDir, resolvedContract.contract);
+  if (resolvedContract.warning) scan.warnings.unshift(resolvedContract.warning);
   const extraArtifacts = discoverExtraArtifacts(runDir, sessionDir, options.extraArtifacts ?? []);
   const frontmatter = readReportFrontmatter(runDir);
   const notes = options.notes ?? [];
@@ -1290,6 +1623,13 @@ export function completeRun(
         sealed: false,
         primary_artifact_id: null,
         artifact_ids: [],
+        next_action: {
+          suggest_only: true,
+          action: 'repair_run',
+          command: `maestro run check ${runId}`,
+          reason: 'Run gates are blocking; fix outputs before advancing the chain',
+          preconditions: ['repair blocking outputs or gates', 'run check must report no blocking gates'],
+        },
         chain_transition: null,
       };
     }
@@ -1313,7 +1653,7 @@ export function completeRun(
     bundle.session.latest_completed_run_id = runId;
     if (bundle.session.active_run_id === runId) bundle.session.active_run_id = null;
     const chainTransition = options.chainVerdict
-      ? applyChainVerdict(bundle.session, runId, options.chainVerdict)
+      ? applyChainVerdict(bundle.session, run, options.chainVerdict)
       : null;
     bundle.session.activity_revision++;
     summarizeRegistry(bundle.gates);
@@ -1332,6 +1672,7 @@ export function completeRun(
       sealed: true,
       primary_artifact_id: primary,
       artifact_ids: artifactIds,
+      next_action: completionNextPointer(bundle.session, runId),
       chain_transition: chainTransition,
     };
   });
@@ -1363,29 +1704,53 @@ function chainStepForRun(session: SessionState, runId: string): { index: number;
  * node hands off to the orchestrator; a fully-drained chain points at
  * `run seal-session`.
  */
-function completionNextPointer(session: SessionState): { command: string; reason: string } {
+function completionNextPointer(session: SessionState, completedRunId?: string): CompleteNextSuggestion {
   const sessionId = session.session_id;
   if (session.status === 'paused') {
     return {
+      suggest_only: true,
+      action: 'resolve_session',
+      command: null,
+      reason: 'session paused — dispatch is forbidden until the blocker or escalation is explicitly resolved',
+      preconditions: ['resolve the named blocker or escalated decision', 'perform an authorized Session resume transition'],
+    };
+  }
+  const reconcilable = completedRunId
+    ? session.orchestration.chain.find(step => step.status === 'running' && step.run_id === completedRunId)
+    : null;
+  if (reconcilable) {
+    return {
+      suggest_only: true,
+      action: 'dispatch_next',
       command: `maestro run next --session ${sessionId}`,
-      reason: 'session paused (blocked step) — resolve the blocker, then resume',
+      reason: `Run ${completedRunId} is sealed; run next reconciles chain step ${reconcilable.step_id} before continuing`,
+      preconditions: ['session_status=running', `chain_step=${reconcilable.step_id}`, `sealed_run_id=${completedRunId}`],
     };
   }
   if (nextPendingIndex(session, true) !== null) {
     return {
+      suggest_only: true,
+      action: 'dispatch_next',
       command: `maestro run next --session ${sessionId}`,
       reason: 'more pending steps — advance the chain',
+      preconditions: ['session_status=running', 'active_run_id=null', 'no earlier pending decision'],
     };
   }
   if (nextPendingDecisionIndex(session) !== null) {
     return {
+      suggest_only: true,
+      action: 'evaluate_decision',
       command: `maestro run next --session ${sessionId}`,
       reason: 'next node is a decision — the orchestrator evaluates it',
+      preconditions: ['session_status=running', 'decision remains pending'],
     };
   }
   return {
+    suggest_only: true,
+    action: 'seal_session',
     command: `maestro run seal-session ${sessionId}`,
     reason: 'all steps complete — seal the session',
+    preconditions: ['all Runs are sealed', 'all chain steps are terminal'],
   };
 }
 
@@ -1456,7 +1821,13 @@ export function completeRunWithVerdict(
         retry: current.retry ? { ...current.retry, exhausted: current.retry.count >= current.retry.max } : null,
       } : null,
       session_status: after.status,
-      next: { command: `maestro run check ${runId}`, reason: 'Run gates are blocking; fix outputs before advancing the chain' },
+      next: {
+        suggest_only: true,
+        action: 'repair_run',
+        command: `maestro run check ${runId}`,
+        reason: 'Run gates are blocking; fix outputs before advancing the chain',
+        preconditions: ['repair blocking outputs or gates', 'run check must report no blocking gates'],
+      },
       seal,
     };
   }
@@ -1623,12 +1994,14 @@ export function briefRun(
   platform?: TargetPlatform,
 ): BriefRunResult {
   const store = new SessionStore(projectRoot);
-  const located = store.findRun(runId, sessionId);
+  const context = resolveRunContext(projectRoot, runId, sessionId, platform);
+  const located = store.findRun(runId, context.session_id);
   const bundle = store.readBundle(located.sessionId);
   const run = located.run;
-  const suffix = platform ? PLATFORM_SUFFIX[platform] : undefined;
+  const resolvedPlatform = context.resolved_platform;
+  const suffix = PLATFORM_SUFFIX[resolvedPlatform];
   const content = resolveStepContent(projectRoot, run.command.name, suffix);
-  const tx = (raw: string) => platform ? transformContentForPlatform(raw, platform) : raw;
+  const tx = (raw: string) => transformContentForPlatform(raw, resolvedPlatform);
 
   const outputs = run.output.produces
     .map(id => {
@@ -1647,14 +2020,72 @@ export function briefRun(
   const upstream = upstreamForConsumedIds(located.sessionId, bundle.artifacts, run.input.consumes);
   const prevHandoff = latestHandoffBefore(store, located.sessionId, run.sequence);
   const anchor = buildAnchorSections(store, bundle.session);
+  const contract = contractForRun(projectRoot, run).contract;
+  const inputs: ExecutionContractView['inputs'] = contract.consumes.map(consume => ({
+    kind: consume.kind,
+    alias: consume.alias ?? null,
+    required: consume.required,
+    require_status: consume.require_status ?? null,
+    resolved: consume.alias
+      ? upstream[consume.alias] ?? null
+      : Object.values(upstream).find(item => item.kind === consume.kind) ?? null,
+  }));
+  const declaredOutputs: ExecutionContractView['outputs']['declared'] = contract.produces.map(produce => ({
+    kind: produce.kind,
+    alias: produce.alias ?? null,
+    primary: produce.primary,
+    path: produce.path ?? null,
+    schema: typeof produce.schema === 'string' ? produce.schema : null,
+  }));
+  const gateItems: ExecutionContractView['gates']['items'] = run.gate_ids
+    .map(gateId => {
+      const gate = bundle.gates.gates[gateId];
+      return gate ? {
+        gate_id: gateId,
+        title: gate.title,
+        scope: gate.scope,
+        status: gate.status,
+        required: gate.required,
+        blocking: gate.blocking,
+      } : null;
+    })
+    .filter((item): item is NonNullable<typeof item> => item !== null);
+  const executionContract: ExecutionContractView = {
+    schema_version: 'execution-contract/1.0',
+    command: run.command.name,
+    invocation: { args: [...run.input.args] },
+    guidance: {
+      prepare_path: content.prepare?.path ?? null,
+      workflow_path: content.workflow?.path ?? null,
+      run_mode_path: content.runMode?.path ?? null,
+    },
+    inputs,
+    outputs: { declared: declaredOutputs, actual: outputs },
+    gates: { registry_revision: bundle.gates.revision, items: gateItems },
+    freshness: {
+      captured_at: localISO(),
+      run_context_identity_revision: run.input.context_identity_revision,
+      session_identity_revision: bundle.session.identity_revision,
+      session_activity_revision: bundle.session.activity_revision,
+      identity_current: run.input.context_identity_revision === bundle.session.identity_revision,
+      command_contract_hash: run.command.contract_hash ?? null,
+    },
+  };
 
   return {
     session_id: located.sessionId,
     run_id: runId,
+    run_dir: context.run_dir,
+    chain_step_id: context.chain_step_id,
+    resolved_platform: resolvedPlatform,
     status: run.status,
     command: run.command.name,
     goal: run.handoff?.summary || bundle.session.intent,
+    args: [...run.input.args],
     gates: gateSummary(bundle.gates, run.gate_ids),
+    prepare: content.prepare
+      ? { path: content.prepare.path, content: tx(content.prepare.raw) }
+      : null,
     workflow: content.workflow
       ? { path: content.workflow.path, content: tx(content.workflow.raw) }
       : null,
@@ -1663,10 +2094,11 @@ export function briefRun(
       : null,
     refs: content.refs,
     outputs,
-    goal_mode: resolveGoalMode(content.prepare?.raw, platform ?? 'claude'),
+    goal_mode: resolveGoalMode(content.prepare?.raw, resolvedPlatform),
     upstream,
     prev_handoff: prevHandoff,
     anchor,
+    execution_contract: executionContract,
     next: briefNext(located.sessionId, runId, run.status),
   };
 }

@@ -37,7 +37,7 @@
 import { existsSync, readdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { resolveStepContent } from './contract.js';
-import { createRun, type PrevHandoff, type RunUpstream } from './runtime.js';
+import { createRun, type NamedGateBlocker, type PrevHandoff, type RunUpstream } from './runtime.js';
 import {
   activeStepIndex,
   nextPendingIndex,
@@ -47,6 +47,7 @@ import { checkLease } from './lease.js';
 import { SessionStore } from './store.js';
 import { readStateJson } from '../utils/state-schema.js';
 import type { SessionState, Handoff } from './schemas.js';
+import type { TargetPlatform } from '../core/skill-converter.js';
 
 /** Chain-forward preview entry: an upcoming step the orchestrator should expect. */
 export interface QueueEntry {
@@ -68,13 +69,21 @@ export interface NextResult {
   session_id: string;
   run_id: string;
   run_dir: string;
+  resolved_platform: TargetPlatform;
+  /** Verbatim argv persisted on the already-created Run. */
+  args: string[];
+  /** Explicit invariant preventing executors from allocating a duplicate Run. */
+  run_already_created: true;
   goal: string;
   step: { index: number; total: number; step_id: string; command: string };
   upstream: Record<string, RunUpstream>;
   entry_gates: { passed: number; failed: number; skipped: number; blocking: number };
+  /** Bounded named entry blockers; full gate detail remains in `run brief`. */
+  blockers: NamedGateBlocker[];
   prev_handoff: PrevHandoff | null;
   /** Prepare-declared deferred-reading refs (path + when). Manifest only. */
   refs: Array<{ path: string; when: string }>;
+  brief: { command: string };
   next: { command: string; reason: string };
   /** Pending steps after the advanced one (chain-forward preview, max 3). */
   queue?: QueueEntry[];
@@ -277,6 +286,8 @@ function renderBirthPacket(r: NextResult): string {
   lines.push('');
   lines.push(`run_id:  ${r.run_id}`);
   lines.push(`run_dir: ${r.run_dir}`);
+  lines.push(`args:    ${JSON.stringify(r.args)}`);
+  lines.push('run_already_created: true (do not call maestro run create)');
   lines.push(`goal:    ${r.goal}`);
   lines.push('');
 
@@ -294,6 +305,9 @@ function renderBirthPacket(r: NextResult): string {
 
   const g = r.entry_gates;
   lines.push(`**Entry gates**: ${g.passed} passed, ${g.failed} failed, ${g.skipped} skipped, ${g.blocking} blocking`);
+  for (const blocker of r.blockers) {
+    lines.push(`- BLOCKER ${blocker.gate_id}: ${blocker.title} (${blocker.status})`);
+  }
   lines.push('');
 
   if (r.prev_handoff) {
@@ -503,7 +517,16 @@ export function runNextStep(projectRoot: string, opts: NextCmdOptions = {}): Nex
   }
 
   if (session.status !== 'running') {
-    return { exitCode: 1, result: null, message: `[run next] session is "${session.status}", not running` };
+    const escalated = session.orchestration.decision_points
+      .filter(point => point.status === 'escalated')
+      .map(point => point.point_id);
+    const detail = escalated.length > 0 ? `; escalated decisions: ${escalated.join(', ')}` : '';
+    return {
+      exitCode: 1,
+      result: null,
+      message: `[run next] session is "${session.status}"; dispatch refused${detail}. `
+        + 'Resolve the blocker/escalation and perform an authorized resume transition before retrying run next.',
+    };
   }
 
   // Reconcile: a chain step whose Run has already sealed is done — advance it so
@@ -569,6 +592,7 @@ export function runNextStep(projectRoot: string, opts: NextCmdOptions = {}): Nex
   const prev = toPrevHandoff(handoff);
   const recommended = recommendedFrom(handoff);
   const queue = buildQueue(session, nextIdx);
+  const args = opts.args ?? (chainStep.args ? [chainStep.args] : []);
 
   let created;
   try {
@@ -577,8 +601,11 @@ export function runNextStep(projectRoot: string, opts: NextCmdOptions = {}): Nex
       command: chainStep.command,
       sessionId,
       intent: session.intent,
-      args: opts.args ?? (chainStep.args ? [chainStep.args] : undefined),
+      args,
       chainStepId: chainStep.step_id,
+      expectedActivityRevision: session.activity_revision,
+      expectedIdentityRevision: session.identity_revision,
+      retryToken: chainStep.pending_retry?.token,
       leaseClaim: {
         executionOwner: opts.executionOwner,
         ownerEpoch: opts.ownerEpoch,
@@ -602,6 +629,9 @@ export function runNextStep(projectRoot: string, opts: NextCmdOptions = {}): Nex
     session_id: sessionId,
     run_id: created.run_id,
     run_dir: created.run_dir,
+    resolved_platform: created.resolved_platform,
+    args,
+    run_already_created: true,
     goal: session.intent,
     step: {
       index: nextIdx,
@@ -616,8 +646,10 @@ export function runNextStep(projectRoot: string, opts: NextCmdOptions = {}): Nex
       skipped: created.entry_gates.skipped.length,
       blocking: created.entry_gates.blocking.length,
     },
+    blockers: created.entry_blockers,
     prev_handoff: prev,
     refs: content.refs,
+    brief: { command: created.next.command },
     next: created.next,
     queue,
     recommended,

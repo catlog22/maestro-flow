@@ -41,6 +41,7 @@ const commandLoaders: Record<string, () => Promise<(p: Command) => void>> = {
   stop:       async () => (await import('./commands/stop.js')).registerStopCommand,
 
   spec:       async () => (await import('./commands/spec.js')).registerSpecCommand,
+  issue:      async () => (await import('./commands/issue.js')).registerIssueCommand,
   wiki:       async () => (await import('./commands/wiki.js')).registerWikiCommand,
   hooks:      async () => (await import('./commands/hooks.js')).registerHooksCommand,
   coordinate: async () => (await import('./commands/coordinate.js')).registerCoordinateCommand,

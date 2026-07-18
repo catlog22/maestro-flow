@@ -6,7 +6,7 @@
  * discovers knowhow tools with matching category, returns concatenated content.
  */
 
-import { readFileSync, existsSync, readdirSync, mkdirSync, writeFileSync, appendFileSync } from 'node:fs';
+import { readFileSync, existsSync, readdirSync, mkdirSync, writeFileSync, appendFileSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { parseSpecEntries, formatSpecEntries, VALID_CATEGORIES, type SpecEntryParsed } from './spec-entry-parser.js';
 import { paths } from '../config/paths.js';
@@ -16,7 +16,7 @@ import {
   hasFrontmatter,
   renderSeedContent,
 } from './spec-seeds.js';
-import { stripFrontmatter, parseFrontmatter } from '../utils/frontmatter.js';
+import { stripFrontmatter, parseFrontmatter, knowhowFileToWikiId } from '../utils/frontmatter.js';
 
 // ============================================================================
 // Types
@@ -409,9 +409,7 @@ function formatFileContent(body: string, keyword?: string, crossCategory?: SpecC
  *   2. Spec-entry content body (first 200 chars after heading)
  */
 function formatRefEntry(e: SpecEntryParsed, workflowRoot?: string): string {
-  const refStem = (e.ref ?? '').replace(/^knowhow\//, '').replace(/\.md$/, '');
-  const refSlug = refStem.replace(/^(KNW|TIP|TPL|RCP|REF|DCS|AST|BLP|DOC)-/i, '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
-  const refId = `knowhow-${refSlug}`;
+  const refId = knowhowFileToWikiId((e.ref ?? '').replace(/^knowhow\//, ''));
 
   // Try to read YAML summary from the referenced knowhow document
   let summary = resolveRefSummary(e.ref, workflowRoot);
@@ -488,10 +486,7 @@ function discoverKnowhowTools(workflowRoot: string, category: SpecCategory): { c
         summary = body.split('\n\n')[0].slice(0, 200).replace(/\s+/g, ' ');
       }
 
-      const stem = file.replace(/\.md$/, '');
-      const slug = stem.replace(/^(KNW|TIP|TPL|RCP|REF|DCS|AST|BLP|DOC)-/i, '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
-
-      tools.push({ title, summary, id: `knowhow-${slug}` });
+      tools.push({ title, summary, id: knowhowFileToWikiId(file) });
     } catch {
       continue;
     }
@@ -518,7 +513,7 @@ const autoInitChecked = new Set<string>();
  * Applies to every layer (global, baseline, team, personal).
  *
  * For project-local dirs: only runs when `.workflow/` already exists
- * (i.e. the project is maestro-managed).
+ * (i.e. the project is managed).
  * For global (`~/.maestro/specs/`): always creates — the home dir exists by definition.
  *
  * Synchronous, per-directory dedup, best-effort — never throws.
@@ -609,8 +604,11 @@ export function loadExtraDocs(projectPath: string, docPaths?: string[]): ExtraDo
 }
 
 // ============================================================================
-// Hit tracking — append-only JSONL log for decay analysis
+// Hit tracking — size-bounded JSONL log for decay analysis
 // ============================================================================
+
+/** Once the hit log passes this size, keep only the newest half (G-A12). */
+const HIT_LOG_MAX_BYTES = 1024 * 1024; // 1MB
 
 function recordHit(
   projectPath: string,
@@ -620,6 +618,10 @@ function recordHit(
 ): void {
   try {
     const hitLog = join(projectPath, SPECS_DIR, '.hit-log.jsonl');
+    if (existsSync(hitLog) && statSync(hitLog).size > HIT_LOG_MAX_BYTES) {
+      const lines = readFileSync(hitLog, 'utf-8').split('\n');
+      writeFileSync(hitLog, lines.slice(Math.floor(lines.length / 2)).join('\n'), 'utf-8');
+    }
     const entry = JSON.stringify({
       ts: new Date().toISOString(),
       cat: category ?? null,

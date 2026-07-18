@@ -82,11 +82,11 @@ Complete OAuth PKCE flow design with authorization code exchange.
     expect(result.content).toContain('OAuth 2.0 PKCE Integration');
     // Should show the load command hint
     expect(result.content).toContain('→ Detail: maestro load --type knowhow --id');
-    // The ref ID should be derived from the ref path
-    expect(result.content).toContain('knowhow-oauth-flow');
+    // The ref ID keeps the type prefix — matching the wiki-indexer id
+    expect(result.content).toContain('knowhow-ast-oauth-flow');
   });
 
-  it('strips knowhow/ prefix and .md suffix from ref for ID generation', () => {
+  it('strips knowhow/ dir prefix and .md suffix but keeps the type prefix', () => {
     writeSpec('coding-conventions.md', `# Coding
 
 <spec-entry category="coding" keywords="api" date="2026-05-10" ref="knowhow/DOC-api-design-standard.md">
@@ -99,8 +99,8 @@ REST API conventions for the project.
 `);
 
     const result = loadSpecs(testDir, 'coding', undefined, undefined, undefined, TEST_OPTS);
-    // DOC- prefix should be stripped, resulting in "api-design-standard"
-    expect(result.content).toContain('knowhow-api-design-standard');
+    // DOC- prefix is kept: `maestro load --id knowhow-doc-...` must round-trip
+    expect(result.content).toContain('knowhow-doc-api-design-standard');
   });
 
   it('handles various knowhow prefixes in ref path', () => {
@@ -124,8 +124,7 @@ Summary for ${prefix}.
 `, 'utf-8');
 
       const result = loadSpecs(freshDir, 'learning', undefined, undefined, undefined, { globalDir: freshGlobal });
-      expect(result.content).toContain('knowhow-my-doc');
-      expect(result.content).not.toContain(`knowhow-${prefix.toLowerCase()}-`);
+      expect(result.content).toContain(`knowhow-${prefix.toLowerCase()}-my-doc`);
 
       rmSync(freshDir, { recursive: true, force: true });
       rmSync(freshGlobal, { recursive: true, force: true });

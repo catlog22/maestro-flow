@@ -9,6 +9,7 @@ import { homedir } from 'node:os';
 import { createRequire } from 'node:module';
 import { paths } from '../config/paths.js';
 import { DEFAULT_ENTRY_STEPS } from './entry-command-generator.js';
+import { buildCodexAgents } from './skill-converter.js';
 
 const require = createRequire(import.meta.url);
 
@@ -205,7 +206,7 @@ export const COMPONENT_DEFS: ComponentDef[] = [
   {
     id: 'commands',
     label: 'Commands',
-    description: 'All Claude slash commands (maestro, manage, odyssey, learn, spec, quality, security)',
+    description: 'All Claude slash commands (maestro, maestro-manage, maestro-odyssey, maestro-learn, maestro-spec, quality, security)',
     sourcePath: join('.claude', 'commands'),
     target: (mode, projectPath) =>
       mode === 'global'
@@ -337,14 +338,16 @@ export const COMPONENT_DEFS: ComponentDef[] = [
   {
     id: 'codex-agents',
     label: 'Codex Agents',
-    description: 'Codex agent definitions',
-    sourcePath: join('.codex', 'agents'),
+    description: 'Codex agent definitions generated from canonical Claude agents',
+    sourcePath: join('.claude', 'agents'),
+    sourceCountDir: join('.claude', 'agents'),
     target: (mode, projectPath) =>
       mode === 'global'
         ? join(homedir(), '.codex', 'agents')
         : join(projectPath, '.codex', 'agents'),
     alwaysGlobal: false,
     platform: 'codex',
+    build: buildCodexAgents,
   },
   {
     id: 'codex-skills',

@@ -4,7 +4,7 @@
 // handoff derivation), then asserts the chain / session transitions.
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { Command } from 'commander';
@@ -375,9 +375,16 @@ describe('run complete — next pointer', () => {
     stepCommand(projectRoot, 'demo');
     seedSession(projectRoot, 's', [{ command: 'demo' }, { command: 'demo' }]);
     const runId = startStep(projectRoot, 's', 0);
+    const runsDir = join(projectRoot, '.workflow', 'sessions', 's', 'runs');
+    const beforeRuns = readdirSync(runsDir);
     const result = completeRunWithVerdict(projectRoot, runId, 's', { verdict: 'done' });
+    expect(result.next.suggest_only).toBe(true);
+    expect(result.next.action).toBe('dispatch_next');
     expect(result.next.command).toBe('maestro run next --session s');
     expect(result.next.reason).toContain('more pending steps');
+    expect(result.next.preconditions).toContain('active_run_id=null');
+    expect(readdirSync(runsDir)).toEqual(beforeRuns);
+    expect(chainOf(projectRoot, 's')[1]).toMatchObject({ status: 'pending', run_id: null });
   });
 
   it('points at run next (decision) when the next node is a decision', () => {
@@ -409,6 +416,8 @@ describe('run complete — next pointer', () => {
     const runId = startStep(projectRoot, 's', 0);
     const result = completeRunWithVerdict(projectRoot, runId, 's', { verdict: 'blocked', reason: 'x' });
     expect(result.next.reason).toContain('paused');
+    expect(result.next).toMatchObject({ suggest_only: true, action: 'resolve_session', command: null });
+    expect(result.next.preconditions).toContain('perform an authorized Session resume transition');
   });
 });
 
@@ -486,8 +495,20 @@ describe('run complete CLI — verdict + 免参 + lease', () => {
 
     // No verdict, no lease, explicit run-id → legacy completeRun (seals the run,
     // leaves the chain step running — chain driving is opt-in via verdict).
-    const out = (await runCompleteCli(projectRoot, [runId, '--session', 's'])) as { sealed?: boolean };
+    const runsDir = join(projectRoot, '.workflow', 'sessions', 's', 'runs');
+    const beforeRuns = readdirSync(runsDir);
+    const out = (await runCompleteCli(projectRoot, [runId, '--session', 's'])) as {
+      sealed?: boolean;
+      next_action?: { suggest_only: boolean; action: string; command: string | null; preconditions: string[] };
+    };
     expect(out?.sealed).toBe(true);
+    expect(out?.next_action).toMatchObject({
+      suggest_only: true,
+      action: 'dispatch_next',
+      command: 'maestro run next --session s',
+    });
+    expect(out?.next_action?.preconditions).toContain(`sealed_run_id=${runId}`);
+    expect(readdirSync(runsDir)).toEqual(beforeRuns);
     expect(chainOf(projectRoot, 's')[0].status).toBe('running'); // chain untouched
   });
 });

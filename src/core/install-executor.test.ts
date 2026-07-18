@@ -22,9 +22,18 @@ beforeAll(async () => {
   process.env.USERPROFILE = join(testHome, 'home');
   process.env.CODEX_HOME = join(testHome, 'codex-home');
   process.env.CLAUDE_HOME = join(testHome, 'claude-home');
-  mkdirSync(join(packageRoot, '.codex', 'agents'), { recursive: true });
+  mkdirSync(join(packageRoot, '.claude', 'agents'), { recursive: true });
   mkdirSync(projectPath, { recursive: true });
-  writeFileSync(join(packageRoot, '.codex', 'agents', 'agent.md'), 'agent');
+  writeFileSync(join(packageRoot, '.claude', 'agents', 'agent.md'), [
+    '---',
+    'name: agent',
+    'description: generated install agent',
+    'allowed-tools: [Read]',
+    '---',
+    '',
+    '# Agent',
+    'Read the assigned files.',
+  ].join('\n'));
   vi.resetModules();
   executor = await import('./install-executor.js');
   manifestApi = await import('./manifest.js');
@@ -109,7 +118,7 @@ describe('executeInstallPipeline additive semantics', () => {
     });
 
     const current = manifestApi.findManifest('project', projectPath);
-    const installedAgent = join(projectPath, '.codex', 'agents', 'agent.md');
+    const installedAgent = join(projectPath, '.codex', 'agents', 'agent.toml');
     expect(current?.selectedComponentIds).toEqual(
       expect.arrayContaining(['commands', 'codex-agents']),
     );
@@ -119,6 +128,7 @@ describe('executeInstallPipeline additive semantics', () => {
     );
     expect(existsSync(priorFile)).toBe(true);
     expect(existsSync(installedAgent)).toBe(true);
+    expect(readFileSync(installedAgent, 'utf8')).toContain('developer_instructions = """');
     expect(current?.entries.some((entry) => entry.path.startsWith(process.env.MAESTRO_HOME!))).toBe(false);
     const shared = manifestApi.findManifest('global', process.env.MAESTRO_HOME!);
     expect(shared?.entries.map((entry) => entry.path)).toContain(

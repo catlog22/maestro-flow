@@ -5,7 +5,7 @@
 import type { DatabaseSync } from 'node:sqlite';
 import type { UnifiedEdge, EdgeProvenance } from '../db/types.js';
 import { makeNodeId, sqliteTransaction } from '../db/connection.js';
-import { appendFileSync, mkdirSync, existsSync } from 'node:fs';
+import { writeFileSync, mkdirSync, existsSync } from 'node:fs';
 import { resolve, dirname } from 'node:path';
 
 function safeJsonParse<T>(str: string | null | undefined, fallback: T): T {
@@ -371,5 +371,7 @@ function logResolutionEdges(projectPath: string, edges: UnifiedEdge[]): void {
       ?? (e.metadata as Record<string, unknown>)?.matchedTerm ?? '',
   }));
 
-  appendFileSync(logPath, lines.join('\n') + '\n', 'utf-8');
+  // G-A12: 覆盖写而非追加 — debug 产物只保留最近一次 sync 的边，历史无消费方，
+  // 追加曾导致无界增长（实测 37MB）。
+  writeFileSync(logPath, lines.join('\n') + '\n', 'utf-8');
 }

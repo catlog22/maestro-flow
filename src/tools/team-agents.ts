@@ -7,7 +7,7 @@
  * - team_remove_agent:   Remove agent from team config
  * - team_members:        List team members with live status from broker
  *
- * Storage: .workflow/.team/{session-id}/members.json
+ * Storage: {run_dir}/work/team/members.json
  *
  * Integration:
  * - Delegate broker for job lifecycle (registerSession, publishEvent, requestCancel)
@@ -23,8 +23,8 @@ import {
   writeFileSync,
 } from 'node:fs';
 import { join } from 'node:path';
-import { getProjectRoot } from '../utils/path-validator.js';
 import { createDefaultDelegateBroker } from '../async/delegate-broker.js';
+import { resolveTeamWorkDir } from './team-run-paths.js';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -48,7 +48,7 @@ interface TeamConfig {
 // ---------------------------------------------------------------------------
 
 function getTeamDir(sessionId: string): string {
-  const dir = join(getProjectRoot(), '.workflow', '.team', sessionId);
+  const dir = resolveTeamWorkDir(sessionId);
   if (!existsSync(dir)) {
     mkdirSync(dir, { recursive: true });
   }
@@ -329,7 +329,7 @@ const ParamsSchema = z.object({
   operation: z
     .enum(['spawn_agent', 'shutdown_agent', 'remove_agent', 'members'])
     .describe('Operation to perform'),
-  session_id: z.string().describe('Session ID for team namespace scoping'),
+  session_id: z.string().describe('Run ID for team namespace scoping; legacy team session IDs are accepted'),
   // spawn_agent params
   role: z.string().optional().describe('[spawn/shutdown/remove] Agent role name'),
   prompt: z.string().optional().describe('[spawn] Prompt/instructions for the agent'),
@@ -346,7 +346,7 @@ export const schema: ToolSchema = {
   name: 'team_agent',
   description: `Team agent lifecycle management - spawn, shutdown, remove agents via delegate broker.
 
-**Storage Location:** .workflow/.team/{session_id}/members.json
+**Storage Location:** {run_dir}/work/team/members.json (legacy team session IDs fall back to .workflow/.team/{session_id})
 
 **Operations & Required Parameters:**
 
@@ -377,7 +377,7 @@ export const schema: ToolSchema = {
       },
       session_id: {
         type: 'string',
-        description: 'Session ID for team namespace scoping',
+        description: 'Run ID for team namespace scoping; legacy team session ID accepted',
       },
       role: {
         type: 'string',

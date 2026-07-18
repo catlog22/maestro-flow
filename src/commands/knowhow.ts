@@ -17,6 +17,7 @@ import {
   escapeYamlValue,
   parseFrontmatter,
   getKnowhowDir,
+  knowhowFileToWikiId,
 } from '../utils/frontmatter.js';
 
 export function registerKnowhowCommand(program: Command): void {
@@ -114,8 +115,7 @@ export function registerKnowhowCommand(program: Command): void {
       fmLines.push('---', '', body);
 
       writeFileSync(join(dir, filename), fmLines.join('\n'), 'utf-8');
-      const idSuffix = slug || `${pad(now.getHours())}${pad(now.getMinutes())}`;
-      console.log(`Created: knowhow-${slugify(ts)}-${idSuffix}`);
+      console.log(`Created: ${knowhowFileToWikiId(filename)}`);
       console.log(`  Type: ${type}`);
       console.log(`  File: knowhow/${filename}`);
     });
@@ -143,7 +143,7 @@ export function registerKnowhowCommand(program: Command): void {
         const prefix = name.match(/^([A-Z]+)-\d{8}/)?.[1] ?? '';
         const typeCat = Object.entries(PREFIX_MAP).find(([, p]) => p === prefix)?.[0] ?? '';
         entries.push({
-          id: `knowhow-${slugify(name.replace(/^...-/, '').replace('.md', ''))}`,
+          id: knowhowFileToWikiId(name),
           filename: name,
           title: data.title || 'Untitled',
           type: typeCat || data.type || '',

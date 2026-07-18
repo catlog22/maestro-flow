@@ -296,6 +296,9 @@ describe('run next — atomic chain binding', () => {
     const outcome = runNextStep(projectRoot, { sessionId: 's' });
     expect(outcome.exitCode).toBe(0);
     expect(store.readRun('s', outcome.result!.run_id).input.args).toEqual(['--depth deep']);
+    expect(outcome.result?.args).toEqual(['--depth deep']);
+    expect(outcome.result?.run_already_created).toBe(true);
+    expect(outcome.message).toContain('do not call maestro run create');
   });
 
   it('rejects a second Run binding after the pending step was claimed', () => {
@@ -306,7 +309,78 @@ describe('run next — atomic chain binding', () => {
 
     createRun({ projectRoot, command: 'demo-plan', sessionId: 's', chainStepId: stepId });
     expect(() => createRun({ projectRoot, command: 'demo-plan', sessionId: 's', chainStepId: stepId }))
-      .toThrow(/already running|not pending/);
+      .toThrow(/active Run|already running|not pending/);
+  });
+
+  it('revalidates activity revision, active Run, and earlier decisions inside the dispatch lock', () => {
+    const projectRoot = root();
+    stepCommand(projectRoot, 'demo-plan', PLAN_CONTRACT);
+    seedSession(projectRoot, 's', 'authority', [
+      { command: 'gate', decision_ref: 'DP-1' },
+      { command: 'demo-plan' },
+    ], { active: true });
+    const store = new SessionStore(projectRoot);
+    store.update('s', draft => {
+      draft.session.orchestration.decision_points = [{
+        point_id: 'DP-1', after_step_id: null, status: 'pending', retry_count: 0,
+        max_retries: 2, evidence_ref: null,
+      }];
+      return null;
+    });
+    const before = store.readBundle('s').session;
+    const target = before.orchestration.chain[1];
+
+    expect(() => createRun({
+      projectRoot, command: 'demo-plan', sessionId: 's', chainStepId: target.step_id,
+      expectedActivityRevision: before.activity_revision,
+      expectedIdentityRevision: before.identity_revision - 1,
+    })).toThrow(/identity changed after run-next preflight/);
+    expect(() => createRun({
+      projectRoot, command: 'demo-plan', sessionId: 's', chainStepId: target.step_id,
+      expectedActivityRevision: before.activity_revision - 1,
+      expectedIdentityRevision: before.identity_revision,
+    })).toThrow(/changed after run-next preflight/);
+    expect(() => createRun({
+      projectRoot, command: 'demo-plan', sessionId: 's', chainStepId: target.step_id,
+      expectedActivityRevision: before.activity_revision,
+      expectedIdentityRevision: before.identity_revision,
+    })).toThrow(/earlier decision DP-1 is pending/);
+
+    store.update('s', draft => {
+      draft.session.orchestration.chain[0].status = 'sealed';
+      draft.session.orchestration.decision_points[0].status = 'passed';
+      draft.session.active_run_id = 'RUN-other';
+      return null;
+    });
+    const active = store.readBundle('s').session;
+    expect(() => createRun({
+      projectRoot, command: 'demo-plan', sessionId: 's', chainStepId: target.step_id,
+      expectedActivityRevision: active.activity_revision,
+      expectedIdentityRevision: active.identity_revision,
+    })).toThrow(/already has active Run RUN-other/);
+  });
+
+  it('explicitly refuses paused escalated Sessions without allocating a Run', () => {
+    const projectRoot = root();
+    stepCommand(projectRoot, 'demo-plan', PLAN_CONTRACT);
+    seedSession(projectRoot, 's', 'paused authority', [{ command: 'demo-plan' }], { active: true });
+    const store = new SessionStore(projectRoot);
+    store.update('s', draft => {
+      draft.session.status = 'paused';
+      draft.session.orchestration.decision_points = [{
+        point_id: 'DP-escalated', after_step_id: null, status: 'escalated', retry_count: 0,
+        max_retries: 2, evidence_ref: null,
+      }];
+      return null;
+    });
+
+    const outcome = runNextStep(projectRoot, { sessionId: 's' });
+    expect(outcome.exitCode).toBe(1);
+    expect(outcome.message).toContain('dispatch refused');
+    expect(outcome.message).toContain('DP-escalated');
+    expect(outcome.message).toContain('authorized resume transition');
+    expect(store.readBundle('s').session.active_run_id).toBeNull();
+    expect(readChain(projectRoot, 's')[0].status).toBe('pending');
   });
 });
 
@@ -316,7 +390,8 @@ describe('run next — sealed reconciliation fencing', () => {
     stepCommand(projectRoot, 'demo-plan', PLAN_CONTRACT);
     seedSession(projectRoot, 's', 'reconcile race', [{ command: 'demo-plan' }], { active: true });
     const created = createRun({ projectRoot, command: 'demo-plan', sessionId: 's' });
-    completeRun(projectRoot, created.run_id, 's');
+    writePlanOutputs(projectRoot, 's', created.run_id, 'sealed before reconciliation');
+    expect(completeRun(projectRoot, created.run_id, 's').sealed).toBe(true);
 
     const originalUpdate = SessionStore.prototype.update;
     let injected = false;
@@ -341,7 +416,7 @@ describe('run next — sealed reconciliation fencing', () => {
     const outcome = runNextStep(projectRoot, { sessionId: 's' });
     spy.mockRestore();
 
-    expect(outcome.exitCode).toBe(0);
+    expect(outcome.exitCode, outcome.message).toBe(0);
     const step = readChain(projectRoot, 's')[0];
     expect(step.status).toBe('running');
     expect(step.run_id).not.toBe(created.run_id);
@@ -401,6 +476,34 @@ describe('run next — birth packet', () => {
     expect(outcome.exitCode).toBe(0);
     expect(outcome.message).not.toContain('SECRET_WORKFLOW_BODY');
     expect(outcome.message).toContain(`maestro run brief ${outcome.result?.run_id}`);
+    expect(outcome.result?.brief.command).toBe(`maestro run brief ${outcome.result?.run_id}`);
+    expect(outcome.result?.run_already_created).toBe(true);
+  });
+
+  it('surfaces bounded named entry blockers in the birth packet', () => {
+    const projectRoot = root();
+    stepCommand(projectRoot, 'blocked-plan', `consumes: []
+produces: []
+gates:
+  entry:
+    - key: approval
+      title: Approval required
+      required: true
+      blocking: true
+      applicable_modes: []
+      check:
+        type: manual
+        prompt: Approve dispatch
+  exit: []`);
+    seedSession(projectRoot, 's', 'named blockers', [{ command: 'blocked-plan' }], { active: true });
+
+    const outcome = runNextStep(projectRoot, { sessionId: 's' });
+    expect(outcome.exitCode).toBe(0);
+    expect(outcome.result?.blockers).toEqual([
+      expect.objectContaining({ title: 'Approval required', status: 'pending' }),
+    ]);
+    expect(outcome.message).toContain('BLOCKER');
+    expect(outcome.message).toContain('Approval required');
   });
 
   it('surfaces upstream aliases and the previous step handoff in the birth packet', () => {

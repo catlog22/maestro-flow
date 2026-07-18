@@ -3,7 +3,7 @@
  *
  * Exposes CRUD operations over the CollabTask system for agent consumption
  * via MCP. Tasks are scoped to a team session_id under the agent pipeline
- * namespace (.workflow/.team/{session_id}/tasks/) to avoid collision with
+ * namespace ({run_dir}/work/team/tasks/) to avoid collision with
  * the human collaboration domain (.workflow/collab/tasks/).
  *
  * Reuses the CollabTask state machine from team-tasks.ts:
@@ -28,13 +28,13 @@ import {
 } from 'node:fs';
 import { join } from 'node:path';
 
-import { getProjectRoot } from '../utils/path-validator.js';
 import type {
   CollabTask,
   TaskStatus,
   TaskPriority,
 } from './team-tasks.js';
 import { validateStatusTransition } from './team-tasks.js';
+import { resolveTeamWorkDir } from './team-run-paths.js';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -45,19 +45,21 @@ export interface AgentTask extends CollabTask {
   session_id: string;
 }
 
+export interface TeamTaskActivityEvidence {
+  nonTerminalCount: number;
+  latestUpdatedAt?: string;
+  known: boolean;
+}
+
+const TERMINAL_AGENT_TASK_STATUSES = new Set<TaskStatus>(['done', 'closed']);
+
 // ---------------------------------------------------------------------------
 // Path helpers
 // ---------------------------------------------------------------------------
 
 /** Absolute path to the agent task directory for a session. */
 function getAgentTasksDir(sessionId: string): string {
-  const dir = join(
-    getProjectRoot(),
-    '.workflow',
-    '.team',
-    sessionId,
-    'tasks',
-  );
+  const dir = join(resolveTeamWorkDir(sessionId), 'tasks');
   if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
   return dir;
 }
@@ -251,6 +253,51 @@ function listAgentTasks(
   return out;
 }
 
+/**
+ * Read task activity without creating directories or mutating task state.
+ * This is the adapter boundary consumed by lifecycle classification.
+ */
+export function readTeamTaskActivityEvidence(
+  sessionId: string,
+  projectRoot?: string,
+): TeamTaskActivityEvidence {
+  return readTeamTaskActivityEvidenceAt(resolveTeamWorkDir(sessionId, projectRoot));
+}
+
+export function readTeamTaskActivityEvidenceAt(stateDir: string): TeamTaskActivityEvidence {
+  const dir = join(stateDir, 'tasks');
+  if (!existsSync(dir)) return { nonTerminalCount: 0, known: true };
+
+  let entries: string[];
+  try {
+    entries = readdirSync(dir);
+  } catch {
+    return { nonTerminalCount: 0, known: false };
+  }
+
+  let nonTerminalCount = 0;
+  let known = true;
+  let latestUpdatedAt: string | undefined;
+  let latestUpdatedAtMs = Number.NEGATIVE_INFINITY;
+  for (const entry of entries) {
+    if (!entry.endsWith('.json')) continue;
+    const task = readAgentTaskFile(join(dir, entry));
+    if (!task) {
+      known = false;
+      continue;
+    }
+    if (!TERMINAL_AGENT_TASK_STATUSES.has(task.status)) nonTerminalCount += 1;
+    const updatedAtMs = Date.parse(task.updated_at);
+    if (!Number.isFinite(updatedAtMs)) known = false;
+    if (Number.isFinite(updatedAtMs) && updatedAtMs > latestUpdatedAtMs) {
+      latestUpdatedAtMs = updatedAtMs;
+      latestUpdatedAt = task.updated_at;
+    }
+  }
+
+  return { nonTerminalCount, known, ...(latestUpdatedAt ? { latestUpdatedAt } : {}) };
+}
+
 // ---------------------------------------------------------------------------
 // Zod Schema
 // ---------------------------------------------------------------------------
@@ -270,7 +317,7 @@ const ParamsSchema = z.object({
   operation: z
     .enum(['create', 'update', 'list', 'get'])
     .describe('Operation to perform'),
-  session_id: z.string().describe('Session ID for task namespace scoping'),
+  session_id: z.string().describe('Run ID for task namespace scoping; legacy team session IDs are accepted'),
   // create params
   title: z.string().optional().describe('[create] Task title'),
   description: z.string().optional().describe('[create/update] Task description'),
@@ -406,7 +453,7 @@ export const schema: ToolSchema = {
   name: 'team_task',
   description: `Team task management for agent teams. Wraps the CollabTask system with session-scoped namespaces.
 
-**Storage Location:** .workflow/.team/{session_id}/tasks/{id}.json
+**Storage Location:** {run_dir}/work/team/tasks/{id}.json (legacy team session IDs fall back to .workflow/.team/{session_id})
 
 **State Machine:** open -> assigned -> in_progress -> pending_review -> done -> closed (closed -> open: reopen)
 
@@ -445,7 +492,7 @@ export const schema: ToolSchema = {
       },
       session_id: {
         type: 'string',
-        description: 'Session ID for task namespace scoping',
+        description: 'Run ID for task namespace scoping; legacy team session ID accepted',
       },
       title: {
         type: 'string',

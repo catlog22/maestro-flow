@@ -5,6 +5,8 @@
  * Supports dual-format: new `<spec-entry>` tags + legacy heading-based entries.
  */
 
+import { knowhowFileToWikiId } from '../utils/frontmatter.js';
+
 // ============================================================================
 // Types
 // ============================================================================
@@ -38,9 +40,11 @@ export interface SpecEntryParsed {
   confidence?: ConfidenceLevel;
   conflictMarker?: string;
   conflictNote?: string;
+  /** Date (YYYY-MM-DD) the conflict was marked — tracks contested age separately from the entry's creation date. */
+  conflictDate?: string;
   /** Stable identity (S-YYYYMMDD-xxxx), survives line-number drift. Anchors the evolution chain. */
   sid?: string;
-  /** sid of the entry this one replaces (this is the newer version). */
+  /** sid(s) of the entry this one replaces — comma-separated when one entry merges several (this is the newer version). */
   supersedes?: string;
   /** sid of the entry that replaced this one (this is the older version). */
   supersededBy?: string;
@@ -138,6 +142,7 @@ export function parseSpecEntries(content: string): ParseResult {
     const confidence = attrs.confidence as ConfidenceLevel | undefined;
     const conflictMarker = attrs['conflict-marker'] || undefined;
     const conflictNote = attrs['conflict-note'] || undefined;
+    const conflictDate = attrs['conflict-date'] || undefined;
     const status = attrs.status as SpecStatus | undefined;
 
     const entry: SpecEntryParsed = {
@@ -151,6 +156,7 @@ export function parseSpecEntries(content: string): ParseResult {
       confidence: confidence && VALID_CONFIDENCE_LEVELS.includes(confidence) ? confidence : undefined,
       conflictMarker,
       conflictNote,
+      conflictDate,
       sid: attrs.sid || undefined,
       supersedes: attrs.supersedes || undefined,
       supersededBy: attrs['superseded-by'] || undefined,
@@ -280,9 +286,7 @@ function formatEntryClean(e: SpecEntryParsed): string {
 
   let refLine = '';
   if (e.ref) {
-    const refStem = e.ref.replace(/^knowhow\//, '').replace(/\.md$/, '');
-    const refSlug = refStem.replace(/^(KNW|TIP|TPL|RCP|REF|DCS|AST|BLP|DOC)-/i, '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
-    const refId = `knowhow-${refSlug}`;
+    const refId = knowhowFileToWikiId(e.ref.replace(/^knowhow\//, ''));
     refLine = `\n\u2192 Detail: maestro load --type knowhow --id ${refId}`;
   }
 

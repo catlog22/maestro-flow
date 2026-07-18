@@ -99,6 +99,16 @@ export function getKnowhowDir(projectRoot?: string): string {
   return join(root, '.workflow', 'knowhow');
 }
 
+/**
+ * Canonical wiki id for a knowhow file — exactly as WikiIndexer derives it:
+ * `knowhow-` + slugified filename stem, type prefix included
+ * (e.g. `TIP-20260427-my-slug.md` → `knowhow-tip-20260427-my-slug`).
+ */
+export function knowhowFileToWikiId(filename: string): string {
+  const stem = filename.replace(/\.md$/i, '');
+  return `knowhow-${slugify(stem)}`;
+}
+
 export function generateKnowhowFilename(type: KnowHowCategory, title?: string): { id: string; filename: string } {
   const now = new Date();
   const pad = (n: number) => String(n).padStart(2, '0');
@@ -108,6 +118,5 @@ export function generateKnowhowFilename(type: KnowHowCategory, title?: string): 
   const filename = slug
     ? `${prefix}-${ts}-${slug}.md`
     : `${prefix}-${ts}-${pad(now.getHours())}${pad(now.getMinutes())}.md`;
-  const idSuffix = slug || `${pad(now.getHours())}${pad(now.getMinutes())}`;
-  return { id: `knowhow-${slugify(ts)}-${idSuffix}`, filename };
+  return { id: knowhowFileToWikiId(filename), filename };
 }

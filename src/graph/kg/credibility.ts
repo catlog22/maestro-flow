@@ -24,7 +24,6 @@ export interface CredibilityRow {
 
 export interface CredibilityConfig {
   floor: number;
-  ceiling: number;
   warningThreshold: number;
   halfLives: Record<string, number>;
 }
@@ -35,7 +34,6 @@ export interface CredibilityConfig {
 
 const DEFAULT_CONFIG: CredibilityConfig = {
   floor: 0.3,
-  ceiling: 1.2,
   warningThreshold: 0.5,
   halfLives: {
     domain: 180,
@@ -82,8 +80,8 @@ export function computeDecayFactor(
 ): number {
   const halfLife = config.halfLives[nodeType] ?? 60;
   const lambda = LN2 / halfLife;
-  const raw = config.floor + (1 - config.floor) * Math.exp(-lambda * ageDays);
-  return Math.min(raw, config.ceiling);
+  // Raw max is 1 (at age 0) — no ceiling needed.
+  return config.floor + (1 - config.floor) * Math.exp(-lambda * ageDays);
 }
 
 export function computeCredibilityFactor(

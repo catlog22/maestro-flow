@@ -1080,6 +1080,10 @@ export function registerSpecCommand(program: Command): void {
     .action(async (oldSid: string, opts: { by: string }) => {
       const { supersedeEntry, getEvolutionChain } = await import('../tools/spec-conflict-marker.js');
 
+      if (oldSid === opts.by) {
+        console.error(`Error: old and replacement sid are identical: ${oldSid}`);
+        process.exit(1);
+      }
       if (getEvolutionChain(process.cwd(), opts.by).length === 0) {
         console.error(`Error: replacement sid not found: ${opts.by}`);
         process.exit(1);
@@ -1123,6 +1127,10 @@ export function registerSpecCommand(program: Command): void {
         const marker = link.current ? '● CURRENT   ' : '○ deprecated';
         console.log(`  ${marker}  ${link.sid}  "${link.title}"  [${link.file} · ${link.date}]`);
       }
+      const head = chain[chain.length - 1];
+      if (head.broken) {
+        console.log(`\n  ! Broken chain: ${head.sid} is deprecated but its successor no longer exists.`);
+      }
     });
 
   // ── health ───────────────────────────────────────────────────────────
@@ -1141,7 +1149,7 @@ export function registerSpecCommand(program: Command): void {
 
       console.log('Spec knowledge health\n');
       console.log(`  Entries:     ${h.total} total · ${h.active} active · ${h.deprecated} deprecated`);
-      console.log(`  Confidence:  ${h.contested} contested · ${h.lowConfidence} low`);
+      console.log(`  Confidence:  ${h.contested} contested${h.contestedStale > 0 ? ` (${h.contestedStale} >30d)` : ''} · ${h.lowConfidence} low`);
       console.log(`  Identity:    ${h.withSid} with sid · ${h.withoutSid} missing sid`);
       console.log(`  Evolution:   ${h.chains} chain${h.chains === 1 ? '' : 's'}`);
       console.log(`  Freshness:   avg ${h.avgFreshness.toFixed(2)} · ${h.staleActive} active entries stale (<0.5)`);
@@ -1150,10 +1158,14 @@ export function registerSpecCommand(program: Command): void {
         console.log(`\n  ! ${h.danglingSupersedes.length} dangling supersedes reference(s):`);
         for (const d of h.danglingSupersedes) console.log(`    ${d.sid} -> ${d.target} (missing) in ${d.file}`);
       }
+      if (h.danglingSupersededBy.length > 0) {
+        console.log(`\n  ! ${h.danglingSupersededBy.length} dangling superseded-by reference(s) — successor deleted:`);
+        for (const d of h.danglingSupersededBy) console.log(`    ${d.sid} -> ${d.target} (missing) in ${d.file}`);
+      }
       if (h.cyclicSids.length > 0) {
         console.log(`\n  ! supersedes cycle involving: ${h.cyclicSids.join(', ')}`);
       }
-      if (h.danglingSupersedes.length === 0 && h.cyclicSids.length === 0) {
+      if (h.danglingSupersedes.length === 0 && h.danglingSupersededBy.length === 0 && h.cyclicSids.length === 0) {
         console.log('\n  Evolution chain integrity OK');
       }
       if (h.withoutSid > 0) {

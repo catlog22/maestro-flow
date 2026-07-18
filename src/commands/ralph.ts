@@ -68,10 +68,11 @@ export function registerRalphCommand(program: Command): void {
     .option('--json', 'Machine-readable output (single JSON line per entry)')
     .option('--quiet', 'Suppress decorative output (for ralph build consumption)')
     .option('--platform <platform>', 'Filter by platform: claude | codex | agent | agy (recommended)')
-    .action(async (opts: { json?: boolean; quiet?: boolean; platform?: string }) => {
+    .option('--steps', 'Include step-registry names (prepare/ + workflows/) resolvable by `maestro run next`')
+    .action(async (opts: { json?: boolean; quiet?: boolean; platform?: string; steps?: boolean }) => {
       const run = await loadSkillsCmd();
       const platform = opts.platform as ('claude' | 'codex' | 'agent' | 'agy' | undefined);
-      const code = await run({ json: !!opts.json, quiet: !!opts.quiet, platform });
+      const code = await run({ json: !!opts.json, quiet: !!opts.quiet, platform, steps: !!opts.steps });
       process.exit(code);
     });
 

@@ -24,6 +24,10 @@ const ALLOWED_TYPES = new Set(['spec', 'knowhow']);
 const INTERNAL_LIMIT = 10;
 const DEFAULT_LIMIT = 3;
 const DEFAULT_MIN_SCORE = 1.0;
+/** Hybrid mode: keep hits scoring at least this fraction of the top hit. */
+const HYBRID_RELATIVE_FACTOR = 0.4;
+/** Scale heuristic: hybrid scores are ≤ ~1.2 while BM25 raw scores run far higher. */
+const HYBRID_SCALE_CUTOFF = 1.5;
 
 // --- Cached WikiIndexer (lazy, only loaded when daemon is unavailable) ---
 
@@ -48,6 +52,22 @@ interface RawHit {
     ext?: { status?: string };
   };
   score: number;
+}
+
+/**
+ * Resolve the score threshold for a daemon response.
+ *
+ * Daemon hybrid scores are normalized (≤ ~1.2×decay) while BM25-only raw
+ * scores commonly exceed 5 — a fixed absolute threshold silently empties
+ * results whenever embedding is active. Hybrid mode uses a relative cut
+ * against the top score; BM25 keeps the absolute default. When the response
+ * does not report `embeddingUsed`, infer the mode from the score scale.
+ */
+function adaptiveMinScore(raw: RawHit[], embeddingUsed?: boolean): number {
+  const top = raw.reduce((m, r) => Math.max(m, r.score), 0);
+  if (top <= 0) return DEFAULT_MIN_SCORE;
+  const hybrid = embeddingUsed ?? top < HYBRID_SCALE_CUTOFF;
+  return hybrid ? HYBRID_RELATIVE_FACTOR * top : DEFAULT_MIN_SCORE;
 }
 
 function toHits(raw: RawHit[], limit: number, minScore: number): WikiSearchHit[] {
@@ -77,7 +97,6 @@ export async function searchWiki(
   opts?: { limit?: number; minScore?: number },
 ): Promise<{ hits: WikiSearchHit[]; source: WikiSearchSource }> {
   const limit = opts?.limit ?? DEFAULT_LIMIT;
-  const minScore = opts?.minScore ?? DEFAULT_MIN_SCORE;
 
   try {
     // Fast path: try search daemon (no heavy imports)
@@ -85,15 +104,18 @@ export async function searchWiki(
       const { tryDaemonSearch } = await import('../search/daemon-client.js');
       const daemonResult = await tryDaemonSearch(workflowRoot, query, INTERNAL_LIMIT, false);
       if (daemonResult?.ok && daemonResult.results) {
-        return { hits: toHits(daemonResult.results as RawHit[], limit, minScore), source: 'daemon' };
+        const raw = daemonResult.results as RawHit[];
+        const minScore = opts?.minScore ?? adaptiveMinScore(raw, daemonResult.embeddingUsed);
+        return { hits: toHits(raw, limit, minScore), source: 'daemon' };
       }
     } catch {
       // Daemon unavailable — fall through to direct search
     }
 
-    // Fallback: direct WikiIndexer BM25 search
+    // Fallback: direct WikiIndexer BM25 search (skipEmbedding → raw BM25 scale)
     const indexer = await getIndexer(workflowRoot);
     const { results } = await indexer.searchWithMeta(query, INTERNAL_LIMIT, { skipEmbedding: true });
+    const minScore = opts?.minScore ?? DEFAULT_MIN_SCORE;
     return { hits: toHits(results as RawHit[], limit, minScore), source: 'indexer' };
   } catch {
     return { hits: [], source: 'none' };

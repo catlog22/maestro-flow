@@ -40,6 +40,14 @@ import type { SessionState } from './schemas.js';
 export type DecisionVerdict = 'proceed' | 'fix' | 'escalate';
 export type DecisionConfidence = 'high' | 'medium' | 'low';
 
+export interface DecideNextSuggestion {
+  suggest_only: true;
+  action: 'resolve_session' | 'insert_fix' | 'dispatch_next';
+  command: string | null;
+  reason: string;
+  preconditions: string[];
+}
+
 export interface DecideOptions {
   verdict: DecisionVerdict;
   confidence: DecisionConfidence;
@@ -62,7 +70,7 @@ export interface DecideResult {
   /** Session status after the verdict (paused on escalate, unchanged otherwise). */
   session_status: SessionState['status'];
   /** Next-step pointer closing decide → next. */
-  next: { command: string; reason: string };
+  next: DecideNextSuggestion;
 }
 
 /** Index of the chain decision node referencing this point, or -1. */
@@ -77,23 +85,32 @@ function chainDecisionNodeIndex(session: SessionState, pointId: string): number 
 function decideNextPointer(
   session: SessionState,
   verdict: DecisionVerdict,
-): { command: string; reason: string } {
+): DecideNextSuggestion {
   const sessionId = session.session_id;
   if (verdict === 'escalate') {
     return {
-      command: `maestro run next --session ${sessionId}`,
-      reason: 'session paused (escalated) — human intervention, then resume',
+      suggest_only: true,
+      action: 'resolve_session',
+      command: null,
+      reason: 'session paused by escalation — run next is forbidden until an authorized resume transition',
+      preconditions: ['resolve the escalated decision', 'perform an authorized Session resume transition'],
     };
   }
   if (verdict === 'fix') {
     return {
+      suggest_only: true,
+      action: 'insert_fix',
       command: `maestro session chain insert --session ${sessionId} --after <step_id|index> --command <fix-command>`,
       reason: 'fix verdict — insert repair step(s), then advance with maestro run next',
+      preconditions: ['fix scope is approved', 'inserted step is bound to this Session'],
     };
   }
   return {
+    suggest_only: true,
+    action: 'dispatch_next',
     command: `maestro run next --session ${sessionId}`,
     reason: 'decision passed — advance the chain',
+    preconditions: ['session_status=running', 'decision point remains passed'],
   };
 }
 

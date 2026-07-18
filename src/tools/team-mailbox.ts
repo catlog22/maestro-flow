@@ -6,7 +6,7 @@
  * - team_read_mailbox:    Read unread messages for a role, mark as delivered
  * - team_mailbox_status:  Per-role unread/pending/delivered counts
  *
- * Storage: .workflow/.team/{session-id}/.msg/mailbox.jsonl
+ * Storage: {run_dir}/work/team/.msg/mailbox.jsonl
  *
  * Integration points for TASK-001 (team-msg dispatch upgrade):
  * - opReadMailbox: reads messages addressed to a role
@@ -18,8 +18,8 @@ import { z } from 'zod';
 import type { ToolSchema, CcwToolResult } from '../types/tool-schema.js';
 import { existsSync, mkdirSync, readFileSync, appendFileSync, writeFileSync } from 'fs';
 import { join, dirname } from 'path';
-import { getProjectRoot } from '../utils/path-validator.js';
 import { createDefaultDelegateBroker } from '../async/delegate-broker.js';
+import { resolveTeamWorkDir } from './team-run-paths.js';
 
 // --- Types ---
 
@@ -50,8 +50,7 @@ export interface MailboxRoleStatus {
 // --- Storage helpers ---
 
 function getMailboxDir(sessionId: string): string {
-  const root = getProjectRoot();
-  return join(root, '.workflow', '.team', sessionId, '.msg');
+  return join(resolveTeamWorkDir(sessionId), '.msg');
 }
 
 function getMailboxPath(sessionId: string): string {
@@ -138,7 +137,7 @@ function attemptBrokerInject(jobId: string, message: string): { attempted: boole
 // --- Zod Schemas ---
 
 const SendMessageSchema = z.object({
-  session_id: z.string().describe('Session ID that determines mailbox storage path'),
+  session_id: z.string().describe('Run ID that determines mailbox storage path; legacy team session IDs are accepted'),
   from: z.string().describe('Sender role name'),
   to: z.string().describe('Recipient role name'),
   message: z.string().describe('Message content to send'),
@@ -148,14 +147,14 @@ const SendMessageSchema = z.object({
 });
 
 const ReadMailboxSchema = z.object({
-  session_id: z.string().describe('Session ID that determines mailbox storage path'),
+  session_id: z.string().describe('Run ID that determines mailbox storage path; legacy team session IDs are accepted'),
   role: z.string().describe('Role name to read mailbox for'),
   limit: z.number().min(1).max(100).optional().default(50).describe('Max messages to return (default: 50)'),
   mark_delivered: z.boolean().optional().default(true).describe('Mark returned messages as delivered (default: true)'),
 });
 
 const MailboxStatusSchema = z.object({
-  session_id: z.string().describe('Session ID that determines mailbox storage path'),
+  session_id: z.string().describe('Run ID that determines mailbox storage path; legacy team session IDs are accepted'),
 });
 
 type SendMessageParams = z.infer<typeof SendMessageSchema>;
@@ -312,7 +311,7 @@ export const schema: ToolSchema = {
   name: 'team_mailbox',
   description: `Team mailbox - agent-to-agent messaging with delivery tracking and broker injection.
 
-**Storage Location:** .workflow/.team/{session-id}/.msg/mailbox.jsonl
+**Storage Location:** {run_dir}/work/team/.msg/mailbox.jsonl (legacy team session IDs fall back to .workflow/.team/{session-id})
 
 **Operations & Required Parameters:**
 
@@ -343,7 +342,7 @@ export const schema: ToolSchema = {
       },
       session_id: {
         type: 'string',
-        description: 'Session ID (e.g., TLS-my-project-2026-02-27)',
+        description: 'Run ID (e.g., 20260717-001-team-testing); legacy team session ID accepted',
       },
       from: {
         type: 'string',

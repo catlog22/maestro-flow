@@ -16,6 +16,10 @@ import {
   writeFileSync,
 } from 'node:fs';
 import { join, dirname, basename, relative } from 'node:path';
+import {
+  applyCodexAgentOverrides,
+  assertNoUnsupportedCodexTaskBoardTokens,
+} from './codex-agent-overrides.js';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -327,20 +331,6 @@ export const TOOL_FIELD_MAP: Record<string, Record<string, FieldMapping>> = {
     agy: {
       tool: 'view_file',
       fields: { skill: 'AbsolutePath', args: null },
-    },
-  },
-  // codex 无任务板工具；清单跟踪走 update_plan（整体替换 plan 数组，无逐字段映射）。
-  // goal 工具（create_goal/update_goal）仅限用户明确要求时使用，禁止映射任务跟踪。
-  TaskCreate: {
-    codex: {
-      tool: 'update_plan',
-      fields: {},
-    },
-  },
-  TaskUpdate: {
-    codex: {
-      tool: 'update_plan',
-      fields: {},
     },
   },
   spawn_agents_on_csv: {
@@ -1192,6 +1182,7 @@ function buildCodexAgentsToml(
   targetAgentsDir: string,
 ): BuildStats {
   const agentsDir = join(claudeDir, 'agents');
+  const overrideDir = join(dirname(claudeDir), '.codex', 'agent-overrides');
   const stats: BuildStats = { commands: 0, skills: 0, agents: 0, files: 0 };
 
   if (!existsSync(agentsDir)) return stats;
@@ -1202,7 +1193,8 @@ function buildCodexAgentsToml(
     const raw = readFileSync(src, 'utf8');
     const { frontmatter, body } = splitFrontmatter(raw);
 
-    const name = (frontmatter?.name as string ?? entry.name.replace(/\.md$/, ''))
+    const agentName = entry.name.replace(/\.md$/, '');
+    const name = (frontmatter?.name as string ?? agentName)
       .replace(/[-\s]+/g, '_').toLowerCase();
     const desc = frontmatter?.description as string ?? '';
 
@@ -1214,7 +1206,10 @@ function buildCodexAgentsToml(
 
     const sandbox = deriveSandboxMode(toolsList);
 
-    let convertedBody = rewriteAgentCallSitesCodex(body);
+    const overriddenBody = applyCodexAgentOverrides(agentName, body, overrideDir);
+    assertNoUnsupportedCodexTaskBoardTokens(agentName, overriddenBody);
+
+    let convertedBody = rewriteAgentCallSitesCodex(overriddenBody);
     convertedBody = rewriteSkillCallSitesCodex(convertedBody);
     convertedBody = applyBodyReplacements(convertedBody, CODEX_PROFILE);
     convertedBody = stripToolTags(convertedBody);

@@ -62,6 +62,10 @@ export function buildKeywordIndex(projectPath: string): Map<string, IndexedEntry
     const fileCategory = CATEGORY_MAP[file] ?? 'learning';
 
     for (const entry of entries) {
+      // Deprecated (superseded) entries are never injected into agent context —
+      // align with spec-loader's formatFileContent filtering.
+      if (entry.status === 'deprecated') continue;
+
       const indexed: IndexedEntry = {
         file,
         category: entry.category || fileCategory,

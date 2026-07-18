@@ -15,7 +15,7 @@ import { Command } from 'commander';
 import { createSessionState } from './defaults.js';
 import { sessionStateSchema } from './schemas.js';
 import { SessionStore } from './store.js';
-import { briefRun, checkRun, completeRun, createRun, prepareStep, sealSession } from './runtime.js';
+import { briefRun, checkRun, completeRun, createRun, prepareStep, rebindRunCommand, sealSession } from './runtime.js';
 import { registerRunCommand } from '../commands/run.js';
 import { resolveCommandSource } from './contract.js';
 import { migrateV1toV2, readStateJson, writeStateJson } from '../utils/state-schema.js';
@@ -98,7 +98,7 @@ describe('Session/Run runtime', () => {
     const program = new Command();
     registerRunCommand(program);
     const run = program.commands.find(command => command.name() === 'run');
-    expect(run?.commands.map(command => command.name())).toEqual(['prepare', 'next', 'create', 'check', 'complete', 'brief', 'skill', 'decide', 'seal-session', 'log-mutation', 'mutations']);
+    expect(run?.commands.map(command => command.name())).toEqual(['prepare', 'next', 'create', 'check', 'rebind', 'complete', 'brief', 'skill', 'decide', 'seal-session', 'log-mutation', 'mutations']);
   });
 
   it('parses every migrated core command contract', () => {
@@ -134,6 +134,7 @@ gates:
     const emptyHash = createHash('sha256').update('').digest('hex');
     expect(run.command.source_path.replaceAll('\\', '/')).toMatch(/\/commands\/installed-plan\.md$/);
     expect(run.command.content_hash).toBe(createHash('sha256').update(globalContract).digest('hex'));
+    expect(run.command.contract_hash).toMatch(/^[a-f0-9]{64}$/);
     expect(run.command.content_hash).not.toBe(emptyHash);
     expect(checkRun(projectRoot, created.run_id).gates.blocking).toHaveLength(1);
 
@@ -161,6 +162,87 @@ gates:
     const projectSource = resolveCommandSource(projectRoot, 'installed-plan');
     expect(projectSource.path).toBe(join(projectRoot, '.claude', 'commands', 'installed-plan.md'));
     expect(projectSource.contract.produces[0]?.kind).toBe('project-plan');
+  });
+
+  it('allows prompt-only definition drift but rejects lifecycle contract drift', () => {
+    const projectRoot = root();
+    commandFile(projectRoot, 'prompt-drift', `consumes: []
+produces: []
+gates:
+  entry: []
+  exit: []`);
+    const created = createRun({ projectRoot, command: 'prompt-drift', intent: 'prompt drift' });
+    const path = join(projectRoot, '.claude', 'commands', 'prompt-drift.md');
+    writeFileSync(path, '\n# Documentation-only edit\n', { flag: 'a' });
+
+    const promptDriftCheck = checkRun(projectRoot, created.run_id);
+    expect(promptDriftCheck.gates.blocking).toEqual([]);
+    expect(promptDriftCheck.warnings).toContainEqual(expect.stringContaining('lifecycle contract is unchanged'));
+    expect(completeRun(projectRoot, created.run_id).sealed).toBe(true);
+
+    commandFile(projectRoot, 'contract-drift', `consumes: []
+produces: []
+gates:
+  entry: []
+  exit: []`);
+    const changed = createRun({ projectRoot, command: 'contract-drift', intent: 'contract drift' });
+    commandFile(projectRoot, 'contract-drift', `consumes: []
+produces:
+  - kind: changed-output
+gates:
+  entry: []
+  exit: []`);
+    expect(() => checkRun(projectRoot, changed.run_id)).toThrow(/lifecycle contract changed/);
+  });
+
+  it('audits a compatible legacy rebind and rejects gate-set changes', () => {
+    const projectRoot = root();
+    commandFile(projectRoot, 'legacy-drift', `consumes: []
+produces: []
+gates:
+  entry: []
+  exit: []`);
+    const created = createRun({ projectRoot, command: 'legacy-drift', intent: 'legacy drift' });
+    const runPath = join(
+      projectRoot, '.workflow', 'sessions', created.session_id, 'runs', created.run_id, 'run.json',
+    );
+    const legacy = JSON.parse(readFileSync(runPath, 'utf8'));
+    delete legacy.command.contract_hash;
+    writeFileSync(runPath, JSON.stringify(legacy, null, 2));
+    writeFileSync(join(projectRoot, '.claude', 'commands', 'legacy-drift.md'), '\n# Prompt edit\n', { flag: 'a' });
+
+    expect(() => checkRun(projectRoot, created.run_id)).toThrow(/maestro run rebind/);
+    const rebound = rebindRunCommand(projectRoot, created.run_id, 'accept documentation-only edit');
+    expect(rebound.contract_hash).toMatch(/^[a-f0-9]{64}$/);
+    const audit = JSON.parse(readFileSync(join(
+      projectRoot, '.workflow', 'sessions', created.session_id, 'runs', created.run_id, 'command-rebind.json',
+    ), 'utf8'));
+    expect(audit).toMatchObject({
+      schema_version: 'command-rebind/1.0',
+      run_id: created.run_id,
+      reason: 'accept documentation-only edit',
+    });
+    expect(checkRun(projectRoot, created.run_id).gates.blocking).toEqual([]);
+
+    commandFile(projectRoot, 'legacy-incompatible', `consumes: []
+produces: []
+gates:
+  entry: []
+  exit: []`);
+    const incompatible = createRun({ projectRoot, command: 'legacy-incompatible', intent: 'legacy incompatible' });
+    const incompatiblePath = join(
+      projectRoot, '.workflow', 'sessions', incompatible.session_id, 'runs', incompatible.run_id, 'run.json',
+    );
+    const incompatibleRun = JSON.parse(readFileSync(incompatiblePath, 'utf8'));
+    delete incompatibleRun.command.contract_hash;
+    writeFileSync(incompatiblePath, JSON.stringify(incompatibleRun, null, 2));
+    commandFile(projectRoot, 'legacy-incompatible', `consumes: []
+produces:
+  - kind: new-required-output
+gates:
+  entry: []
+  exit: []`);
+    expect(() => rebindRunCommand(projectRoot, incompatible.run_id, 'unsafe change')).toThrow(/different Run gate set/);
   });
 
   it('resolves every migrated command through workflow YAML associations', () => {
@@ -239,6 +321,8 @@ gates:
     const blocked = completeRun(projectRoot, created.run_id);
     expect(blocked.sealed).toBe(false);
     expect(blocked.status).toBe('blocked');
+    expect(blocked.next_action).toMatchObject({ suggest_only: true, action: 'repair_run' });
+    expect(blocked.next_action?.command).toBe(`maestro run check ${created.run_id}`);
 
     writePlanRun(projectRoot, created.session_id, created.run_id);
     const firstCheck = checkRun(projectRoot, created.run_id);
@@ -258,6 +342,7 @@ gates:
     const completed = completeRun(projectRoot, created.run_id);
     expect(completed.sealed).toBe(true);
     expect(completed.primary_artifact_id).toMatch(/^ART-001-/);
+    expect(completed.next_action).toMatchObject({ suggest_only: true, action: 'seal_session' });
 
     const sessionDir = join(projectRoot, '.workflow', 'sessions', created.session_id);
     const artifacts = JSON.parse(readFileSync(join(sessionDir, 'artifacts.json'), 'utf8'));
@@ -467,6 +552,61 @@ gates:
     expect(brief.next.command).toBe(`maestro run check ${execRun.run_id}`);
     expect(brief.next.reason).toContain('does not seal');
     expect(brief.next.reason).toContain(`maestro run complete ${execRun.run_id}`);
+  });
+
+  it('brief additively exposes an independently executable execution-contract/1.0', () => {
+    const projectRoot = root();
+    commandFile(projectRoot, 'self-contained', `consumes:
+  - kind: context
+    alias: current-context
+    required: true
+    require_status: sealed
+produces:
+  - kind: result
+    alias: latest-result
+    primary: true
+    path: outputs/result.json
+    schema: result/1.0
+gates:
+  entry:
+    - key: approval
+      title: Approval required
+      required: true
+      blocking: true
+      applicable_modes: []
+      check:
+        type: manual
+        prompt: Approve execution
+  exit: []`);
+    const workflowDir = join(projectRoot, 'workflows');
+    mkdirSync(workflowDir, { recursive: true });
+    writeFileSync(join(workflowDir, 'self-contained.md'), '# Execution manual\n\nPerform the bounded task.\n', 'utf8');
+    const created = createRun({
+      projectRoot, command: 'self-contained', intent: 'self-contained brief', args: ['--target', 'core'],
+    });
+
+    const brief = briefRun(projectRoot, created.run_id, created.session_id);
+    expect(brief.args).toEqual(['--target', 'core']);
+    expect(brief.prepare).toBeNull();
+    expect(brief.workflow?.content).toContain('Perform the bounded task');
+    expect(brief.execution_contract).toMatchObject({
+      schema_version: 'execution-contract/1.0',
+      command: 'self-contained',
+      invocation: { args: ['--target', 'core'] },
+      guidance: { workflow_path: expect.stringContaining('self-contained.md') },
+      freshness: { identity_current: true },
+    });
+    expect(brief.execution_contract.inputs).toEqual([
+      expect.objectContaining({
+        kind: 'context', alias: 'current-context', required: true, require_status: 'sealed', resolved: null,
+      }),
+    ]);
+    expect(brief.execution_contract.outputs.declared).toEqual([
+      expect.objectContaining({ kind: 'result', alias: 'latest-result', primary: true, schema: 'result/1.0' }),
+    ]);
+    expect(brief.execution_contract.gates.items).toEqual(expect.arrayContaining([
+      expect.objectContaining({ title: 'Approval required', scope: 'entry', blocking: true }),
+    ]));
   });
 
   it('brief of a sealed Run points next at run next to advance the chain (G4)', () => {

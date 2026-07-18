@@ -21,7 +21,7 @@ const MAESTRO_BIN = join(process.cwd(), 'bin', 'maestro.js');
 
 beforeEach(() => {
   testDir = mkdtempSync(join(tmpdir(), 'maestro-cli-spec-e2e-'));
-  // Create .workflow to simulate maestro-managed project
+  // Create .workflow to simulate managed project
   mkdirSync(join(testDir, '.workflow'), { recursive: true });
 });
 

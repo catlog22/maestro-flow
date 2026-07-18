@@ -13,7 +13,7 @@ import { loadSpecs, loadExtraDocs, type SpecCategory, type LoadSpecsOptions } fr
 import { evaluateContextBudget } from './context-budget.js';
 import { resolveSelf } from '../tools/team-members.js';
 import { evaluateKeywordInjection } from './keyword-spec-injector.js';
-import { loadWikiByCategory } from './wiki-role-loader.js';
+import { loadWikiIndex, selectWikiByCategory } from './wiki-role-loader.js';
 import type { SpecInjectionConfig } from '../types/index.js';
 import { logInjectionEvent } from './spec-analytics.js';
 import { wrapMaestroContext, type ContextSection } from './context-format.js';
@@ -177,6 +177,9 @@ export function evaluateSpecInjection(
   const allCategories: string[] = [];
   let totalCount = 0;
 
+  // Parse wiki-index.json once for all categories (hot path — avoid per-category re-parse)
+  const wikiIndex = loadWikiIndex(projectPath);
+
   for (const category of categories) {
     // Build loader options with keyword filters and extra spec files
     const loaderOpts: LoadSpecsOptions = {};
@@ -205,7 +208,7 @@ export function evaluateSpecInjection(
     }
 
     // Wiki category knowledge injection
-    const wikiResult = loadWikiByCategory(projectPath, category);
+    const wikiResult = selectWikiByCategory(wikiIndex, category);
     if (wikiResult) {
       ctxSections.push({ label: `wiki[${category}]`, lines: markdownToLines(wikiResult.content) });
       totalCount += wikiResult.entryCount;

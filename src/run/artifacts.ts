@@ -110,9 +110,18 @@ export function scanOutputs(
         kind = declared?.kind ?? `${name}-collection`;
         schemaVersion = `${kind}/1.0`;
       } else if (extname(name).toLowerCase() === '.json') {
-        const parsed = JSON.parse(readFileSync(absolutePath, 'utf8')) as { _meta?: unknown };
-        if (parsed._meta) {
-          const meta = artifactMetaSchema.parse(parsed._meta);
+        const parsed = JSON.parse(readFileSync(absolutePath, 'utf8')) as unknown;
+        const hasMeta = typeof parsed === 'object' && parsed !== null && Object.hasOwn(parsed, '_meta');
+        if (hasMeta) {
+          const rawMeta = (parsed as { _meta: unknown })._meta;
+          const result = artifactMetaSchema.safeParse(rawMeta);
+          if (!result.success) {
+            const detail = result.error.issues
+              .map(issue => `${issue.path.join('.') || '_meta'}: ${issue.message}`)
+              .join('; ');
+            throw new Error(`invalid _meta; expected non-empty kind and schema${detail ? ` (${detail})` : ''}`);
+          }
+          const meta = result.data;
           kind = meta.kind;
           schemaVersion = meta.schema;
           role = meta.role ?? (directJsonCount === 1 ? 'primary' : role);

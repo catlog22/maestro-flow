@@ -17,6 +17,16 @@ const chainRetrySchema = z.object({
   max: z.number().int().nonnegative(),
 }).strict();
 
+export const pendingRetryTokenSchema = z.object({
+  token: nonEmptyString,
+  session_id: nonEmptyString,
+  parent_run_id: nonEmptyString,
+  chain_step_id: nonEmptyString,
+  command: nonEmptyString,
+  issued_at: nonEmptyString,
+  expires_at: nonEmptyString,
+}).strict();
+
 export const orchestrationStepStatusSchema = z.enum([
   'pending', 'running', 'completed', 'sealed', 'failed', 'skipped',
 ]);
@@ -34,6 +44,7 @@ const orchestrationStepSchema = z.object({
   stage: z.string().nullable().optional(),
   goal_ref: z.string().nullable().optional(),
   retry: chainRetrySchema.optional(),
+  pending_retry: pendingRetryTokenSchema.nullable().optional(),
 }).strict();
 
 // ── ralph-meta decomposition types, zod-ified locally ────────────────────────
@@ -285,8 +296,44 @@ export const handoffSchema = z.object({
   details: z.record(z.string(), z.unknown()),
 }).strict();
 
-export const commandRunSchema = z.object({
-  schema_version: z.literal('command-run/1.0'),
+export const targetPlatformSchema = z.enum(['claude', 'codex', 'agy', 'agents-standard', 'pi']);
+
+export const goalBindingSchema = z.object({
+  provider: nonEmptyString,
+  external_id: z.string().nullable(),
+  step_goal_ref: z.string().nullable(),
+  observed_status: z.enum(['active', 'complete', 'blocked', 'unknown']),
+  observed_at: nonEmptyString,
+}).strict();
+
+export const dispatchExpectationSchema = z.object({
+  run_id: nonEmptyString,
+  chain_step_id: nonEmptyString,
+  team_task_id: nonEmptyString,
+  revision: z.number().int().nonnegative(),
+  dispatched_at: nonEmptyString,
+}).strict();
+
+export const runCheckpointSchema = z.object({
+  run_id: nonEmptyString,
+  chain_step_id: nonEmptyString,
+  team_task_id: nonEmptyString,
+  revision: z.number().int().nonnegative(),
+  artifact_id: z.string().nullable(),
+  verdict: z.enum(['pass', 'warn', 'block', 'unknown']),
+  authoritative: z.boolean(),
+  updated_at: nonEmptyString,
+}).strict();
+
+export const retryFenceSchema = z.object({
+  token: nonEmptyString,
+  chain_step_id: nonEmptyString,
+  issued_at: nonEmptyString,
+  expires_at: nonEmptyString,
+  consumed_at: z.string().nullable(),
+}).strict();
+
+const commandRunBaseSchema = z.object({
   session_id: nonEmptyString,
   run_id: nonEmptyString,
   sequence: z.number().int().positive(),
@@ -297,6 +344,7 @@ export const commandRunSchema = z.object({
     source_path: z.string(),
     content_hash: z.string().regex(/^[a-f0-9]{64}$/),
     resolved_prompt_hash: z.string().regex(/^[a-f0-9]{64}$/),
+    contract_hash: z.string().regex(/^[a-f0-9]{64}$/).optional(),
   }).strict(),
   status: z.enum(['created', 'running', 'blocked', 'failed', 'completed', 'sealed']),
   input: z.object({
@@ -315,6 +363,44 @@ export const commandRunSchema = z.object({
   completed_at: z.string().nullable(),
   sealed_at: z.string().nullable(),
 }).strict();
+
+export const commandRunV1Schema = commandRunBaseSchema.extend({
+  schema_version: z.literal('command-run/1.0'),
+}).strict();
+
+export const commandRunV11Schema = commandRunBaseSchema.extend({
+  schema_version: z.literal('command-run/1.1'),
+  chain_step_id: z.string().nullable(),
+  resolved_platform: targetPlatformSchema,
+  goal_binding: goalBindingSchema.nullable(),
+  checkpoint_expectation: dispatchExpectationSchema.nullable(),
+  checkpoint: runCheckpointSchema.nullable(),
+  retry_fence: retryFenceSchema.nullable(),
+}).strict();
+
+export const commandRunReadSchema = z.union([commandRunV11Schema, commandRunV1Schema]);
+export type CommandRunInput = z.infer<typeof commandRunReadSchema>;
+export type CommandRun = z.infer<typeof commandRunV11Schema>;
+
+export function normalizeCommandRun(
+  run: CommandRunInput,
+  fallbackPlatform: z.infer<typeof targetPlatformSchema> = 'claude',
+): CommandRun {
+  if (run.schema_version === 'command-run/1.1') return run;
+  return commandRunV11Schema.parse({
+    ...run,
+    schema_version: 'command-run/1.1',
+    chain_step_id: null,
+    resolved_platform: fallbackPlatform,
+    goal_binding: null,
+    checkpoint_expectation: null,
+    checkpoint: null,
+    retry_fence: null,
+  });
+}
+
+/** Backward-compatible read schema. New writes must use commandRunV11Schema. */
+export const commandRunSchema = commandRunReadSchema.transform(run => normalizeCommandRun(run));
 
 export const artifactMetaSchema = z.object({
   kind: nonEmptyString,
@@ -347,6 +433,7 @@ export const reportFrontmatterSchema = z.object({
 
 export type SessionState = z.infer<typeof sessionStateSchema>;
 export type OrchestrationStep = z.infer<typeof orchestrationStepSchema>;
+export type PendingRetryToken = z.infer<typeof pendingRetryTokenSchema>;
 export type OrchestrationPosition = z.infer<typeof positionSchema>;
 export type OrchestrationDecomposition = z.infer<typeof decompositionSchema>;
 export type OrchestrationLease = z.infer<typeof leaseSchema>;
@@ -359,6 +446,8 @@ export type Artifact = z.infer<typeof artifactSchema>;
 export type ArtifactRegistry = z.infer<typeof artifactRegistrySchema>;
 export type EvidenceStore = z.infer<typeof evidenceStoreSchema>;
 export type Handoff = z.infer<typeof handoffSchema>;
-export type CommandRun = z.infer<typeof commandRunSchema>;
+export type GoalBinding = z.infer<typeof goalBindingSchema>;
+export type DispatchExpectation = z.infer<typeof dispatchExpectationSchema>;
+export type RunCheckpoint = z.infer<typeof runCheckpointSchema>;
 export type ArtifactMeta = z.infer<typeof artifactMetaSchema>;
 export type ReportFrontmatter = z.infer<typeof reportFrontmatterSchema>;

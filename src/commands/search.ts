@@ -8,7 +8,7 @@
  * Scoring: multi-signal normalization inspired by codebase-memory-mcp.
  *   Wiki:  BM25F score + type boost (spec > knowhow > note)
  *   Code:  BM25 score + kind boost + name-match bonus
- *   Merge: percentile-aware normalization + source weight
+ *   Merge: rank interleave (ordering) + per-source normalized relevance (display)
  *
  * Per-source caps: session ≤3, scratch ≤3 to prevent low-value source spam.
  */
@@ -128,9 +128,15 @@ export interface SearchMeta {
 let _lastSearchMeta: SearchMeta = { embeddingUsed: false, embeddingDocs: 0 };
 export function getLastSearchMeta(): SearchMeta { return _lastSearchMeta; }
 
+// One-shot attribution when a supposedly-running daemon can't be reached (G-C12).
+let _daemonFallbackNoted = false;
+
 export async function runUnifiedSearch(q: string, opts: UnifiedSearchOptions & { skipEmbedding?: boolean }): Promise<SearchResult[]> {
   const limit = opts.limit > 0 ? opts.limit : 20;
-  const candidateLimit = Math.max(limit * 2, 40);
+  // Facet filters run after candidate truncation — widen the pool when any
+  // facet is active so narrow queries don't starve to 0 results (G-C3).
+  const hasFacet = Boolean(opts.type || opts.category || opts.kind || opts.workspace);
+  const candidateLimit = hasFacet ? Math.max(limit * 2, 200) : Math.max(limit * 2, 40);
 
   // Try daemon first (warm ONNX model, no cold-start penalty)
   const workflowRoot = resolve('.workflow');
@@ -146,6 +152,10 @@ export async function runUnifiedSearch(q: string, opts: UnifiedSearchOptions & {
   } else {
     // Daemon unavailable — use BM25-only to avoid ONNX cold-start (~1800ms).
     // Spawn daemon in background so future searches get embedding.
+    if (daemonResult === null && !_daemonFallbackNoted && readDaemonInfo(workflowRoot)) {
+      _daemonFallbackNoted = true;
+      console.error('Note: search daemon unreachable — falling back to BM25-only (embedding disabled)');
+    }
     const indexer = await getIndexer();
     const result = await indexer.searchWithMeta(q, candidateLimit, { skipEmbedding: true });
     scored = result.results;
@@ -169,7 +179,8 @@ export async function runUnifiedSearch(q: string, opts: UnifiedSearchOptions & {
   if (opts.category) {
     filtered = filtered.filter(r => r.entry.category === opts.category);
   }
-  const kind = opts.kind;
+  // Tags are lowercased at parse time — normalize user input to match (G-C10).
+  const kind = opts.kind?.toLowerCase();
   if (kind) {
     filtered = filtered.filter(r => r.entry.tags.includes(kind));
   }
@@ -183,11 +194,19 @@ export async function runUnifiedSearch(q: string, opts: UnifiedSearchOptions & {
 
   // CATEGORY_CAPS only when user didn't explicitly select a wiki facet.
   const applyCaps = !opts.type && !opts.category && !opts.kind;
+  // Per-parent cap: a container entry and its -NNN chunks share a parent key.
+  // Keep the top 2 per parent — one file cannot flood top-N, while chunk hits
+  // (a documented load-the-parent workflow) stay visible (G-C11).
+  const PARENT_CAP = 2;
   const seen = new Set<string>();
   const deduped: typeof filtered = [];
   const catCounts = new Map<string, number>();
+  const parentCounts = new Map<string, number>();
   for (const r of filtered) {
     if (seen.has(r.entry.id)) continue;
+    const parentKey = r.entry.id.replace(/-\d{2,3}$/, '');
+    const parentCount = parentCounts.get(parentKey) ?? 0;
+    if (parentCount >= PARENT_CAP) continue;
     if (applyCaps) {
       const cat = r.entry.category ?? '';
       const cap = CATEGORY_CAPS[cat];
@@ -198,6 +217,7 @@ export async function runUnifiedSearch(q: string, opts: UnifiedSearchOptions & {
       }
     }
     seen.add(r.entry.id);
+    parentCounts.set(parentKey, parentCount + 1);
     deduped.push(r);
     if (deduped.length >= limit) break;
   }
@@ -302,33 +322,56 @@ async function runKgSearch(q: string, limit: number): Promise<{ results: KgSearc
   }
 }
 
+/** Map raw FTS code nodes to the CLI result shape. */
+function mapCodeNodes(nodes: Array<{ id: string; kind: string; name: string; filePath: string; startLine?: number; _bm25Score?: number; signature?: string }>): CodeSearchResult[] {
+  return nodes.map(n => ({
+    id: n.id,
+    kind: n.kind,
+    name: n.name,
+    filePath: n.filePath,
+    line: typeof n.startLine === 'number' && n.startLine > 0 ? n.startLine : null,
+    score: typeof n._bm25Score === 'number' ? n._bm25Score : null,
+    signature: n.signature || undefined,
+  }));
+}
+
 /**
  * Search MaestroGraph for code nodes matching the query. Never throws —
  * a degraded index is reported via `status` so callers can surface a hint.
+ *
+ * Uses hybrid (vector + FTS fusion) search when the code embedding index is
+ * available; degrades to FTS-only otherwise (G-C4).
  */
-async function runCodeSearch(q: string, limit: number): Promise<CodeSearchOutcome> {
+async function runCodeSearch(q: string, limit: number, skipEmbedding?: boolean): Promise<CodeSearchOutcome> {
   try {
     const { MaestroGraph } = await import('../graph/kg/engine.js');
     if (!MaestroGraph.isInitialized(resolve('.'))) return { results: [], status: 'not-initialized' };
     const mg = await MaestroGraph.open(resolve('.'));
     try {
-      const results = mg.searchCode(q, { limit });
+      let results: CodeSearchResult[] | null = null;
+      if (!skipEmbedding) {
+        try {
+          // sourceTypes: ['codegraph'] restricts the FTS side to code nodes.
+          const hybrid = await mg.searchHybrid(q, { limit, sourceTypes: ['codegraph'] });
+          results = hybrid.map(r => ({
+            id: r.node.id,
+            kind: r.node.kind,
+            name: r.node.name,
+            filePath: r.node.filePath,
+            line: typeof r.node.startLine === 'number' && r.node.startLine > 0 ? r.node.startLine : null,
+            score: typeof r.score === 'number' ? r.score : null,
+            signature: r.node.signature || undefined,
+          }));
+        } catch { /* embedding path failed — fall back to FTS-only below */ }
+      }
+      if (results === null) {
+        results = mapCodeNodes(mg.searchCode(q, { limit }));
+      }
       if (results.length === 0) {
         const codeNodes = mg.getStats().nodesBySourceType['codegraph'] ?? 0;
         if (codeNodes === 0) return { results: [], status: 'empty' };
       }
-      return {
-        results: results.map((n: { id: string; kind: string; name: string; filePath: string; startLine?: number; _bm25Score?: number; signature?: string }) => ({
-          id: n.id,
-          kind: n.kind,
-          name: n.name,
-          filePath: n.filePath,
-          line: typeof n.startLine === 'number' && n.startLine > 0 ? n.startLine : null,
-          score: typeof n._bm25Score === 'number' ? n._bm25Score : null,
-          signature: n.signature || undefined,
-        })),
-        status: 'ok',
-      };
+      return { results, status: 'ok' };
     } finally {
       mg.close();
     }
@@ -410,7 +453,7 @@ export function registerSearchCommand(program: Command): void {
       // Parallel: wiki + code search (skip irrelevant source based on flags)
       const [wikiResults, codeOutcome] = await Promise.all([
         codeOnly ? [] : runUnifiedSearch(q, { type: opts.type, category: opts.category, kind: opts.kind, workspace: opts.workspace, limit, skipEmbedding, includeDeprecated: opts.includeDeprecated === true }),
-        wikiOnly ? { results: [], status: 'ok' as CodeIndexStatus } : runCodeSearch(q, limit),
+        wikiOnly ? { results: [], status: 'ok' as CodeIndexStatus } : runCodeSearch(q, limit, skipEmbedding),
       ]);
       const codeResults = codeOutcome.results;
       const codeHint = wikiOnly ? null : codeIndexHint(codeOutcome.status);
@@ -507,7 +550,7 @@ export function registerSearchCommand(program: Command): void {
       for (const r of merged) {
         const displayName = truncate(r.name, 60);
         const name = isTTY ? highlightTerms(displayName, qTerms) : displayName;
-        const scoreTag = `  (${r.normalizedScore.toFixed(4)})`;
+        const scoreTag = `  (${r.score.toFixed(4)})`;
         if (r.source === 'wiki') {
           const confBadge = r.confidence === 'contested' ? ' [CONTESTED]'
             : r.confidence === 'low' ? ' [LOW CONFIDENCE]'
@@ -763,7 +806,10 @@ export interface MergedResult {
   kind: string;
   name: string;
   detail: string;
-  normalizedScore: number;
+  /** Interleave ordering value — rank-normalized position × source weight. */
+  rank: number;
+  /** Real normalized relevance within the source (finalScore / source max, 0..1). */
+  score: number;
   snippet?: string;
   summary?: string;
   signature?: string;
@@ -893,6 +939,11 @@ function mergeAndNormalize(wiki: SearchResult[], code: CodeSearchResult[], limit
   const wikiRanks = rankNormalize(wikiScored.map(r => ({ index: r.index, score: r.finalScore })));
   const codeRanks = rankNormalize(codeScored.map(r => ({ index: r.index, score: r.finalScore })));
 
+  // Rank decides interleave order only; the displayed score is the real
+  // per-source normalized relevance (preserves contested/kg-dedup penalties) — X4.
+  const maxWikiFinal = wikiScored.reduce((m, r) => Math.max(m, r.finalScore), 0);
+  const maxCodeFinal = codeScored.reduce((m, r) => Math.max(m, r.finalScore), 0);
+
   const merged: MergedResult[] = [];
   for (let i = 0; i < wikiScored.length; i++) {
     const r = wikiScored[i];
@@ -901,7 +952,8 @@ function mergeAndNormalize(wiki: SearchResult[], code: CodeSearchResult[], limit
       kind: r.type,
       name: r.title,
       detail: r.category ? `${r.category}  ${r.id}` : r.id,
-      normalizedScore: wikiRanks[i] * WIKI_WEIGHT,
+      rank: wikiRanks[i] * WIKI_WEIGHT,
+      score: maxWikiFinal > 0 ? r.finalScore / maxWikiFinal : 0,
       snippet: r.snippet ?? undefined,
       summary: r.summary || undefined,
       category: r.category ?? undefined,
@@ -919,11 +971,12 @@ function mergeAndNormalize(wiki: SearchResult[], code: CodeSearchResult[], limit
       kind: r.kind,
       name: r.name,
       detail: codeLocation(r),
-      normalizedScore: codeRanks[i] * CODE_WEIGHT,
+      rank: codeRanks[i] * CODE_WEIGHT,
+      score: maxCodeFinal > 0 ? r.finalScore / maxCodeFinal : 0,
       signature: r.signature,
     });
   }
 
-  merged.sort((a, b) => b.normalizedScore - a.normalizedScore);
+  merged.sort((a, b) => b.rank - a.rank);
   return merged.slice(0, limit);
 }

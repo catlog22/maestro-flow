@@ -9,6 +9,7 @@ import type {
   SourceType, EdgeProvenance, UnifiedGraphStats, Visibility,
 } from './types.js';
 import { tokenize as camelTokenize } from '../resolution/name-matcher.js';
+import { computeScore } from '../query/scoring.js';
 
 // ---------------------------------------------------------------------------
 // Row ↔ Object mappers
@@ -710,7 +711,7 @@ export class KgQueryBuilder {
     return [...codeResults, ...knowledgeResults];
   }
 
-  private searchNodesLike(query: string, opts: { limit?: number; kinds?: string[]; languages?: string[] }): UnifiedNode[] {
+  private searchNodesLike(query: string, opts: { limit?: number; kinds?: string[]; languages?: string[] }): Array<UnifiedNode & { _bm25Score?: number }> {
     const words = query.split(/\s+/).filter(w => w.length > 0);
     const FIELDS = ['name', 'qualified_name', 'docstring', 'signature'] as const;
 
@@ -742,10 +743,19 @@ export class KgQueryBuilder {
       sql += ` AND language IN (${opts.languages.map(() => '?').join(',')})`;
       params.push(...opts.languages);
     }
+    // LIKE has no bm25 — fetch a wider candidate pool, then rank by the
+    // multi-signal relevance score (name match > path > kind) — G-C5.
+    const requested = clampQueryLimit(opts.limit, 20, 500);
     sql += ` ORDER BY name LIMIT ?`;
-    params.push(clampQueryLimit(opts.limit, 20, 500));
+    params.push(Math.min(requested * 3, 500));
     const rows = this.db.prepare(sql).all(...params) as unknown as NodeRow[];
-    return rows.map(rowToNode);
+    const scored = rows.map(r => {
+      const node = rowToNode(r) as UnifiedNode & { _bm25Score?: number };
+      node._bm25Score = computeScore(node, query);
+      return node;
+    });
+    scored.sort((a, b) => (b._bm25Score ?? 0) - (a._bm25Score ?? 0));
+    return scored.slice(0, requested);
   }
 
   private searchKnowledgeLike(query: string, opts: { limit?: number; sourceTypes?: SourceType[] }): UnifiedNode[] {

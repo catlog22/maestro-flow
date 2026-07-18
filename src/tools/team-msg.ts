@@ -19,11 +19,22 @@ import type { ToolSchema, CcwToolResult } from '../types/tool-schema.js';
 import { existsSync, mkdirSync, readFileSync, appendFileSync, writeFileSync, rmSync, statSync } from 'fs';
 import { join, dirname } from 'path';
 import { getProjectRoot } from '../utils/path-validator.js';
+import {
+  classifyTeamSession,
+  type ClassifyTeamSessionOptions,
+  type TeamRunStatus,
+  type TeamSessionClassification,
+  type TeamSessionLifecycle,
+} from '../team/session-lifecycle.js';
+import { readTeamTaskActivityEvidenceAt } from './team-tasks-mcp.js';
+import { resolveTeamWorkDir, resolveTeamWorkPath } from './team-run-paths.js';
 
 // --- Team Metadata ---
 
 export interface TeamMeta {
-  status: 'active' | 'completed' | 'archived';
+  status: TeamSessionLifecycle;
+  health?: TeamSessionClassification['health'];
+  cleanup_eligible?: boolean;
   created_at: string;
   updated_at: string;
   archived_at?: string;
@@ -85,6 +96,10 @@ export function getEffectiveTeamMeta(team: string): TeamMeta {
         meta.roles = legacyData.roles;
       }
     }
+    const classification = readStoredTeamSessionClassification(team);
+    meta.status = classification.lifecycle;
+    meta.health = classification.health;
+    meta.cleanup_eligible = classification.cleanupEligible;
     return meta;
   }
 
@@ -102,17 +117,165 @@ export function getEffectiveTeamMeta(team: string): TeamMeta {
 
   const legacyData = readLegacyFiles(team);
 
-  return {
+  const effective: TeamMeta = {
     status,
     created_at,
     updated_at,
     ...legacyData,
   };
+  const classification = readStoredTeamSessionClassification(team);
+  effective.status = classification.lifecycle;
+  effective.health = classification.health;
+  effective.cleanup_eligible = classification.cleanupEligible;
+  return effective;
+}
+
+const STORED_RUN_STATUSES = new Set<TeamRunStatus>([
+  'created',
+  'running',
+  'blocked',
+  'completed',
+  'paused',
+  'sealed',
+  'archived',
+  'failed',
+]);
+const STORED_TEAM_LIFECYCLES = new Set<TeamSessionLifecycle>([
+  'active',
+  'paused',
+  'completed',
+  'failed',
+  'abandoned',
+  'archived',
+]);
+
+export interface StoredTeamSessionClassificationOptions
+  extends Partial<ClassifyTeamSessionOptions> {
+  projectRoot?: string;
+  liveBrokerMembers?: number;
+  livenessKnown?: boolean;
+}
+
+export interface StoredTeamSessionLocation {
+  stateDir: string;
+  runRootDir?: string;
+}
+
+/** Reconcile canonical Run, sidecar, message, task, and legacy clocks. */
+export function readStoredTeamSessionClassification(
+  team: string,
+  options: StoredTeamSessionClassificationOptions = {},
+): TeamSessionClassification {
+  const projectRoot = options.projectRoot ?? getProjectRoot();
+  const workPath = resolveTeamWorkPath(team, projectRoot);
+  return readStoredTeamSessionClassificationAt(
+    {
+      stateDir: workPath.dir,
+      ...(workPath.scope === 'run' ? { runRootDir: dirname(dirname(workPath.dir)) } : {}),
+    },
+    options,
+  );
+}
+
+export function readStoredTeamSessionClassificationAt(
+  location: StoredTeamSessionLocation,
+  options: Omit<StoredTeamSessionClassificationOptions, 'projectRoot'> = {},
+): TeamSessionClassification {
+  const stateDir = location.stateDir;
+  const session = readJsonObject(join(stateDir, 'team-session.json'));
+  const meta = readJsonObject(join(stateDir, '.msg', 'meta.json'));
+  const run = location.runRootDir ? readJsonObject(join(location.runRootDir, 'run.json')) : null;
+  const messages = readMessagesAt(join(stateDir, '.msg', 'messages.jsonl'));
+  const latestMessage = messages[messages.length - 1];
+  const taskActivity = readTeamTaskActivityEvidenceAt(stateDir);
+  const activeWorkers = Array.isArray(session?.active_workers) ? session.active_workers.length : 0;
+  const abandonment = session?.abandonment_transition;
+
+  let filesystemMtime: string | undefined;
+  try {
+    filesystemMtime = statSync(stateDir).mtime.toISOString();
+  } catch {
+    // Missing legacy state remains unknown and fail-closed.
+  }
+
+  return classifyTeamSession(
+    {
+      runStatus: asRunStatus(run?.status),
+      sidecarLifecycle: asLifecycle(session?.status),
+      metaLifecycle: asLifecycle(meta?.status),
+      abandonmentTransition: asAbandonmentTransition(abandonment),
+      liveBrokerMembers: options.liveBrokerMembers,
+      livenessKnown: options.livenessKnown,
+      taskStateKnown: taskActivity.known,
+      nonTerminalTasks: taskActivity.nonTerminalCount,
+      persistedActiveWorkers: activeWorkers,
+      latestMessageAt: latestMessage?.ts,
+      latestTaskAt: taskActivity.latestUpdatedAt,
+      metaUpdatedAt: asString(meta?.updated_at),
+      sidecarUpdatedAt: asString(session?.updated_at),
+      filesystemMtime,
+    },
+    {
+      now: options.now ?? new Date(),
+      staleTtlMs: options.staleTtlMs ?? 24 * 60 * 60 * 1_000,
+    },
+  );
+}
+
+function readJsonObject(filePath: string): Record<string, unknown> | null {
+  if (!existsSync(filePath)) return null;
+  try {
+    const value = JSON.parse(readFileSync(filePath, 'utf-8')) as unknown;
+    return value && typeof value === 'object' && !Array.isArray(value)
+      ? value as Record<string, unknown>
+      : null;
+  } catch {
+    return null;
+  }
+}
+
+function readMessagesAt(filePath: string): TeamMessage[] {
+  if (!existsSync(filePath)) return [];
+  try {
+    return readFileSync(filePath, 'utf-8')
+      .split('\n')
+      .filter(Boolean)
+      .map((line) => JSON.parse(line) as TeamMessage);
+  } catch {
+    return [];
+  }
+}
+
+function asString(value: unknown): string | undefined {
+  return typeof value === 'string' ? value : undefined;
+}
+
+function asRunStatus(value: unknown): TeamRunStatus | undefined {
+  return typeof value === 'string' && STORED_RUN_STATUSES.has(value as TeamRunStatus)
+    ? value as TeamRunStatus
+    : undefined;
+}
+
+function asLifecycle(value: unknown): TeamSessionLifecycle | undefined {
+  return typeof value === 'string' && STORED_TEAM_LIFECYCLES.has(value as TeamSessionLifecycle)
+    ? value as TeamSessionLifecycle
+    : undefined;
+}
+
+function asAbandonmentTransition(value: unknown) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return undefined;
+  const transition = value as Record<string, unknown>;
+  if (transition.audited !== true) return undefined;
+  return {
+    audited: true as const,
+    actor: asString(transition.actor) ?? '',
+    reason: asString(transition.reason) ?? '',
+    at: asString(transition.at),
+  };
 }
 
 function readLegacyFiles(team: string): Partial<TeamMeta> {
-  const root = getProjectRoot();
-  const sessionDir = join(root, '.workflow', '.team', team);
+  const sessionDir = resolveTeamWorkDir(team);
   const result: Partial<TeamMeta> = {};
 
   const sharedMemPath = join(sessionDir, 'shared-memory.json');
@@ -185,7 +348,7 @@ export interface StatusEntry {
 
 const ParamsSchema = z.object({
   operation: z.enum(['log', 'read', 'list', 'status', 'delete', 'clear', 'broadcast', 'get_state', 'read_mailbox', 'mailbox_status']).describe('Operation to perform'),
-  session_id: z.string().optional().describe('Session ID that determines message storage path'),
+  session_id: z.string().optional().describe('Run ID that determines message storage path; legacy team session IDs are accepted'),
   team_session_id: z.string().optional().describe('[deprecated] Use session_id'),
   team: z.string().optional().describe('[deprecated] Use session_id'),
   from: z.string().optional().describe('[log/broadcast/list] Sender role name'),
@@ -212,7 +375,7 @@ export const schema: ToolSchema = {
   name: 'team_msg',
   description: `Team message bus - persistent JSONL log for Agent Team communication. Choose an operation and provide its required parameters.
 
-**Storage Location:** .workflow/.team/{session-id}/.msg/messages.jsonl
+**Storage Location:** {run_dir}/work/team/.msg/messages.jsonl (legacy team session IDs fall back to .workflow/.team/{session-id})
 
 **Operations & Required Parameters:**
 
@@ -267,7 +430,7 @@ export const schema: ToolSchema = {
       },
       session_id: {
         type: 'string',
-        description: 'Session ID (e.g., TLS-my-project-2026-02-27)',
+        description: 'Run ID (e.g., 20260717-001-team-testing); legacy team session ID accepted',
       },
       from: { type: 'string', description: '[log/broadcast/list] Sender role' },
       to: { type: 'string', description: '[log/list] Recipient role' },
@@ -289,8 +452,7 @@ export const schema: ToolSchema = {
 // --- Helpers ---
 
 export function getLogDir(sessionId: string): string {
-  const root = getProjectRoot();
-  return join(root, '.workflow', '.team', sessionId, '.msg');
+  return join(resolveTeamWorkDir(sessionId), '.msg');
 }
 
 export function getLogDirWithFallback(sessionId: string): string {

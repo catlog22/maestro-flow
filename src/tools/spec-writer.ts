@@ -5,13 +5,14 @@
  * Uses spec-entry-parser for formatting and spec-loader for directory resolution.
  */
 
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
 import { execSync } from 'node:child_process';
 import { join } from 'node:path';
 import { formatNewEntry, parseSpecEntries, generateSid } from './spec-entry-parser.js';
 import { resolveSpecDir, CATEGORY_MAP, type SpecCategory, type SpecScope } from './spec-loader.js';
 import { ensureSpecFile } from './spec-init.js';
 import { slugify } from '../utils/frontmatter.js';
+import { updateFileAtomic } from '../utils/atomic-write.js';
 
 // ============================================================================
 // Size guard — prevent oversized entries in spec files
@@ -172,26 +173,30 @@ export function appendSpecEntry(
   // stubs that lack a frontmatter block.
   ensureSpecFile(specsDir, filename);
 
-  // Read current content
-  const existing = readFileSync(filePath, 'utf-8');
+  // Lock-guarded read-modify-write (G-A4): the duplicate check and the
+  // append must see the same content, so both run inside the lock.
+  const date = new Date().toISOString().slice(0, 10);
+  const sid = generateSid();
+  let isDuplicate = false;
+  updateFileAtomic(filePath, existing => {
+    const current = existing ?? '';
+    // Parsed duplicate check: exact title match against parsed entries
+    const { entries, legacy } = parseSpecEntries(current);
+    isDuplicate = entries.some(
+      e => e.title.toLowerCase().trim() === title.toLowerCase().trim()
+    ) || legacy.some(
+      e => e.title.toLowerCase().trim() === title.toLowerCase().trim()
+    );
+    if (isDuplicate) return null;
 
-  // Parsed duplicate check: exact title match against parsed entries
-  const { entries, legacy } = parseSpecEntries(existing);
-  const isDuplicate = entries.some(
-    e => e.title.toLowerCase().trim() === title.toLowerCase().trim()
-  ) || legacy.some(
-    e => e.title.toLowerCase().trim() === title.toLowerCase().trim()
-  );
+    // Generate and append entry with a stable identity
+    const entry = formatNewEntry(category, keywords, date, title, content, evidence, undefined, description, undefined, undefined, undefined, { sid });
+    return current + '\n\n' + entry;
+  });
+
   if (isDuplicate) {
     return { ok: true, file: filePath, category, title, duplicate: true };
   }
-
-  // Generate and append entry with a stable identity
-  const date = new Date().toISOString().slice(0, 10);
-  const sid = generateSid();
-  const entry = formatNewEntry(category, keywords, date, title, content, evidence, undefined, description, undefined, undefined, undefined, { sid });
-  writeFileSync(filePath, existing + '\n\n' + entry, 'utf-8');
-
   return { ok: true, file: filePath, category, title, duplicate: false, evidence, sid };
 }
 
@@ -227,23 +232,27 @@ export function appendSpecEntryWithRef(
   // stubs that lack a frontmatter block.
   ensureSpecFile(specsDir, filename);
 
-  const existing = readFileSync(filePath, 'utf-8');
+  // Lock-guarded read-modify-write (G-A4) — same protocol as appendSpecEntry.
+  const date = new Date().toISOString().slice(0, 10);
+  const sid = generateSid();
+  let isDuplicateRef = false;
+  updateFileAtomic(filePath, existing => {
+    const current = existing ?? '';
+    // Parsed duplicate check: exact title match against parsed entries
+    const { entries: existingEntries, legacy: existingLegacy } = parseSpecEntries(current);
+    isDuplicateRef = existingEntries.some(
+      e => e.title.toLowerCase().trim() === title.toLowerCase().trim()
+    ) || existingLegacy.some(
+      e => e.title.toLowerCase().trim() === title.toLowerCase().trim()
+    );
+    if (isDuplicateRef) return null;
 
-  // Parsed duplicate check: exact title match against parsed entries
-  const { entries: existingEntries, legacy: existingLegacy } = parseSpecEntries(existing);
-  const isDuplicateRef = existingEntries.some(
-    e => e.title.toLowerCase().trim() === title.toLowerCase().trim()
-  ) || existingLegacy.some(
-    e => e.title.toLowerCase().trim() === title.toLowerCase().trim()
-  );
+    const entry = formatNewEntry(category, keywords, date, title, summary, source, ref, undefined, undefined, undefined, undefined, { sid });
+    return current + '\n\n' + entry;
+  });
+
   if (isDuplicateRef) {
     return { ok: true, file: filePath, category, title, duplicate: true };
   }
-
-  const date = new Date().toISOString().slice(0, 10);
-  const sid = generateSid();
-  const entry = formatNewEntry(category, keywords, date, title, summary, source, ref, undefined, undefined, undefined, undefined, { sid });
-  writeFileSync(filePath, existing + '\n\n' + entry, 'utf-8');
-
   return { ok: true, file: filePath, category, title, duplicate: false, sid };
 }

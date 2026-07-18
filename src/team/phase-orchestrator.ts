@@ -7,7 +7,7 @@
 
 import { existsSync, mkdirSync, appendFileSync } from 'node:fs';
 import { join, dirname } from 'node:path';
-import { getProjectRoot } from '../utils/path-validator.js';
+import { resolveTeamWorkDir } from '../tools/team-run-paths.js';
 import { evaluatePhaseGate } from '../tools/phase-gate-evaluator.js';
 import type { PhaseGateInput } from '../tools/phase-gate-evaluator.js';
 import {
@@ -207,12 +207,12 @@ export class PhaseOrchestrator {
   }
 
   /**
-   * Append transition record to .workflow/.team/{session}/transitions.jsonl
+   * Append transition record to {run_dir}/work/team/transitions.jsonl.
+   * Legacy team session IDs retain their former storage location.
    */
   private persistTransition(record: PhaseTransitionRecord): void {
     try {
-      const root = getProjectRoot();
-      const dir = join(root, '.workflow', '.team', this.sessionId);
+      const dir = resolveTeamWorkDir(this.sessionId);
       if (!existsSync(dir)) {
         mkdirSync(dir, { recursive: true });
       }

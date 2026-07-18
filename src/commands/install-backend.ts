@@ -1238,7 +1238,7 @@ export function scanFallbackTargets(
 
 /**
  * Walk a source directory and build a Set of corresponding target paths.
- * Used by fallback cleanup to distinguish maestro-managed files from
+ * Used by fallback cleanup to distinguish managed files from
  * user-added content (e.g. custom workflows like Maestro-publish).
  */
 function buildKnownPaths(
@@ -1340,7 +1340,7 @@ function cleanContentManagedFile(filePath: string): boolean {
  * hooks, MCP, and statusline. Used as fallback when manifests are lost.
  *
  * When `pkgRoot` is provided, source directories are scanned to build a
- * white-list of known (maestro-managed) target paths. Only files matching
+ * white-list of known (managed) target paths. Only files matching
  * the white-list are deleted — user-added content (e.g. custom workflows
  * like Maestro-publish) is left untouched.
  */
@@ -1452,7 +1452,7 @@ const DEDUPE_START = '# maestro:dedupe-agents-start';
 const DEDUPE_END = '# maestro:dedupe-agents-end';
 
 /**
- * Strip ALL maestro-managed dedupe blocks, orphaned markers, and orphaned
+ * Strip ALL managed dedupe blocks, orphaned markers, and orphaned
  * .agents/skills entries from codex config content.  Handles corruption left
  * by older versions where indexOf(END) found an orphan before START.
  */
@@ -1534,7 +1534,7 @@ export function writeCodexSkillDedupeConfig(
 }
 
 /**
- * Remove the maestro-managed dedupe block from codex config.
+ * Remove the managed dedupe block from codex config.
  */
 export function removeCodexSkillDedupeConfig(
   scope: 'global' | 'project',

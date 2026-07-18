@@ -187,6 +187,8 @@ describe('run decide — escalate', () => {
     expect(bundle.session.status).toBe('paused');
     expect(bundle.session.orchestration.decision_points[0].status).toBe('escalated');
     expect(bundle.session.orchestration.chain[0].status).toBe('pending'); // stays pending
+    expect(result.next).toMatchObject({ suggest_only: true, action: 'resolve_session', command: null });
+    expect(result.next.preconditions).toContain('perform an authorized Session resume transition');
   });
 });
 

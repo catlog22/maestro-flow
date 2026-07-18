@@ -7,6 +7,7 @@ import {
   completeRunWithVerdict,
   createRun,
   prepareStep,
+  rebindRunCommand,
   skillContent,
   sealSession,
   type CompletionVerdict,
@@ -106,23 +107,30 @@ export function registerRunCommand(program: Command): void {
     .description('Create a Run in an existing or new Session')
     .option('--session <id>', 'explicit Session ID')
     .option('--intent <text>', 'intent used when creating a Session')
-    .option('--parent-run <id>', 'parent Run ID for retries')
+    .option('--retry-token <token>', 'opaque single-use token issued by a needs-retry transition')
+    .option('--platform <name>', 'target platform persisted for this Run')
     .option('--arg <value>', 'command argument (repeatable)', collect, [])
     .option('--workflow-root <path>', 'project root containing .workflow', process.cwd())
     .action((command: string, positionalArgs: string[], opts: {
       session?: string;
       intent?: string;
-      parentRun?: string;
+      retryToken?: string;
+      platform?: string;
       arg: string[];
       workflowRoot: string;
     }) => {
       try {
+        const platform = opts.platform as TargetPlatform | undefined;
+        if (platform && !VALID_PLATFORMS.includes(platform)) {
+          throw new Error(`unknown platform "${platform}", valid: ${VALID_PLATFORMS.join(', ')}`);
+        }
         print(createRun({
           projectRoot: resolve(opts.workflowRoot),
           command,
           sessionId: opts.session,
           intent: opts.intent,
-          parentRunId: opts.parentRun,
+          retryToken: opts.retryToken,
+          platform,
           args: [...opts.arg, ...positionalArgs],
         }));
       } catch (error) {
@@ -139,6 +147,20 @@ export function registerRunCommand(program: Command): void {
     .action((runId: string, opts: { session?: string; workflowRoot: string }) => {
       try {
         print(checkRun(resolve(opts.workflowRoot), runId, opts.session));
+      } catch (error) {
+        reportError(error);
+      }
+    });
+
+  run
+    .command('rebind <run-id>')
+    .description('Backfill contract_hash for a legacy Run after verified prompt-only definition drift')
+    .option('--session <id>', 'explicit Session ID')
+    .requiredOption('--reason <text>', 'audited reason for accepting prompt-only drift')
+    .option('--workflow-root <path>', 'project root containing .workflow', process.cwd())
+    .action((runId: string, opts: { session?: string; reason: string; workflowRoot: string }) => {
+      try {
+        print(rebindRunCommand(resolve(opts.workflowRoot), runId, opts.reason, opts.session));
       } catch (error) {
         reportError(error);
       }

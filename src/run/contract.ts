@@ -226,6 +226,21 @@ function extractFinish(raw: string): string[] {
   return parsed.finish.filter((entry): entry is string => typeof entry === 'string' && entry.trim().length > 0);
 }
 
+const PLATFORM_SUFFIX_RE = /\.(?:codex|agy|pi)\.md$/;
+
+/** The step registry: the exact dir lists `resolveStepContent` resolves against. */
+function stepRegistryDirs(projectRoot: string): { prepareDirs: string[]; workflowDirs: string[] } {
+  const project = paths.project(projectRoot);
+  return {
+    prepareDirs: [project.prepare, paths.prepare, join(projectRoot, 'prepare')],
+    workflowDirs: [
+      join(project.workflow, 'workflows'),
+      paths.workflows,
+      join(projectRoot, 'workflows'),
+    ],
+  };
+}
+
 function resolveAssociatedWorkflow(
   dirs: string[],
   commandName: string,
@@ -233,7 +248,7 @@ function resolveAssociatedWorkflow(
   for (const dir of dirs) {
     if (!existsSync(dir)) continue;
     const matches = readdirSync(dir, { withFileTypes: true })
-      .filter(entry => entry.isFile() && entry.name.endsWith('.md') && !/\.(?:codex|agy|pi)\.md$/.test(entry.name))
+      .filter(entry => entry.isFile() && entry.name.endsWith('.md') && !PLATFORM_SUFFIX_RE.test(entry.name))
       .map(entry => {
         const path = join(dir, entry.name);
         const raw = readFileSync(path, 'utf8');
@@ -255,13 +270,7 @@ export function resolveStepContent(
   platformSuffix?: string,
 ): ResolvedStepContent {
   const normalized = stepName.replace(/^\//, '').replace(/\.md$/i, '');
-  const project = paths.project(projectRoot);
-  const prepareDirs = [project.prepare, paths.prepare, join(projectRoot, 'prepare')];
-  const workflowDirs = [
-    join(project.workflow, 'workflows'),
-    paths.workflows,
-    join(projectRoot, 'workflows'),
-  ];
+  const { prepareDirs, workflowDirs } = stepRegistryDirs(projectRoot);
 
   const directWorkflow = resolveInDirs(workflowDirs, `${normalized}.md`);
   const associatedWorkflow = directWorkflow
@@ -290,4 +299,45 @@ export function resolveStepContent(
   const finish = workflow ? extractFinish(workflow.raw) : [];
 
   return { prepare, workflow, runMode, refs, finish };
+}
+
+export interface StepRegistryEntry {
+  name: string;
+  scope: 'global' | 'project';
+  source: 'prepare' | 'workflow' | 'association';
+  path: string;
+}
+
+/**
+ * Enumerate every step name `resolveStepContent` can resolve: prepare/workflow
+ * basenames plus workflow frontmatter command aliases. This is the build-time
+ * mirror of the run-time step registry — `ralph skills --steps` exposes it so
+ * chain-build prevalidation validates against the same name space `run next`
+ * loads from.
+ */
+export function listResolvableSteps(projectRoot: string): StepRegistryEntry[] {
+  const { prepareDirs, workflowDirs } = stepRegistryDirs(projectRoot);
+  const globalDirs = new Set([paths.prepare, paths.workflows]);
+  const seen = new Map<string, StepRegistryEntry>();
+  const add = (entry: StepRegistryEntry) => {
+    if (!seen.has(entry.name)) seen.set(entry.name, entry);
+  };
+  const scanDir = (dir: string, source: 'prepare' | 'workflow') => {
+    if (!existsSync(dir)) return;
+    const scope = globalDirs.has(dir) ? 'global' as const : 'project' as const;
+    for (const item of readdirSync(dir, { withFileTypes: true })) {
+      if (!item.isFile() || !item.name.endsWith('.md') || PLATFORM_SUFFIX_RE.test(item.name)) continue;
+      const path = join(dir, item.name);
+      add({ name: basename(item.name, '.md'), scope, source, path });
+      if (source === 'workflow') {
+        const association = extractWorkflowAssociation(readFileSync(path, 'utf8'));
+        for (const alias of association?.commands ?? []) {
+          add({ name: alias, scope, source: 'association', path });
+        }
+      }
+    }
+  };
+  for (const dir of prepareDirs) scanDir(dir, 'prepare');
+  for (const dir of workflowDirs) scanDir(dir, 'workflow');
+  return Array.from(seen.values()).sort((a, b) => a.name.localeCompare(b.name));
 }
