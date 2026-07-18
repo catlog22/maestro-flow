@@ -48,7 +48,7 @@ content  -- free-text description of the entry
 ## Prerequisites
 
 - Target specs directory must exist:
-  - `project`: `.workflow/specs/` (run `/spec setup` or `maestro spec init`)
+  - `project`: `.workflow/specs/` (run `/maestro-spec setup` or `maestro spec init`)
   - `global`: `~/.maestro/specs/` (run `maestro spec init --scope global`)
   - `team`: `.workflow/collab/specs/` (run `maestro spec init --scope team`)
   - `personal`: `.workflow/collab/specs/{uid}/` (run `maestro spec init --scope personal`)
@@ -68,7 +68,7 @@ Validate:
   - category ∈ {coding, arch, quality, debug, test, review, learning, ui}
   - content non-empty
   - personal scope requires uid (resolve from `maestro collab whoami` if --uid not given)
-On failure: show usage `/spec add [--scope <scope>] <category> <content>`, exit
+On failure: show usage `/maestro-spec add [--scope <scope>] <category> <content>`, exit
 ```
 
 ### Step 2: Resolve Target File

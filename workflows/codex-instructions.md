@@ -168,8 +168,8 @@ maestro load --type spec --category coding
 
 | What | Command |
 |------|---------|
-| Spec | `/spec add <category> "title" "content" --keywords kw1,kw2 --description "summary"` |
-| Knowhow | `/manage knowledge capture` (`--spec-category <cat>` for agent injection) |
+| Spec | `/maestro-spec add <category> "title" "content" --keywords kw1,kw2 --description "summary"` |
+| Knowhow | `/maestro-manage knowledge capture` (`--spec-category <cat>` for agent injection) |
 
 Category routing: decisions→`arch`, patterns→`coding`, pitfalls→`debug`/`learning`, rules→`review`, tests→`test`.
 入口分工：skill 命令走引导式工作流；`maestro spec add` CLI 直写（supersede 流程用 `--json` 拿 sid）。
@@ -183,7 +183,7 @@ Category routing: decisions→`arch`, patterns→`coding`, pitfalls→`debug`/`l
 | **conflict** | 两条规则均有道理 | `maestro spec conflict mark <file> <line> --note "<reason>"` | 旧条目 `contested`（search ×0.5），人裁决 |
 
 Confidence levels: `high` → `medium` (default) → `low` (`[LOW CONFIDENCE]`) → `contested` (`[CONTESTED]`).
-Resolution: `/manage knowledge audit`
+Resolution: `/maestro-manage knowledge audit`
 
 ### Health & Maintenance
 

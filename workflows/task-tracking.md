@@ -1,4 +1,5 @@
-<!-- session-mode: inherited -->
+<!-- session-mode: none -->
+<!-- lifecycle-profile: neutral -->
 # Task Tracking Protocol
 
 Task 工具是 session 权威状态的 **UI 镜像**，不替代 session 状态。

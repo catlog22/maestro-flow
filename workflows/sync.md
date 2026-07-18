@@ -41,7 +41,7 @@ No files changed → emit W001, exit
 Read .workflow/codebase/doc-index.json
 Extract: components[], features[], requirements[], architecture_decisions[]
 
-If missing: prompt → (a) MUST run /manage sync rebuild then re-run
+If missing: prompt → (a) MUST run /maestro-manage sync rebuild then re-run
              or    → (b) DEGRADED_MODE: git-diff-only, skip Steps 3-5; flag sync as [LOW CONFIDENCE] (git-diff-only, Steps 3-5 skipped)
 ```
 

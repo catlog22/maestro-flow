@@ -32,19 +32,19 @@ category: coding
 ## Description Rules
 
 - First line after `### Title` must state **when to use** this tool
-- For ref entries: `spec load` shows only the first 200 chars after heading — timing must be in that window
+- For ref entries: `maestro-spec load` shows only the first 200 chars after heading — timing must be in that window
 - For ref knowhow docs: YAML `summary` field is shown by `wiki list` and wiki-role-loader hook
 
 ## Discovery Path
 
 ```
-Register (knowhow/ + tool: true) → spec load --category / spec-injector auto-inject → agent discovers tool
+Register (knowhow/ + tool: true) → maestro-spec load --category / spec-injector auto-inject → agent discovers tool
 ```
 
 Agents discover tool specs via:
-- `spec load --category <category>` — scans knowhow/ for `category + tool: true` matches
+- `maestro-spec load --category <category>` — scans knowhow/ for `category + tool: true` matches
 - `spec-injector` hook — auto-injects at Agent launch based on agent type → category mapping
-- `spec load --keyword <word>` — keyword search across all entries (cross-category)
+- `maestro-spec load --keyword <word>` — keyword search across all entries (cross-category)
 
 ## Category Reference
 

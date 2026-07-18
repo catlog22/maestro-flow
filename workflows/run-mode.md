@@ -40,6 +40,8 @@ maestro run create odyssey --session 20260715-odyssey-planex-todo -- --mode plan
 ## Artifact Boundary
 
 - Every formal artifact (including evidence-role artifacts declared in the prepare contract) MUST be written under `{run_dir}/outputs/`.
+- Every new formal JSON artifact MUST contain a complete top-level `_meta` object: `{"_meta":{"kind":"<stable-kind>","schema":"<stable-kind>/1.0"},...}`. `kind` and `schema` are required together; `role` and `alias` are optional.
+- A legacy JSON artifact with no `_meta` remains readable through contract/filename inference. Never write a partial, null, or non-object `_meta`; strict validation rejects the artifact and blocks Run completion.
 - Human-readable synthesis and handoff MUST be written to `{run_dir}/report.md`.
 - Informal worker traces and intermediate logs may use `{run_dir}/evidence/` (lazily created, not gate-checked).
 - Temporary computation may use `{run_dir}/work/`; it is never an artifact and is never indexed.
@@ -65,3 +67,9 @@ finish:
   - Confirm every fix commit references its finding ID.
 ---
 ```
+
+## Team Skills and FSM Chains
+
+`team-*` skills are independent user entry points — invoked directly via `Skill(...)`, never dispatched as a step inside a `ralph next` / `maestro run next` FSM chain. They do not appear in any chain catalog or Stage Mapping.
+
+A team skill owns its own Run lifecycle: its coordinator resolves and completes the Run under the `run-mode-lite.md` contract. The FSM chain contract above governs only lifecycle steps dispatched by the orchestrators.

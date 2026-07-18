@@ -153,10 +153,10 @@ A_RECORD extra: §8 improvement metrics — re-capture and build before/after co
 
 | Category | Content | Follow-up |
 |----------|---------|-----------|
-| Performance pattern | Bottleneck type + fix approach + measurement | `/spec add coding` |
-| Security rule | Vulnerability class + fix + prevention | `/spec add debug` |
-| Architecture constraint | Violation + correct boundary + check | `/spec add arch` |
-| Reliability pattern | Failure mode + handling strategy + verification | `/spec add coding` |
+| Performance pattern | Bottleneck type + fix approach + measurement | `/maestro-spec add coding` |
+| Security rule | Vulnerability class + fix + prevention | `/maestro-spec add debug` |
+| Architecture constraint | Violation + correct boundary + check | `/maestro-spec add arch` |
+| Reliability pattern | Failure mode + handling strategy + verification | `/maestro-spec add coding` |
 
 ---
 
@@ -235,11 +235,11 @@ Goals:       {done}/{total} ({skipped} skipped)
 
 | Condition | Next |
 |-----------|------|
-| Discovery issues created | `/manage issue list --source improve-odyssey` |
-| Deeper debug needed | `/odyssey <finding> --mode debug` |
-| Formal review of changes | `/odyssey <changed-files> --mode review` |
-| UI-related findings | `/odyssey <component> --mode ui` |
-| Document pattern | `/learn decompose <module>` |
-| Second opinion | `/learn consult <understanding.md>` |
-| Design/perf/arch pattern to persist | `/spec add coding\|arch "..."` |
+| Discovery issues created | `/maestro-manage issue list --source improve-odyssey` |
+| Deeper debug needed | `/maestro-odyssey <finding> --mode debug` |
+| Formal review of changes | `/maestro-odyssey <changed-files> --mode review` |
+| UI-related findings | `/maestro-odyssey <component> --mode ui` |
+| Document pattern | `/maestro-learn decompose <module>` |
+| Second opinion | `/maestro-learn consult <understanding.md>` |
+| Design/perf/arch pattern to persist | `/maestro-spec add coding\|arch "..."` |
 | Pending decisions | Filter evidence phase=decision status=pending |

@@ -7,7 +7,7 @@
 
 Knowledge graph link discovery and health improvement. Analyzes the unified wiki index to find orphaned entries, missing connections, and transitive link gaps, then suggests or auto-applies new `related` links.
 
-**Closed-loop**: wiki-connect improves graph → wiki-digest produces better clusters → learn follow surfaces richer trails.
+**Closed-loop**: wiki-connect improves graph → wiki-digest produces better clusters → maestro-learn follow surfaces richer trails.
 
 ---
 
@@ -22,13 +22,13 @@ Knowledge graph link discovery and health improvement. Analyzes the unified wiki
 ## Argument Shape
 
 ```
-/manage knowledge wiki connect                                 → full graph analysis, all types
-/manage knowledge wiki connect --scope spec                    → limit to spec entries only
-/manage knowledge wiki connect --scope memory                  → limit to memory entries only
-/manage knowledge wiki connect --min-similarity 0.5            → raise threshold (default: 0.3)
-/manage knowledge wiki connect --fix                           → auto-apply top suggestions
-/manage knowledge wiki connect --max 10                        → limit suggestion count (default: 20)
-/manage knowledge wiki connect --scope spec --fix --max 5      → combined: fix top 5 spec connections
+/maestro-manage knowledge wiki connect                                 → full graph analysis, all types
+/maestro-manage knowledge wiki connect --scope spec                    → limit to spec entries only
+/maestro-manage knowledge wiki connect --scope memory                  → limit to memory entries only
+/maestro-manage knowledge wiki connect --min-similarity 0.5            → raise threshold (default: 0.3)
+/maestro-manage knowledge wiki connect --fix                           → auto-apply top suggestions
+/maestro-manage knowledge wiki connect --max 10                        → limit suggestion count (default: 20)
+/maestro-manage knowledge wiki connect --scope spec --fix --max 5      → combined: fix top 5 spec connections
 ```
 
 | Flag | Effect |
@@ -151,8 +151,8 @@ Report:       .workflow/knowhow/KNW-wiki-connections-{date}.md
 
 | Action | Command |
 |--------|---------|
-| Generate knowledge digest | `/manage knowledge wiki digest <topic>` |
-| Follow-along on orphan | `/learn follow <wiki-id>` |
+| Generate knowledge digest | `/maestro-manage knowledge wiki digest <topic>` |
+| Follow-along on orphan | `/maestro-learn follow <wiki-id>` |
 | View full graph | `maestro wiki graph` |
-| Run harvest for new content | `/manage knowledge harvest --recent 7` |
+| Run harvest for new content | `/maestro-manage knowledge harvest --recent 7` |
 

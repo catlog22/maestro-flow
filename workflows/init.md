@@ -84,7 +84,7 @@ state.json exists → Path C (existing) | source files exist → Path B (brownfi
 1. Create `.workflow/` directory structure
 2. Create `.workflow/state.json` (status: "idle")
 3. Offer codebase mapping:
-   - "Map codebase first" → execute `/manage sync rebuild` to understand existing architecture, then return
+   - "Map codebase first" → execute `/maestro-manage sync rebuild` to understand existing architecture, then return
    - "Skip mapping" → proceed
 4. Run Workflow Preferences (same as Path A step 2) → `.workflow/config.json`
 5. Ask user for project vision, goals, constraints (same deep questioning as Path A step 1)
@@ -154,5 +154,5 @@ Verify all required directories and files exist:
 3. Route next steps:
    - "Run `roadmap --mode full` to create full spec package with roadmap (heavy path)"
    - "Run `roadmap` to create interactive roadmap directly (light path)"
-   - "Run `/manage status` to view project dashboard"
+   - "Run `/maestro-manage status` to view project dashboard"
    - "Run `brainstorm` to explore ideas first"

@@ -204,10 +204,10 @@ Review findings with severity >= medium.
 
 | Category | Content | Follow-up |
 |----------|---------|-----------|
-| Cross-dimension recurring pattern | Pattern + affected dimensions + coding standard | `$spec add review` |
-| Security finding | Vulnerability type + triggers + fix approach | `$spec add debug` |
-| Architecture violation pattern | Violation + correct boundary + verification | `$spec add arch` |
-| Reusable generalization pattern | Signature + risk + fix template + scope | `$spec add coding` |
+| Cross-dimension recurring pattern | Pattern + affected dimensions + coding standard | `$maestro-spec add review` |
+| Security finding | Vulnerability type + triggers + fix approach | `$maestro-spec add debug` |
+| Architecture violation pattern | Violation + correct boundary + verification | `$maestro-spec add arch` |
+| Reusable generalization pattern | Signature + risk + fix template + scope | `$maestro-spec add coding` |
 
 ---
 
@@ -276,9 +276,9 @@ Goals:      {done}/{total} ({skipped} skipped)
 
 | Condition | Next |
 |-----------|------|
-| Discovery issues | `$manage issue list --source review-odyssey` |
-| Document pattern | `$learn decompose <module>` |
-| Debug root cause | `$odyssey <issue> --mode debug` |
-| Second opinion | `$learn consult <understanding.md>` |
-| Related question | `$learn investigate "<question>"` |
+| Discovery issues | `$maestro-manage issue list --source review-odyssey` |
+| Document pattern | `$maestro-learn decompose <module>` |
+| Debug root cause | `$maestro-odyssey <issue> --mode debug` |
+| Second opinion | `$maestro-learn consult <understanding.md>` |
+| Related question | `$maestro-learn investigate "<question>"` |
 | Pending decisions | Filter evidence phase=decision status=pending |

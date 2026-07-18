@@ -299,7 +299,7 @@ insight.routed_id = "{target_file}#INS-{INS_id}"
 #### Target: note
 
 ```
-Invoke /manage knowledge capture tip with:
+Invoke /maestro-manage knowledge capture tip with:
   text = "[Retro phase {NN} / {lens}] {insight.title}: {insight.summary}"
   tags = insight.tags + ["retrospective", "phase-{NN}", insight.lens]
 
@@ -378,7 +378,7 @@ Also append each insight to `.workflow/specs/learnings.md` as `<spec-entry>` wit
 
 Print: phase, lenses run, insight count, routing summary, output paths.
 
-Next steps: `/manage status` | `/manage issue list --source retrospective` | `/manage knowledge knowhow list` | `/maestro-session-seal`
+Next steps: `/maestro-manage status` | `/maestro-manage issue list --source retrospective` | `/maestro-manage knowledge knowhow list` | `/maestro-session-seal`
 
 If range/all mode: loop Steps 3-8 per phase, then print aggregate summary.
 

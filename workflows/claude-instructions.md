@@ -142,8 +142,8 @@ maestro load --type spec --category coding
 
 | What | Command |
 |------|---------|
-| Spec | `/spec add <category> "title" "content" --keywords kw1,kw2 --description "summary"` |
-| Knowhow | `/manage knowledge capture` (`--spec-category <cat>` for agent injection) |
+| Spec | `/maestro-spec add <category> "title" "content" --keywords kw1,kw2 --description "summary"` |
+| Knowhow | `/maestro-manage knowledge capture` (`--spec-category <cat>` for agent injection) |
 
 Category routing: decisions→`arch`, patterns→`coding`, pitfalls→`debug`/`learning`, rules→`review`, tests→`test`.
 入口分工：slash 命令走引导式工作流；`maestro spec add` CLI 直写（supersede 流程用 `--json` 拿 sid）。
@@ -156,7 +156,7 @@ Category routing: decisions→`arch`, patterns→`coding`, pitfalls→`debug`/`l
 | 关系 | 场景 | 命令 | 效果 |
 |------|------|------|------|
 | **supersede** | 新规则替代旧规则（演化） | `maestro spec supersede <old-sid> --by <new-sid>` | 旧条目 `deprecated`（search/load 排除），演化链保留 |
-| **conflict** | 两条规则均有道理（争议） | `maestro spec conflict mark <file> <line> --note "<reason>"` | 旧条目 `contested`（search ×0.5，`[CONTESTED]` 标注，仍注入），人裁决 — resolution 走 `/manage knowledge audit` |
+| **conflict** | 两条规则均有道理（争议） | `maestro spec conflict mark <file> <line> --note "<reason>"` | 旧条目 `contested`（search ×0.5，`[CONTESTED]` 标注，仍注入），人裁决 — resolution 走 `/maestro-manage knowledge audit` |
 
 supersede 流程：`maestro spec add ... --json`（→ new-sid）→ `spec supersede <old-sid> --by <new-sid>`，`spec history <sid>` 查看演化链。
 

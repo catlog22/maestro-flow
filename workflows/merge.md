@@ -120,6 +120,6 @@ Display:
   Roadmap: .workflow/roadmap.md updated
 
   Next steps:
-    /manage status          -- View dashboard
+    /maestro-manage status          -- View dashboard
     /maestro-session-seal   -- Seal merged session (knowledge extraction + DAG progression)
 ```

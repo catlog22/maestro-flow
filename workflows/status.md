@@ -78,7 +78,7 @@ CONTEXT: key_decisions, blockers, deferred
 If issue_state exists: display ISSUES panel (open count, critical count, by-status breakdown, critical issues list).
 - Omit critical sub-section if none. Note blockers→issues migration if applicable. Note deferred items.
 
-If issue_state is null: "No issues tracked. Use `/manage issue create` to discover issues."
+If issue_state is null: "No issues tracked. Use `/maestro-manage issue create` to discover issues."
 
 Status icons:
 - `[x]` completed
@@ -102,7 +102,7 @@ Else if .workflow/worktrees.json has active entries → ACTIVE WORKTREES panel: 
 ### Step 5.0: Issue-Aware Routing
 
 If issue_state exists, evaluate BEFORE status routing:
-- critical_open > 0 → suggest `/manage issue list` --severity critical, `debug` --from-uat
+- critical_open > 0 → suggest `/maestro-manage issue list` --severity critical, `debug` --from-uat
 - diagnosed > 0 → suggest `plan` --gaps
 - registered > 0 → suggest `debug`
 

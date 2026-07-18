@@ -151,9 +151,9 @@ Finalize discovery-state.json: status = "completed", completed_at = NOW_ISO
 Display summary: session ID, mode, raw/unique counts, per-perspective breakdown, severity breakdown.
 
 Next steps:
-  - /manage issue list --severity critical
-  - /manage issue list
-  - see also: /manage issue discover usage docs (by-prompt mode for focused scans)
+  - /maestro-manage issue list --severity critical
+  - /maestro-manage issue list
+  - see also: /maestro-manage issue discover usage docs (by-prompt mode for focused scans)
 ```
 
 ---
@@ -215,8 +215,8 @@ Finalize discovery-state.json: status = "completed"
 Display summary: session, prompt, rounds, raw/unique counts, per-dimension + severity breakdown.
 
 Next steps:
-  - /manage issue list --source discovery
-  - see also: /manage issue discover usage docs (full 8-perspective scan and by-prompt mode)
+  - /maestro-manage issue list --source discovery
+  - see also: /maestro-manage issue discover usage docs (full 8-perspective scan and by-prompt mode)
 ```
 
 ---

@@ -343,7 +343,7 @@ Design System: {project_name}. Color strategy: {color_strategy}. Typography: {ty
 </spec-entry>
 ```
 
-If `ui-conventions.md` doesn't exist, create it. Combined with the product entry from `teach`, `spec load --category ui` surfaces both.
+If `ui-conventions.md` doesn't exist, create it. Combined with the product entry from `teach`, `maestro-spec load --category ui` surfaces both.
 
 ### Step 5: Confirm, refine, and refresh session cache
 

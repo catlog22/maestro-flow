@@ -8,7 +8,7 @@
 > 本文件是 `/maestro` 命令体（A_CLASSIFY_INTENT）消费的**语义目录**：意图 → task_type → chain。
 > 执行流程（状态机、session 创建、`Agent(ralph-executor)` 派发、决策评估、compose/play 模板系统）全部在命令体内定义，本文件不含执行语义。
 >
-> **cmd 记法**：裸名称（`plan`、`execute`、`review`…）= first-tier step，经 `maestro ralph skills` 解析为 skill；`manage X` / `spec X` = dispatcher 命令 + 子命令参数；`maestro-*`、`quality-refactor`、`team-*` = 独立 command/skill 名。
+> **cmd 记法**：裸名称（`plan`、`execute`、`review`…）= first-tier step，来自 prepare/workflows 步骤注册表（build 期经 `maestro ralph skills --steps` 预校验，执行期由 `run next` 的 `resolveStepContent()` 加载）；`manage X` / `spec X` = dispatcher 命令 + 子命令参数；`maestro-*`、`quality-refactor`、`team-*` = 独立 command/skill 名。
 
 ## Intent → task_type
 
@@ -124,9 +124,9 @@ resolvePhase — priority order:
   3. From project state artifacts: in-progress execute → first incomplete phase → latest artifact phase
   4. null if chain is 'analyze-plan-execute' (uses {run_dir} instead)
   5. null if all chain commands are phase-independent:
-     manage status, manage issue, manage issue discover, maestro-init,
-     maestro-fork, maestro-merge, roadmap, spec setup,
-     manage knowledge (knowhow/capture/harvest/wiki/domain), manage sync (codebase/rebuild),
+     maestro-manage status, maestro-manage issue, maestro-manage issue discover, maestro-init,
+     maestro-fork, maestro-merge, roadmap, maestro-spec setup,
+     maestro-manage knowledge (knowhow/capture/harvest/wiki/domain), maestro-manage sync (codebase/rebuild),
      maestro-session-seal
   6. Ask user
 
@@ -144,7 +144,7 @@ When executing issue chains, replace `{issue_id}` in step args with resolved ID.
 ```javascript
 const chainMap = {
   // ── Single-step ──
-  'status':             [{ cmd: 'manage status' }],
+  'status':             [{ cmd: 'maestro-manage status' }],
   'init':               [{ cmd: 'maestro-init' }],
   'grill':              [{ cmd: 'grill', args: '"{description}"' }],
   'blueprint':          [{ cmd: 'blueprint', args: '"{description}"' }],
@@ -165,25 +165,25 @@ const chainMap = {
   'refactor':           [{ cmd: 'quality-refactor', args: '"{description}"' }],
   'review':             [{ cmd: 'review', args: '{phase}' }],
   'retrospective':      [{ cmd: 'retrospective', args: '{phase}' }],
-  'learn':              [{ cmd: 'manage knowledge capture', args: '"{description}"' }],
-  'sync':               [{ cmd: 'manage sync codebase' }],
+  'learn':              [{ cmd: 'maestro-manage knowledge capture', args: '"{description}"' }],
+  'sync':               [{ cmd: 'maestro-manage sync codebase' }],
   'milestone_close':    [{ cmd: 'maestro-session-seal' }],
   'milestone_audit':    [{ cmd: 'maestro-ralph', args: '"{description}" --engine swarm --script wf-milestone-audit' }],
   'milestone_complete': [{ cmd: 'maestro-session-seal' }],
-  'codebase_rebuild':   [{ cmd: 'manage sync rebuild' }],
-  'codebase_refresh':   [{ cmd: 'manage sync codebase' }],
-  'spec_setup':         [{ cmd: 'spec setup' }],
-  'spec_add':           [{ cmd: 'spec add', args: '"{description}"' }],
-  'spec_load':          [{ cmd: 'spec load' }],
-  'spec_map':           [{ cmd: 'manage sync rebuild' }],
-  'domain_add':         [{ cmd: 'manage knowledge domain', args: '"{description}"' }],
-  'knowhow_capture':    [{ cmd: 'manage knowledge capture', args: '"{description}"' }],
-  'issue':              [{ cmd: 'manage issue', args: '"{description}"' }],
-  'issue_discover':     [{ cmd: 'manage issue discover', args: '"{description}"' }],
+  'codebase_rebuild':   [{ cmd: 'maestro-manage sync rebuild' }],
+  'codebase_refresh':   [{ cmd: 'maestro-manage sync codebase' }],
+  'spec_setup':         [{ cmd: 'maestro-spec setup' }],
+  'spec_add':           [{ cmd: 'maestro-spec add', args: '"{description}"' }],
+  'spec_load':          [{ cmd: 'maestro-spec load' }],
+  'spec_map':           [{ cmd: 'maestro-manage sync rebuild' }],
+  'domain_add':         [{ cmd: 'maestro-manage knowledge domain', args: '"{description}"' }],
+  'knowhow_capture':    [{ cmd: 'maestro-manage knowledge capture', args: '"{description}"' }],
+  'issue':              [{ cmd: 'maestro-manage issue', args: '"{description}"' }],
+  'issue_discover':     [{ cmd: 'maestro-manage issue discover', args: '"{description}"' }],
   'issue_analyze':      [{ cmd: 'analyze', args: '--gaps "{description}"' }],
   'issue_plan':         [{ cmd: 'plan', args: '--gaps' }],
   'issue_execute':      [{ cmd: 'execute', args: '' }],
-  'knowhow':            [{ cmd: 'manage knowledge knowhow', args: '"{description}"' }],
+  'knowhow':            [{ cmd: 'maestro-manage knowledge knowhow', args: '"{description}"' }],
   'quick':              [{ cmd: 'quick', args: '"{description}"' }],
   'fork':               [{ cmd: 'maestro-fork', args: '-m {milestone_num}' }],
   'merge':              [{ cmd: 'maestro-merge', args: '-m {milestone_num}' }],
@@ -214,15 +214,15 @@ const chainMap = {
   'next-milestone':       [{ cmd: 'roadmap', args: '"{description}"' }, { cmd: 'plan', args: '{phase}' }, { cmd: 'execute', args: '{phase}' }],
   'review-fix':           [{ cmd: 'plan', args: '{phase} --gaps' }, { cmd: 'execute', args: '{phase}' }, { cmd: 'review', args: '{phase}' }],
   'quality-loop-partial': [{ cmd: 'plan', args: '{phase} --gaps' }, { cmd: 'execute', args: '{phase}' }],
-  'issue-full':           [{ cmd: 'analyze', args: '--gaps {issue_id}' }, { cmd: 'plan', args: '--gaps' }, { cmd: 'execute', args: '' }, { cmd: 'review', args: '{phase}' }, { cmd: 'manage issue', args: 'close {issue_id} --resolution fixed' }, { cmd: 'harvest', args: '--auto' }],
-  'issue-quick':          [{ cmd: 'plan', args: '--gaps' }, { cmd: 'execute', args: '' }, { cmd: 'manage issue', args: 'close {issue_id} --resolution fixed' }],
+  'issue-full':           [{ cmd: 'analyze', args: '--gaps {issue_id}' }, { cmd: 'plan', args: '--gaps' }, { cmd: 'execute', args: '' }, { cmd: 'review', args: '{phase}' }, { cmd: 'maestro-manage issue', args: 'close {issue_id} --resolution fixed' }, { cmd: 'harvest', args: '--auto' }],
+  'issue-quick':          [{ cmd: 'plan', args: '--gaps' }, { cmd: 'execute', args: '' }, { cmd: 'maestro-manage issue', args: 'close {issue_id} --resolution fixed' }],
 
   'harvest':              [{ cmd: 'harvest', args: '"{description}"' }],
-  'wiki':                 [{ cmd: 'manage knowledge wiki' }],
+  'wiki':                 [{ cmd: 'maestro-manage knowledge wiki' }],
   'wiki_connect':         [{ cmd: 'wiki-connect' }],
   'wiki_digest':          [{ cmd: 'wiki-digest' }],
   'business_test':        [{ cmd: 'auto-test', args: '{phase}' }],
-  'spec_remove':          [{ cmd: 'spec remove', args: '"{description}"' }],
+  'spec_remove':          [{ cmd: 'maestro-spec remove', args: '"{description}"' }],
   'update':               [{ cmd: 'maestro-update' }],
   'overlay':              [{ cmd: 'maestro-overlay', args: '"{description}"' }],
 };
@@ -281,7 +281,7 @@ detectNextAction(state):
 | Input | task_type | Chain |
 |-------|-----------|-------|
 | `"continue"` | *(exact)* state_continue | (from state) |
-| `"status"` | *(exact)* status | manage status |
+| `"status"` | *(exact)* status | maestro-manage status |
 | `"plan phase 2"` | plan | plan 2 |
 | `"execute"` | execute | execute |
 | `"Add API endpoint"` | quick | quick |
@@ -290,8 +290,8 @@ detectNextAction(state):
 | `"修复登录问题"` | debug | debug "登录" |
 | `"fix issue ISS-abc-001"` | issue_execute | issue-full |
 | `"这个问题需要看看"` | analyze | analyze |
-| `"创建一个 issue 跟踪"` | issue | manage issue |
-| `"discover issues"` | issue_discover | manage issue discover |
+| `"创建一个 issue 跟踪"` | issue | maestro-manage issue |
+| `"discover issues"` | issue_discover | maestro-manage issue discover |
 | `"brainstorm notifications"` | brainstorm-driven | brainstorm→plan→execute |
 | `"spec generate auth"` | spec-driven | init→spec→plan→execute |
 | `"ui design landing"` | impeccable_build | maestro-impeccable --chain build |

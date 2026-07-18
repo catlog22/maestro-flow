@@ -37,7 +37,7 @@ All types share `WikiNodeType = 'knowhow'`. The `type` field distinguishes subty
 
 ---
 
-## Part A: KnowHow Management (/manage knowledge knowhow)
+## Part A: KnowHow Management (/maestro-manage knowledge knowhow)
 
 Operations: list, search, view, edit, delete, prune across both stores.
 
@@ -84,7 +84,7 @@ MANDATORY: execute View/Edit/Delete/Prune/Integrity-Check logic per spec; REQUIR
 
 ---
 
-## Part B: KnowHow Capture (/manage knowledge capture)
+## Part B: KnowHow Capture (/maestro-manage knowledge capture)
 
 Capture reusable knowledge into `.workflow/knowhow/`.
 
@@ -420,7 +420,7 @@ Multiple workflows append `<spec-entry>` blocks to this container:
 
 | Workflow | Source value | When |
 |----------|-------------|------|
-| `/manage knowledge capture` | `manual` or `tip` | Manual capture during active work |
+| `/maestro-manage knowledge capture` | `manual` or `tip` | Manual capture during active work |
 | `retrospective` | `retrospective` | Phase retrospective insight distillation |
 | `learn-retro` | `retro-git` or `retro-decision` | Retrospective from git activity or decisions |
 | `wiki-connect` | `wiki-connect` | Graph connectivity insights |
