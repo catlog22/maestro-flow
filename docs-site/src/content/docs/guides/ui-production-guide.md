@@ -12,13 +12,13 @@ Maestro UI 生产管线覆盖从设计原型到代码实现的全生命周期，
 ### 管线架构
 
 ```
-impeccable --chain build  →  impeccable (auto pipeline)  →  ui-codify
+impeccable --chain build  →  impeccable (auto pipeline)  →  impeccable --codify
   design-ref/                critique/audit 驱动迭代         knowhow 资产
 ```
 
 **Phase 管线位置**：`analyze -> ui-design -> plan -> execute -> verify`（设计先于规划）
 
-`maestro-impeccable` 是 impeccable skill（23 命令 / 6 分类）的编排层，通过 critique/audit 评分驱动自动迭代循环。`--chain build` 产出的 `design-ref/` 会被 `maestro-plan` 自动检测，将设计 token 注入执行任务的 `read_first[]`。
+`maestro-impeccable` 是 impeccable skill（23 命令 / 6 分类）的编排层，通过 critique/audit 评分驱动自动迭代循环。`--chain build` 产出的 `design-ref/` 会被 `/maestro-next` 自动检测，将设计 token 注入执行任务的 `read_first[]`。
 
 ---
 
@@ -52,7 +52,7 @@ impeccable --chain build  →  impeccable (auto pipeline)  →  ui-codify
 
 | 下一步 | 命令 |
 |--------|------|
-| 基于设计规划 | `/maestro-plan {phase}` |
+| 基于设计规划 | `/maestro-next "{phase}"` |
 | 精调设计 | `/maestro-impeccable "{phase}" --chain improve` |
 
 ---
@@ -149,12 +149,12 @@ S_PARSE → S_SETUP → S_CHAIN → S_GATE → S_REPORT
 
 ---
 
-### 2.3 maestro-ui-codify — UI 代码化
+### 2.3 maestro-impeccable --codify — UI 代码化
 
 从现有源代码中逆向提取设计系统，生成参考包并固化为知识资产。
 
 ```
-/maestro-ui-codify <source-path> [--package-name <name>] [--output-dir <path>] [--overwrite]
+/maestro-impeccable --codify <source-path> [--package-name <name>] [--output-dir <path>] [--overwrite]
 ```
 
 | 参数 | 默认值 | 说明 |
@@ -185,18 +185,18 @@ S_PARSE → S_SETUP → S_CHAIN → S_GATE → S_REPORT
 # Step 2: 自动化生产（build chain）
 /maestro-impeccable "新建 landing page" --chain build --threshold 28
 # Step 3: 逆向提取设计系统
-/maestro-ui-codify src/components --package-name my-design-system
+/maestro-impeccable --codify src/components --package-name my-design-system
 ```
 
-**数据流向**：`ui-design` → `design-ref/` → `maestro-plan` 消费 → `ui-craft` 操作源码 → `ui-codify` 逆向提取，形成闭环。
+**数据流向**：`ui-design` → `design-ref/` → `maestro-next` 消费 → `ui-craft` 操作源码 → `maestro-impeccable --codify` 逆向提取，形成闭环。
 
 ### Phase 管线集成
 
 ```bash
 /maestro-impeccable "1" --chain build  # 设计先行
-/maestro-plan 1                         # 基于设计规划
-/maestro-execute 1                      # 执行实现
-/maestro-verify 1                       # 验证目标
+/maestro-next "1"                        # 基于设计规划
+/maestro-ralph continue 1               # 执行实现
+# 验证已集成到 maestro-ralph 决策门控
 ```
 
 ### 单命令模式
@@ -209,7 +209,7 @@ S_PARSE → S_SETUP → S_CHAIN → S_GATE → S_REPORT
 # 生产加固
 /maestro-impeccable "准备上线" --chain harden --threshold 30
 # 逆向提取
-/maestro-ui-codify src/ui --package-name company-components
+/maestro-impeccable --codify src/ui --package-name company-components
 ```
 
 ---
@@ -223,8 +223,8 @@ S_PARSE → S_SETUP → S_CHAIN → S_GATE → S_REPORT
 | 现有页面优化 | `impeccable --chain improve` | critique 驱动迭代 |
 | 增强动效/排版/色彩 | `impeccable --chain enhance` | 单维度 + critique 验证 |
 | 上线前加固 | `impeccable --chain harden` | audit 驱动边界处理 |
-| 提取设计规范 | `ui-codify` | 逆向提取为知识资产 |
-| 跨项目复用设计 | `ui-codify` + knowhow | 提取后通过知识系统共享 |
+| 提取设计规范 | `impeccable --codify` | 逆向提取为知识资产 |
+| 跨项目复用设计 | `impeccable --codify` + knowhow | 提取后通过知识系统共享 |
 
 ```bash
 # 快速原型
@@ -232,5 +232,5 @@ S_PARSE → S_SETUP → S_CHAIN → S_GATE → S_REPORT
 # 迭代优化
 /maestro-impeccable "优化 dashboard" --chain improve --threshold 30 --max-loops 5
 # 设计沉淀
-/maestro-ui-codify src --package-name project-design-v1
+/maestro-impeccable --codify src --package-name project-design-v1
 ```

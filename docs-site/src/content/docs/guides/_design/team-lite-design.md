@@ -40,14 +40,14 @@ CLI 命令仍叫 `maestro collab *`（用户感知友好），但磁盘布局用
 
 1. **身份识别** — 映射本地 Git 身份到 `.workflow/collab/members/{uid}.json`
 2. **共享活跃日志** — 全团队 append-only JSONL，记录谁在做什么
-3. **冲突预警** — `/maestro-plan` / `/maestro-execute` 启动前扫日志，发现同 phase 活动即提示
+3. **冲突预警** — `/maestro-next` / `/maestro-ralph continue` 启动前扫日志，发现同 phase 活动即提示
 4. **一键同步** — `maestro collab sync` 封装 `git stash + pull --rebase + pop + push`
 
 ## 前置依赖
 
 | 任务 | 改动 | 工作量 |
 |---|---|---|
-| P0.1 | `state.json` 增加 `current_task_id`，maestro-execute 进入/退出 TASK 时写入/清空 | 0.5d |
+| P0.1 | `state.json` 增加 `current_task_id`，/maestro-ralph continue 进入/退出 TASK 时写入/清空 | 0.5d |
 | P0.2 | 抽公共 `src/utils/jsonl-log.ts`（appendLine/readAll/tailLast/rotateIfLarge） | 0.5d |
 
 ## 数据模型

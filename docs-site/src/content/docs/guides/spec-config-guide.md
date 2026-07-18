@@ -202,8 +202,8 @@ maestro spec list [--scope <scope>] [--uid <uid>]
 maestro spec status [--scope <scope>] [--uid <uid>]
 
 # Tool 发现
-/maestro-tools-register "<description>"
-/maestro-tools-execute "<name>" | --category <cat>
+/spec add "<description>"
+/maestro-ralph "<name>" | --category <cat>
 
 # 分析
 maestro spec analytics [--keywords] [--hit-rate] [--clear]

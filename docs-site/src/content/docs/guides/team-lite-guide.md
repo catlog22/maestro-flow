@@ -28,7 +28,7 @@ maestro collab status              # 查看最近 30 分钟谁在做什么
 maestro collab sync                # 一键同步（stash → pull --rebase → pop → push）
 ```
 
-`/maestro-plan` 和 `/maestro-execute` 的模板已集成 preflight 调用，无需手动触发。
+`/maestro-next` 和 `/maestro-ralph continue` 的模板已集成 preflight 调用，无需手动触发。
 
 ## 核心命令速查
 

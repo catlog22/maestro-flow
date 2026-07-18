@@ -8,10 +8,10 @@ Maestro 提供了两个强大的工作流增强命令：
 
 | 命令 | 用途 | 特点 |
 |------|------|------|
-| `maestro-universal-workflow` | 动态生成任务特定的工作流脚本 | 对抗决策模式、可复用库积累 |
-| `maestro-swarm-workflow` | 并行执行预构建的工作流脚本 | 多代理并发、8 个固定脚本 |
+| `/maestro-ralph --engine universal` | 动态生成任务特定的工作流脚本 | 对抗决策模式、可复用库积累 |
+| `/maestro-ralph --engine swarm` | 并行执行预构建的工作流脚本 | 多代理并发、8 个固定脚本 |
 
-## maestro-universal-workflow
+## /maestro-ralph --engine universal
 
 ### 用途
 
@@ -35,16 +35,16 @@ Maestro 提供了两个强大的工作流增强命令：
 
 ```bash
 # 自动匹配或生成
-/maestro-universal-workflow "评估数据库迁移方案的可行性和风险"
+/maestro-ralph --engine universal "评估数据库迁移方案的可行性和风险"
 
 # 指定深度
-/maestro-universal-workflow "审查 auth 模块的安全性" --depth deep
+/maestro-ralph --engine universal "审查 auth 模块的安全性" --depth deep
 
 # 只生成不执行
-/maestro-universal-workflow "对比 3 种缓存策略" --dry-run --name cache-eval
+/maestro-ralph --engine universal "对比 3 种缓存策略" --dry-run --name cache-eval
 
 # 基于已有脚本修改
-/maestro-universal-workflow "类似 analyze 但加入成本维度" --from wf-analyze
+/maestro-ralph --engine universal "类似 analyze 但加入成本维度" --from wf-analyze
 ```
 
 ### 对抗深度级别
@@ -71,7 +71,7 @@ Phase 5: Arbitrate — referee 根据辩论结果选出最优方案
 
 ---
 
-## maestro-swarm-workflow
+## /maestro-ralph --engine swarm
 
 ### 用途
 
@@ -94,36 +94,36 @@ Phase 5: Arbitrate — referee 根据辩论结果选出最优方案
 
 ```bash
 # 直接调用
-/maestro-swarm-workflow "analyze auth module"
+/maestro-ralph --engine swarm "analyze auth module"
 
 # 指定脚本
-/maestro-swarm-workflow "审查代码质量" --script wf-review
+/maestro-ralph --engine swarm "审查代码质量" --script wf-review
 
 # 限定分析维度
-/maestro-swarm-workflow "分析性能瓶颈" --dims architecture,performance
+/maestro-ralph --engine swarm "分析性能瓶颈" --dims architecture,performance
 
 # 限定角色
-/maestro-swarm-workflow "设计新功能" --roles system-architect,product-manager
+/maestro-ralph --engine swarm "设计新功能" --roles system-architect,product-manager
 ```
 
 ### 可用脚本
 
 | 脚本 | 加速命令 | 对抗模式 |
 |------|---------|---------|
-| `wf-analyze` | maestro-analyze | explore → 6-dim scoring → skeptic cross-verify → 3-way advocacy + referee |
-| `wf-brainstorm` | maestro-brainstorm | multi-role analysis → 3-specialist cross-review → 3-proposal competition → arbitrator |
-| `wf-review` | quality-review | 6-dim scan → 3-vote adversarial verify → 3-perspective report + arbitrated verdict |
-| `wf-verify` | maestro-execute (E2.7) | 3-layer + antipattern + convergence → prosecutor vs defender debate → judge verdict |
-| `wf-grill` | maestro-grill | explore → parallel branch stress → meta-skeptic challenge → 3-vote verdict |
-| `wf-plan` | maestro-plan | parallel context → 3-strategy competing proposals → judge panel scoring → 3-critic adversarial check |
-| `wf-execute` | maestro-execute | wave-based parallel execution → adversarial convergence spot-check → 3-vote status determination |
-| `wf-milestone-audit` | maestro-milestone-audit | parallel 3-dim audit → adversarial dimension challenge → 3-vote verdict |
+| `wf-analyze` | /maestro-ralph --engine swarm --script wf-analyze | explore → 6-dim scoring → skeptic cross-verify → 3-way advocacy + referee |
+| `wf-brainstorm` | /maestro-ralph --engine swarm --script wf-brainstorm | multi-role analysis → 3-specialist cross-review → 3-proposal competition → arbitrator |
+| `wf-review` | /maestro-ralph --engine swarm --script wf-review | 6-dim scan → 3-vote adversarial verify → 3-perspective report + arbitrated verdict |
+| `wf-verify` | /maestro-ralph continue (E2.7) | 3-layer + antipattern + convergence → prosecutor vs defender debate → judge verdict |
+| `wf-grill` | /maestro-ralph --engine swarm --script wf-grill | explore → parallel branch stress → meta-skeptic challenge → 3-vote verdict |
+| `wf-plan` | /maestro-next | parallel context → 3-strategy competing proposals → judge panel scoring → 3-critic adversarial check |
+| `wf-execute` | /maestro-ralph continue | wave-based parallel execution → adversarial convergence spot-check → 3-vote status determination |
+| `wf-milestone-audit` | /maestro-session-seal | parallel 3-dim audit → adversarial dimension challenge → 3-vote verdict |
 
 ---
 
 ## 与现有命令的关系
 
-| 维度 | swarm-workflow | universal-workflow | composer/player |
+| 维度 | /maestro-ralph --engine swarm | /maestro-ralph --engine universal | /maestro --compose / --play |
 |------|---------------|-------------------|-----------------|
 | 脚本来源 | 固定 8 个预写脚本 | 动态生成 + 积累库 | 用户定义 JSON 模板 |
 | 适用范围 | 对应 8 个 maestro 命令 | 任意任务 | 任意 DAG 工作流 |
@@ -133,40 +133,40 @@ Phase 5: Arbitrate — referee 根据辩论结果选出最优方案
 
 ### 选择建议
 
-1. **标准任务** → 使用 `maestro-swarm-workflow`（已有匹配脚本）
-2. **非标准任务** → 使用 `maestro-universal-workflow`（动态生成）
-3. **精确控制** → 使用 `maestro-composer` + `maestro-player`（JSON 模板）
-4. **顺序执行** → 使用 `maestro-ralph`（自适应链）
+1. **标准任务** → 使用 `/maestro-ralph --engine swarm`（已有匹配脚本）
+2. **非标准任务** → 使用 `/maestro-ralph --engine universal`（动态生成）
+3. **精确控制** → 使用 `/maestro --compose` + `/maestro --play`（JSON 模板）
+4. **顺序执行** → 使用 `/maestro-ralph`（自适应链）
 
 ---
 
 ## 集成 Ralph
 
-`maestro-swarm-workflow` 可以作为 ralph chain 中的加速执行器：
+`/maestro-ralph --engine swarm` 可以作为 ralph chain 中的加速执行器：
 
 ```json
 {
   "steps": [
     {
       "index": 0,
-      "skill": "maestro-swarm-workflow",
-      "args": "\"analyze auth module\" --script wf-analyze",
+      "skill": "maestro-ralph",
+      "args": "--engine swarm \"analyze auth module\" --script wf-analyze",
       "stage": "analyze"
     }
   ]
 }
 ```
 
-Ralph 会自动识别 swarm-workflow 并使用并行执行模式。
+Ralph 会自动识别 swarm engine 并使用并行执行模式。
 
 ---
 
 ## 最佳实践
 
-1. **从标准开始**：先尝试 `maestro-swarm-workflow`，没有匹配再用 `universal-workflow`
+1. **从标准开始**：先尝试 `/maestro-ralph --engine swarm`，没有匹配再用 `--engine universal`
 2. **控制深度**：`shallow` 用于快速检查，`standard` 用于常规任务，`deep` 用于关键决策
 3. **复用脚本**：生成的脚本保存在 `~/.maestro/workflows/dynamic/`，可通过 `--from` 复用
-4. **结合 ralph**：将 swarm-workflow 作为 ralph chain 的并行加速层
+4. **结合 ralph**：将 swarm engine 作为 ralph chain 的并行加速层
 
 ---
 

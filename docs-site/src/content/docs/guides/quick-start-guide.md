@@ -51,22 +51,22 @@ maestro install toggle --type skill --enable scholar-writing
 
 ```bash
 /maestro-init                          # 初始化 .workflow/ 目录
-/maestro-roadmap "项目名称和目标" -y     # 生成路线图
+/maestro-ralph --roadmap "项目名称和目标" -y  # 生成路线图
 ```
 
 ### 从头脑风暴开始
 
 ```bash
-/maestro-brainstorm "在线教育平台"       # 多角色头脑风暴
-/maestro-init --from brainstorm:ANL-xxx # 基于头脑风暴初始化
-/maestro-roadmap "创建路线图" -y
+/maestro-ralph --engine swarm --script wf-brainstorm "在线教育平台"  # 多角色头脑风暴
+/maestro-init --from brainstorm:ANL-xxx                           # 基于头脑风暴初始化
+/maestro-ralph --roadmap "创建路线图" -y
 ```
 
 ### 完整规范蓝图（大型项目）
 
 ```bash
 /maestro-init
-/maestro-blueprint                      # 6 阶段规范蓝图（产品简报 + PRD + 架构 + 史诗）
+/maestro "生成规范蓝图"                   # 6 阶段规范蓝图（产品简报 + PRD + 架构 + 史诗）
 ```
 
 ---
@@ -77,18 +77,18 @@ maestro install toggle --type skill --enable scholar-writing
 
 ```bash
 # 全量模式——覆盖当前里程碑所有 Phase
-/maestro-analyze                        # 分析
-/maestro-plan                           # 规划
-/maestro-execute                        # 执行
-/maestro-verify                         # 验证
+/maestro-ralph --engine swarm --script wf-analyze  # 分析
+/maestro-next                                      # 规划
+/maestro-ralph continue                            # 执行
+# 注：/maestro-verify 已于 v0.5.51 退役，验证集成进 maestro-ralph 决策门
 
 # 逐 Phase 模式（micro 层：Phase 级深度分析）
-/maestro-analyze 1                      # 只分析 Phase 1（6 维度评分）
-/maestro-plan 1                         # 只规划 Phase 1
-/maestro-execute 1                      # 只执行 Phase 1
+/maestro-ralph --engine swarm --script wf-analyze 1  # 只分析 Phase 1（6 维度评分）
+/maestro-next 1                                      # 只规划 Phase 1
+/maestro-ralph continue 1                            # 只执行 Phase 1
 
 # 宏观探索模式（macro 层：roadmap 之前使用）
-/maestro-analyze "实现多租户架构"         # 需求影响面探索 → scope_verdict 路由
+/maestro "实现多租户架构"                            # 需求影响面探索 → scope_verdict 路由
 ```
 
 ### 一键全自动
@@ -101,9 +101,9 @@ maestro install toggle --type skill --enable scholar-writing
 ### 免初始化模式（临时任务）
 
 ```bash
-/maestro-analyze "实现 JWT 认证"         # scope=standalone，自动创建 state.json
-/maestro-plan --dir scratch/20260420-analyze-jwt-...
-/maestro-execute --dir scratch/20260420-plan-jwt-...
+/maestro "实现 JWT 认证"                 # scope=standalone，自动创建 state.json
+/maestro-next --dir scratch/20260420-analyze-jwt-...
+/maestro-ralph continue --dir scratch/20260420-plan-jwt-...
 ```
 
 ---
@@ -114,22 +114,22 @@ maestro install toggle --type skill --enable scholar-writing
 
 ```bash
 # 统一自动测试（智能路由：spec/gap/code）
-/quality-auto-test 1
+/maestro-ralph --engine swarm 1
 
-# 会话式 UAT
-/quality-test 1
+# 安全审计 / 测试
+/security-audit 1
 
 # 代码审查
-/quality-review 1 --level standard
+/maestro-ralph --engine swarm --script wf-review 1
 ```
 
 ### 测试失败修复循环
 
 ```bash
-/quality-debug --from-uat 1             # 诊断失败
-/maestro-plan 1 --gaps                  # 生成修复计划
-/maestro-execute 1                      # 执行修复
-/quality-auto-test 1 --re-run           # 重跑失败场景
+/odyssey --mode debug --from-uat 1      # 诊断失败
+/maestro-next 1 --gaps                  # 生成修复计划
+/maestro-ralph continue 1              # 执行修复
+/maestro-ralph --engine swarm 1 --re-run  # 重跑失败场景
 ```
 
 ---
@@ -140,16 +140,16 @@ maestro install toggle --type skill --enable scholar-writing
 
 ```bash
 # 发现问题
-/manage-issue-discover by-prompt "检查 API 错误处理"
+/manage issue discover by-prompt "检查 API 错误处理"
 
 # 创建 Issue
-/manage-issue create --title "内存泄漏" --severity high
+/manage issue create --title "内存泄漏" --severity high
 
 # 闭环处理
-/maestro-analyze --gaps ISS-001          # 根因分析
-/maestro-plan --gaps                     # 方案规划
-/maestro-execute                         # 执行修复
-/manage-issue close ISS-001 --resolution "Fixed"
+/maestro-ralph --engine swarm --script wf-analyze --gaps ISS-001  # 根因分析
+/maestro-next --gaps                     # 方案规划
+/maestro-ralph continue                  # 执行修复
+/manage issue close ISS-001 --resolution "Fixed"
 ```
 
 **Commander Agent** 可自动推进未分析的 Issue，无需手动干预。
@@ -162,13 +162,13 @@ maestro install toggle --type skill --enable scholar-writing
 
 ```bash
 # 最快路径
-/maestro-quick "修复登录页 Bug"
+/maestro-next "修复登录页 Bug"
 
 # 带规划验证
-/maestro-quick --full "重构 API 层"
+/maestro-next "重构 API 层" --full
 
 # 带决策提取
-/maestro-quick --discuss "数据库迁移策略"
+/maestro-next --note "数据库迁移策略"
 ```
 
 ---
@@ -216,18 +216,18 @@ maestro delegate "..." --rule development-implement-feature --mode write
 
 ```bash
 # 初始化（扫描代码库生成规范文件）
-/spec-setup                                    # 已有项目：扫描代码库填充 specs
+/spec setup                                     # 已有项目：扫描代码库填充 specs
 # 新项目可跳过 -- specs 由 analyze/plan/execute 渐进填充
 
 # 录入规范
-/spec-add coding "所有 API 使用 Hono 框架"
-/spec-add arch "通知模块使用事件驱动架构"
-/spec-add learning "分页 offset=0 会越界"
+/spec add coding "所有 API 使用 Hono 框架"
+/spec add arch "通知模块使用事件驱动架构"
+/spec add learning "分页 offset=0 会越界"
 
 # 加载规范
-/spec-load --role implement
-/spec-load --keyword auth
-/spec-load --role implement --keyword auth
+/spec load --role implement
+/spec load --keyword auth
+/spec load --role implement --keyword auth
 ```
 
 **自动注入**：Hook 在 Agent 启动时按类型自动注入对应规范（coder→coding, tester→test, debugger→debug）。
@@ -282,7 +282,7 @@ maestro hooks toggle spec-injector off
 ```bash
 /maestro-fork -m 2                              # Fork M2 worktree
 cd .worktrees/m2-production/
-/maestro-analyze 3 && /maestro-plan 3 && /maestro-execute 3
+/maestro-ralph --engine swarm --script wf-analyze 3 && /maestro-next 3 && /maestro-ralph continue 3
 
 cd /project
 /maestro-merge -m 2                             # 合并回 main
@@ -297,10 +297,10 @@ cd /project
 
 ```bash
 # 审计（跨 Phase 集成验证）
-/maestro-milestone-audit
+/maestro-session-seal
 
 # 完成（归档并推进到下一里程碑）
-/maestro-milestone-complete
+/maestro-session-seal
 ```
 
 ---
@@ -371,7 +371,7 @@ maestro kg context "validateToken"                  # 调用者/被调用者
 ### 新项目
 
 ```bash
-/maestro-init → /maestro-roadmap → /maestro-plan 1 → /maestro-execute 1 → /maestro-verify 1 → /maestro-milestone-audit
+/maestro-init → /maestro-ralph --roadmap → /maestro-next 1 → /maestro-ralph continue 1 → /maestro-session-seal
 ```
 
 ### 一键全自动
@@ -383,13 +383,13 @@ maestro kg context "validateToken"                  # 调用者/被调用者
 ### Bug 修复
 
 ```bash
-/maestro-quick "修复移动端登录页布局问题"
+/maestro-next "修复移动端登录页布局问题"
 ```
 
 ### 问题发现与修复
 
 ```bash
-/manage-issue-discover → /maestro-analyze --gaps ISS-xxx → /maestro-plan --gaps → /maestro-execute → close
+/manage issue discover → /maestro-ralph --engine swarm --script wf-analyze --gaps ISS-xxx → /maestro-next --gaps → /maestro-ralph continue → /manage issue close
 ```
 
 ### 并行开发
