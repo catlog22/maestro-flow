@@ -10,6 +10,7 @@
  */
 
 import { createClient, probeEndpoint, type LlmConfig } from './llm.js';
+import { relative, resolve } from 'node:path';
 import { createTraceEmitter, silentEmitter, type StreamEvent } from './stream-json-emitter.js';
 import { TOOL_SCHEMAS } from './tools.js';
 import { buildSystemPrompt } from './system-prompt.js';
@@ -20,6 +21,7 @@ import type { ResolvedMoaPreset } from './config.js';
 import { EndpointCircuitBreaker, type CircuitBreakerConfig, type NamedEndpointRef } from './circuit-breaker.js';
 import {
   buildRepositoryMap,
+  extractExplicitFilePaths,
   extractRepositoryMapFocusPaths,
   type RepositoryMap,
 } from './repository-map.js';
@@ -135,6 +137,11 @@ async function runSingleJob(
     const maxTurns = job.maxTurns ?? globalMaxTurns;
     const systemPrompt = buildSystemPrompt(cwd, repositoryMap, maxTurns);
     const prompt = buildExplorePrompt(job.prompt);
+    const explicitFiles = new Set(extractExplicitFilePaths(job.prompt).map(path =>
+      relative(resolve(cwd), resolve(cwd, path)).replace(/\\/g, '/').toLowerCase(),
+    ));
+    const requiredInitialReads = (repositoryMap.directReadPaths ?? [])
+      .filter(path => explicitFiles.has(path.toLowerCase()));
 
     const result = await agentLoop({
       prompt,
@@ -145,6 +152,7 @@ async function runSingleJob(
       cwd,
       maxTurns,
       emitter: createTraceEmitter(trace),
+      requiredInitialReads,
     });
 
     return {

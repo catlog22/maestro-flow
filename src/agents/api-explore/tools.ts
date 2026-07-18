@@ -78,9 +78,12 @@ function readFile(args: { file_path: string; offset?: number; limit?: number }, 
   const content = readFileSync(resolved.path, 'utf-8');
   const lines = content.split('\n');
   const offset = Math.max(1, args.offset ?? 1);
+  if (offset > lines.length) {
+    return `[offset ${offset} exceeds file length ${lines.length}; valid range is 1-${lines.length}]`;
+  }
   const end = args.limit ? Math.min(offset + args.limit - 1, lines.length) : lines.length;
 
-  const result: string[] = [];
+  const result: string[] = [`[file lines ${lines.length}; showing ${offset}-${end}]`];
   if (end < lines.length) {
     result.push(`[showing lines ${offset}-${end} of ${lines.length}; next offset=${end + 1}]`);
     const declarations = collectOmittedDeclarations(lines, end);
@@ -335,6 +338,48 @@ function truncateUtf8(value: string, maxBytes: number): string {
   return value.slice(0, low) + marker;
 }
 
+function findLastRequestedFileLine(lines: string[], fallbackOffset: number): number {
+  const requestedMarker = '--- requested lines ---';
+  let inRequestedLines = !lines.includes(requestedMarker);
+  let lastLine = fallbackOffset - 1;
+  for (const line of lines) {
+    if (line === requestedMarker) {
+      inRequestedLines = true;
+      continue;
+    }
+    if (!inRequestedLines) continue;
+    const match = line.match(/^(\d+)\t/);
+    if (match) lastLine = Number(match[1]);
+  }
+  return lastLine;
+}
+
+function truncateReadResult(value: string, maxBytes: number, fallbackOffset: number): string {
+  if (Buffer.byteLength(value, 'utf-8') <= maxBytes) return value;
+
+  const sourceLines = value.split('\n');
+  const kept: string[] = [];
+  let keptBytes = 0;
+  // Reserve enough space for continuation metadata before accepting a line.
+  const markerReserveBytes = 128;
+  for (const line of sourceLines) {
+    const addedBytes = Buffer.byteLength(line, 'utf-8') + (kept.length > 0 ? 1 : 0);
+    if (keptBytes + addedBytes + markerReserveBytes > maxBytes) break;
+    kept.push(line);
+    keptBytes += addedBytes;
+  }
+
+  const totalLines = Number(value.match(/^\[file lines (\d+);/)?.[1] ?? 0);
+  let lastLine = findLastRequestedFileLine(kept, fallbackOffset);
+  let marker = `…[batch Read truncated at file line ${lastLine}; next offset=${lastLine + 1}; total lines=${totalLines || 'unknown'}]`;
+  while (kept.length > 0 && Buffer.byteLength(`${kept.join('\n')}\n${marker}`, 'utf-8') > maxBytes) {
+    kept.pop();
+    lastLine = findLastRequestedFileLine(kept, fallbackOffset);
+    marker = `…[batch Read truncated at file line ${lastLine}; next offset=${lastLine + 1}; total lines=${totalLines || 'unknown'}]`;
+  }
+  return kept.length > 0 ? `${kept.join('\n')}\n${marker}` : marker;
+}
+
 function canonicalCommand(command: BatchCommand): string {
   return JSON.stringify(Object.fromEntries(
     Object.entries(command).sort(([a], [b]) => a.localeCompare(b)),
@@ -398,11 +443,16 @@ async function batch(args: BatchArgs, cwd: string): Promise<string> {
 
   const perCommandBudget = Math.min(
     BATCH_COMMAND_RESULT_MAX_BYTES,
-    Math.max(512, Math.floor(BATCH_RESULT_BUDGET_BYTES / args.commands.length)),
+    Math.max(512, Math.floor(
+      (BATCH_RESULT_BUDGET_BYTES - 256 - args.commands.length * 96) / args.commands.length,
+    )),
   );
   const sections = results.map((result, index) => {
     const type = args.commands[index]?.type ?? 'Unknown';
-    const content = truncateUtf8(result.content, perCommandBudget);
+    const command = args.commands[index];
+    const content = command?.type === 'Read'
+      ? truncateReadResult(result.content, perCommandBudget, Math.max(1, command.offset ?? 1))
+      : truncateUtf8(result.content, perCommandBudget);
     return `--- command ${index + 1} (${type}, ${result.status}) ---\n${content}`;
   });
   const errors = results.filter(result => result.status === 'error').length;
@@ -533,7 +583,7 @@ export const TOOL_SCHEMAS: ToolSchema[] = [
                 include: { type: 'string', description: 'Search include glob, e.g. *.ts.' },
                 exclude: { type: 'string', description: 'Search exclude glob, e.g. *.test.ts.' },
                 context: { type: 'integer', description: 'Search context lines.' },
-                files_only: { type: 'boolean', description: 'Search file paths only.' },
+                files_only: { type: 'boolean', description: 'Return only paths of files whose contents match query. This does not search file names or prove path existence.' },
                 file_path: { type: 'string', description: 'Absolute or cwd-relative file path for Read.' },
                 offset: { type: 'integer', description: 'Read start line, 1-indexed.' },
                 limit: { type: 'integer', description: 'Search output-line or Read line-count limit.' },

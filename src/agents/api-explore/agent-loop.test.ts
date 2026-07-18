@@ -198,4 +198,41 @@ describe('agentLoop Batch round budget', () => {
     const checkpointMessages = mocks.callLlm.mock.calls[2][2] as Array<{ content?: string }>;
     expect(checkpointMessages.at(-1)?.content).toContain('Efficiency checkpoint');
   });
+
+  it('injects ignored exact files into the first Batch once and deduplicates model Reads', async () => {
+    mocks.callLlm
+      .mockResolvedValueOnce({
+        ...batchResponse('batch-1'),
+        toolCalls: [{
+          id: 'batch-1',
+          name: 'Batch',
+          arguments: '{"commands":[{"type":"Read","file_path":"docs/audit.md"},{"type":"Search","query":"X1"}]}',
+        }],
+      })
+      .mockResolvedValueOnce({
+        content: 'verified',
+        toolCalls: [],
+        usage: { inputTokens: 20, outputTokens: 4 },
+        stopReason: 'stop',
+      });
+
+    await agentLoop({
+      prompt: 'verify docs/audit.md',
+      systemPrompt: 'system',
+      client,
+      llmConfig,
+      toolSchemas: [batchSchema],
+      maxTurns: 1,
+      cwd: process.cwd(),
+      emitter: silentEmitter,
+      requiredInitialReads: ['docs/audit.md'],
+    });
+
+    expect(JSON.parse(mocks.executeToolAsync.mock.calls[0][1])).toEqual({
+      commands: [
+        { type: 'Read', file_path: 'docs/audit.md' },
+        { type: 'Search', query: 'X1' },
+      ],
+    });
+  });
 });

@@ -17,6 +17,8 @@ export interface AgentLoopParams {
   /** Protocol event sink (default: NDJSON on stdout — the standalone agent protocol) */
   emitter?: StreamEmitter;
   beforeTurn?: (ctx: { turn: number; messages: ChatCompletionMessageParam[] }) => Promise<void> | void;
+  /** Ignored exact-path evidence files injected into the first Batch as direct Reads. */
+  requiredInitialReads?: string[];
 }
 
 export interface AgentLoopResult {
@@ -97,7 +99,10 @@ export async function agentLoop(params: AgentLoopParams): Promise<AgentLoopResul
     totalInput += response.usage.inputTokens;
     totalOutput += response.usage.outputTokens;
 
-    const toolCalls = normalizeBatchToolCalls(response.toolCalls);
+    const toolCalls = normalizeBatchToolCalls(
+      response.toolCalls,
+      toolRounds === 0 ? params.requiredInitialReads : undefined,
+    );
 
     if (toolCalls.length > 0) {
       if (forceFinalAnswer) {
@@ -150,7 +155,7 @@ export async function agentLoop(params: AgentLoopParams): Promise<AgentLoopResul
       });
       messages.push({
         role: 'user',
-        content: 'You must call Batch before answering. Put all independent Search commands into one Batch call.',
+        content: 'You must call Batch before answering. Put all independent evidence commands into one Batch call and directly Read any required exact files.',
       });
     } else {
       const text = response.content ?? '';
@@ -179,11 +184,14 @@ export async function agentLoop(params: AgentLoopParams): Promise<AgentLoopResul
  * supported commands into the single declared Batch call so local concurrency,
  * result budgets, and round accounting remain authoritative.
  */
-function normalizeBatchToolCalls(toolCalls: LlmToolCall[]): LlmToolCall[] {
+function normalizeBatchToolCalls(toolCalls: LlmToolCall[], requiredReads: string[] = []): LlmToolCall[] {
   if (toolCalls.length === 0) return toolCalls;
-  if (toolCalls.length === 1 && toolCalls[0].name === 'Batch') return toolCalls;
+  if (toolCalls.length === 1 && toolCalls[0].name === 'Batch' && requiredReads.length === 0) return toolCalls;
 
-  const commands: Record<string, unknown>[] = [];
+  const commands: Record<string, unknown>[] = requiredReads.map(filePath => ({
+    type: 'Read',
+    file_path: filePath,
+  }));
   for (const toolCall of toolCalls) {
     const args = safeParseJson(toolCall.arguments);
     if (toolCall.name === 'Batch') {
@@ -202,10 +210,18 @@ function normalizeBatchToolCalls(toolCalls: LlmToolCall[]): LlmToolCall[] {
   }
 
   if (commands.length === 0) return toolCalls;
+  const seenReads = new Set<string>();
+  const deduplicatedCommands = commands.filter((command) => {
+    if (command.type !== 'Read' || typeof command.file_path !== 'string') return true;
+    const key = command.file_path.replace(/\\/g, '/').toLowerCase();
+    if (seenReads.has(key)) return false;
+    seenReads.add(key);
+    return true;
+  });
   return [{
     id: toolCalls[0].id,
     name: 'Batch',
-    arguments: JSON.stringify({ commands }),
+    arguments: JSON.stringify({ commands: deduplicatedCommands }),
   }];
 }
 

@@ -406,11 +406,29 @@ interface BackendInfo {
   bundled: boolean;
 }
 
+type OnnxLogLevel = 'verbose' | 'info' | 'warning' | 'error' | 'fatal';
+const ONNX_LOG_LEVELS = new Set<OnnxLogLevel>(['verbose', 'info', 'warning', 'error', 'fatal']);
+
+export function resolveOnnxLogLevel(value = process.env.MAESTRO_ONNX_LOG_LEVEL): OnnxLogLevel {
+  return value && ONNX_LOG_LEVELS.has(value as OnnxLogLevel)
+    ? value as OnnxLogLevel
+    : process.env.MAESTRO_DEBUG === '1' ? 'warning' : 'error';
+}
+
+export async function configureOnnxRuntimeLogging(): Promise<typeof import('onnxruntime-node')> {
+  const ort = await import('onnxruntime-node');
+  // ORT defaults to warning and emits benign provider-assignment diagnostics
+  // during every fresh search process. Keep actionable errors while allowing
+  // explicit verbose diagnostics through MAESTRO_ONNX_LOG_LEVEL.
+  ort.env.logLevel = resolveOnnxLogLevel();
+  return ort;
+}
+
 let _detectedConfig: DeviceConfig | null = null;
 
 async function listBackends(): Promise<BackendInfo[]> {
   try {
-    const ort = await import('onnxruntime-node');
+    const ort = await configureOnnxRuntimeLogging();
     if (typeof ort.listSupportedBackends === 'function') {
       return ort.listSupportedBackends() as BackendInfo[];
     }
@@ -575,6 +593,7 @@ async function getPipeline(): Promise<any> {
   if (_pipeline) return _pipeline;
 
   await configureProxy();
+  await configureOnnxRuntimeLogging();
   const config = await detectDevice();
   const modelId = resolveLocalModel();
   const { pipeline } = await loadTransformers();

@@ -14,6 +14,8 @@ export interface RepositoryMap {
   fellBack: boolean;
   truncated: boolean;
   focusCount?: number;
+  /** Existing exact files omitted by ignore rules; these must be read directly. */
+  directReadPaths?: string[];
 }
 
 export interface RepositoryMapOptions {
@@ -36,6 +38,8 @@ interface RepositoryFocus {
   root: string;
   isDirectory: boolean;
 }
+
+const EXPLICIT_FILE_PATH_PATTERN = /(?:[A-Za-z]:[\\/])?(?:[\w@.+-]+[\\/])+[\w@.+-]+\.[A-Za-z0-9]+/g;
 
 export function normalizeRepositoryMapDepth(
   value: number | undefined,
@@ -103,12 +107,22 @@ function focusPriority(path: string, isDirectory: boolean, focuses: RepositoryFo
 export function extractRepositoryMapFocusPaths(prompts: string[]): string[] {
   const paths: string[] = [];
   for (const prompt of prompts) {
-    if (!isStructuredPrompt(prompt)) continue;
-    const scope = parseStructuredPrompt(prompt).scope;
-    if (!scope) continue;
-    paths.push(...scope.split(/[,\n]/).map(part => part.trim()).filter(Boolean));
+    if (isStructuredPrompt(prompt)) {
+      const scope = parseStructuredPrompt(prompt).scope;
+      if (scope) {
+        paths.push(...scope.split(/[,\n]/).map(part => part.trim()).filter(Boolean));
+      }
+    }
+    // Exact files are often named in FIND rather than SCOPE. Preserve them as
+    // evidence targets even when their parent directory is gitignored.
+    paths.push(...(prompt.match(EXPLICIT_FILE_PATH_PATTERN) ?? []));
   }
   return [...new Set(paths)];
+}
+
+export function extractExplicitFilePaths(prompt: string): string[] {
+  return [...new Set(prompt.match(EXPLICIT_FILE_PATH_PATTERN) ?? [])]
+    .map(path => path.replace(/\\/g, '/'));
 }
 
 function renderRepositoryTree(
@@ -203,8 +217,13 @@ export function buildRepositoryMap(cwd: string, options: RepositoryMapOptions = 
       fellBack: true,
       truncated: false,
       focusCount: focuses.length,
+      directReadPaths: [],
     };
   }
+
+  const directReadPaths = focuses
+    .filter(focus => !focus.isDirectory && scope.ignores(focus.target, false))
+    .map(focus => relative(root, focus.target).replace(/\\/g, '/'));
 
   for (let depth = targetDepth; depth >= 1; depth--) {
     try {
@@ -216,6 +235,7 @@ export function buildRepositoryMap(cwd: string, options: RepositoryMapOptions = 
           fellBack: depth < targetDepth,
           truncated: false,
           focusCount: focuses.length,
+          directReadPaths,
         };
       }
       if (depth === 1) {
@@ -233,6 +253,7 @@ export function buildRepositoryMap(cwd: string, options: RepositoryMapOptions = 
           fellBack: depth < targetDepth,
           truncated: true,
           focusCount: focuses.length,
+          directReadPaths,
         };
       }
     } catch {
@@ -248,5 +269,6 @@ export function buildRepositoryMap(cwd: string, options: RepositoryMapOptions = 
     fellBack: true,
     truncated: false,
     focusCount: focuses.length,
+    directReadPaths,
   };
 }

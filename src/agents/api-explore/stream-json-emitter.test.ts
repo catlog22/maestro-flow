@@ -35,8 +35,19 @@ describe('createTraceEmitter', () => {
 
     const truncated = trace[0].content as string;
     expect(truncated.length).toBeLessThan(big.length);
-    expect(truncated).toContain('…[truncated 3000 chars]');
+    expect(truncated).toContain('…[truncated 3000 chars; tail preserved]');
     expect(trace[1].content).toBe('short');
+  });
+
+  it('preserves continuation metadata at the tail of a truncated trace result', () => {
+    const trace: StreamEvent[] = [];
+    const emitter = createTraceEmitter(trace);
+    const continuation = '…[batch Read truncated at file line 40; next offset=41; total lines=184]';
+
+    emitter.toolResult('tc-1', `${'x'.repeat(5_000)}\n${continuation}`);
+
+    expect(trace[0].content).toContain('tail preserved');
+    expect(trace[0].content).toContain(continuation);
   });
 
   it('preserves is_error flag on tool results', () => {

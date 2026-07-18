@@ -38,6 +38,7 @@ export const silentEmitter: StreamEmitter = buildEmitter(() => {});
 
 /** Cap for tool_result content stored in traces — keeps session files bounded. */
 const TRACE_TOOL_RESULT_LIMIT = 2_000;
+const TRACE_TOOL_RESULT_TAIL = 500;
 
 /** Collects events into `trace` for session persistence; tool results are truncated. */
 export function createTraceEmitter(trace: StreamEvent[]): StreamEmitter {
@@ -45,7 +46,11 @@ export function createTraceEmitter(trace: StreamEvent[]): StreamEmitter {
     if (event.type === 'tool_result' && typeof event.content === 'string'
         && event.content.length > TRACE_TOOL_RESULT_LIMIT) {
       const omitted = event.content.length - TRACE_TOOL_RESULT_LIMIT;
-      event = { ...event, content: event.content.slice(0, TRACE_TOOL_RESULT_LIMIT) + `\n…[truncated ${omitted} chars]` };
+      const headLength = TRACE_TOOL_RESULT_LIMIT - TRACE_TOOL_RESULT_TAIL;
+      event = {
+        ...event,
+        content: `${event.content.slice(0, headLength)}\n…[truncated ${omitted} chars; tail preserved]\n${event.content.slice(-TRACE_TOOL_RESULT_TAIL)}`,
+      };
     }
     trace.push(event);
   });

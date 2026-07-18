@@ -102,6 +102,49 @@ describe('Read tool', () => {
     expect(result).toContain('omitted declaration index');
     expect(result).toContain('180\tlateTarget');
   });
+
+  it('reports an out-of-range offset instead of returning an empty successful Read', async () => {
+    const root = createWorkspace();
+    writeFileSync(join(root, 'short.md'), '# one\nline two\n');
+
+    const result = await executeToolAsync(
+      'Batch',
+      JSON.stringify({ commands: [{ type: 'Read', file_path: 'short.md', offset: 20 }] }),
+      root,
+    );
+
+    expect(result).toContain('offset 20 exceeds file length 3');
+    expect(result).toContain('valid range is 1-3');
+  });
+
+  it('preserves a precise continuation when a multi-command Batch byte-truncates Markdown', async () => {
+    const root = createWorkspace();
+    const lines = Array.from({ length: 183 }, (_, index) =>
+      `${index + 1} 中文证据行 ${'证据'.repeat(40)}`,
+    );
+    writeFileSync(join(root, 'audit.md'), `${lines.join('\n')}\n`);
+    const commands: Array<{ type: 'Read'; file_path: string }> = [
+      { type: 'Read', file_path: 'audit.md' },
+    ];
+    for (let index = 0; index < 8; index++) {
+      const filePath = `short-${index}.txt`;
+      writeFileSync(join(root, filePath), `short ${index}\n`);
+      commands.push({ type: 'Read', file_path: filePath });
+    }
+
+    const first = await executeToolAsync('Batch', JSON.stringify({ commands }), root);
+    const continuation = first.match(/next offset=(\d+); total lines=184/);
+    expect(continuation).not.toBeNull();
+    expect(first).toContain('batch Read truncated at file line');
+
+    const offset = Number(continuation?.[1]);
+    const resumed = await executeToolAsync(
+      'Batch',
+      JSON.stringify({ commands: [{ type: 'Read', file_path: 'audit.md', offset, limit: 1 }] }),
+      root,
+    );
+    expect(resumed).toContain(`${offset}\t${offset} 中文证据行`);
+  });
 });
 
 describe('Batch tool', () => {

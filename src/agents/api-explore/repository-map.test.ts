@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import {
   buildRepositoryMap,
   extractRepositoryMapFocusPaths,
+  extractExplicitFilePaths,
   normalizeRepositoryMapDepth,
 } from './repository-map.js';
 import { buildSystemPrompt } from './system-prompt.js';
@@ -114,6 +115,21 @@ describe('buildRepositoryMap', () => {
     expect(extractRepositoryMapFocusPaths([
       'FIND: proxy chain\\nSCOPE: src/config/, src/agents/api-explore/\\nEXPECTED: file:line',
     ])).toEqual(['src/config/', 'src/agents/api-explore/']);
+  });
+
+  it('keeps ignored exact files named outside SCOPE as required direct-read targets', () => {
+    const root = createRepository();
+    mkdirSync(join(root, 'docs'), { recursive: true });
+    writeFileSync(join(root, '.gitignore'), 'docs/\n');
+    writeFileSync(join(root, 'docs', 'audit.md'), '# audit');
+    const prompt = 'FIND: verify IDs from docs/audit.md\nSCOPE: src/\nEXPECTED: evidence';
+    const focusPaths = extractRepositoryMapFocusPaths([prompt]);
+    const result = buildRepositoryMap(root, { focusPaths });
+
+    expect(extractExplicitFilePaths(prompt)).toEqual(['docs/audit.md']);
+    expect(focusPaths).toContain('docs/audit.md');
+    expect(result.tree).not.toContain('docs/');
+    expect(result.directReadPaths).toEqual(['docs/audit.md']);
   });
 });
 
