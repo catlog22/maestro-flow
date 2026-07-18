@@ -12,6 +12,7 @@ import type { Command } from 'commander';
 import { resolve, join } from 'node:path';
 
 import { truncate } from '../utils/cli-format.js';
+import { isDeprecatedKnowledgeEntry } from '../utils/knowledge-lifecycle.js';
 import type { WikiIndexer } from '#maestro-dashboard/wiki/wiki-indexer.js';
 import type { WikiEntry } from '#maestro-dashboard/wiki/wiki-types.js';
 import { loadWorkspaceConfig, resolveWorkspaceLinks } from '../config/index.js';
@@ -99,6 +100,7 @@ export function registerLoadCommand(program: Command): void {
     .option('--list', 'List matching entries (compact, no body)')
     .option('--scope <scope>', 'Spec scope: project|global|team|personal (default: project)')
     .option('--limit <n>', 'Max entries (default: 20 for --list, 10 for load)', '')
+    .option('--include-deprecated', 'Include deprecated/superseded entries')
     .option('--json', 'Output as JSON')
     .action(async (opts) => {
       const type = opts.type as LoadType;
@@ -112,6 +114,7 @@ export function registerLoadCommand(program: Command): void {
       }).catch(() => {});
 
       const isList = opts.list === true;
+      const includeDeprecated = opts.includeDeprecated === true;
       const ids: string[] = opts.id ? opts.id.split(',').map((s: string) => s.trim()).filter(Boolean) : [];
 
       // --type spec (non-list, no specific IDs): delegate to spec-loader
@@ -130,11 +133,19 @@ export function registerLoadCommand(program: Command): void {
       if (ids.length > 0) {
         entries = ids
           .map(id => index.byId[id])
-          .filter((e): e is WikiEntry => Boolean(e));
-        const missing = ids.filter(id => !index.byId[id]);
-        if (missing.length > 0) console.error(`Not found: ${missing.join(', ')}`);
+          .filter((e): e is WikiEntry => Boolean(e) && (includeDeprecated || !isDeprecatedKnowledgeEntry(e)));
+        const missing = ids.filter(id => {
+          const entry = index.byId[id];
+          return !entry || (!includeDeprecated && isDeprecatedKnowledgeEntry(entry));
+        });
+        if (missing.length > 0) {
+          const suffix = includeDeprecated ? '' : ' (use --include-deprecated to load retired entries)';
+          console.error(`Not found or deprecated: ${missing.join(', ')}${suffix}`);
+        }
       } else {
-        let pool = index.entries.filter(e => matchesType(e, type));
+        let pool = index.entries.filter(e =>
+          matchesType(e, type) && (includeDeprecated || !isDeprecatedKnowledgeEntry(e))
+        );
 
         if (opts.category) {
           pool = pool.filter(e => e.category === opts.category);
@@ -189,7 +200,10 @@ async function loadBySpecCategory(opts: Record<string, unknown>): Promise<void> 
   const linkedSpecs = resolved
     .filter(lw => lw.valid && lw.share.includes('spec'))
     .map(lw => ({ name: lw.name, specsDir: join(lw.workflowRoot, 'specs') }));
-  const loaderOpts = linkedSpecs.length > 0 ? { linkedWorkspaces: linkedSpecs } : undefined;
+  const loaderOpts = {
+    ...(linkedSpecs.length > 0 ? { linkedWorkspaces: linkedSpecs } : {}),
+    includeDeprecated: opts.includeDeprecated === true,
+  };
 
   const scope = (opts.scope as string | undefined) ?? 'project';
   const keyword = opts.keyword as string | undefined;

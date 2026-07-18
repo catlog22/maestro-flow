@@ -36,6 +36,7 @@ function writeWikiIndex(entries: Array<{
   category?: string;
   specCategory?: string;
   updated: string;
+  status?: string;
 }>): void {
   writeFileSync(
     join(testDir, '.workflow', 'wiki-index.json'),
@@ -166,6 +167,21 @@ describe('loadWikiByCategory — sorting and limits', () => {
 // ---------------------------------------------------------------------------
 
 describe('loadWikiByCategory — edge cases', () => {
+  it('excludes deprecated and superseded entries', () => {
+    writeWikiIndex([
+      { type: 'knowhow', title: 'Active Entry', summary: 'Current', category: 'coding', status: 'active', updated: '2026-05-03' },
+      { type: 'knowhow', title: 'Deprecated Entry', summary: 'Old', category: 'coding', status: 'deprecated', updated: '2026-05-02' },
+      { type: 'knowhow', title: 'Superseded Entry', summary: 'Old decision', category: 'coding', status: 'superseded', updated: '2026-05-01' },
+    ]);
+
+    const result = loadWikiByCategory(testDir, 'coding');
+    expect(result).not.toBeNull();
+    expect(result!.entryCount).toBe(1);
+    expect(result!.content).toContain('Active Entry');
+    expect(result!.content).not.toContain('Deprecated Entry');
+    expect(result!.content).not.toContain('Superseded Entry');
+  });
+
   it('handles entries without category field', () => {
     writeWikiIndex([
       { type: 'knowhow', title: 'No Category', summary: 'Content', updated: '2026-05-01' },

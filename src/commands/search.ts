@@ -17,6 +17,7 @@ import type { Command } from 'commander';
 import { resolve } from 'node:path';
 
 import { truncate, extractSnippet, highlightTerms } from '../utils/cli-format.js';
+import { isDeprecatedKnowledgeEntry } from '../utils/knowledge-lifecycle.js';
 import type { WikiIndexer } from '#maestro-dashboard/wiki/wiki-indexer.js';
 import type { WikiEntry, WikiNodeType } from '#maestro-dashboard/wiki/wiki-types.js';
 import { loadWorkspaceConfig, resolveWorkspaceLinks } from '../config/index.js';
@@ -177,7 +178,7 @@ export async function runUnifiedSearch(q: string, opts: UnifiedSearchOptions & {
   }
   // Superseded entries are hidden by default — preserved in the chain, out of the way.
   if (!opts.includeDeprecated) {
-    filtered = filtered.filter(r => (r.entry.ext?.status as string | undefined) !== 'deprecated');
+    filtered = filtered.filter(r => !isDeprecatedKnowledgeEntry(r.entry));
   }
 
   // CATEGORY_CAPS only when user didn't explicitly select a wiki facet.

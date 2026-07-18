@@ -18,7 +18,7 @@
 
 import { z } from 'zod';
 import type { ToolSchema, CcwToolResult } from '../types/tool-schema.js';
-import { existsSync, mkdirSync, writeFileSync } from 'fs';
+import { existsSync, mkdirSync } from 'fs';
 import { join } from 'path';
 import { getProjectRoot } from '../utils/path-validator.js';
 import type { WikiIndexer } from '#maestro-dashboard/wiki/wiki-indexer.js';
@@ -32,6 +32,7 @@ import {
   getKnowhowDir as _getKnowhowDir,
   generateKnowhowFilename as generateId,
 } from '../utils/frontmatter.js';
+import { updateFileAtomic } from '../utils/atomic-write.js';
 
 const DECISION_STATUSES = ['proposed', 'accepted', 'superseded'] as const;
 
@@ -126,7 +127,13 @@ function executeAdd(params: Params): CcwToolResult {
   }
   fmLines.push('---', '', body);
 
-  writeFileSync(filePath, fmLines.join('\n'), 'utf-8');
+  const document = fmLines.join('\n');
+  updateFileAtomic(filePath, current => {
+    if (current !== null) {
+      throw new Error(`Knowhow entry already exists: ${filename}`);
+    }
+    return document;
+  });
 
   return {
     success: true,

@@ -8,6 +8,7 @@
  */
 
 import type { WikiIndexer } from '#maestro-dashboard/wiki/wiki-indexer.js';
+import { isDeprecatedKnowledgeEntry } from '../utils/knowledge-lifecycle.js';
 
 export interface WikiSearchHit {
   id: string;
@@ -38,13 +39,24 @@ async function getIndexer(workflowRoot: string): Promise<WikiIndexer> {
 }
 
 interface RawHit {
-  entry: { id: string; type: string; title?: string; summary?: string };
+  entry: {
+    id: string;
+    type: string;
+    title?: string;
+    summary?: string;
+    status?: string;
+    ext?: { status?: string };
+  };
   score: number;
 }
 
 function toHits(raw: RawHit[], limit: number, minScore: number): WikiSearchHit[] {
   return raw
-    .filter((r) => ALLOWED_TYPES.has(r.entry.type) && r.score >= minScore)
+    .filter((r) =>
+      ALLOWED_TYPES.has(r.entry.type)
+      && !isDeprecatedKnowledgeEntry(r.entry)
+      && r.score >= minScore
+    )
     .slice(0, limit)
     .map((r) => ({
       id: r.entry.id,

@@ -67,6 +67,27 @@ describe('loadSpecs — single directory (no uid)', () => {
     assert.strictEqual(result.totalLoaded, 1);
   });
 
+  it('hides deprecated entries by default and includes them only when requested', () => {
+    writeSpec(
+      BASELINE_DIR,
+      'coding-conventions.md',
+      '# Coding Conventions\n\n' +
+      '<spec-entry title="Current rule" category="coding" keywords="current" status="active">\nCurrent body\n</spec-entry>\n\n' +
+      '<spec-entry title="Retired rule" category="coding" keywords="retired" status="deprecated">\nRetired body\n</spec-entry>',
+    );
+
+    const current = loadSpecs(TEST_DIR, 'coding', undefined, undefined, undefined, TEST_OPTS);
+    assert.ok(current.content.includes('Current body'));
+    assert.ok(!current.content.includes('Retired body'));
+
+    const audit = loadSpecs(TEST_DIR, 'coding', undefined, undefined, undefined, {
+      ...TEST_OPTS,
+      includeDeprecated: true,
+    });
+    assert.ok(audit.content.includes('Current body'));
+    assert.ok(audit.content.includes('Retired body'));
+  });
+
   it('returns empty when no specs directory', () => {
     const result = loadSpecs('/nonexistent/path', undefined, undefined, undefined, undefined, TEST_OPTS);
     assert.strictEqual(result.content, '');

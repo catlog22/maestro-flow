@@ -115,6 +115,8 @@ export interface LoadSpecsOptions {
   extraSpecFiles?: string[];
   /** Linked workspace specs directories (read-only, inserted between global and baseline layers) */
   linkedWorkspaces?: Array<{ name: string; specsDir: string }>;
+  /** Include deprecated entries for explicit audit/history loading. */
+  includeDeprecated?: boolean;
 }
 
 export function loadSpecs(projectPath: string, category?: SpecCategory, uid?: string, keyword?: string, scope?: SpecScope, options?: LoadSpecsOptions): SpecLoadResult {
@@ -324,7 +326,9 @@ function formatFileContent(body: string, keyword?: string, crossCategory?: SpecC
   // Deprecated (superseded) entries are never injected into agent context —
   // the current version lives elsewhere in the chain. `maestro spec history`
   // still surfaces them for audit.
-  const entries = allEntries.filter(e => e.status !== 'deprecated');
+  const entries = options?.includeDeprecated
+    ? allEntries
+    : allEntries.filter(e => e.status !== 'deprecated');
 
   // No structured entries at all → pass through raw body (or keyword-grep it)
   if (allEntries.length === 0 && legacy.length === 0) {

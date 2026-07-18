@@ -8,6 +8,7 @@
 
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { isDeprecatedKnowledgeEntry } from '../utils/knowledge-lifecycle.js';
 
 export interface WikiCategoryResult {
   content: string;
@@ -28,7 +29,7 @@ export function loadWikiByCategory(projectPath: string, category: string): WikiC
     return null;
   }
 
-  let index: { entries?: Array<{ type: string; title: string; summary: string; category?: string | null; specCategory?: string | null; updated: string }> };
+  let index: { entries?: Array<{ type: string; title: string; summary: string; category?: string | null; specCategory?: string | null; updated: string; status?: string; ext?: { status?: string } }> };
   try {
     index = JSON.parse(raw);
   } catch (err) {
@@ -39,7 +40,9 @@ export function loadWikiByCategory(projectPath: string, category: string): WikiC
   if (!index?.entries?.length) return null;
 
   const matched = index.entries
-    .filter(e => e.category === category || e.specCategory === category)
+    .filter(e =>
+      !isDeprecatedKnowledgeEntry(e) && (e.category === category || e.specCategory === category)
+    )
     .sort((a, b) => b.updated.localeCompare(a.updated))
     .slice(0, 10);
 
