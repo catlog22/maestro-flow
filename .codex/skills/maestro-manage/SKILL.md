@@ -1,8 +1,8 @@
 ---
-name: manage
+name: maestro-manage
 description: Project management hub — status, issues, knowledge stores, and
   drift/rebuild sync. knowledge 子命令覆盖 capture（knowhow 沉淀）/ audit（知识审计）/ harvest
-  / wiki / domain；约束类规则走 /spec add。Triggers on "项目状态", "issue 管理", "知识沉淀",
+  / wiki / domain；约束类规则走 /maestro-spec add。Triggers on "项目状态", "issue 管理", "知识沉淀",
   "knowhow capture", "knowledge audit", "知识审计", "drift 同步".
 argument-hint: <subcommand> [args...] where subcommand = status|issue|knowledge|sync
 allowed-tools:
@@ -133,7 +133,7 @@ Next-step decision table defined in workflow status.md Step 5.
 | Phase needs planning | step `plan` (`maestro run prepare --platform codex plan` + `maestro run create plan --session YYYYMMDD-plan-{topic} --intent "{goal}" -- {phase}`) |
 | Phase needs execution | step `execute` (`maestro run prepare --platform codex execute` + `maestro run create execute --session YYYYMMDD-execute-{topic} --intent "{goal}" -- {phase}`) |
 | Session ready to seal | maestro-session-seal (not a step) |
-| Issues need triage | `/manage issue list` |
+| Issues need triage | `/maestro-manage issue list` |
 </completion>
 
 ---
@@ -148,7 +148,7 @@ Issue lifecycle management. Second token selects the mode:
 ### issue → CRUD
 
 <purpose>
-Issue lifecycle management: create, list, status, update, close, link. Stored in `.workflow/issues/issues.jsonl`. For automated discovery, use `/manage issue discover`.
+Issue lifecycle management: create, list, status, update, close, link. Stored in `.workflow/issues/issues.jsonl`. For automated discovery, use `/maestro-manage issue discover`.
 </purpose>
 
 <deferred_reading>
@@ -207,7 +207,7 @@ Follow '~/.maestro/workflows/issue.md' completely.
 |-----------|-----------|
 | create | `maestro run create analyze --session YYYYMMDD-analyze-{topic} --intent "{goal}" -- --gaps <ISS-ID>` or `maestro run create plan --session YYYYMMDD-plan-{topic} --intent "{goal}" -- --gaps` |
 | list | `maestro run create analyze --session YYYYMMDD-analyze-{topic} --intent "{goal}" -- --gaps <ISS-ID>` for open issues |
-| close | `/manage status` |
+| close | `/maestro-manage status` |
 </completion>
 
 <error_codes>
@@ -230,7 +230,7 @@ Follow '~/.maestro/workflows/issue.md' completely.
 ### issue → discover
 
 <purpose>
-Automated issue discovery: multi-perspective (8 perspectives) or prompt-driven. Deduplicates and records to `issues.jsonl`. For CRUD operations, use `/manage issue <create|list|...>`.
+Automated issue discovery: multi-perspective (8 perspectives) or prompt-driven. Deduplicates and records to `issues.jsonl`. For CRUD operations, use `/maestro-manage issue <create|list|...>`.
 </purpose>
 
 <deferred_reading>
@@ -319,7 +319,7 @@ Follow '~/.maestro/workflows/issue-discover.md' completely.
 
 | Condition | Suggestion |
 |-----------|-----------|
-| Issues discovered | `/manage issue list` to review |
+| Issues discovered | `/maestro-manage issue list` to review |
 | Need root cause analysis | `maestro run create analyze --session YYYYMMDD-analyze-{topic} --intent "{goal}" -- --gaps <ISS-ID>` |
 | Want to plan fixes | `maestro run create plan --session YYYYMMDD-plan-{topic} --intent "{goal}" -- --gaps` |
 </completion>
@@ -435,9 +435,9 @@ Follow '~/.maestro/workflows/knowhow.md' completely.
 
 | Condition | Suggestion |
 |-----------|-----------|
-| Entry captured | `/manage knowledge knowhow list` to view library |
-| Want to connect entries | `/manage knowledge wiki connect` |
-| Want to bridge to specs | `/spec add <category>` with `--spec-category` |
+| Entry captured | `/maestro-manage knowledge knowhow list` to view library |
+| Want to connect entries | `/maestro-manage knowledge wiki connect` |
+| Want to bridge to specs | `/maestro-spec add <category>` with `--spec-category` |
 </completion>
 
 <a id="knowledge-knowhow"></a>
@@ -503,7 +503,7 @@ Follow '~/.maestro/workflows/knowhow.md' Part A (KnowHow Management) completely.
 <error_codes>
 | Code | Severity | Description | Stage |
 |------|----------|-------------|-------|
-| E001 | error | No memory stores found — for workflow store run `/manage knowledge capture`; for system store create `~/.claude/projects/{project}/memory/MEMORY.md` manually | resolve_paths |
+| E001 | error | No memory stores found — for workflow store run `/maestro-manage knowledge capture`; for system store create `~/.claude/projects/{project}/memory/MEMORY.md` manually | resolve_paths |
 | E002 | error | Entry ID or filename not found | execute_view, execute_delete |
 | E003 | error | Prune requires at least one filter (--tag, --type, --before, --after) | execute_prune |
 | E004 | error | Cannot delete MEMORY.md — use `edit` action instead | execute_delete |
@@ -531,9 +531,9 @@ Follow '~/.maestro/workflows/knowhow.md' Part A (KnowHow Management) completely.
 
 | Condition | Suggestion |
 |-----------|-----------|
-| Want to capture new knowhow | `/manage knowledge capture` |
-| View project state | `/manage status` |
-| Prune stale entries | `/manage knowledge audit --scope knowhow` |
+| Want to capture new knowhow | `/maestro-manage knowledge capture` |
+| View project state | `/maestro-manage status` |
+| Prune stale entries | `/maestro-manage knowledge audit --scope knowhow` |
 </completion>
 
 <a id="knowledge-audit"></a>
@@ -567,7 +567,7 @@ Flag 全集、scope 对应的扫描路径、Stage 步骤、检测算法定义在
 2. **Backup before mutate** — MUST create backup tarball in `.workflow/.trash/` before any file modification (E005 if backup fails)
 3. **Deprecate over delete** — 文本存储首选 `status="deprecated"` 保留历史；NEVER 物理删除 spec/knowhow 文件
 4. **Purge 仅 artifact** — `--purge` MUST NOT 作用于 spec/knowhow scope (E004)
-5. **Rescue before delete** — 未 harvest 的 artifact 删除前 MUST 强制提示先跑 `/manage knowledge harvest` (W002)
+5. **Rescue before delete** — 未 harvest 的 artifact 删除前 MUST 强制提示先跑 `/maestro-manage knowledge harvest` (W002)
 6. **Conflict marker sync** — deprecate/delete 执行时如果目标条目有 conflict-marker，MUST 同步调用 `maestro spec conflict clear` 清除标记
 7. **Mutual exclusion** — `--interactive`/`--mark`/`--delete`/`--purge` 四选一；同时传入多个 MUST trigger E006
 8. **Dry-run safety** — `--dry-run` MUST NOT write any files; `--purge` 与 `--dry-run` 互斥 (E003)
@@ -600,7 +600,7 @@ Follow `~/.maestro/workflows/knowledge-audit.md` Stages 1-8 in order.
 
 - **Deprecate over delete**: 文本存储首选 `status="deprecated"`，保留历史。
 - **Purge 仅 artifact**: `--purge` 不作用于 spec/knowhow。
-- **Rescue before delete**: 未抽取 artifact 删除前强制提示先 `/manage knowledge harvest`。
+- **Rescue before delete**: 未抽取 artifact 删除前强制提示先 `/maestro-manage knowledge harvest`。
 
 ### Conflict Resolution Integration
 
@@ -636,7 +636,7 @@ Follow `~/.maestro/workflows/knowledge-audit.md` Stages 1-8 in order.
 | Condition | Suggestion |
 |-----------|-----------|
 | 复审淘汰记录 | 查看 `audit-report-{date}.md` |
-| 抢救未抽取 artifact | `/manage knowledge harvest <artifact-id>` |
+| 抢救未抽取 artifact | `/maestro-manage knowledge harvest <artifact-id>` |
 | 验证 spec 现状 | `maestro load --type spec` |
 | 查看冲突标记 | `maestro spec conflict list` |
 | 清除已解决冲突 | `maestro spec conflict clear-all <file>` |
@@ -747,10 +747,10 @@ Extraction patterns, classification rules, routing infrastructure, and fragment 
 | Condition | Suggestion |
 |-----------|-----------|
 | Wiki entries created | `maestro wiki list --type note` |
-| Wiki graph needs linking | `/manage knowledge wiki connect --fix` |
-| Issues created | `/manage issue list --source harvest` |
+| Wiki graph needs linking | `/maestro-manage knowledge wiki connect --fix` |
+| Issues created | `/maestro-manage issue list --source harvest` |
 | Specs extracted | `maestro load --type spec` |
-| Specs extracted (审查) | `/manage knowledge audit --scope spec` — 新写入的 spec 可能与现有条目矛盾或替代 |
+| Specs extracted (审查) | `/maestro-manage knowledge audit --scope spec` — 新写入的 spec 可能与现有条目矛盾或替代 |
 | 查看演化链 | `maestro spec history <sid>` — 确认 supersede 链完整 |
 | Spec 冲突标记已存在 | `maestro spec conflict list` — 查看当前冲突状态 |
 | 知识健康检查 | `maestro spec health` — 悬空/循环 supersedes 校验 |
@@ -784,7 +784,7 @@ Extraction patterns, classification rules, routing infrastructure, and fragment 
 - [ ] If `--dry-run`: preview displayed, no files written
 - [ ] If not dry-run: all routed items written to target stores
 - [ ] Wiki entries created via `maestro wiki create` (or fallback to pending files)
-- [ ] Spec entries added via `spec add` mechanism
+- [ ] Spec entries added via `maestro-spec add` mechanism
 - [ ] Issue entries appended to `issues.jsonl` with canonical schema
 - [ ] `harvest-log.jsonl` updated with provenance for each routed item
 - [ ] `harvest-report-{date}.md` written with full summary
@@ -884,10 +884,10 @@ Remaining tokens after `knowledge wiki` — action and optional flags.
 
 | Condition | Suggestion |
 |-----------|-----------|
-| Health score < 50 | `/manage knowledge wiki cleanup --fix` |
-| Orphan entries found | `/manage knowledge wiki connect --fix` |
-| Knowledge gaps identified | `/manage knowledge capture` |
-| Want knowledge synthesis | `/manage knowledge wiki digest` |
+| Health score < 50 | `/maestro-manage knowledge wiki cleanup --fix` |
+| Orphan entries found | `/maestro-manage knowledge wiki connect --fix` |
+| Knowledge gaps identified | `/maestro-manage knowledge capture` |
+| Want knowledge synthesis | `/maestro-manage knowledge wiki digest` |
 </completion>
 
 <a id="knowledge-extractors"></a>
@@ -1047,9 +1047,9 @@ Remaining tokens after `knowledge domain` -- expects `<canonical> "<definition>"
 
 **Examples:**
 ```bash
-/manage knowledge domain auth-token "Short-lived credential for API authentication"
-/manage knowledge domain event-bus "Central pub-sub message broker for cross-module communication"
-/manage knowledge domain 会话上下文 "Runtime state container for active workflow session"
+/maestro-manage knowledge domain auth-token "Short-lived credential for API authentication"
+/maestro-manage knowledge domain event-bus "Central pub-sub message broker for cross-module communication"
+/maestro-manage knowledge domain 会话上下文 "Runtime state container for active workflow session"
 ```
 
 Domain term lifecycle: discover/manual → register → active → (optional) deprecated → removed.
@@ -1099,7 +1099,7 @@ Follow '~/.maestro/workflows/domain-add.md' completely.
 | Condition | Suggestion |
 |-----------|-----------|
 | Verify term added | `maestro domain show <canonical>` |
-| Add more terms | `/manage knowledge domain <canonical> "<definition>"` |
+| Add more terms | `/maestro-manage knowledge domain <canonical> "<definition>"` |
 | Discover candidates | `maestro domain discover` |
 | List all terms | `maestro domain list` |
 </completion>
@@ -1165,8 +1165,8 @@ Follow '~/.maestro/workflows/sync.md' completely.
 
 | Condition | Suggestion |
 |-----------|-----------|
-| Docs refreshed | `/manage status` |
-| Major structural changes | `/manage sync rebuild` |
+| Docs refreshed | `/maestro-manage status` |
+| Major structural changes | `/maestro-manage sync rebuild` |
 | Incremental refresh | Use `--since` flag |
 </completion>
 
@@ -1189,7 +1189,7 @@ Follow '~/.maestro/workflows/sync.md' completely.
 ### sync → drift
 
 <purpose>
-检测代码重构/增量变更后，代码现实与 .workflow/ 文档之间的漂移。互补于 `/manage knowledge audit`（检测知识存储内部矛盾）。本命令通过 git 时间线 + session 历史检测 code↔document 漂移。
+检测代码重构/增量变更后，代码现实与 .workflow/ 文档之间的漂移。互补于 `/maestro-manage knowledge audit`（检测知识存储内部矛盾）。本命令通过 git 时间线 + session 历史检测 code↔document 漂移。
 </purpose>
 
 <deferred_reading>
@@ -1241,7 +1241,7 @@ Remaining tokens after `sync drift` — flags.
 4. **Mutual exclusion** — `--report` 与 `--auto-archive` 互斥；同时传入 MUST trigger E006
 5. **Auto-depth escalation** — `drift_window` > 180 天 MUST auto-upgrade to `--depth deep` with W002 warning
 6. **Audit trail** — every triage decision MUST be logged in `drift-log.jsonl` with finding ID, action, and timestamp
-7. **Rebuild trigger** — codebase scope 的 3+ P0 finding MUST auto-trigger `/manage sync codebase --full` after triage
+7. **Rebuild trigger** — codebase scope 的 3+ P0 finding MUST auto-trigger `/maestro-manage sync codebase --full` after triage
 </invariants>
 
 <execution>
@@ -1268,14 +1268,14 @@ Follow `~/.maestro/workflows/drift-realign.md` Stages 1-9 in order.
 **GATE 4: Triage → Apply** (Stages 6-7 → Stage 8)
 - REQUIRED: 备份 tarball 生成于 `.workflow/.trash/drift-realign-{timestamp}/`。
 - REQUIRED: 所有用户决策已记录（或 `--auto-archive`/`--report` 已生效）。
-- REQUIRED: codebase scope 的 rebuild 动作自动触发 `/manage sync codebase --full`。
+- REQUIRED: codebase scope 的 rebuild 动作自动触发 `/maestro-manage sync codebase --full`。
 - BLOCKED if 备份失败 (E005)。
 
 ### Execution Constraints
 
 - **Code-as-Truth**: 代码是唯一真理源。当文档说 X 但代码做 Y 时，文档漂移。
 - **Parallel scan**: Stage 4 在单条消息中派发 4 个 agent（roadmap-scanner、spec-scanner、codebase-scanner、artifact-scanner）。
-- **Auto-rebuild**: 当 codebase-scanner 检测到严重漂移（3+ P0 finding）时，分诊后自动触发 `/manage sync codebase --full`。若 sync 报告重大结构变更，建议 `/manage sync rebuild`。
+- **Auto-rebuild**: 当 codebase-scanner 检测到严重漂移（3+ P0 finding）时，分诊后自动触发 `/maestro-manage sync codebase --full`。若 sync 报告重大结构变更，建议 `/maestro-manage sync rebuild`。
 - **Long gap handling**: 当 `drift_window` > 180 天时，自动升级为 `--depth deep` 并警告用户 (W002)。
 
 ### Platform Inquiry（Stage 2a，交互式）
@@ -1298,11 +1298,11 @@ Follow `~/.maestro/workflows/drift-realign.md` Stages 1-9 in order.
 
 | Condition | Suggestion |
 |-----------|-----------|
-| codebase 文档已重建 | `/manage status` |
+| codebase 文档已重建 | `/maestro-manage status` |
 | spec 标记待更新 | 手动编辑标记的 spec 文件 |
 | roadmap 已过时 | `maestro run prepare --platform codex roadmap` + `maestro run create roadmap --session YYYYMMDD-roadmap-{topic} --intent "{goal}"` 重新生成 |
-| state.json 需清理 | `/manage knowledge audit --scope artifact` |
-| 需要完整同步 | `/manage sync codebase --full` |
+| state.json 需清理 | `/maestro-manage knowledge audit --scope artifact` |
+| 需要完整同步 | `/maestro-manage sync codebase --full` |
 | project.md 已过时 | 编辑 `.workflow/project.md` |
 </completion>
 
@@ -1331,7 +1331,7 @@ Follow `~/.maestro/workflows/drift-realign.md` Stages 1-9 in order.
 - [ ] 变更前备份 tarball 已生成
 - [ ] archive 动作已将文件移入 `.trash/`
 - [ ] update 动作已注入 TODO 标记及提示
-- [ ] rebuild 动作已自动触发 `/manage sync codebase --full`
+- [ ] rebuild 动作已自动触发 `/maestro-manage sync codebase --full`
 - [ ] `state.json` 已更新 `last_drift_realign` 时间戳
 - [ ] `drift-report-{date}.md` 已生成
 - [ ] `drift-log.jsonl` 已追加
@@ -1411,8 +1411,8 @@ Follow '~/.maestro/workflows/codebase-rebuild.md' completely.
 
 | Condition | Suggestion |
 |-----------|-----------|
-| View updated state | `/manage status` |
-| Incremental updates later | `/manage sync codebase` |
+| View updated state | `/maestro-manage status` |
+| Incremental updates later | `/maestro-manage sync codebase` |
 | Verify KG stats | `maestro kg stats` |
 | Future change impact | `maestro kg diff-wiki` |
 </completion>

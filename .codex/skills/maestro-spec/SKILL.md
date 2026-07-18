@@ -1,8 +1,8 @@
 ---
-name: spec
+name: maestro-spec
 description: Manage project specs — add, load, remove entries, or initialize the
-  spec system. Spec = 项目约束规则（编码规范、架构约束、质量标准）；可复用知识文档走 /manage knowledge
-  capture。Triggers on "spec add", "记录规范", "添加约束", "添加规则", "加载规范", "spec setup",
+  spec system. Spec = 项目约束规则（编码规范、架构约束、质量标准）；可复用知识文档走 /maestro-manage knowledge
+  capture。Triggers on "maestro-spec add", "记录规范", "添加约束", "添加规则", "加载规范", "maestro-spec setup",
   "初始化规范".
 argument-hint: <subcommand> [args...] where subcommand = add|load|remove|setup
 allowed-tools:
@@ -48,7 +48,7 @@ Load only the routed subcommand's required-reading workflow file — do not prel
 
 ## Subcommand: add
 
-**Usage**: `/spec add [--scope project|global|team|personal] [-y] <category> <content>`
+**Usage**: `/maestro-spec add [--scope project|global|team|personal] [-y] <category> <content>`
 
 <required_reading>
 @~/.maestro/workflows/specs-add.md
@@ -72,16 +72,16 @@ Scope-to-directory mapping, category-to-file mapping, and entry format defined i
 **Examples:**
 ```bash
 # English content → English keywords
-/spec add coding "Named exports" "Always use named exports" --keywords "exports,naming"
+/maestro-spec add coding "Named exports" "Always use named exports" --keywords "exports,naming"
 
 # With description for search results
-/spec add coding "OAuth PKCE Flow" "完整 PKCE 集成流程" --keywords "oauth,pkce" --description "OAuth 2.0 PKCE 认证流程规范"
+/maestro-spec add coding "OAuth PKCE Flow" "完整 PKCE 集成流程" --keywords "oauth,pkce" --description "OAuth 2.0 PKCE 认证流程规范"
 
 # Chinese content → Chinese keywords
-/spec add coding "命名导出规范" "始终使用命名导出" --keywords "导出,命名,模块"
+/maestro-spec add coding "命名导出规范" "始终使用命名导出" --keywords "导出,命名,模块"
 
 # Ref mode
-/spec add arch "OAuth PKCE 集成" "完整流程设计" --ref knowhow/AST-oauth-flow.md
+/maestro-spec add arch "OAuth PKCE 集成" "完整流程设计" --ref knowhow/AST-oauth-flow.md
 ```
 </context>
 
@@ -145,8 +145,8 @@ Follow '~/.maestro/workflows/specs-add.md' completely.
 | Verify entry added | `maestro load --type spec --scope <scope> --keyword {keyword}` |
 | New entry replaces old one | `maestro spec supersede <old-sid> --by <new-sid>` |
 | View evolution chain | `maestro spec history <sid>` |
-| Add more entries | `/spec add <category>` |
-| View all specs | `/spec load --category <category>` |
+| Add more entries | `/maestro-spec add <category>` |
+| View all specs | `/maestro-spec load --category <category>` |
 | Check knowledge health | `maestro spec health` |
 </completion>
 
@@ -154,7 +154,7 @@ Follow '~/.maestro/workflows/specs-add.md' completely.
 
 ## Subcommand: load
 
-**Usage**: `/spec load [--scope <scope>] [--category <category>] [--keyword <word>]`
+**Usage**: `/maestro-spec load [--scope <scope>] [--category <category>] [--keyword <word>]`
 
 <required_reading>
 @~/.maestro/workflows/specs-load.md
@@ -192,11 +192,11 @@ Arguments -- optional flags and keyword
 
 **Examples:**
 ```
-/spec load --category coding            # coding全文 + 跨文件coding条目 (global + project)
-/spec load --scope global --category arch  # 明确包含全局 arch 规范
-/spec load --category review            # review-standards + quality-rules + 跨文件review条目
-/spec load --category coding --keyword auth
-/spec load --keyword auth
+/maestro-spec load --category coding            # coding全文 + 跨文件coding条目 (global + project)
+/maestro-spec load --scope global --category arch  # 明确包含全局 arch 规范
+/maestro-spec load --category review            # review-standards + quality-rules + 跨文件review条目
+/maestro-spec load --category coding --keyword auth
+/maestro-spec load --keyword auth
 ```
 
 **Ref entries:**
@@ -237,7 +237,7 @@ Follow '~/.maestro/workflows/specs-load.md' completely.
 <error_codes>
 | Code | Severity | Description | Stage |
 |------|----------|-------------|-------|
-| E001 | warning | `.workflow/specs/` not initialized -- run `/spec setup` first (global specs still available) | detect_context |
+| E001 | warning | `.workflow/specs/` not initialized -- run `/maestro-spec setup` first (global specs still available) | detect_context |
 | W001 | warning | No matching specs found for keyword -- showing all specs in category instead | load_specs |
 </error_codes>
 
@@ -253,14 +253,14 @@ Follow '~/.maestro/workflows/specs-load.md' completely.
 
 ## Subcommand: remove
 
-**Usage**: `/spec remove <entry-id> [--cascade] [-y]`
+**Usage**: `/maestro-spec remove <entry-id> [--cascade] [-y]`
 
 <required_reading>
 @~/.maestro/workflows/specs-remove.md
 </required_reading>
 
 <purpose>
-Remove a `<spec-entry>` from a specs file. Symmetric with `/spec add`.
+Remove a `<spec-entry>` from a specs file. Symmetric with `/maestro-spec add`.
 Uses `maestro wiki remove-entry` for atomic removal with index auto-update.
 </purpose>
 
@@ -269,10 +269,10 @@ Arguments -- expects `<entry-id>` (e.g., `spec-learnings-003`, `spec-coding-conv
 
 **Entry ID format**: `spec-{file-stem}-{NNN}` — the sub-node ID assigned by WikiIndexer when indexing `<spec-entry>` blocks.
 
-**Discovery**: Use `maestro wiki list --type spec --json` or `/spec load --keyword <term>` to find entry IDs.
+**Discovery**: Use `maestro wiki list --type spec --json` or `/maestro-spec load --keyword <term>` to find entry IDs.
 
 **Flags:**
-- `--cascade` — When the target spec is a ref-type entry (created via `spec add --ref` and linked to a knowhow document), also delete the referenced knowhow file. Without this flag, ref-type removal leaves an orphan knowhow file.
+- `--cascade` — When the target spec is a ref-type entry (created via `maestro-spec add --ref` and linked to a knowhow document), also delete the referenced knowhow file. Without this flag, ref-type removal leaves an orphan knowhow file.
 </context>
 
 <invariants>
@@ -308,8 +308,8 @@ Follow '~/.maestro/workflows/specs-remove.md' completely.
 <error_codes>
 | Code | Severity | Description | Stage |
 |------|----------|-------------|-------|
-| E001 | fatal | Entry ID is required -- usage: `/spec remove <entry-id>` | parse_input |
-| E002 | fatal | `.workflow/specs/` not initialized -- run `/spec setup` first | validate |
+| E001 | fatal | Entry ID is required -- usage: `/maestro-spec remove <entry-id>` | parse_input |
+| E002 | fatal | `.workflow/specs/` not initialized -- run `/maestro-spec setup` first | validate |
 | E003 | fatal | Entry ID not found in wiki index | lookup |
 | E004 | fatal | Entry is not a spec sub-node (wrong type) | validate |
 </error_codes>
@@ -328,7 +328,7 @@ Follow '~/.maestro/workflows/specs-remove.md' completely.
 
 ## Subcommand: setup
 
-**Usage**: `/spec setup`
+**Usage**: `/maestro-spec setup`
 
 <required_reading>
 @~/.maestro/workflows/specs-setup.md
@@ -395,7 +395,7 @@ Follow '~/.maestro/workflows/specs-setup.md' completely.
 <success_criteria>
 - [ ] `.workflow/specs/` directory created
 - [ ] Core spec files always created: `coding-conventions.md`, `architecture-constraints.md`, `learnings.md`
-- [ ] Optional spec files created when detected: `quality-rules.md` (linter/CI), `test-conventions.md` (test framework), `ui-conventions.md` (frontend framework). `debug-notes.md` / `review-standards.md` deferred (on demand via `/spec add`).
+- [ ] Optional spec files created when detected: `quality-rules.md` (linter/CI), `test-conventions.md` (test framework), `ui-conventions.md` (frontend framework). `debug-notes.md` / `review-standards.md` deferred (on demand via `/maestro-spec add`).
 - [ ] Workflow recipe knowhow created in `.workflow/knowhow/` for each detected operational workflow (test / debug / build / dev / lint). Each recipe matches the `recipe` schema in `~/.maestro/workflows/knowhow.md` Part B and contains at least one runnable command.
 - [ ] Report displayed grouped by destination (specs / recipes / skipped / deferred), with `.proposed.md` files surfaced when an existing recipe slug was preserved.
 </success_criteria>

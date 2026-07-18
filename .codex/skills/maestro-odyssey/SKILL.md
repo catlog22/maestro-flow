@@ -1,5 +1,5 @@
 ---
-name: odyssey
+name: maestro-odyssey
 description: Long-running iterative cycle — one entry, five modes
   (debug|improve|planex|review|ui). Shared archaeology/audit → fix → verify →
   generalize → discover → persist skeleton with mode-specific dimensions.
@@ -255,7 +255,7 @@ Commit: `"odyssey-{mode}({slug}): DISCOVER — sibling triage complete"`
 
 ### A_RECORD
 
-1. Finalize understanding.md learnings section — persist by the active mode's **Knowledge Persistence categories** (see mode section). For improve/ui, also emit the metrics/before-after section. Completion summary lists suggested `/spec add` commands.
+1. Finalize understanding.md learnings section — persist by the active mode's **Knowledge Persistence categories** (see mode section). For improve/ui, also emit the metrics/before-after section. Completion summary lists suggested `/maestro-spec add` commands.
 
 2. Mark record goal done. Pending decisions: Normal → request_user_input | `-y` → skip (show deferred count).
 
@@ -371,10 +371,10 @@ S_CONFIRM → S_FIX           : needs_rework
 
 | Category | Content | Follow-up |
 |----------|---------|-----------|
-| Recurring root cause pattern | Type + triggers + fix + detection | `/spec add debug` |
-| Non-obvious workaround | Problem + steps + why obvious fix fails | `/spec add learning` |
-| Architecture boundary violation | Violation + correct boundary + verification | `/spec add arch` |
-| Reusable generalization pattern | Signature + risk + fix template + scope | `/spec add coding` |
+| Recurring root cause pattern | Type + triggers + fix + detection | `/maestro-spec add debug` |
+| Non-obvious workaround | Problem + steps + why obvious fix fails | `/maestro-spec add learning` |
+| Architecture boundary violation | Violation + correct boundary + verification | `/maestro-spec add arch` |
+| Reusable generalization pattern | Signature + risk + fix template + scope | `/maestro-spec add coding` |
 
 **Completion summary:**
 ```
@@ -479,10 +479,10 @@ S_VERIFY → S_FIX           : needs_rework
 
 | Category | Content | Follow-up |
 |----------|---------|-----------|
-| Performance pattern | Bottleneck type + fix approach + measurement | `/spec add coding` |
-| Security rule | Vulnerability class + fix + prevention | `/spec add debug` |
-| Architecture constraint | Violation + correct boundary + check | `/spec add arch` |
-| Reliability pattern | Failure mode + handling strategy + verification | `/spec add coding` |
+| Performance pattern | Bottleneck type + fix approach + measurement | `/maestro-spec add coding` |
+| Security rule | Vulnerability class + fix + prevention | `/maestro-spec add debug` |
+| Architecture constraint | Violation + correct boundary + check | `/maestro-spec add arch` |
+| Reliability pattern | Failure mode + handling strategy + verification | `/maestro-spec add coding` |
 
 **Completion summary:**
 ```
@@ -658,10 +658,10 @@ Max iterations (default 3) prevents infinite loops.
 
 | Category | Content | Follow-up |
 |----------|---------|-----------|
-| Multi-round fix cycle pattern | Problem scenario + fix iteration + final approach | `/spec add debug` |
-| Reusable implementation pattern | Pattern + applicable scope + code template | `/spec add coding` |
-| Acceptance criteria template | Standard template + verify_method suggestion | `/spec add review` |
-| Generalization pattern | Signature + risk + fix template | `/spec add coding` |
+| Multi-round fix cycle pattern | Problem scenario + fix iteration + final approach | `/maestro-spec add debug` |
+| Reusable implementation pattern | Pattern + applicable scope + code template | `/maestro-spec add coding` |
+| Acceptance criteria template | Standard template + verify_method suggestion | `/maestro-spec add review` |
+| Generalization pattern | Signature + risk + fix template | `/maestro-spec add coding` |
 
 **Completion summary:**
 ```
@@ -762,10 +762,10 @@ Normal: request_user_input per tier | `-y`: auto-fix all. Remaining > 0 → retr
 
 | Category | Content | Follow-up |
 |----------|---------|-----------|
-| Cross-dimension recurring pattern | Pattern + affected dimensions + coding standard | `/spec add review` |
-| Security finding | Vulnerability type + triggers + fix approach | `/spec add debug` |
-| Architecture violation pattern | Violation + correct boundary + verification | `/spec add arch` |
-| Reusable generalization pattern | Signature + risk + fix template + scope | `/spec add coding` |
+| Cross-dimension recurring pattern | Pattern + affected dimensions + coding standard | `/maestro-spec add review` |
+| Security finding | Vulnerability type + triggers + fix approach | `/maestro-spec add debug` |
+| Architecture violation pattern | Violation + correct boundary + verification | `/maestro-spec add arch` |
+| Reusable generalization pattern | Signature + risk + fix template + scope | `/maestro-spec add coding` |
 
 **Completion summary:**
 ```
@@ -860,10 +860,10 @@ Discover routes: new component to audit → S_AUDIT; fixable sibling → S_FIX.
 
 | Category | Content | Follow-up |
 |----------|---------|-----------|
-| Design pattern | Component pattern + applicable scenarios + token references | `/spec add ui` |
-| Interaction spec | State definitions + transition rules + feedback patterns | `/spec add ui` |
-| Accessibility rule | WCAG requirement + implementation approach | `/spec add ui` |
-| Reusable generalization pattern | Pattern signature + application scope | `/spec add coding` |
+| Design pattern | Component pattern + applicable scenarios + token references | `/maestro-spec add ui` |
+| Interaction spec | State definitions + transition rules + feedback patterns | `/maestro-spec add ui` |
+| Accessibility rule | WCAG requirement + implementation approach | `/maestro-spec add ui` |
+| Reusable generalization pattern | Pattern signature + application scope | `/maestro-spec add coding` |
 
 **Completion summary:**
 ```
@@ -914,14 +914,14 @@ Goals:      {done}/{total} ({skipped} skipped)
 <next_step_routing>
 | Condition | Next |
 |-----------|------|
-| Discovery issues created | `/manage issue list --source {mode}-odyssey` |
-| Deeper debug needed (from any mode) | `/odyssey <finding> --mode debug` |
-| Formal review of changes | `/odyssey <changed-files> --mode review` |
-| UI-related findings | `/odyssey <component> --mode ui` |
-| Document pattern | `/learn decompose <module>` |
-| Second opinion | `/learn consult <understanding.md>` |
-| Related question | `/learn investigate "<question>"` |
-| Design/perf/arch pattern to persist | `/spec add ui\|coding\|arch "..."` |
+| Discovery issues created | `/maestro-manage issue list --source {mode}-odyssey` |
+| Deeper debug needed (from any mode) | `/maestro-odyssey <finding> --mode debug` |
+| Formal review of changes | `/maestro-odyssey <changed-files> --mode review` |
+| UI-related findings | `/maestro-odyssey <component> --mode ui` |
+| Document pattern | `/maestro-learn decompose <module>` |
+| Second opinion | `/maestro-learn consult <understanding.md>` |
+| Related question | `/maestro-learn investigate "<question>"` |
+| Design/perf/arch pattern to persist | `/maestro-spec add ui\|coding\|arch "..."` |
 | Pending decisions | Filter evidence phase=decision status=pending |
 </next_step_routing>
 </output>

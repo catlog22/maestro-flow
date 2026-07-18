@@ -81,7 +81,7 @@ Fork and sync algorithm steps are defined in workflow `fork.md`.
 |-----------|-----------|
 | Fork complete | `cd {wt.path}` then step `analyze` (`maestro run prepare analyze` + `maestro run create analyze --session YYYYMMDD-analyze-{topic} --intent "{goal}"`) |
 | Fork + automated | `maestro delegate "run full lifecycle for session" --cd {wt.path} --mode write` |
-| Fork + status check | [@skill] Skill({ skill: "manage", args: "status" }) |
+| Fork + status check | [@skill] Skill({ skill: "maestro-manage", args: "status" }) |
 | Sync complete | Resume work in worktree |
 | Sync conflicts found | Resolve manually, then retry |
 </completion>

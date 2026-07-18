@@ -67,7 +67,7 @@ $ARGUMENTS — intent text + optional flags.
 5. **Argument pass-through** — intent text becomes first arg to target step; user can modify at confirmation; `-y` only passes through when user provided it
 6. **--suggest never executes** — show recommendation + prepare content only
 7. **--note is append-only** — never overwrite or reorder existing entries
-8. **--promote delegates** — spec/knowhow promotion routes through `spec add` / `manage knowledge capture`, never writes directly
+8. **--promote delegates** — spec/knowhow promotion routes through `maestro-spec add` / `maestro-manage knowledge capture`, never writes directly
 </invariants>
 
 <state_machine>
@@ -221,24 +221,24 @@ init → {brainstorm | blueprint | analyze-macro} → roadmap
 | grill / pressure test / stress test | grill | Socratic pressure-test of a plan/idea against codebase reality — adversarial questioning, terminology collision checks |
 | collab / cross-verify / multi-tool / second opinion | collab | Fan out one requirement to multiple CLI tools, cross-verify findings into a unified conclusion |
 | refactor / tech debt | quality-refactor (retained skill) | — |
-| sync docs | manage sync codebase (retained skill) | — |
-| issue / defect | manage issue (retained skill) | — |
-| wiki / knowledge graph | manage knowledge wiki (retained skill) | — |
-| spec / rule / constraint | spec load / spec add (retained skill) | — |
+| sync docs | maestro-manage sync codebase (retained skill) | — |
+| issue / defect | maestro-manage issue (retained skill) | — |
+| wiki / knowledge graph | maestro-manage knowledge wiki (retained skill) | — |
+| spec / rule / constraint | maestro-spec load / maestro-spec add (retained skill) | — |
 | init / project setup | maestro-init (retained skill) | — |
-| status / dashboard | manage status (retained skill) | — |
+| status / dashboard | maestro-manage status (retained skill) | — |
 | security / OWASP | security-audit (retained skill) | — |
-| learn / explore code / follow | learn follow / learn investigate (retained skill) | — |
-| harvest / extract knowledge | manage knowledge harvest (retained skill) | — |
+| learn / explore code / follow | maestro-learn follow / maestro-learn investigate (retained skill) | — |
+| harvest / extract knowledge | maestro-manage knowledge harvest (retained skill) | — |
 | fork / parallel dev | maestro-fork (retained skill) | — |
 
 **Auxiliary workflow clusters:**
 
 | Cluster | Trigger | Chain |
 |---------|---------|-------|
-| Learning | New code / unknown module | learn follow → learn decompose → learn consult |
-| Knowledge | Distill experience | manage knowledge harvest → manage knowledge capture → spec add |
-| Issue | Defect management | manage issue discover → manage issue |
+| Learning | New code / unknown module | maestro-learn follow → maestro-learn decompose → maestro-learn consult |
+| Knowledge | Distill experience | maestro-manage knowledge harvest → maestro-manage knowledge capture → maestro-spec add |
+| Issue | Defect management | maestro-manage issue discover → maestro-manage issue |
 
 ### A_EXECUTE_STEP
 
@@ -328,7 +328,7 @@ Core Chain:  analyze → plan → execute → verify
 Quality:     review, test, auto-test, debug, retrospective
 Discovery:   grill, collab, brainstorm, blueprint, roadmap, quick
 
-Retained Skills: quality-refactor, manage sync codebase, manage-*, learn-*, spec-*, ...
+Retained Skills: quality-refactor, maestro-manage sync codebase, manage-*, learn-*, spec-*, ...
 ```
 
 ### Normal mode

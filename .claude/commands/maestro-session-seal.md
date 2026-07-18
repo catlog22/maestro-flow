@@ -67,8 +67,8 @@ Skip if `--skip-knowledge`. Otherwise:
      - "跳过" (no knowledge extraction)
    ```
 4. **Persist** selected items:
-   - Specs → `[@skill] Skill("spec", "add ...")`
-   - Knowhow → `[@skill] Skill("manage", "knowledge capture ...")`
+   - Specs → `[@skill] Skill("maestro-spec", "add ...")`
+   - Knowhow → `[@skill] Skill("maestro-manage", "knowledge capture ...")`
    - Record promoted IDs in `session.json.lifecycle.promoted[]`（前缀区分 spec:/knowhow:）
 
 ### Step 3: Seal Session
@@ -107,8 +107,8 @@ Status: DONE
 | Condition | Suggestion |
 |-----------|-----------|
 | Next session activated | step `analyze` (`maestro run prepare analyze` + `maestro run create analyze --session {next-slug} --intent "{goal}"`) |
-| DAG complete (all sealed) | `/manage status` |
-| Knowledge review needed | `/manage knowledge audit` |
+| DAG complete (all sealed) | `/maestro-manage status` |
+| Knowledge review needed | `/maestro-manage knowledge audit` |
 </completion>
 
 <error_codes>

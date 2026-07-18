@@ -89,7 +89,7 @@ Remaining      → intent (amend_mode 时为 change_request)
 9. **执行 step 通过 `maestro run next` CLI 加载并内联执行**（由 execute Agent 完成）
 10. **session.json orchestration 是唯一编排真相源** — 不生成 markdown 清单或侧文件；一切状态写入经 CLI 动词（`session create --chain-file` / `session chain insert|skip|replace` / `run next` / `run complete --verdict` / `run decide` / `session meta update`），prompt 层不得直写 session.json 或 ralph-meta.json
 11. **每个 step 必须在 chain 中标记 completed** — 由 `maestro run complete --verdict done`（或 `done-with-concerns`）驱动链推进；CLI 是唯一合法写入路径
-12. **step command 在 A_BUILD_STEPS 解析** — 通过 `maestro ralph skills --platform claude --json --quiet` 预校验
+12. **step command 在 A_BUILD_STEPS 解析** — 通过 `maestro ralph skills --platform claude --steps --json --quiet` 预校验（`--steps` 引入 prepare/workflows 步骤注册表，覆盖生命周期 step 名）
 13. **执行 step 内容加载** — 由 `maestro run next` CLI 通过 `resolveStepContent()` 在执行期完成
 14. **Decomposition is outcome-oriented** — sub-goals 为可观测交付，禁止 lifecycle 复刻
 15. **Sessions are independent work units** — skill args 统一用 `--session {session}` 模式，无 phase/milestone 占位符
@@ -402,7 +402,7 @@ Generate steps from `session.lifecycle_position` to `session-seal`（`session.se
 | brainstorm | `brainstorm "{intent}" --from grill:{grill_id}` *(if grill ran)* / `brainstorm "{intent}"` *(otherwise)* | — | all |
 | blueprint | `blueprint "{intent}"` | — | all |
 | init | `maestro-init` | — | all |
-| spec-setup | `spec setup` | — | all (**仅当 `.workflow/specs/` 不存在时插入**) |
+| spec-setup | `maestro-spec setup` | — | all (**仅当 `.workflow/specs/` 不存在时插入**) |
 | analyze-macro | `analyze "{intent}"` | `post-analyze-scope` | all |
 | roadmap | `roadmap --from analyze:{analyze_macro_id}` | — | all |
 | analyze | `analyze --session {session}` | — | all |
@@ -436,8 +436,8 @@ Generate steps from `session.lifecycle_position` to `session-seal`（`session.se
 8. **占位符**：`{session}` `{intent}` 由 A_STEP_RESOLVE_ARGS 运行时替换
 9. **skill 名预校验**（每个执行 step，decision 节点跳过；build 期一次性校验，不落 chain 字段）：
    - 取 skill 名（args 前的第一个 token）
-   - **预校验通过 `Bash("maestro ralph skills --platform claude --json --quiet")`** 一次性拉取 claude 平台可用 commands + skills（global + project，project 覆盖 global），匹配 skill 名：
-     - 命中（command 或 skill，global/project）→ 允许进 chain-file
+   - **预校验通过 `Bash("maestro ralph skills --platform claude --steps --json --quiet")`** 一次性拉取 claude 平台可用 commands + skills（global + project，project 覆盖 global）**加 `--steps` 步骤注册表**（prepare/workflows，`type:"step"`——生命周期 step 名 analyze/plan/execute/… 只在此注册表，与 `run next` 执行期 `resolveStepContent()` 同名字空间），匹配 skill 名：
+     - 命中（command、skill 或 step）→ 允许进 chain-file
      - 未命中 → A_CREATE_SESSION 报错 E006（缺失 skill 不进 chain-file）
    - **不在 build 阶段读取 .md 内容**；step 内容加载（含 `<required_reading>` / `<deferred_reading>`）由 `maestro run next` CLI 在执行期完成
 10. **每个 step 建链时形态**：chain-file step 仅 `command/args?/stage?/goal_ref?/retry_max?/decision_ref?`（CLI 落 `step_id/status=pending/run_id=null/inserted_by/retry`，见 Session Schema）；进度字段（原 completion_*）不落 chain，由 run.json handoff 承担
@@ -1099,7 +1099,7 @@ Multi-match within a priority → `[@ask] AskUserQuestion`。Cross-priority → 
 | brainstorm | `brainstorm "{intent}"` | — | all |
 | blueprint | `blueprint "{intent}"` | — | all |
 | init | `maestro-init` | — | all |
-| spec-setup | `spec setup` | — | all |
+| spec-setup | `maestro-spec setup` | — | all |
 | analyze-macro | `analyze "{intent}"` | `post-analyze-scope` | all |
 | roadmap | `roadmap --from analyze:{id}` | — | all |
 | analyze | `analyze --session {session}` | — | all |

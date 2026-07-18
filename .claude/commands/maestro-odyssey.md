@@ -1,5 +1,5 @@
 ---
-name: odyssey
+name: maestro-odyssey
 description: "Long-running iterative cycle — one entry, five modes (debug|improve|planex|review|ui). Shared archaeology/audit → fix → verify → generalize → discover → persist skeleton with mode-specific dimensions. User-invoked campaign entry; single-step fixes route via /maestro-next"
 argument-hint: "<intent> --mode debug|improve|planex|review|ui [--auto] [-y] [-c]"
 allowed-tools:
@@ -185,13 +185,13 @@ Mode-specific phase gates (Discovery, Audit, FIX, VERIFY/CONFIRM) are defined in
 <next_step_routing>
 | Condition | Next |
 |-----------|------|
-| Discovery issues created | `/manage issue list --source {mode}-odyssey` |
-| Deeper debug needed (from any mode) | `/odyssey <finding> --mode debug` |
-| Formal review of changes | `/odyssey <changed-files> --mode review` |
-| UI-related findings | `/odyssey <component> --mode ui` |
-| Document pattern | `/learn decompose <module>` |
-| Second opinion | `/learn consult <understanding.md>` |
-| Related question | `/learn investigate "<question>"` |
-| Design/perf/arch pattern to persist | `/spec add ui\|coding\|arch "..."` |
+| Discovery issues created | `/maestro-manage issue list --source {mode}-odyssey` |
+| Deeper debug needed (from any mode) | `/maestro-odyssey <finding> --mode debug` |
+| Formal review of changes | `/maestro-odyssey <changed-files> --mode review` |
+| UI-related findings | `/maestro-odyssey <component> --mode ui` |
+| Document pattern | `/maestro-learn decompose <module>` |
+| Second opinion | `/maestro-learn consult <understanding.md>` |
+| Related question | `/maestro-learn investigate "<question>"` |
+| Design/perf/arch pattern to persist | `/maestro-spec add ui\|coding\|arch "..."` |
 | Pending decisions | Filter evidence phase=decision status=pending |
 </next_step_routing>

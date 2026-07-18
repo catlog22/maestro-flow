@@ -76,7 +76,7 @@ Follow '~/.maestro/workflows/refactor.md' completely.
 - BLOCKED if tests fail: fix regressions before completing.
 
 **Knowledge inquiry on completion:**
-After successful refactoring, ask user once: "Record refactoring pattern as coding convention?" If yes → `[@skill] Skill("spec", "add coding \"<title>\" \"<pattern>\" --keywords <kw1>,<kw2> --description \"<summary>\"")`.
+After successful refactoring, ask user once: "Record refactoring pattern as coding convention?" If yes → `[@skill] Skill("maestro-spec", "add coding \"<title>\" \"<pattern>\" --keywords <kw1>,<kw2> --description \"<summary>\"")`.
 </execution>
 
 <completion>
@@ -101,7 +101,7 @@ maestro run complete --session {session_id} --verdict {done|done-with-concerns|n
 
 | Condition | Suggestion |
 |-----------|-----------|
-| All tests pass | `/manage sync codebase` (update codebase docs) |
+| All tests pass | `/maestro-manage sync codebase` (update codebase docs) |
 | Test failures after refactor | `maestro run create debug --session YYYYMMDD-debug-{topic} --intent "test failures after refactor in {scope}"` |
 | No test suite available | `maestro run create auto-test --session YYYYMMDD-auto-test-{topic} --intent "{goal}" -- {phase}` |
 </completion>
