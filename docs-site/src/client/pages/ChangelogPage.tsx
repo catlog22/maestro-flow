@@ -17,6 +17,31 @@ interface ChangelogEntry {
 
 const changelog: ChangelogEntry[] = [
   {
+    version: '0.5.51',
+    date: '2026-07',
+    changes: [
+      { type: 'feat', text_en: 'Unify the Session/Run lifecycle around prepare, create, brief, check, and complete, with run next stepping, explicit ASCII session IDs, progressive context injection, and finish checklists', text_zh: 'Session/Run 生命周期统一为 prepare、create、brief、check、complete，新增 run next 步进、显式 ASCII Session ID、渐进式上下文注入与 finish 收口清单' },
+      { type: 'feat', text_en: 'Integrate Codex Multi-Agent V2 collaboration, TOML agent generation, platform tool profiles, update_plan task tracking, and isolated Goal guidance', text_zh: '集成 Codex Multi-Agent V2 collaboration、TOML Agent 生成、平台工具 profile、update_plan 任务跟踪与独立 Goal 指引' },
+      { type: 'feat', text_en: 'Rebuild Explore around parallel streaming batches, repository maps, a reusable agent loop, configurable turn limits, direct proxy fallback, and stronger evidence validation', text_zh: 'Explore 重构为并行流式 Batch、repository map、通用 agent loop、可配置轮次、代理直连回退与更严格证据校验' },
+      { type: 'feat', text_en: 'Add docs v1/v2 switching with the consolidated v2 command model and a unified configuration reference', text_zh: 'docsite 新增 v1/v2 切换、v2 合并命令模型与统一配置参考指南' },
+      { type: 'fix', text_en: 'Harden Ralph and team execution with birth-packet-first dispatch, lease fencing, single-source state, fail-closed completion, and canonical artifact paths', text_zh: 'Ralph 与 team 执行加固：birth-packet 优先派发、lease fencing、状态单源、fail-closed completion 与标准产物路径' },
+      { type: 'fix', text_en: 'Make knowledge writes and graph migrations atomic, block SQL injection and nested transactions, expose index corruption, and normalize searchable Session/Run topology', text_zh: '知识写入与图谱迁移原子化，修复 SQL 注入与嵌套事务，显式暴露索引损坏并规范化可搜索的 Session/Run 拓扑' },
+      { type: 'refactor', text_en: 'Converge commands and workflows on prepare/workflows/ref entry steps, retire the chains data layer and obsolete commands, and move collab/grill to run-lite entry steps', text_zh: '命令与工作流收敛到 prepare/workflows/ref entry step，退役 chains 数据层与废弃命令，并将 collab/grill 迁移为 run-lite entry step' },
+      { type: 'fix', text_en: 'Align 23 team-skill coordinators and all generated Claude/Codex/Agy/Agents mirrors with the canonical Run contract', text_zh: '将 23 个 team skill coordinator 及 Claude/Codex/Agy/Agents 生成镜像对齐标准 Run 契约' },
+    ],
+  },
+  {
+    version: '0.5.50',
+    date: '2026-07',
+    changes: [
+      { type: 'feat', text_en: 'Expand the installer to 14 platforms with shared hooks, platform-grouped Hub controls, OpenAI Responses API support, and endpoint circuit-breaker recovery', text_zh: '安装矩阵扩展至 14 平台与通用 hooks，Hub 按功能分组，并加入 OpenAI Responses API 与端点熔断恢复' },
+      { type: 'feat', text_en: 'Add local embedding model paths, spec JSON output, knowhow tool registration, and on-demand workflow installation', text_zh: '新增本地 embedding 模型路径、spec JSON 输出、knowhow 工具注册与按需 workflow 安装' },
+      { type: 'fix', text_en: 'Prevent uninstall from deleting user workflows and harden knowledge-system memory, SQLite locking, and search-daemon limits', text_zh: '防止 uninstall 误删用户 workflow，并加固知识系统内存、SQLite 锁与 search daemon 限制' },
+      { type: 'refactor', text_en: 'Unify Ralph verification-ledger completion and normalize generated Codex skill categories', text_zh: '统一 Ralph verification-ledger 完成流程并规范化 Codex skill 生成分类' },
+      { type: 'docs', text_en: 'Restructure the bilingual README, guides, competitive comparison, and docs-site deployment', text_zh: '重构双语 README、指南、竞品对比与 docsite 部署' },
+    ],
+  },
+  {
     version: '0.5.49',
     date: '2026-07',
     changes: [
@@ -620,7 +645,7 @@ export default function ChangelogPage() {
 
       {/* Version entries */}
       <div className="space-y-[var(--spacing-8)] max-w-[860px]">
-        {changelog.map((entry) => (
+        {changelog.map((entry, index) => (
           <section key={entry.version}>
             {/* Version header */}
             <div className="flex items-center gap-[var(--spacing-3)] mb-[var(--spacing-3)]">
@@ -630,7 +655,7 @@ export default function ChangelogPage() {
               <span className="text-[length:var(--font-size-sm)] text-text-tertiary">
                 {entry.date}
               </span>
-              {entry.version === '0.4.3' && (
+              {index === 0 && (
                 <span className="text-[length:10px] font-[var(--font-weight-semibold)] px-[var(--spacing-2)] py-[2px] rounded-full bg-status-bg-completed text-accent-green">
                   {t('changelog.latest')}
                 </span>
