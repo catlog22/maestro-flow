@@ -32,7 +32,7 @@
 - ✅ **干净前向**(基于 master、behind 0):`codex/kg-index-stability`(0.5.34)、`codex/switch-kg-maestrograph-cli`——KG 索引稳定 + KG→MaestroGraph + 搜索散文强化 + hooks.json 注册模式。
 - ⚠️ **陈旧分叉**(无共同祖先、behind 50):`fix/global-spec-injection`(0.4.24)、`feat-增强自动执行…`(0.1.4)——整体合并会回退,只能 cherry-pick(如 spec-global 修复、review-BLOCK 自动修复)。
 
-**新代码主要改"知识质量"层(KG 索引/搜索/spec)；对 R1–R5 的命令/工作流文件（`.claude/commands/maestro-ralph.md`、`.claude/commands/maestro.md`、`workflows/{grill,brainstorm,analyze,roadmap}.md`，`codex/kg-index-stability` 有重写精简；注意大脑 `workflows/maestro.md` 本身未变）虽改动文件，但未解决任何结构性发现。** 逐条对照（第 2 列＝"新上游是否**解决**该发现"，非"是否改动文件"）:
+**新代码主要改"知识质量"层(KG 索引/搜索/maestro-spec)；对 R1–R5 的命令/工作流文件（`.claude/commands/maestro-ralph.md`、`.claude/commands/maestro.md`、`workflows/{grill,brainstorm,analyze,roadmap}.md`，`codex/kg-index-stability` 有重写精简；注意大脑 `workflows/maestro.md` 本身未变）虽改动文件，但未解决任何结构性发现。** 逐条对照（第 2 列＝"新上游是否**解决**该发现"，非"是否改动文件"）:
 
 | 发现 | 新上游是否触及 | 判定 |
 |---|---|---|

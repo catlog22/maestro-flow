@@ -89,36 +89,36 @@ summary: "Use when implementing OAuth 2.0 login for public clients."
 
 | 命令 | 职责 |
 |------|------|
-| `/spec add` | 向 specs 文件追加 `<spec-entry>` 条目，支持 inline 和 ref 两种模式 |
-| `/manage knowledge capture` | 捕获 6 种类型知识文档到 knowhow/（compact、template、recipe、reference、decision、tip） |
-| `/spec add` | 将可复用业务流程注册为 knowhow 工具文档（YAML 头 `tool: true` + `category`） |
-| `/manage knowledge capture` | 捕获原子洞察到 `learnings.md`（pattern、gotcha、technique、tip） |
-| `/manage knowledge harvest` | 从工作流产物中提取知识碎片，路由到 wiki/spec/issue 三个存储 |
+| `/maestro-spec add` | 向 specs 文件追加 `<spec-entry>` 条目，支持 inline 和 ref 两种模式 |
+| `/maestro-manage knowledge capture` | 捕获 6 种类型知识文档到 knowhow/（compact、template、recipe、reference、decision、tip） |
+| `/maestro-spec add` | 将可复用业务流程注册为 knowhow 工具文档（YAML 头 `tool: true` + `category`） |
+| `/maestro-manage knowledge capture` | 捕获原子洞察到 `learnings.md`（pattern、gotcha、technique、tip） |
+| `/maestro-manage knowledge harvest` | 从工作流产物中提取知识碎片，路由到 wiki/spec/issue 三个存储 |
 
 ### 读取类
 
 | 命令 | 职责 |
 |------|------|
-| `/spec load` | 按 category 加载主文档 + 跨文件 keyword 匹配条目 + 自动发现 knowhow 工具 |
+| `/maestro-spec load` | 按 category 加载主文档 + 跨文件 keyword 匹配条目 + 自动发现 knowhow 工具 |
 | `/maestro-ralph` | 从 knowhow 加载工具文档并逐步执行 |
-| `/manage knowledge knowhow` | 跨 workflow knowhow 和 system memory 两个存储做 list/search/view/edit/delete |
-| `/manage knowledge wiki` | Wiki 图健康度、搜索、清理、统计 |
+| `/maestro-manage knowledge knowhow` | 跨 workflow knowhow 和 system memory 两个存储做 list/search/view/edit/delete |
+| `/maestro-manage knowledge wiki` | Wiki 图健康度、搜索、清理、统计 |
 
 ### 分析类
 
 | 命令 | 职责 |
 |------|------|
-| `/manage knowledge wiki digest` | 语义主题聚类 + 知识覆盖热力图 + gap 分析 |
-| `/manage knowledge wiki connect` | 发现孤立节点和缺失连接，修复图联通性 |
-| `/manage knowledge audit` | 审计 spec/knowhow/artifact 三存储 — 矛盾检测、过期淘汰、孤立清理（keep/deprecate/delete 三态决策） |
-| `/learn decompose` | 从代码中提取设计模式，写入 spec 和 wiki |
-| `/learn follow` | 引导式阅读代码/wiki，提取 pattern 并构建理解 |
+| `/maestro-manage knowledge wiki digest` | 语义主题聚类 + 知识覆盖热力图 + gap 分析 |
+| `/maestro-manage knowledge wiki connect` | 发现孤立节点和缺失连接，修复图联通性 |
+| `/maestro-manage knowledge audit` | 审计 spec/knowhow/artifact 三存储 — 矛盾检测、过期淘汰、孤立清理（keep/deprecate/delete 三态决策） |
+| `/maestro-learn decompose` | 从代码中提取设计模式，写入 spec 和 wiki |
+| `/maestro-learn follow` | 引导式阅读代码/wiki，提取 pattern 并构建理解 |
 
 ### 初始化
 
 | 命令 | 职责 |
 |------|------|
-| `/spec setup` | 扫描项目结构，初始化 specs 骨架文件（6 个种子文件） |
+| `/maestro-spec setup` | 扫描项目结构，初始化 specs 骨架文件（6 个种子文件） |
 
 ---
 
@@ -144,18 +144,18 @@ summary: "Use when testing payment endpoints for retry safety."
 5. Verify webhook delivers exactly once
 ```
 
-`spec load --category test` 自动扫描 knowhow/ 中 `category=test` 且 `tool=true` 的文档，将工具摘要与 spec 一起注入 agent 上下文。
+`maestro-spec load --category test` 自动扫描 knowhow/ 中 `category=test` 且 `tool=true` 的文档，将工具摘要与 spec 一起注入 agent 上下文。
 
 ### 注册与使用
 
 | 阶段 | 命令 | 场景 |
 |------|------|------|
-| 规划期间 | `/spec add generate` | 标准化业务流程 |
-| 执行之后 | `/spec add extract` | 捕获经过验证的操作步骤 |
-| 测试之前 | `/spec add generate` | 注册验证方法给 test agent |
-| 复盘时 | `/spec add optimize` | 从产物中提取可复用流程 |
+| 规划期间 | `/maestro-spec add generate` | 标准化业务流程 |
+| 执行之后 | `/maestro-spec add extract` | 捕获经过验证的操作步骤 |
+| 测试之前 | `/maestro-spec add generate` | 注册验证方法给 test agent |
+| 复盘时 | `/maestro-spec add optimize` | 从产物中提取可复用流程 |
 
-使用方式：按名称执行 `/maestro-ralph integration-test`、按 category 发现 `/maestro-ralph --category test`、Agent 自动发现（`spec load` 输出包含工具摘要）。
+使用方式：按名称执行 `/maestro-ralph integration-test`、按 category 发现 `/maestro-ralph --category test`、Agent 自动发现（`maestro-spec load` 输出包含工具摘要）。
 
 ---
 
@@ -243,14 +243,14 @@ WikiIndexer 除了索引文件系统中的 spec/knowhow 文档外，还将非文
 执行产物                    提取                      存储                    消费
 ─────────                  ─────                    ─────                  ─────
 分析会话 ─────┐                              ┌─→ specs/     ─→ spec-injector → agent
-调试记录 ─────┼──→ /manage knowledge harvest ──────────┼─→ knowhow/   ─→ wiki load → 按需
-规划文档 ─────┤    /maestro-next --promote    ├─→ issues/    ─→ manage issue → 追踪
-代码变更 ─────┘    /learn decompose          └─→ learnings  ─→ keyword-injector → 上下文
+调试记录 ─────┼──→ /maestro-manage knowledge harvest ──────────┼─→ knowhow/   ─→ wiki load → 按需
+规划文档 ─────┤    /maestro-next --promote    ├─→ issues/    ─→ maestro-manage issue → 追踪
+代码变更 ─────┘    /maestro-learn decompose          └─→ learnings  ─→ keyword-injector → 上下文
 
                     淘汰清理                    审计                    CodeGraph
                     ─────                      ─────                  ─────
 specs/     ──┐                              ┌─→ kg search   ─→ 符号搜索
-knowhow/   ──┼──→ /manage knowledge audit ──┼─→ kg context  ─→ 调用关系
+knowhow/   ──┼──→ /maestro-manage knowledge audit ──┼─→ kg context  ─→ 调用关系
 artifacts/ ──┘    (三态: keep/deprecate/delete) └─→ kg path    ─→ 调用链追踪
                                                              ↑ Hook 自动同步
                                                              kg-sync (UserPromptSubmit)
@@ -259,7 +259,7 @@ artifacts/ ──┘    (三态: keep/deprecate/delete) └─→ kg path    ─
 Progressive Fill——各阶段自动沉淀：
 
 ```bash
-maestro-init    → spec setup（骨架 + 扫描）
+maestro-init    → maestro-spec setup（骨架 + 扫描）
 maestro-ralph → 锁定决策 → arch，代码模式 → coding
 maestro-next    → 设计约定 → coding/arch，测试策略 → test
 maestro-ralph continue → 经验教训 → learning，根因 → debug
@@ -282,7 +282,7 @@ maestro-ralph  → 质量发现 → review
 
 ```bash
 /workflow-lite-execute
-/manage knowledge harvest --source lite-plan --to auto
+/maestro-manage knowledge harvest --source lite-plan --to auto
 ```
 
 harvest 自动路由：
@@ -297,7 +297,7 @@ harvest 自动路由：
 **3. 注册验证工具**
 
 ```bash
-/spec add generate User API E2E 验证：注册 → 登录 → token 刷新 → CRUD → 异常
+/maestro-spec add generate User API E2E 验证：注册 → 登录 → token 刷新 → CRUD → 异常
 ```
 
 **4. 测试消费**
@@ -310,17 +310,17 @@ harvest 自动路由：
 **5. 反哺**
 
 ```bash
-/spec add optimize user-api-verify   # 追加新发现的 edge case
-/manage knowledge capture "refresh token 过期后重试需要处理 race condition"
+/maestro-spec add optimize user-api-verify   # 追加新发现的 edge case
+/maestro-manage knowledge capture "refresh token 过期后重试需要处理 race condition"
 ```
 
 各命令职责：
 
 | 命令 | 产出 | 性质 |
 |---|---|---|
-| `/manage knowledge harvest` | spec 条目 + wiki 条目 + issue | 被动知识 |
-| `/manage knowledge capture` | AST-*.md（API 契约） | 被动资产 |
-| `/spec add` | RCP-*.md（验证流程） | 主动可执行 |
+| `/maestro-manage knowledge harvest` | spec 条目 + wiki 条目 + issue | 被动知识 |
+| `/maestro-manage knowledge capture` | AST-*.md（API 契约） | 被动资产 |
+| `/maestro-spec add` | RCP-*.md（验证流程） | 主动可执行 |
 | `/maestro-ralph --engine swarm` | 测试代码 | 消费 tool |
 
 </details>
@@ -364,7 +364,7 @@ harvest 自动路由：
 
 ### Tool 发现
 
-Tool 是标记了 `tool: true` YAML 头的 knowhow 文档。`spec load --category` 自动扫描 `knowhow/` 中匹配 category + tool 的条目，追加摘要。
+Tool 是标记了 `tool: true` YAML 头的 knowhow 文档。`maestro-spec load --category` 自动扫描 `knowhow/` 中匹配 category + tool 的条目，追加摘要。
 
 ### Spec 注入配置
 

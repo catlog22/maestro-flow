@@ -47,18 +47,18 @@ graph TB
         QR["/maestro-ralph --engine swarm --script wf-review"]
         QAT["/maestro-ralph --engine swarm"]
         QT["/maestro <test intent>"]
-        QD["/odyssey --mode debug"]
+        QD["/maestro-odyssey --mode debug"]
         QRF["/quality-refactor"]
-        QS["/manage sync codebase"]
+        QS["/maestro-manage sync codebase"]
     end
 
     subgraph issue["Issue Closed-Loop"]
-        ID["/manage issue discover"]
-        IC["/manage issue create"]
+        ID["/maestro-manage issue discover"]
+        IC["/maestro-manage issue create"]
         IA["/maestro-ralph --engine swarm --script wf-analyze --gaps"]
         IP["/maestro-next <plan --gaps>"]
         IE["/maestro-ralph continue"]
-        ICL["/manage issue close"]
+        ICL["/maestro-manage issue close"]
     end
 
     subgraph milestone["Milestone"]
@@ -156,7 +156,7 @@ graph TB
 
 | path | Meaning | Source | Lifecycle |
 |------|---------|--------|-----------|
-| `standalone` | Independent Issue, not bound to a Phase | Manual creation, `/manage issue discover`, external import | Independent closed-loop, does not affect Phase progression |
+| `standalone` | Independent Issue, not bound to a Phase | Manual creation, `/maestro-manage issue discover`, external import | Independent closed-loop, does not affect Phase progression |
 | `workflow` | Phase-linked Issue | `/maestro-ralph --engine swarm --script wf-review` auto-create, `/maestro-ralph --engine swarm` failure, Phase verification output | May block milestone completion |
 
 ---
@@ -233,12 +233,12 @@ Discover → Create → Analyze → Plan → Execute → Close
 ```
 
 ```bash
-/manage issue discover by-prompt "Check API error handling"
-/manage issue create --title "Memory leak" --severity high
+/maestro-manage issue discover by-prompt "Check API error handling"
+/maestro-manage issue create --title "Memory leak" --severity high
 /maestro-ralph --engine swarm --script wf-analyze --gaps ISS-xxx   # Root cause analysis
 /maestro-next "<plan --gaps intent>"                             # Solution planning
 /maestro-ralph continue                                # Execute fix
-/manage issue close ISS-xxx --resolution "Fixed"
+/maestro-manage issue close ISS-xxx --resolution "Fixed"
 ```
 
 **Commander Agent** auto-advances unanalyzed Issues with priority `execute > analyze > plan`.
@@ -252,20 +252,20 @@ Discover → Create → Analyze → Plan → Execute → Close
 Unlike the Quality pipeline (fast gate), Odyssey commands are long-running persistent sessions. Each command has a built-in fix→verify→generalize closed loop that iterates until 0 remaining actionable items.
 
 ```bash
-/odyssey --mode debug "memory leak issue"               # archaeology→diagnosis→fix→generalize siblings
-/odyssey --mode improve "src/api/"                       # 6-dim audit→round-by-round fix→exhaust all
-/odyssey --mode planex "implement JWT refresh tokens"    # requirement→acceptance criteria→iterate until ALL pass
-/odyssey --mode review "src/auth/"              # deep review→fix all severities→re-review gate
-/odyssey --mode ui "src/components/Dashboard"            # visual survey→divergent exploration→exhaustive polish
+/maestro-odyssey --mode debug "memory leak issue"               # archaeology→diagnosis→fix→generalize siblings
+/maestro-odyssey --mode improve "src/api/"                       # 6-dim audit→round-by-round fix→exhaust all
+/maestro-odyssey --mode planex "implement JWT refresh tokens"    # requirement→acceptance criteria→iterate until ALL pass
+/maestro-odyssey --mode review "src/auth/"              # deep review→fix all severities→re-review gate
+/maestro-odyssey --mode ui "src/components/Dashboard"            # visual survey→divergent exploration→exhaustive polish
 ```
 
 | Command | Focus | Compared to |
 |---------|-------|-------------|
-| `odyssey --mode debug` | Deep debug with archaeology & generalization | vs `quality-debug` (retired, folded into odyssey) |
-| `odyssey --mode improve` | Runtime quality deep improvement | vs `/maestro-ralph --engine swarm --script wf-review` (pass/fail gate) |
-| `odyssey --mode planex` | Requirement-to-delivery exhaustive loop | vs `/maestro-ralph continue` (plan-based) |
-| `odyssey --mode review` | Review + fix + generalize full cycle | vs `/maestro-ralph --engine swarm --script wf-review` (verdict only) |
-| `odyssey --mode ui` | Persistent UI polish session | vs `/maestro-impeccable` (single execution) |
+| `maestro-odyssey --mode debug` | Deep debug with archaeology & generalization | vs `quality-debug` (retired, folded into odyssey) |
+| `maestro-odyssey --mode improve` | Runtime quality deep improvement | vs `/maestro-ralph --engine swarm --script wf-review` (pass/fail gate) |
+| `maestro-odyssey --mode planex` | Requirement-to-delivery exhaustive loop | vs `/maestro-ralph continue` (plan-based) |
+| `maestro-odyssey --mode review` | Review + fix + generalize full cycle | vs `/maestro-ralph --engine swarm --script wf-review` (verdict only) |
+| `maestro-odyssey --mode ui` | Persistent UI polish session | vs `/maestro-impeccable` (single execution) |
 
 **Shared flags**: `--skip-fix` (analysis only) · `--skip-generalize` (skip generalization) · `-c` (resume session) · `--auto` (automatic mode)
 
@@ -282,7 +282,7 @@ Unlike the Quality pipeline (fast gate), Odyssey commands are long-running persi
 | `/maestro-ralph --engine swarm {N}` | Smart routing test (spec/gap/code) | `--re-run` `--dry-run` |
 | `/maestro-ralph --engine swarm --script wf-review {N}` | Tiered code review | `--level quick\|standard\|deep` |
 | `/maestro "<test intent>"` | Session-based UAT | `--auto-fix` |
-| `/odyssey --mode debug` | Hypothesis-driven debugging | `--from-uat {N}` `--parallel` |
+| `/maestro-odyssey --mode debug` | Hypothesis-driven debugging | `--from-uat {N}` `--parallel` |
 | `/quality-refactor` | Technical debt remediation | `[scope]` |
 
 **Fix loop**: `verify gaps → plan --gaps → execute → verify` or `test failure → debug → plan --gaps → execute`
@@ -312,12 +312,12 @@ Unlike the Quality pipeline (fast gate), Odyssey commands are long-running persi
 ## 6. Specification and Knowledge
 
 ```bash
-/spec setup                                      # Scan project for conventions
-/spec add coding "All APIs use Hono framework"   # Record a spec
-/spec load --role implement                     # Load specs
-/manage sync codebase                            # Incremental refresh codebase docs
-/manage knowledge knowhow search "authentication"  # Search knowhow
-/manage status                                   # Project dashboard
+/maestro-spec setup                                      # Scan project for conventions
+/maestro-spec add coding "All APIs use Hono framework"   # Record a spec
+/maestro-spec load --role implement                     # Load specs
+/maestro-manage sync codebase                            # Incremental refresh codebase docs
+/maestro-manage knowledge knowhow search "authentication"  # Search knowhow
+/maestro-manage status                                   # Project dashboard
 ```
 
 ---

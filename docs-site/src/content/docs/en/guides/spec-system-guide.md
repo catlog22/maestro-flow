@@ -29,7 +29,7 @@ Maestro's knowledge management consists of **Spec** (coded constraints/tools) an
 
 ### File to Role Mapping
 
-Each spec file serves as the primary document for a role. `spec load --role` loads the primary file in full, plus cross-file entries tagged with that role.
+Each spec file serves as the primary document for a role. `maestro-spec load --role` loads the primary file in full, plus cross-file entries tagged with that role.
 
 | File | Primary Role | Purpose |
 |------|-------------|---------|
@@ -92,7 +92,7 @@ Standard deployment procedure with rollback safety.
 
 </details>
 
-- **Registration**: `/spec add` -- extract, generate, or optimize tool definitions
+- **Registration**: `/maestro-spec add` -- extract, generate, or optimize tool definitions
 - **Execution**: `/maestro-ralph` -- load tool by name or role, execute step-by-step
 
 ### Spec Commands
@@ -109,15 +109,15 @@ maestro spec load --keyword <kw>             # Cross all files
 ### Progressive Fill
 
 ```
-maestro-init    -> spec setup       /maestro-ralph --engine swarm --script wf-analyze -> plan, implement
+maestro-init    -> maestro-spec setup       /maestro-ralph --engine swarm --script wf-analyze -> plan, implement
 /maestro-next   -> implement, test  /maestro-ralph continue -> implement, analyze
 (retired; integrated into /maestro-ralph decision gate) -> review
 ```
 
 ### Keyword System
 
-- `spec add` auto-extracts 3-5 domain keywords
-- `spec load --keyword <kw>` matches `<spec-entry>` `keywords` attribute
+- `maestro-spec add` auto-extracts 3-5 domain keywords
+- `maestro-spec load --keyword <kw>` matches `<spec-entry>` `keywords` attribute
 - Legacy heading entries fallback to text search
 
 ---
@@ -302,7 +302,7 @@ maestro spec add <category> "<title>" "<content>" [--roles r1,r2] [--keywords kw
 maestro spec list [--scope <scope>] | status [--scope <scope>]
 
 # -- Tool Spec ------------------------------------------------------------
-/spec add "<description>"
+/maestro-spec add "<description>"
 /maestro-ralph "<name>" | --role <role>
 
 # -- Wiki -----------------------------------------------------------------

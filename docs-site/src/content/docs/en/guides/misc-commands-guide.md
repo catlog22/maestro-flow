@@ -88,9 +88,9 @@ Detect Version → Preview Plan → Step-by-Step Confirm → Execute Migration �
 
 ---
 
-## 3. spec remove — Spec Removal
+## 3. maestro-spec remove — Spec Removal
 
-Removes a specified `<spec-entry>` from specs files. Symmetric counterpart to `/spec add`, using `maestro wiki remove-entry` for atomic deletion with automatic index updates.
+Removes a specified `<spec-entry>` from specs files. Symmetric counterpart to `/maestro-spec add`, using `maestro wiki remove-entry` for atomic deletion with automatic index updates.
 
 ### Entry ID Format
 
@@ -102,15 +102,15 @@ spec-{file-stem}-{NNN}  (e.g., spec-learnings-003)
 
 ```bash
 maestro wiki list --type spec --json    # List all spec entries
-/spec load --keyword auth               # Search by keyword
-/spec remove spec-learnings-003          # Remove specific entry
+/maestro-spec load --keyword auth               # Search by keyword
+/maestro-spec remove spec-learnings-003          # Remove specific entry
 ```
 
 ### Notes
 
-- Requires `.workflow/specs/` initialized via `/spec setup`
+- Requires `.workflow/specs/` initialized via `/maestro-spec setup`
 - Entry ID must be a spec type child node
-- Removal is irreversible (preview with `/spec load` first)
+- Removal is irreversible (preview with `/maestro-spec load` first)
 
 ---
 

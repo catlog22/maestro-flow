@@ -2,7 +2,7 @@
 title: "Learn Toolkit Guide"
 ---
 
-A complete reference for Maestro's learning toolkit, covering the principles, usage, and collaboration patterns of 5 `/learn` subcommands.
+A complete reference for Maestro's learning toolkit, covering the principles, usage, and collaboration patterns of 5 `/maestro-learn` subcommands.
 
 ---
 
@@ -10,22 +10,22 @@ A complete reference for Maestro's learning toolkit, covering the principles, us
 
 The learning toolkit is Maestro's **interactive deep learning** module, focused on extracting structured knowledge from code, documentation, and decision history. Each command follows the scientific method -- hypothesis, evidence, verification, codification -- transforming implicit engineering experience into reusable explicit knowledge.
 
-### Comparison with /manage knowledge capture
+### Comparison with /maestro-manage knowledge capture
 
-| Dimension | /learn subcommands | /manage knowledge capture |
+| Dimension | /maestro-learn subcommands | /maestro-manage knowledge capture |
 |-----------|-----------------|-------------|
 | Interaction mode | Interactive deep learning, multi-round guidance | Atomic operation, single capture |
 | Goal | Systematic acquisition of deep understanding | Quick recording of a single insight |
 | Output | Structural reports, pattern catalog, evidence trail | Single `<spec-entry>` |
 | Duration | Minutes, multi-agent parallel | Seconds, instant completion |
 
-Simple rule: **Use /learn when you need to think, use /manage knowledge capture when you need to record**.
+Simple rule: **Use /maestro-learn when you need to think, use /maestro-manage knowledge capture when you need to record**.
 
 ---
 
 ## 2. Command Reference
 
-### 2.1 learn consult — Unified Retrospective
+### 2.1 maestro-learn consult — Unified Retrospective
 
 Periodic review of project activities, distilling insights from Git commit history and architecture decisions.
 
@@ -46,10 +46,10 @@ Periodic review of project activities, distilling insights from Git commit histo
 <summary>Command examples</summary>
 
 ```bash
-/learn consult                                    # Default: both lenses, full analysis of last 7 days
-/learn consult --lens git --days 14               # Git analysis only, last 14 days
-/learn consult --lens decision --phase 2          # Decision analysis only, focus on Phase 2
-/learn consult --lens all --author alice --compare # Full analysis, filtered by author, compare with last retro
+/maestro-learn consult                                    # Default: both lenses, full analysis of last 7 days
+/maestro-learn consult --lens git --days 14               # Git analysis only, last 14 days
+/maestro-learn consult --lens decision --phase 2          # Decision analysis only, focus on Phase 2
+/maestro-learn consult --lens all --author alice --compare # Full analysis, filtered by author, compare with last retro
 ```
 </details>
 
@@ -86,7 +86,7 @@ Output: Per-person statistics, high-churn file list, low-test area warnings (< 2
 
 ---
 
-### 2.2 learn follow — Guided Reading
+### 2.2 maestro-learn follow — Guided Reading
 
 Extract deep understanding from code or documentation through section-by-section guided reading.
 
@@ -102,9 +102,9 @@ Extract deep understanding from code or documentation through section-by-section
 <summary>Command examples</summary>
 
 ```bash
-/learn follow src/auth/jwt.ts                     # Follow-read a specific file
-/learn follow src/utils/ --depth deep              # Deep follow-read of entire directory
-/learn follow arch-auth-design --save-wiki          # Follow-read wiki document and save notes
+/maestro-learn follow src/auth/jwt.ts                     # Follow-read a specific file
+/maestro-learn follow src/utils/ --depth deep              # Deep follow-read of entire directory
+/maestro-learn follow arch-auth-design --save-wiki          # Follow-read wiki document and save notes
 ```
 </details>
 
@@ -125,7 +125,7 @@ The command automatically builds a **1-hop context neighborhood** (wiki referenc
 
 ---
 
-### 2.3 learn decompose — Code Pattern Decomposition
+### 2.3 maestro-learn decompose — Code Pattern Decomposition
 
 Systematically decompose complex code into a reusable design pattern catalog, with parallel analysis across 4 dimensions.
 
@@ -135,16 +135,16 @@ Systematically decompose complex code into a reusable design pattern catalog, wi
 |-----------|-------------|---------|
 | `<target>` | File path / directory / module name | Required |
 | `--patterns <list>` | Comma-separated pattern name list for focused analysis | Detect all |
-| `--save-spec` | Auto-call `/spec add` for each new pattern | Off |
+| `--save-spec` | Auto-call `/maestro-spec add` for each new pattern | Off |
 | `--save-wiki` | Create wiki notes per dimension | Off |
 
 <details>
 <summary>Command examples</summary>
 
 ```bash
-/learn decompose src/auth/                       # Decompose the auth module
-/learn decompose src/utils/ --patterns "Factory,Observer,Strategy"  # Focus on specified patterns
-/learn decompose src/core/ --save-spec --save-wiki  # Decompose and sync to spec and wiki
+/maestro-learn decompose src/auth/                       # Decompose the auth module
+/maestro-learn decompose src/utils/ --patterns "Factory,Observer,Strategy"  # Focus on specified patterns
+/maestro-learn decompose src/core/ --save-spec --save-wiki  # Decompose and sync to spec and wiki
 ```
 </details>
 
@@ -163,7 +163,7 @@ Each finding carries: pattern name, dimension, confidence, code anchor (file:lin
 
 ---
 
-### 2.4 learn consult — Multi-Perspective Analysis
+### 2.4 maestro-learn consult — Multi-Perspective Analysis
 
 Get alternative perspectives on code, decisions, or plans, avoiding blind spots from a single judgment.
 
@@ -178,10 +178,10 @@ Get alternative perspectives on code, decisions, or plans, avoiding blind spots 
 <summary>Command examples</summary>
 
 ```bash
-/learn consult src/auth/jwt.ts                    # Default review mode
-/learn consult src/core/ --mode challenge          # Adversarial challenge
-/learn consult HEAD --mode consult                 # Interactive Q&A
-/learn consult 2 --mode review                     # Review Phase 2 plan
+/maestro-learn consult src/auth/jwt.ts                    # Default review mode
+/maestro-learn consult src/core/ --mode challenge          # Adversarial challenge
+/maestro-learn consult HEAD --mode consult                 # Interactive Q&A
+/maestro-learn consult 2 --mode review                     # Review Phase 2 plan
 ```
 </details>
 
@@ -205,7 +205,7 @@ Synthesized as: consensus points, disagreement points, overall verdict, top 3 re
 
 ---
 
-### 2.5 learn investigate — Systematic Investigation
+### 2.5 maestro-learn investigate — Systematic Investigation
 
 Investigate "why" and "how" questions in the codebase using the scientific method -- not bug fixing, but understanding the system.
 
@@ -221,9 +221,9 @@ Investigate "why" and "how" questions in the codebase using the scientific metho
 <summary>Command examples</summary>
 
 ```bash
-/learn investigate "What is the full lifecycle of a JWT refresh token"
-/learn investigate "Why does queue consumption sometimes process duplicates" --scope src/queue/
-/learn investigate "What cache invalidation strategies are used" --max-hypotheses 5
+/maestro-learn investigate "What is the full lifecycle of a JWT refresh token"
+/maestro-learn investigate "Why does queue consumption sometimes process duplicates" --scope src/queue/
+/maestro-learn investigate "What cache invalidation strategies are used" --max-hypotheses 5
 ```
 </details>
 
@@ -284,34 +284,34 @@ Uses the `<spec-entry>` closed-tag format with `category`, `keywords`, `date`, `
 
 | What You Want To Do | Command | Example |
 |--------------------|---------|---------|
-| Review last week's work quality | `learn consult` | `--lens git --days 7` |
-| Check if architecture decisions are still valid | `learn consult` | `--lens decision --phase 2` |
-| Understand the design of an unfamiliar module | `learn follow` | `src/auth/ --depth deep` |
-| Learn implicit conventions in a code section | `learn follow` | `src/utils/logger.ts` |
-| Inventory a module's design patterns | `learn decompose` | `src/core/ --save-spec` |
-| Extract a reusable pattern library | `learn decompose` | `src/ --save-wiki` |
-| Review code quality (multi-perspective) | `learn consult` | `src/api/` |
-| Stress-test a solution | `learn consult` | `HEAD --mode challenge` |
-| Consult AI about an implementation | `learn consult` | `plan.json --mode consult` |
-| Understand "why does it work this way" | `learn investigate` | `"What causes cache penetration"` |
-| Trace a complete call chain path | `learn investigate` | `"Request path from entry to database"` |
+| Review last week's work quality | `maestro-learn consult` | `--lens git --days 7` |
+| Check if architecture decisions are still valid | `maestro-learn consult` | `--lens decision --phase 2` |
+| Understand the design of an unfamiliar module | `maestro-learn follow` | `src/auth/ --depth deep` |
+| Learn implicit conventions in a code section | `maestro-learn follow` | `src/utils/logger.ts` |
+| Inventory a module's design patterns | `maestro-learn decompose` | `src/core/ --save-spec` |
+| Extract a reusable pattern library | `maestro-learn decompose` | `src/ --save-wiki` |
+| Review code quality (multi-perspective) | `maestro-learn consult` | `src/api/` |
+| Stress-test a solution | `maestro-learn consult` | `HEAD --mode challenge` |
+| Consult AI about an implementation | `maestro-learn consult` | `plan.json --mode consult` |
+| Understand "why does it work this way" | `maestro-learn investigate` | `"What causes cache penetration"` |
+| Trace a complete call chain path | `maestro-learn investigate` | `"Request path from entry to database"` |
 
 ### Typical Workflow Combinations
 
 | Scenario | Steps |
 |----------|-------|
-| **New Member Onboarding** | `learn follow src/` -> `learn decompose src/core/ --save-wiki` -> `learn consult --lens git --days 30` |
-| **Before Architecture Decisions** | `learn follow src/auth/ --depth deep` -> `learn consult --mode review` -> `learn consult --mode challenge` -> `learn investigate "impact scope"` |
-| **Iteration Retrospective** | `learn consult --lens all --days 14 --compare` -> `learn investigate "high churn cause"` -> `learn decompose --save-spec` |
-| **Issue Investigation (Understanding, Not Fixing)** | `learn investigate "latency cause"` -> `learn follow key file` -> `learn consult --mode consult` |
+| **New Member Onboarding** | `maestro-learn follow src/` -> `maestro-learn decompose src/core/ --save-wiki` -> `maestro-learn consult --lens git --days 30` |
+| **Before Architecture Decisions** | `maestro-learn follow src/auth/ --depth deep` -> `maestro-learn consult --mode review` -> `maestro-learn consult --mode challenge` -> `maestro-learn investigate "impact scope"` |
+| **Iteration Retrospective** | `maestro-learn consult --lens all --days 14 --compare` -> `maestro-learn investigate "high churn cause"` -> `maestro-learn decompose --save-spec` |
+| **Issue Investigation (Understanding, Not Fixing)** | `maestro-learn investigate "latency cause"` -> `maestro-learn follow key file` -> `maestro-learn consult --mode consult` |
 
 ### Natural Transitions Between Commands
 
 ```
-learn follow -> learn decompose      # From understanding to pattern extraction
-learn follow -> learn consult        # From understanding to multi-perspective validation
-learn decompose -> /spec add         # From pattern discovery to spec inclusion
-learn consult -> learn investigate   # From retrospective finding to deep investigation
-learn investigate -> learn follow    # From problem identification to deep reading
-learn consult -> learn decompose     # From challenge to systematic decomposition
+maestro-learn follow -> maestro-learn decompose      # From understanding to pattern extraction
+maestro-learn follow -> maestro-learn consult        # From understanding to multi-perspective validation
+maestro-learn decompose -> /maestro-spec add         # From pattern discovery to spec inclusion
+maestro-learn consult -> maestro-learn investigate   # From retrospective finding to deep investigation
+maestro-learn investigate -> maestro-learn follow    # From problem identification to deep reading
+maestro-learn consult -> maestro-learn decompose     # From challenge to systematic decomposition
 ```

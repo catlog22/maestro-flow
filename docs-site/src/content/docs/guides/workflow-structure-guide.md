@@ -48,7 +48,7 @@ icon: "📁"
 │   └── learnings.md              # 学习记录（可选）
 │
 ├── knowhow/                      # 知识文档（9 种前缀 + learn 特殊前缀）
-│   ├── .maestro-learn/           # /learn 会话状态
+│   ├── .maestro-learn/           # /maestro-learn 会话状态
 │   ├── KNW-*.md                  # session
 │   ├── TIP-*.md                  # tip
 │   ├── TPL-*.md                  # template
@@ -58,13 +58,13 @@ icon: "📁"
 │   ├── AST-*.md                  # asset
 │   ├── BLP-*.md                  # blueprint
 │   ├── DOC-*.md                  # document
-│   ├── KNW-follow-*.md           # /learn follow
-│   ├── KNW-decompose-*.md        # /learn decompose
-│   ├── KNW-retro-*.md/json       # /learn consult
-│   ├── KNW-opinion-*.md          # /learn consult
-│   ├── KNW-investigate-*/        # /learn investigate
-│   ├── KNW-digest-*.md           # /manage knowledge wiki digest
-│   └── wiki-connections-*.md     # /manage knowledge wiki connect
+│   ├── KNW-follow-*.md           # /maestro-learn follow
+│   ├── KNW-decompose-*.md        # /maestro-learn decompose
+│   ├── KNW-retro-*.md/json       # /maestro-learn consult
+│   ├── KNW-opinion-*.md          # /maestro-learn consult
+│   ├── KNW-investigate-*/        # /maestro-learn investigate
+│   ├── KNW-digest-*.md           # /maestro-manage knowledge wiki digest
+│   └── wiki-connections-*.md     # /maestro-manage knowledge wiki connect
 │
 ├── scratch/                      # 执行产物（{YYYYMMDD}-{type}[-P{N}]-{slug}）
 │   ├── *-analyze-*/              # 分析：discussion.md, analysis.md, conclusions.json, context.md
@@ -218,7 +218,7 @@ Spec 作用域：
 | personal | `.workflow/collab/specs/{uid}/` | `spec:personal:{uid}:` |
 
 ```xml
-<spec-entry category="coding" keywords="exports,naming" date="2026-05-13" source="spec add" roles="implement">
+<spec-entry category="coding" keywords="exports,naming" date="2026-05-13" source="maestro-spec add" roles="implement">
   规范内容...
 </spec-entry>
 ```
@@ -262,7 +262,7 @@ Learn 特殊前缀：`KNW-follow-`, `KNW-decompose-`, `KNW-retro-`, `KNW-opinion
 ```
 
 - `issues/issue-history.jsonl` — 已关闭问题归档
-- `issues/discoveries/` — `/manage issue discover` 会话产物
+- `issues/discoveries/` — `/maestro-manage issue discover` 会话产物
 
 ---
 
@@ -336,7 +336,7 @@ v0.5.50+ 移除了 coordinate 图执行子系统（chains 数据层）。原 `--
 | execute | EXC-{NNN} | phase | `/maestro-ralph continue` |
 | verify | VRF-{NNN} | phase, milestone | （已退役；集成进 `/maestro-ralph` decision gate） |
 | review | REV-{NNN} | phase | `/maestro-ralph --engine swarm --script wf-review` |
-| debug | DBG-{NNN} | phase, standalone | `/odyssey --mode debug` |
+| debug | DBG-{NNN} | phase, standalone | `/maestro-odyssey --mode debug` |
 | test | TST-{NNN} | phase | `/maestro "<test intent>"` 或 `/security-audit` |
 | brainstorm | BRN-{NNN} | adhoc | `/maestro-ralph --engine swarm --script wf-brainstorm` |
 | collab | CLB-{NNN} | adhoc | `/maestro-ralph --engine swarm` |

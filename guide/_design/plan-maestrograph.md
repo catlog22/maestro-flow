@@ -262,7 +262,7 @@ CREATE TABLE IF NOT EXISTS schema_versions (
 | `maestro kg sync` | 全量 | 手动命令 |
 | `UserPromptSubmit` hook | 增量（变更文件） | kg-sync hook（已有） |
 | `finish-work` Step 3.5 | Domain 增量 | 新 domain term 注册后 |
-| `spec add` | Spec 增量 | 新 spec entry 添加后 |
+| `maestro-spec add` | Spec 增量 | 新 spec entry 添加后 |
 | `knowhow add` | Wiki 增量 | 新 knowhow 添加后 |
 | git commit | CodeGraph 增量 | codegraph sync（已有） |
 

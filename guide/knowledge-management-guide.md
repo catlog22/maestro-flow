@@ -191,7 +191,7 @@ summary: "Use when testing payment endpoints for retry safety."
 5. Verify webhook delivers exactly once
 ```
 
-`spec load --category test` 自动扫描 knowhow/ 中 `category=test` 且 `tool=true` 的文档，将工具摘要与 spec 一起注入 agent 上下文。
+`maestro-spec load --category test` 自动扫描 knowhow/ 中 `category=test` 且 `tool=true` 的文档，将工具摘要与 spec 一起注入 agent 上下文。
 
 ### 注册与使用
 
@@ -202,7 +202,7 @@ summary: "Use when testing payment endpoints for retry safety."
 | 测试之前 | `/maestro-tools-register generate` | 注册验证方法给 test agent |
 | 复盘时 | `/maestro-tools-register optimize` | 从产物中提取可复用流程 |
 
-使用方式：按名称执行 `/maestro-tools-execute integration-test`、按 category 发现 `/maestro-tools-execute --category test`、Agent 自动发现（`spec load` 输出包含工具摘要）。
+使用方式：按名称执行 `/maestro-tools-execute integration-test`、按 category 发现 `/maestro-tools-execute --category test`、Agent 自动发现（`maestro-spec load` 输出包含工具摘要）。
 
 ---
 

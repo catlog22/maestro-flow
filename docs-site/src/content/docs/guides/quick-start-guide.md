@@ -126,7 +126,7 @@ maestro install toggle --type skill --enable scholar-writing
 ### 测试失败修复循环
 
 ```bash
-/odyssey --mode debug --from-uat 1      # 诊断失败
+/maestro-odyssey --mode debug --from-uat 1      # 诊断失败
 /maestro-next 1 --gaps                  # 生成修复计划
 /maestro-ralph continue 1              # 执行修复
 /maestro-ralph --engine swarm 1 --re-run  # 重跑失败场景
@@ -140,16 +140,16 @@ maestro install toggle --type skill --enable scholar-writing
 
 ```bash
 # 发现问题
-/manage issue discover by-prompt "检查 API 错误处理"
+/maestro-manage issue discover by-prompt "检查 API 错误处理"
 
 # 创建 Issue
-/manage issue create --title "内存泄漏" --severity high
+/maestro-manage issue create --title "内存泄漏" --severity high
 
 # 闭环处理
 /maestro-ralph --engine swarm --script wf-analyze --gaps ISS-001  # 根因分析
 /maestro-next --gaps                     # 方案规划
 /maestro-ralph continue                  # 执行修复
-/manage issue close ISS-001 --resolution "Fixed"
+/maestro-manage issue close ISS-001 --resolution "Fixed"
 ```
 
 **Commander Agent** 可自动推进未分析的 Issue，无需手动干预。
@@ -216,18 +216,18 @@ maestro delegate "..." --rule development-implement-feature --mode write
 
 ```bash
 # 初始化（扫描代码库生成规范文件）
-/spec setup                                     # 已有项目：扫描代码库填充 specs
+/maestro-spec setup                                     # 已有项目：扫描代码库填充 specs
 # 新项目可跳过 -- specs 由 analyze/plan/execute 渐进填充
 
 # 录入规范
-/spec add coding "所有 API 使用 Hono 框架"
-/spec add arch "通知模块使用事件驱动架构"
-/spec add learning "分页 offset=0 会越界"
+/maestro-spec add coding "所有 API 使用 Hono 框架"
+/maestro-spec add arch "通知模块使用事件驱动架构"
+/maestro-spec add learning "分页 offset=0 会越界"
 
 # 加载规范
-/spec load --role implement
-/spec load --keyword auth
-/spec load --role implement --keyword auth
+/maestro-spec load --role implement
+/maestro-spec load --keyword auth
+/maestro-spec load --role implement --keyword auth
 ```
 
 **自动注入**：Hook 在 Agent 启动时按类型自动注入对应规范（coder→coding, tester→test, debugger→debug）。
@@ -389,7 +389,7 @@ maestro kg context "validateToken"                  # 调用者/被调用者
 ### 问题发现与修复
 
 ```bash
-/manage issue discover → /maestro-ralph --engine swarm --script wf-analyze --gaps ISS-xxx → /maestro-next --gaps → /maestro-ralph continue → /manage issue close
+/maestro-manage issue discover → /maestro-ralph --engine swarm --script wf-analyze --gaps ISS-xxx → /maestro-next --gaps → /maestro-ralph continue → /maestro-manage issue close
 ```
 
 ### 并行开发

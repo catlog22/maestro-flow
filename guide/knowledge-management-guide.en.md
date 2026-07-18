@@ -191,7 +191,7 @@ summary: "Use when testing payment endpoints for retry safety."
 5. Verify webhook delivers exactly once
 ```
 
-`spec load --category test` automatically scans for documents in knowhow/ where `category=test` and `tool=true`, injecting the tool summary along with spec into the agent context.
+`maestro-spec load --category test` automatically scans for documents in knowhow/ where `category=test` and `tool=true`, injecting the tool summary along with spec into the agent context.
 
 ### Registration and Usage
 
@@ -202,7 +202,7 @@ summary: "Use when testing payment endpoints for retry safety."
 | Before Testing | `/maestro-tools-register generate` | Register verification methods for the test agent |
 | During Retrospective | `/maestro-tools-register optimize` | Extract reusable processes from artifacts |
 
-Usage: Execute by name `/maestro-tools-execute integration-test`, discover by category `/maestro-tools-execute --category test`, Agent auto-discovery (`spec load` output includes tool summaries).
+Usage: Execute by name `/maestro-tools-execute integration-test`, discover by category `/maestro-tools-execute --category test`, Agent auto-discovery (`maestro-spec load` output includes tool summaries).
 
 ---
 

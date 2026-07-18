@@ -123,7 +123,7 @@ Run quality verification after execution — three complementary test tracks:
 ### Test Failure Fix Loop
 
 ```bash
-/odyssey --mode debug --from-uat 1      # Diagnose failure
+/maestro-odyssey --mode debug --from-uat 1      # Diagnose failure
 /maestro-next 1 --gaps                 # Generate fix plan
 /maestro-ralph continue 1              # Execute fix
 /maestro-ralph --engine swarm 1 --re-run  # Re-run failed scenarios
@@ -137,16 +137,16 @@ Problem tracking system parallel to Phase pipeline, supports full automation:
 
 ```bash
 # Discover problems
-/manage issue discover by-prompt "Check API error handling"
+/maestro-manage issue discover by-prompt "Check API error handling"
 
 # Create issue
-/manage issue create --title "Memory leak" --severity high
+/maestro-manage issue create --title "Memory leak" --severity high
 
 # Closed-loop processing
 /maestro-ralph --engine swarm --script wf-analyze --gaps ISS-001  # Root cause analysis
 /maestro-next --gaps                    # Solution planning
 /maestro-ralph continue                 # Execute fix
-/manage issue close ISS-001 --resolution "Fixed"
+/maestro-manage issue close ISS-001 --resolution "Fixed"
 ```
 
 **Commander Agent** can auto-advance unanalyzed issues without manual intervention.
@@ -213,18 +213,18 @@ Project-level knowledge auto-injection — no manual context pasting when Agents
 
 ```bash
 # Initialize (scan codebase to generate spec files)
-/spec setup                                     # Existing projects: scan codebase to populate specs
+/maestro-spec setup                                     # Existing projects: scan codebase to populate specs
 # New projects can skip -- specs are progressively populated by analyze/plan/execute
 
 # Add specs
-/spec add coding "All APIs use Hono framework"
-/spec add arch "Notification module uses event-driven architecture"
-/spec add learning "Pagination offset=0 causes off-by-one"
+/maestro-spec add coding "All APIs use Hono framework"
+/maestro-spec add arch "Notification module uses event-driven architecture"
+/maestro-spec add learning "Pagination offset=0 causes off-by-one"
 
 # Load specs
-/spec load --role implement
-/spec load --keyword auth
-/spec load --role implement --keyword auth
+/maestro-spec load --role implement
+/maestro-spec load --keyword auth
+/maestro-spec load --role implement --keyword auth
 ```
 
 **Auto-injection**: Hooks auto-inject specs by Agent type at startup (coder→coding, tester→test, debugger→debug).
@@ -386,7 +386,7 @@ Once installed, hooks keep the graph fresh automatically (`kg-sync` incremental 
 ### Issue Discovery & Fix
 
 ```bash
-/manage issue discover → /maestro-ralph --engine swarm --script wf-analyze --gaps ISS-xxx → /maestro-next --gaps → /maestro-ralph continue → /manage issue close
+/maestro-manage issue discover → /maestro-ralph --engine swarm --script wf-analyze --gaps ISS-xxx → /maestro-next --gaps → /maestro-ralph continue → /maestro-manage issue close
 ```
 
 ### Parallel Development

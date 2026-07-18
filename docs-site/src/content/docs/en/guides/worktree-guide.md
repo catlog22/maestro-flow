@@ -160,7 +160,7 @@ Inside a worktree, new artifacts auto-belong to the milestone in `worktree-scope
 
 ## Dashboard Integration
 
-`/manage status` displays worktree status:
+`/maestro-manage status` displays worktree status:
 
 <details>
 <summary>Dashboard Output Examples</summary>

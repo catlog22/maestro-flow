@@ -379,7 +379,7 @@ Maestro 使用 `action x object` 矩阵进行语义路由：
 |------|------|--------|
 | `"Add API endpoint"` | quick | `/maestro-next` |
 | `"plan phase 2"` | plan | `/maestro-next "<plan intent>"` |
-| `"debug auth crash"` | debug | `/odyssey --mode debug` |
+| `"debug auth crash"` | debug | `/maestro-odyssey --mode debug` |
 | `"fix issue ISS-abc-001"` | issue-full | analyze → plan → execute → review → close |
 | `"brainstorm notifications"` | brainstorm-driven | brainstorm → plan → execute（verify 已并入 `/maestro-ralph` decision gate） |
 | `"continue"` | state_continue | 基于项目状态自动推断 |
@@ -396,7 +396,7 @@ Maestro 使用 `action x object` 矩阵进行语义路由：
 | `verify` | （已退役；集成进 `/maestro-ralph` decision gate） |
 | `review` | `/maestro-ralph --engine swarm --script wf-review "{phase}"` |
 | `test` | `/maestro "<test intent> {phase}"` 或 `/security-audit` |
-| `debug` | `/odyssey --mode debug "{description}"` |
+| `debug` | `/maestro-odyssey --mode debug "{description}"` |
 | `quick` | `/maestro-next "{description}"` |
 
 **多步链**

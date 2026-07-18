@@ -1,5 +1,5 @@
 // prebuild.js — Copy .claude/.codex commands/skills into docs-site for Vite glob resolution
-import { cpSync, mkdirSync, existsSync, readdirSync, statSync } from 'fs';
+import { cpSync, mkdirSync, existsSync, readdirSync, rmSync, statSync } from 'fs';
 import { join } from 'path';
 import { fileURLToPath } from 'url';
 
@@ -10,6 +10,7 @@ const root = join(__dirname, '..');
 const srcCmds = join(root, '.claude', 'commands');
 const destCmds = join(__dirname, '.claude', 'commands');
 if (existsSync(srcCmds)) {
+  rmSync(destCmds, { recursive: true, force: true });
   mkdirSync(destCmds, { recursive: true });
   cpSync(srcCmds, destCmds, {
     recursive: true,
@@ -23,6 +24,7 @@ if (existsSync(srcCmds)) {
 const srcSkills = join(root, '.claude', 'skills');
 const destSkills = join(__dirname, '.claude', 'skills');
 if (existsSync(srcSkills)) {
+  rmSync(destSkills, { recursive: true, force: true });
   mkdirSync(destSkills, { recursive: true });
   cpSync(srcSkills, destSkills, { recursive: true });
   console.log(`Copied .claude/skills: ${readdirSync(destSkills).length} directories`);
@@ -32,6 +34,7 @@ if (existsSync(srcSkills)) {
 const srcCodexSkills = join(root, '.codex', 'skills');
 const destCodexSkills = join(__dirname, '.codex', 'skills');
 if (existsSync(srcCodexSkills)) {
+  rmSync(destCodexSkills, { recursive: true, force: true });
   mkdirSync(destCodexSkills, { recursive: true });
   cpSync(srcCodexSkills, destCodexSkills, { recursive: true });
   console.log(`Copied .codex/skills: ${readdirSync(destCodexSkills).length} directories`);

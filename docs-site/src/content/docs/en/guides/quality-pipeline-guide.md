@@ -13,9 +13,9 @@ Complete reference for the Maestro quality pipeline: seven stages organized arou
 | `maestro-ralph --engine swarm --script wf-review` | Multi-level code review | Does code quality meet standards? | `REV-{NNN}` |
 | `maestro "<test intent>"` | Conversational UAT | Does it work from the user's perspective? | `TST-{NNN}` |
 | `maestro-ralph --engine swarm` | Unified automated testing | Do coverage and regression checks pass? | `TST-{NNN}` |
-| `odyssey --mode debug` | Hypothesis-driven debugging | What is the root cause? | `DBG-{NNN}` |
+| `maestro-odyssey --mode debug` | Hypothesis-driven debugging | What is the root cause? | `DBG-{NNN}` |
 | `quality-refactor` | Reflection-driven refactoring | Is technical debt converging? | `WBR-{NNN}` |
-| `manage sync codebase` | Documentation synchronization | Are docs consistent with code? | -- |
+| `maestro-manage sync codebase` | Documentation synchronization | Are docs consistent with code? | -- |
 | `maestro-next --promote` | Phase retrospective | What insights are reusable? | `INS-{8hex}` |
 
 ---
@@ -63,7 +63,7 @@ Artifact path: `scratch/{YYYYMMDD}-test-P{N}-{slug}/` (uat.md, test-plan.json, t
 |-----------|-----------|
 | All passed | `/maestro-session-seal` |
 | `--auto-fix` succeeded | Verified via `/maestro-ralph` decision gate |
-| Issues remain | `/odyssey --mode debug "<from-uat {phase}>"` |
+| Issues remain | `/maestro-odyssey --mode debug "<from-uat {phase}>"` |
 | Insufficient coverage | `/maestro-ralph --engine swarm "{phase}"` |
 
 ---
@@ -98,16 +98,16 @@ Artifact path: `scratch/{YYYYMMDD}-auto-test-P{N}-{slug}/` (test-plan.json, scen
 | Condition | Next Step |
 |-----------|-----------|
 | Converged (≥95%) | Verified via `/maestro-ralph` decision gate |
-| Bugs found | `/odyssey --mode debug "<from-uat {phase}>"` |
+| Bugs found | `/maestro-odyssey --mode debug "<from-uat {phase}>"` |
 | Max iterations, >80% | `/maestro "<test intent: {phase}>"` |
-| Max iterations, <80% | `/odyssey --mode debug "{phase}"` |
+| Max iterations, <80% | `/maestro-odyssey --mode debug "{phase}"` |
 
 ---
 
-## odyssey --mode debug — Hypothesis-Driven Debugging
+## maestro-odyssey --mode debug — Hypothesis-Driven Debugging
 
 ```bash
-/odyssey --mode debug "<issue description>" [--from-uat <phase>] [--parallel]
+/maestro-odyssey --mode debug "<issue description>" [--from-uat <phase>] [--parallel]
 ```
 
 | Mode | Trigger | Symptom Source |
@@ -140,10 +140,10 @@ Artifact path: `scratch/{YYYYMMDD}-refactor-{scope}/reflection-log.md`
 
 ---
 
-## manage sync codebase — Documentation Synchronization
+## maestro-manage sync codebase — Documentation Synchronization
 
 ```bash
-/manage sync codebase [--full] [--since <commit|HEAD~N>] [--dry-run]
+/maestro-manage sync codebase [--full] [--since <commit|HEAD~N>] [--dry-run]
 ```
 
 Detects changes via `git diff` → traces impact chains through `doc-index.json` → updates `.workflow/codebase/` documents.
@@ -187,7 +187,7 @@ Detects changes via `git diff` → traces impact chains through `doc-index.json`
              │ Apply fix                │ Issues found
              ▼                          ▼
     ┌──────────────────┐      ┌──────────────────────────┐
-    │ maestro-ralph    │◄─────┤   odyssey --mode debug    │
+    │ maestro-ralph    │◄─────┤   maestro-odyssey --mode debug    │
     │ continue         │ debug │   (debugging)             │
     └────────┬─────────┘      └──────────┬───────────────┘
              │                           │
@@ -200,7 +200,7 @@ Detects changes via `git diff` → traces impact chains through `doc-index.json`
              ▼
     ┌──────────────────────────────────────────────────┐
     │  quality-refactor (optional, tech debt)          │
-    │  manage sync codebase (sync docs)                │
+    │  maestro-manage sync codebase (sync docs)                │
     │  maestro-next --promote (retro, feedback)        │
     └──────────────────────────────────────────────────┘
 ```
@@ -216,25 +216,25 @@ Code just executed
   │
   ├─ Need user acceptance? ──> /maestro "<test intent: <phase>>"
   │    ├─ All passed ──> /maestro-session-seal
-  │    └─ Issues found ──> /odyssey --mode debug "<from-uat <phase>>"
+  │    └─ Issues found ──> /maestro-odyssey --mode debug "<from-uat <phase>>"
   │
   ├─ Need automated testing? ──> /maestro-ralph --engine swarm "<phase>"
   │    ├─ Converged ──> Verified via maestro-ralph decision gate
-  │    └─ Bugs found ──> /odyssey --mode debug "<from-uat <phase>>"
+  │    └─ Bugs found ──> /maestro-odyssey --mode debug "<from-uat <phase>>"
   │
-  ├─ Known bugs? ──> /odyssey --mode debug "<issue>"
+  ├─ Known bugs? ──> /maestro-odyssey --mode debug "<issue>"
   │    ├─ Root cause clear ──> /maestro-next "<phase> --gaps"
   │    └─ Unclear ──> Continue debugging
   │
   ├─ Need to reduce tech debt? ──> /quality-refactor <scope>
-  │    ├─ Tests pass ──> /manage sync codebase
-  │    └─ Tests fail ──> /odyssey --mode debug "<scope>"
+  │    ├─ Tests pass ──> /maestro-manage sync codebase
+  │    └─ Tests fail ──> /maestro-odyssey --mode debug "<scope>"
   │
-  ├─ Code changed but docs not updated? ──> /manage sync codebase
+  ├─ Code changed but docs not updated? ──> /maestro-manage sync codebase
   │
   └─ Phase complete, need retrospective? ──> /maestro-next --promote
        ├─ Insights found ──> Auto-route to spec/issue/knowhow
-       └─ Complete ──> /manage status
+       └─ Complete ──> /maestro-manage status
 ```
 
 </details>
@@ -254,7 +254,7 @@ After `maestro-ralph` decision gate confirms Phase goals, quality commands are t
 | Trigger Scenario | Command |
 |-----------------|---------|
 | `maestro-ralph wf-review` verdict BLOCK | `/maestro-next "{phase} --gaps"` |
-| `odyssey --mode debug` confirms root cause | `/maestro-next "{phase} --gaps"` |
+| `maestro-odyssey --mode debug` confirms root cause | `/maestro-next "{phase} --gaps"` |
 | `maestro "<test intent>" --auto-fix` | Auto-invokes `maestro-next --gaps → maestro-ralph continue → decision gate` |
 
 **Pre-milestone-audit checkpoints**: All Phases verified via maestro-ralph decision gate → Critical Phases reviewed → Core functionality tested → Issues resolved → Retrospective completed

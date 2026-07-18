@@ -90,12 +90,12 @@ The log file `.workflow/spec-analytics.jsonl` contains three types of entries.
   "type": "cli",
   "id": "CLI-1715788800000-2",
   "timestamp": "2026-05-15T12:00:01.000Z",
-  "command": "spec load",
+  "command": "maestro-spec load",
   "args": { "category": "coding", "scope": "project" }
 }
 ```
 
-Tracked commands: `spec load` · `spec list` · `spec init` · `spec add` · `spec analytics` etc.
+Tracked commands: `maestro-spec load` · `spec list` · `spec init` · `maestro-spec add` · `spec analytics` etc.
 
 </details>
 

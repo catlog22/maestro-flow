@@ -11,7 +11,7 @@
     {
       "id": "spec",
       "name": "Specification",
-      "description": "Project specs and conventions — add, load, remove entries via unified /spec command",
+      "description": "Project specs and conventions — add, load, remove entries via unified /maestro-spec command",
       "icon": "file-text",
       "color": "blue"
     },
@@ -25,7 +25,7 @@
     {
       "id": "manage",
       "name": "Management",
-      "description": "Project status, issues, knowledge stores, drift/rebuild sync — unified /manage command",
+      "description": "Project status, issues, knowledge stores, drift/rebuild sync — unified /maestro-manage command",
       "icon": "settings",
       "color": "gray"
     },
@@ -46,7 +46,7 @@
     {
       "id": "learn",
       "name": "Learning",
-      "description": "Guided reading, investigation, pattern extraction, and second opinions — unified /learn command",
+      "description": "Guided reading, investigation, pattern extraction, and second opinions — unified /maestro-learn command",
       "icon": "book-open",
       "color": "purple"
     },
@@ -151,34 +151,34 @@
       "argumentHint": "[--dry-run] [--force] [--setup-only]"
     },
     {
-      "name": "spec",
-      "file": ".claude/commands/spec.md",
+      "name": "maestro-spec",
+      "file": ".claude/commands/maestro-spec.md",
       "category": "spec",
       "description": "Manage project specs — add, load, remove entries, or initialize the spec system. Unified command with subcommands.",
       "argumentHint": "add|load|remove|setup [args...]",
       "subcommands": ["add", "load", "remove", "setup"]
     },
     {
-      "name": "manage",
-      "file": ".claude/commands/manage.md",
+      "name": "maestro-manage",
+      "file": ".claude/commands/maestro-manage.md",
       "category": "manage",
       "description": "Project management hub — status, issues, knowledge stores, and drift/rebuild sync. Unified command with subcommands.",
       "argumentHint": "status|issue|knowledge|sync [args...]",
       "subcommands": ["status", "issue", "knowledge", "sync"]
     },
     {
-      "name": "odyssey",
-      "file": ".claude/commands/odyssey.md",
+      "name": "maestro-odyssey",
+      "file": ".claude/commands/maestro-odyssey.md",
       "category": "odyssey",
       "description": "Long-running iterative cycle — one entry, five modes. Shared archaeology/audit → fix → verify → generalize → discover → persist.",
       "argumentHint": "<intent> --mode debug|improve|planex|review|ui [--auto] [-y] [-c]",
       "subcommands": ["debug", "improve", "planex", "review", "ui"]
     },
     {
-      "name": "learn",
-      "file": ".claude/commands/learn.md",
+      "name": "maestro-learn",
+      "file": ".claude/commands/maestro-learn.md",
       "category": "learn",
-      "description": "User-invoked learning toolkit — guided reading, investigation, pattern extraction, or second opinions. Manual /learn only; auto code analysis routes via /maestro-next.",
+      "description": "User-invoked learning toolkit — guided reading, investigation, pattern extraction, or second opinions. Manual /maestro-learn only; auto code analysis routes via /maestro-next.",
       "argumentHint": "follow|investigate|decompose|consult [args...]",
       "subcommands": ["follow", "investigate", "decompose", "consult"]
     },

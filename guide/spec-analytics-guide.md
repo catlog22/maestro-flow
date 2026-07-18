@@ -90,12 +90,12 @@ Spec 注入系统在 agent 创建和 prompt 转换时自动注入项目规范。
   "type": "cli",
   "id": "CLI-1715788800000-2",
   "timestamp": "2026-05-15T12:00:01.000Z",
-  "command": "spec load",
+  "command": "maestro-spec load",
   "args": { "category": "coding", "scope": "project" }
 }
 ```
 
-追踪命令：`spec load` · `spec list` · `spec init` · `spec add` · `spec analytics` 等
+追踪命令：`maestro-spec load` · `spec list` · `spec init` · `maestro-spec add` · `spec analytics` 等
 
 </details>
 

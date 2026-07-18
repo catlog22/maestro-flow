@@ -47,7 +47,7 @@ title: ".workflow/ Artifact Directory System"
 │   └── learnings.md              # Learning records (optional)
 │
 ├── knowhow/                      # Knowledge documents (9 prefixes + learn special prefixes)
-│   ├── .maestro-learn/           # /learn session state
+│   ├── .maestro-learn/           # /maestro-learn session state
 │   ├── KNW-*.md                  # session
 │   ├── TIP-*.md                  # tip
 │   ├── TPL-*.md                  # template
@@ -57,13 +57,13 @@ title: ".workflow/ Artifact Directory System"
 │   ├── AST-*.md                  # asset
 │   ├── BLP-*.md                  # blueprint
 │   ├── DOC-*.md                  # document
-│   ├── KNW-follow-*.md           # /learn follow
-│   ├── KNW-decompose-*.md        # /learn decompose
-│   ├── KNW-retro-*.md/json       # /learn consult
-│   ├── KNW-opinion-*.md          # /learn consult
-│   ├── KNW-investigate-*/        # /learn investigate
-│   ├── KNW-digest-*.md           # /manage knowledge wiki digest
-│   └── wiki-connections-*.md     # /manage knowledge wiki connect
+│   ├── KNW-follow-*.md           # /maestro-learn follow
+│   ├── KNW-decompose-*.md        # /maestro-learn decompose
+│   ├── KNW-retro-*.md/json       # /maestro-learn consult
+│   ├── KNW-opinion-*.md          # /maestro-learn consult
+│   ├── KNW-investigate-*/        # /maestro-learn investigate
+│   ├── KNW-digest-*.md           # /maestro-manage knowledge wiki digest
+│   └── wiki-connections-*.md     # /maestro-manage knowledge wiki connect
 │
 ├── scratch/                      # Execution artifacts ({YYYYMMDD}-{type}[-P{N}]-{slug})
 │   ├── *-analyze-*/              # Analysis: discussion.md, analysis.md, conclusions.json, context.md
@@ -217,7 +217,7 @@ Spec Scopes:
 | personal | `.workflow/collab/specs/{uid}/` | `spec:personal:{uid}:` |
 
 ```xml
-<spec-entry category="coding" keywords="exports,naming" date="2026-05-13" source="spec add" roles="implement">
+<spec-entry category="coding" keywords="exports,naming" date="2026-05-13" source="maestro-spec add" roles="implement">
   Specification content...
 </spec-entry>
 ```
@@ -261,7 +261,7 @@ Learn special prefixes: `KNW-follow-`, `KNW-decompose-`, `KNW-retro-`, `KNW-opin
 ```
 
 - `issues/issue-history.jsonl` — archived closed issues
-- `issues/discoveries/` — `/manage issue discover` session artifacts
+- `issues/discoveries/` — `/maestro-manage issue discover` session artifacts
 
 ---
 
@@ -311,7 +311,7 @@ Created by `/maestro-session-seal` when a milestone is completed:
 | execute | EXC-{NNN} | phase | `/maestro-ralph continue` |
 | verify | VRF-{NNN} | phase, milestone | (retired; integrated into `/maestro-ralph` decision gate) |
 | review | REV-{NNN} | phase | `/maestro-ralph --engine swarm --script wf-review` |
-| debug | DBG-{NNN} | phase, standalone | `/odyssey --mode debug` |
+| debug | DBG-{NNN} | phase, standalone | `/maestro-odyssey --mode debug` |
 | test | TST-{NNN} | phase | `/maestro "<test intent>"` or `/security-audit` |
 | brainstorm | BRN-{NNN} | adhoc | `/maestro-ralph --engine swarm --script wf-brainstorm` |
 | collab | CLB-{NNN} | adhoc | `/maestro-ralph --engine swarm` |

@@ -149,7 +149,7 @@ maestro delegate "continue" --to gemini --resume
 <details>
 <summary>maestro load</summary>
 
-统一知识加载命令 — 替代旧版 `spec load`/`wiki load`/`session load`，支持 9 种类型。
+统一知识加载命令 — 替代旧版 `maestro-spec load`/`wiki load`/`session load`，支持 9 种类型。
 
 ```bash
 maestro load --type spec --category coding           # 加载 coding 类 spec

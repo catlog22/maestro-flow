@@ -113,10 +113,10 @@ Session 动词（保留原位）
 
 | 子命令 | 收编 | 调用形式 |
 |------|------|------|
-| `manage status` | manage-status | `/manage status` |
-| `manage issue <sub>` | manage-issue + manage-issue-discover | `/manage issue create/list/discover` |
-| `manage knowledge <sub>` | manage-knowhow + manage-knowhow-capture + manage-knowledge-audit + manage-harvest + manage-wiki + manage-kg-extractors | `/manage knowledge capture/audit/harvest/wiki/extractors` |
-| `manage sync <sub>` | manage-drift-realign + manage-codebase-rebuild | `/manage sync drift/rebuild` |
+| `maestro-manage status` | manage-status | `/maestro-manage status` |
+| `maestro-manage issue <sub>` | manage-issue + manage-issue-discover | `/maestro-manage issue create/list/discover` |
+| `maestro-manage knowledge <sub>` | manage-knowhow + manage-knowhow-capture + manage-knowledge-audit + manage-harvest + manage-wiki + manage-kg-extractors | `/maestro-manage knowledge capture/audit/harvest/wiki/extractors` |
+| `maestro-manage sync <sub>` | manage-drift-realign + manage-codebase-rebuild | `/maestro-manage sync drift/rebuild` |
 
 **合并为 `manage.md`**（单入口 + 子命令路由）：
 - frontmatter 声明子命令列表
@@ -127,10 +127,10 @@ Session 动词（保留原位）
 
 | 子命令 | 收编 |
 |------|------|
-| `learn follow` | learn-follow |
-| `learn investigate` | learn-investigate |
-| `learn decompose` | learn-decompose |
-| `learn consult` | learn-second-opinion |
+| `maestro-learn follow` | learn-follow |
+| `maestro-learn investigate` | learn-investigate |
+| `maestro-learn decompose` | learn-decompose |
+| `maestro-learn consult` | learn-second-opinion |
 
 **合并为 `learn.md`**（单入口 + 子命令）。
 
@@ -138,10 +138,10 @@ Session 动词（保留原位）
 
 | 子命令 | 收编 |
 |------|------|
-| `spec add` | spec-add |
-| `spec load` | spec-load |
-| `spec remove` | spec-remove |
-| `spec setup` | spec-setup |
+| `maestro-spec add` | spec-add |
+| `maestro-spec load` | spec-load |
+| `maestro-spec remove` | spec-remove |
+| `maestro-spec setup` | spec-setup |
 
 **合并为 `spec.md`**（单入口 + 子命令）。
 
@@ -191,9 +191,9 @@ Session 动词（保留原位）
 |------|------|------|------|
 | 0 | Ralph 合并（5→1+1）——最高 ROI，消除 LEGACY 标记 | 低（v2 已标 RECOMMENDED） | ralph 全功能可用；旧入口无残留引用 |
 | 1 | 编排器吸收（4→0）——composer/player/swarm/universal 逻辑并入 maestro/ralph | 中（需理解各自独特逻辑） | `maestro --compose/--play` 工作；swarm/universal 功能在 ralph 可达 |
-| 2 | Odyssey 合并（5→1）——结构同构，合并最机械 | 低 | `odyssey --mode debug/improve/planex/review/ui` 全路径可用 |
-| 3 | Manage 合并（11+1→1）——子命令路由 | 低 | `manage status/issue/knowledge/sync` 全子命令可用 |
-| 4 | Learn + Spec 合并（4+4→2）——子命令路由 | 低 | `learn follow/investigate/decompose/consult` + `spec add/load/remove/setup` |
+| 2 | Odyssey 合并（5→1）——结构同构，合并最机械 | 低 | `maestro-odyssey --mode debug/improve/planex/review/ui` 全路径可用 |
+| 3 | Manage 合并（11+1→1）——子命令路由 | 低 | `maestro-manage status/issue/knowledge/sync` 全子命令可用 |
+| 4 | Learn + Spec 合并（4+4→2）——子命令路由 | 低 | `maestro-learn follow/investigate/decompose/consult` + `maestro-spec add/load/remove/setup` |
 | 5 | 工具合并（amend+overlay / tools / ui-codify）——轻量 | 低 | 合并后功能无丢失 |
 
 **每 wave 完成后 commit**，保证可回退。

@@ -20,7 +20,7 @@ Maestro 的 step 内容分三层，各有既有规范管辖：
 | prepare（思考期契约） | `prepare/<step>.md` | **本规范** |
 | workflow（执行期手册） | `workflows/<step>.md` | **本规范** + command-authoring.md § 7 的格式规则 |
 
-**关键范围声明**：first-tier step 指有 prepare/workflows 成对文件的 step，现存 **19 对**。其中 **13 个**注册于 maestro-next step registry 且无任何专属 command 文件（经 maestro-next / maestro / ralph 入口调度）；5 个 odyssey-* 经 `/odyssey` 模式限定命令路由、grill 另有 `/maestro-grill` 独立命令——这两类的**入口命令文件**本身仍受 command-authoring.md 管辖（`maestro-next.md:56` 的 "13 first-tier steps" 指 registry 注册数，与 19 对文件数不矛盾）。
+**关键范围声明**：first-tier step 指有 prepare/workflows 成对文件的 step，现存 **19 对**。其中 **13 个**注册于 maestro-next step registry 且无任何专属 command 文件（经 maestro-next / maestro / ralph 入口调度）；5 个 odyssey-* 经 `/maestro-odyssey` 模式限定命令路由、grill 另有 `/maestro-grill` 独立命令——这两类的**入口命令文件**本身仍受 command-authoring.md 管辖（`maestro-next.md:56` 的 "13 first-tier steps" 指 registry 注册数，与 19 对文件数不矛盾）。
 
 对全部 19 对，step 级错误码 / Success Criteria 由 workflow 文件持有（现状实态，如 `workflows/analyze.md:364,386`）。这是对 command-authoring.md § 7「错误码/Success Criteria/completion 归 command」的**范围限定**——该矩阵适用于有专属 command 文件的命令，其 § 7 已加对应 scope note（见 § 九-8）。
 

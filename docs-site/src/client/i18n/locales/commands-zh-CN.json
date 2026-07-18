@@ -982,7 +982,7 @@
       "name": "maestro-tools-register",
       "name_zh": "工具注册",
       "description": "Register tool specs — extract, generate, or optimize reusable process/tool definitions into .workflow/specs/tools.md",
-      "description_zh": "Codify reusable business processes as tool specs. Auto-discovered by agents via spec load and spec-injector",
+      "description_zh": "Codify reusable business processes as tool specs. Auto-discovered by agents via maestro-spec load and spec-injector",
       "workflow": "Register during planning · after execution · before testing · during retrospective/harvest",
       "workflow_zh": "plan → execute → test → retrospective, auto-discovered by agents via spec-injector",
       "prev_commands": [],

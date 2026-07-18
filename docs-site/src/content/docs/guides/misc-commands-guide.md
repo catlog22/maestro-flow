@@ -89,9 +89,9 @@ Maestro 工作流中用于维护、发布和规范管理的辅助命令。
 
 ---
 
-## 三、spec remove — 规范移除
+## 三、maestro-spec remove — 规范移除
 
-从 specs 文件中移除指定的 `<spec-entry>` 条目。与 `/spec add` 对称，使用 `maestro wiki remove-entry` 原子删除并自动更新索引。
+从 specs 文件中移除指定的 `<spec-entry>` 条目。与 `/maestro-spec add` 对称，使用 `maestro wiki remove-entry` 原子删除并自动更新索引。
 
 ### Entry ID 格式
 
@@ -103,21 +103,21 @@ spec-{file-stem}-{NNN}  （如 spec-learnings-003）
 
 ```bash
 maestro wiki list --type spec --json    # 列出所有 spec 条目
-/spec load --keyword auth               # 按关键词搜索
-/spec remove spec-learnings-003          # 移除指定条目
+/maestro-spec load --keyword auth               # 按关键词搜索
+/maestro-spec remove spec-learnings-003          # 移除指定条目
 ```
 
 ### 注意事项
 
-- 需先通过 `/spec setup` 初始化 `.workflow/specs/`
+- 需先通过 `/maestro-spec setup` 初始化 `.workflow/specs/`
 - Entry ID 必须是 spec 类型子节点
-- 移除不可逆（建议先用 `/spec load` 预览）
+- 移除不可逆（建议先用 `/maestro-spec load` 预览）
 
 ---
 
-## 四、manage knowledge audit — 知识审计淘汰
+## 四、maestro-manage knowledge audit — 知识审计淘汰
 
-审计 spec / knowhow / artifact 三存储，识别矛盾、过期、孤立和元数据质量问题。与 `/manage knowledge harvest`（写入/提取）对称——harvest 积累知识，audit 清理知识。
+审计 spec / knowhow / artifact 三存储，识别矛盾、过期、孤立和元数据质量问题。与 `/maestro-manage knowledge harvest`（写入/提取）对称——harvest 积累知识，audit 清理知识。
 
 ### 审计场景（8 类 28 子场景）
 
@@ -165,11 +165,11 @@ maestro wiki list --type spec --json    # 列出所有 spec 条目
 ### 常见用法
 
 ```bash
-/manage knowledge audit --scope all              # 全量审计（交互式）
-/manage knowledge audit --scope spec --level P0  # 仅审计 P0 级 spec 问题
-/manage knowledge audit --scope knowhow --dry-run # 预览 knowhow 审计
-/manage knowledge audit --scope artifact --report # 仅生成 artifact 审计报告
-/manage knowledge audit --scope all --mark        # 非交互标记所有问题条目
+/maestro-manage knowledge audit --scope all              # 全量审计（交互式）
+/maestro-manage knowledge audit --scope spec --level P0  # 仅审计 P0 级 spec 问题
+/maestro-manage knowledge audit --scope knowhow --dry-run # 预览 knowhow 审计
+/maestro-manage knowledge audit --scope artifact --report # 仅生成 artifact 审计报告
+/maestro-manage knowledge audit --scope all --mark        # 非交互标记所有问题条目
 ```
 
 ---

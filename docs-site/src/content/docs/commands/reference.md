@@ -82,9 +82,9 @@ Detect version, preview changes, apply workflow upgrades
 
 ## Specification
 
-*Project specs and conventions — add, load, remove entries via unified /spec command*
+*Project specs and conventions — add, load, remove entries via unified /maestro-spec command*
 
-### `spec`
+### `maestro-spec`
 
 **Usage:** `add|load|remove|setup [args...]`
 
@@ -114,9 +114,9 @@ OWASP Top 10 and STRIDE security auditing with supply chain analysis — three t
 
 ## Management
 
-*Project status, issues, knowledge stores, drift/rebuild sync — unified /manage command*
+*Project status, issues, knowledge stores, drift/rebuild sync — unified /maestro-manage command*
 
-### `manage`
+### `maestro-manage`
 
 **Usage:** `status|issue|knowledge|sync [args...]`
 
@@ -130,7 +130,7 @@ Project management hub — status, issues, knowledge stores, and drift/rebuild s
 
 *Long-running iterative cycles — one entry, five modes (debug|improve|planex|review|ui)*
 
-### `odyssey`
+### `maestro-odyssey`
 
 **Usage:** `<intent> --mode debug|improve|planex|review|ui [--auto] [-y] [-c]`
 
@@ -142,13 +142,13 @@ Long-running iterative cycle — one entry, five modes. Shared archaeology/audit
 
 ## Learning
 
-*Guided reading, investigation, pattern extraction, and second opinions — unified /learn command*
+*Guided reading, investigation, pattern extraction, and second opinions — unified /maestro-learn command*
 
-### `learn`
+### `maestro-learn`
 
 **Usage:** `follow|investigate|decompose|consult [args...]`
 
-User-invoked learning toolkit — guided reading, investigation, pattern extraction, or second opinions. Manual /learn only; auto code analysis routes via /maestro-next.
+User-invoked learning toolkit — guided reading, investigation, pattern extraction, or second opinions. Manual /maestro-learn only; auto code analysis routes via /maestro-next.
 
 **Subcommands:** `follow`, `investigate`, `decompose`, `consult`
 
@@ -225,10 +225,10 @@ User-invoked learning toolkit — guided reading, investigation, pattern extract
 > v0.5.51 consolidated 66 v1 commands into 17 v2 unified commands. For legacy v1 references, see `inventory.json` (v1 inventory). Key replacements:
 >
 > - `/maestro-plan`, `/maestro-execute`, `/maestro-quick` → `/maestro`, `/maestro-next`, or `/maestro-ralph`
-> - `/spec-add`, `/spec-load`, `/spec-remove`, `/spec-setup` → `/spec` subcommands
-> - `/manage-status`, `/manage-knowhow`, `/manage-issue`, `/manage-harvest` → `/manage` subcommands
-> - `/quality-review`, `/quality-test`, `/quality-debug` → `/maestro-ralph --engine swarm` or `/odyssey`
-> - `/learn-decompose`, `/learn-follow`, `/learn-investigate` → `/learn` subcommands
-> - `/odyssey-debug`, `/odyssey-improve`, `/odyssey-planex` → `/odyssey --mode <name>`
-> - `/wiki-connect`, `/wiki-digest` → `/manage knowledge wiki` subcommands
+> - `/spec-add`, `/spec-load`, `/spec-remove`, `/spec-setup` → `/maestro-spec` subcommands
+> - `/manage-status`, `/manage-knowhow`, `/manage-issue`, `/manage-harvest` → `/maestro-manage` subcommands
+> - `/quality-review`, `/quality-test`, `/quality-debug` → `/maestro-ralph --engine swarm` or `/maestro-odyssey`
+> - `/learn-decompose`, `/learn-follow`, `/learn-investigate` → `/maestro-learn` subcommands
+> - `/odyssey-debug`, `/odyssey-improve`, `/odyssey-planex` → `/maestro-odyssey --mode <name>`
+> - `/wiki-connect`, `/wiki-digest` → `/maestro-manage knowledge wiki` subcommands
 

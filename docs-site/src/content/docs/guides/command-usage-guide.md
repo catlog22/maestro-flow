@@ -43,7 +43,7 @@ graph TB
 
     subgraph knowledge["知识管理"]
         CP["/maestro-next --note/--promote"]
-        KA["/manage knowledge audit 审计淘汰"]
+        KA["/maestro-manage knowledge audit 审计淘汰"]
     end
 
     subgraph pipeline["Milestone 管线"]
@@ -57,18 +57,18 @@ graph TB
         QR["/maestro-ralph --engine swarm --script wf-review"]
         QAT["/maestro-ralph --engine swarm"]
         QT["/maestro <test intent>"]
-        QD["/odyssey --mode debug"]
+        QD["/maestro-odyssey --mode debug"]
         QRF["/quality-refactor"]
-        QS["/manage sync codebase"]
+        QS["/maestro-manage sync codebase"]
     end
 
     subgraph issue["Issue 闭环"]
-        ID["/manage issue discover"]
-        IC["/manage issue create"]
+        ID["/maestro-manage issue discover"]
+        IC["/maestro-manage issue create"]
         IA["/maestro-ralph --engine swarm --script wf-analyze --gaps"]
         IP["/maestro-next <plan --gaps>"]
         IE["/maestro-ralph continue"]
-        ICL["/manage issue close"]
+        ICL["/maestro-manage issue close"]
     end
 
     subgraph milestone["里程碑"]
@@ -171,7 +171,7 @@ graph TB
 
 | path | 含义 | 来源 | 生命周期 |
 |------|------|------|----------|
-| `standalone` | 独立 Issue，不绑定 Phase | 手动创建、`/manage issue discover`、外部导入 | 独立闭环，不影响 Phase 推进 |
+| `standalone` | 独立 Issue，不绑定 Phase | 手动创建、`/maestro-manage issue discover`、外部导入 | 独立闭环，不影响 Phase 推进 |
 | `workflow` | Phase 关联 Issue | `/maestro-ralph --engine swarm --script wf-review` auto-create、`/maestro-ralph --engine swarm` 失败产生、Phase 验证产生 | 可能阻塞 milestone 完成 |
 
 ---
@@ -248,12 +248,12 @@ graph TB
 ```
 
 ```bash
-/manage issue discover by-prompt "检查 API 的错误处理"
-/manage issue create --title "内存泄漏" --severity high
+/maestro-manage issue discover by-prompt "检查 API 的错误处理"
+/maestro-manage issue create --title "内存泄漏" --severity high
 /maestro-ralph --engine swarm --script wf-analyze --gaps ISS-xxx   # 根因分析
 /maestro-next "<plan --gaps intent>"                            # 方案规划
 /maestro-ralph continue                                # 执行修复
-/manage issue close ISS-xxx --resolution "Fixed"
+/maestro-manage issue close ISS-xxx --resolution "Fixed"
 ```
 
 **Commander Agent** 可自动推进未分析的 Issue，按 `execute > analyze > plan` 优先级调度。
@@ -267,20 +267,20 @@ graph TB
 与 Quality 管线（快速门控）不同，Odyssey 命令是长周期持久化会话，每个命令自带 fix→verify→generalize 闭环迭代，直到 0 remaining actionable 才退出。
 
 ```bash
-/odyssey --mode debug "内存泄漏问题"                    # 考古→诊断→修复→泛化同类
-/odyssey --mode improve "src/api/"                      # 6 维审计→逐轮修复→全部穷尽
-/odyssey --mode planex "实现 JWT 刷新令牌"               # 需求→验收标准→迭代直到 ALL pass
-/odyssey --mode review "src/auth/"             # 深度审查→全 severity 修复→re-review
-/odyssey --mode ui "src/components/Dashboard"           # 视觉普查→发散探索→穷尽打磨
+/maestro-odyssey --mode debug "内存泄漏问题"                    # 考古→诊断→修复→泛化同类
+/maestro-odyssey --mode improve "src/api/"                      # 6 维审计→逐轮修复→全部穷尽
+/maestro-odyssey --mode planex "实现 JWT 刷新令牌"               # 需求→验收标准→迭代直到 ALL pass
+/maestro-odyssey --mode review "src/auth/"             # 深度审查→全 severity 修复→re-review
+/maestro-odyssey --mode ui "src/components/Dashboard"           # 视觉普查→发散探索→穷尽打磨
 ```
 
 | 命令 | 定位 | 对比 |
 |------|------|------|
-| `odyssey --mode debug` | 深度调试闭环（含考古、泛化） | vs `/quality-debug`（已退役，并入 odyssey） |
-| `odyssey --mode improve` | 运行质量深度提升 | vs `/maestro-ralph --engine swarm --script wf-review`（通过/失败门控） |
-| `odyssey --mode planex` | 需求到交付穷尽迭代 | vs `/maestro-ralph continue`（按计划执行） |
-| `odyssey --mode review` | 审查+修复+泛化全流程 | vs `/maestro-ralph --engine swarm --script wf-review`（裁决不修复） |
-| `odyssey --mode ui` | UI 持久化打磨会话 | vs `/maestro-impeccable`（单次执行） |
+| `maestro-odyssey --mode debug` | 深度调试闭环（含考古、泛化） | vs `/quality-debug`（已退役，并入 odyssey） |
+| `maestro-odyssey --mode improve` | 运行质量深度提升 | vs `/maestro-ralph --engine swarm --script wf-review`（通过/失败门控） |
+| `maestro-odyssey --mode planex` | 需求到交付穷尽迭代 | vs `/maestro-ralph continue`（按计划执行） |
+| `maestro-odyssey --mode review` | 审查+修复+泛化全流程 | vs `/maestro-ralph --engine swarm --script wf-review`（裁决不修复） |
+| `maestro-odyssey --mode ui` | UI 持久化打磨会话 | vs `/maestro-impeccable`（单次执行） |
 
 **共用 flags**：`--skip-fix`（仅分析）· `--skip-generalize`（跳过泛化）· `-c`（恢复会话）· `--auto`（自动模式）
 
@@ -297,7 +297,7 @@ graph TB
 | `/maestro-ralph --engine swarm {N}` | 智能路由测试（spec/gap/code） | `--re-run` `--dry-run` |
 | `/maestro-ralph --engine swarm --script wf-review {N}` | 分层代码审查 | `--level quick\|standard\|deep` |
 | `/maestro "<test intent>"` | 会话式 UAT | `--auto-fix` |
-| `/odyssey --mode debug` | 假设驱动调试 | `--from-uat {N}` `--parallel` |
+| `/maestro-odyssey --mode debug` | 假设驱动调试 | `--from-uat {N}` `--parallel` |
 | `/quality-refactor` | 技术债务治理 | `[scope]` |
 
 **修复循环**：`verify gaps → plan --gaps → execute → verify` 或 `test 失败 → debug → plan --gaps → execute`
@@ -326,16 +326,16 @@ graph TB
 
 ## 六、规范与知识
 
-> **路由边界**（v0.5.50+）：`/spec` 管理项目约束规则（编码规范、架构约束、质量标准）；`/manage knowledge` 管理可复用知识文档（决策记录、操作配方、参考资料）。约束类走 `/spec add`，知识类走 `/manage knowhow capture`。
+> **路由边界**（v0.5.50+）：`/maestro-spec` 管理项目约束规则（编码规范、架构约束、质量标准）；`/maestro-manage knowledge` 管理可复用知识文档（决策记录、操作配方、参考资料）。约束类走 `/maestro-spec add`，知识类走 `/maestro-manage knowhow capture`。
 
 ```bash
-/spec setup                                      # 扫描项目生成规范
-/spec add coding "所有 API 使用 Hono 框架"       # 录入约束规则
-/spec load --role implement                     # 加载规范
-/manage sync codebase                            # 增量刷新代码库文档
-/manage knowledge knowhow search "认证"          # 搜索可复用知识
-/manage knowledge audit --scope all             # 审计三存储，清理过期/矛盾条目
-/manage status                                   # 项目仪表板
+/maestro-spec setup                                      # 扫描项目生成规范
+/maestro-spec add coding "所有 API 使用 Hono 框架"       # 录入约束规则
+/maestro-spec load --role implement                     # 加载规范
+/maestro-manage sync codebase                            # 增量刷新代码库文档
+/maestro-manage knowledge knowhow search "认证"          # 搜索可复用知识
+/maestro-manage knowledge audit --scope all             # 审计三存储，清理过期/矛盾条目
+/maestro-manage status                                   # 项目仪表板
 /maestro-next --note "实现认证"      # 任务前加载知识上下文（或用 maestro search/load）
 ```
 
@@ -348,13 +348,13 @@ graph TB
 | `/maestro-next` | 单命令推荐 | 轻量路由，不创建 session，推荐 1 个原子命令 + 2-3 备选 |
 | `/maestro-ralph --engine swarm --script wf-grill` | 压力测试 | 对抗式苏格拉底访谈，验证方案假设，产出 context-package |
 | `/maestro "<specification intent>"` | 正式规格 | 6 阶段文档链（Brief → PRD → Architecture → Epics），与 brainstorm 互补 |
-| `/manage knowledge audit` | 知识审计 | spec/knowhow/artifact 三存储审计淘汰（keep/deprecate/delete） |
+| `/maestro-manage knowledge audit` | 知识审计 | spec/knowhow/artifact 三存储审计淘汰（keep/deprecate/delete） |
 | `/team-swarm` | 蚁群智能 | ACO 驱动群体优化，信息素收敛，4 角色 + Python 控制器 |
-| `/odyssey --mode debug` | 深度调试 | 考古→诊断→修复→泛化，三句哲学约束穷尽迭代 |
-| `/odyssey --mode improve` | 深度改进 | 6 维审计→逐轮修复→0 remaining actionable |
-| `/odyssey --mode planex` | 需求交付 | 验收标准 ALL pass，不允许"接近通过" |
-| `/odyssey --mode review` | 审查修复 | 全 severity 逐轮修复 + re-review gate |
-| `/odyssey --mode ui` | UI 深度优化 | 视觉普查→发散探索→穷尽打磨每个像素 |
+| `/maestro-odyssey --mode debug` | 深度调试 | 考古→诊断→修复→泛化，三句哲学约束穷尽迭代 |
+| `/maestro-odyssey --mode improve` | 深度改进 | 6 维审计→逐轮修复→0 remaining actionable |
+| `/maestro-odyssey --mode planex` | 需求交付 | 验收标准 ALL pass，不允许"接近通过" |
+| `/maestro-odyssey --mode review` | 审查修复 | 全 severity 逐轮修复 + re-review gate |
+| `/maestro-odyssey --mode ui` | UI 深度优化 | 视觉普查→发散探索→穷尽打磨每个像素 |
 
 ---
 
@@ -413,16 +413,16 @@ graph TB
 /maestro-update --force     # 一键全量升级
 ```
 
-### spec remove — 规范移除
+### maestro-spec remove — 规范移除
 
 从 specs 文件中移除指定的 `<spec-entry>` 条目。Entry ID 格式：`spec-{file-stem}-{NNN}`。
 
 ```bash
 maestro wiki list --type spec --json    # 列出所有 spec 条目
-/spec remove spec-learnings-003          # 移除指定条目
+/maestro-spec remove spec-learnings-003          # 移除指定条目
 ```
 
-### manage knowledge audit — 知识审计
+### maestro-manage knowledge audit — 知识审计
 
 审计 spec / knowhow / artifact 三存储，识别矛盾、过期、孤立和元数据质量问题。
 
@@ -434,8 +434,8 @@ maestro wiki list --type spec --json    # 列出所有 spec 条目
 | `--report` | 仅生成审计报告 |
 
 ```bash
-/manage knowledge audit --scope all              # 全量审计
-/manage knowledge audit --scope spec --level P0  # 仅 P0 级 spec 问题
+/maestro-manage knowledge audit --scope all              # 全量审计
+/maestro-manage knowledge audit --scope spec --level P0  # 仅 P0 级 spec 问题
 ```
 
 ### 里程碑发布（/maestro-milestone-release 已退役）
