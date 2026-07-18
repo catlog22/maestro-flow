@@ -29,6 +29,7 @@
     ".claude/skills",
     ".claude/CLAUDE.md",
     ".codex/agents",
+    ".codex/agent-overrides",
     ".codex/skills",
     ".agy/agents",
     ".agy/skills",
@@ -48,12 +49,15 @@
     "test:kg": "vitest run src/graph",
     "lint": "tsc --noEmit",
     "lint:session-run": "node scripts/lint-session-run-prompts.mjs && node scripts/lint-session-run-mirrors.mjs",
-    "sync:codex-skills": "node scripts/sync-codex-run-mode.mjs --write && node scripts/lint-session-run-mirrors.mjs",
+    "sync:codex-skills": "node scripts/sync-codex-run-mode.mjs --write && node scripts/sync-codex-run-mode.mjs --check && node scripts/lint-session-run-mirrors.mjs",
+    "sync:docs-reference": "node scripts/sync-docs-reference.mjs",
+    "check:docs-reference": "node scripts/sync-docs-reference.mjs --check",
     "lint:codex-skills": "node scripts/lint-session-run-mirrors.mjs",
+    "lint:codex-agents": "node scripts/sync-codex-agents.mjs --check",
     "migrate:session-run-prompts": "node scripts/migrate-session-run-prompts.mjs --write",
     "clean": "rm -rf dist",
-    "build:mirrors": "node scripts/convert-claude-to-agy.mjs && node scripts/build-agents-standard.mjs && node scripts/sync-codex-run-mode.mjs --write && node scripts/lint-session-run-mirrors.mjs",
-    "prepublishOnly": "npm run build && npm run build:mirrors"
+    "build:mirrors": "node scripts/lint-session-run-prompts.mjs && node scripts/convert-claude-to-agy.mjs && node scripts/build-agents-standard.mjs && node scripts/sync-codex-run-mode.mjs --write && node scripts/sync-codex-run-mode.mjs --check && node scripts/sync-codex-agents.mjs --check && node scripts/lint-session-run-mirrors.mjs",
+    "prepublishOnly": "node scripts/lint-session-run-prompts.mjs && npm run check:docs-reference && npm run build && npm run build:mirrors"
   },
   "engines": {
     "node": ">=22.19.0"

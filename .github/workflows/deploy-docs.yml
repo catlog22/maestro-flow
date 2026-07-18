@@ -36,6 +36,9 @@ jobs:
         run: npm ci
         working-directory: docs-site
 
+      - name: Verify docs-reference.md is in sync
+        run: npm run check:docs-reference
+
       - name: Build
         run: npm run build
         working-directory: docs-site

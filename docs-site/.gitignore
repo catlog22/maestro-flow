@@ -2,4 +2,5 @@
 .codex/
 guides/
 !src/content/docs/guides/
+!src/content/docs/en/guides/
 dist/
