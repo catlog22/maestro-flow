@@ -1,4 +1,4 @@
-import { mkdtemp, mkdir, writeFile, rm } from 'node:fs/promises';
+import { mkdtemp, mkdir, readFile, writeFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -58,6 +58,17 @@ describe('WikiIndexer', () => {
     const indexer = new WikiIndexer({ workflowRoot: tmpRoot });
     const xTagged = await indexer.query({ type: 'spec', tag: 'x' });
     expect(xTagged.map((d) => d.id)).toEqual(['spec:project:a']);
+  });
+
+  it('maps deprecated/superseded status and surfaces it into ext', async () => {
+    await write('knowhow/TIP-dead.md', `---\ntitle: Dead tip\nstatus: deprecated\n---\n# Dead tip\nBody`);
+    await write('knowhow/DCS-old.md', `---\ntitle: Old decision\nstatus: superseded\n---\n# Old decision\nBody`);
+
+    const index = await new WikiIndexer({ workflowRoot: tmpRoot }).get();
+    expect(index.byId['knowhow-tip-dead'].status).toBe('deprecated');
+    expect(index.byId['knowhow-tip-dead'].ext.status).toBe('deprecated');
+    expect(index.byId['knowhow-dcs-old'].status).toBe('deprecated');
+    expect(index.byId['knowhow-dcs-old'].ext.status).toBe('deprecated');
   });
 });
 
@@ -770,6 +781,93 @@ describe('virtual adapters: run-mode sessions', () => {
       'session-run-20260712-legacy-run-001', 'spec:project:legacy-promoted-rule',
     ]));
     expect(index.byId['spec:project:legacy-promoted-rule'].related).toContain('session-20260712-legacy');
+  });
+
+  it('indexes the canonical command-run/1.1 writer shape and invalidates old search caches', async () => {
+    const sessionId = '20260718-runtime-shape';
+    const runId = '20260718-001-quality-review';
+    await write('specs/runtime-promoted-rule.md', [
+      '---',
+      'title: Runtime promoted rule',
+      'status: active',
+      'category: review',
+      '---',
+      '# Runtime promoted rule',
+      'Canonical SessionStore promotion target.',
+    ].join('\n'));
+    await write(`sessions/${sessionId}/session.json`, JSON.stringify({
+      schema_version: 'session/1.1', session_id: sessionId, intent: 'Runtime writer fixture', status: 'sealed',
+      identity_revision: 1, activity_revision: 5, active_run_id: null, latest_completed_run_id: runId,
+      boundary_contract: { in_scope: [], out_of_scope: [], constraints: [], definition_of_done: 'Searchable' },
+      orchestration: { engine: 'coordinator', quality_mode: 'standard', auto_mode: false, chain: [], decision_points: [] },
+      requests: [],
+      lifecycle: {
+        sealed_at: '2026-07-18T10:00:00.000Z', seal_summary: 'Runtime writer sealed',
+        promoted_spec_ids: ['project:runtime-promoted-rule'], promoted_knowhow_ids: [], forked_from: null,
+      },
+      refs: { gates: 'gates.json', artifacts: 'artifacts.json', evidence: 'evidence.json' },
+    }));
+    await write(`sessions/${sessionId}/artifacts.json`, JSON.stringify({
+      schema_version: 'artifacts/1.0', revision: 1,
+      artifacts: {
+        'ART-runtime-review': {
+          kind: 'review-findings', role: 'primary', producer_run_id: runId,
+          relative_path: `runs/${runId}/outputs/review-findings.json`, media_type: 'application/json',
+          schema_version: 'review-findings/1.0', content_hash: 'a'.repeat(64), size: 64,
+          status: 'sealed', derived_from: [], replaces: null,
+        },
+      },
+      aliases: { 'latest-review': 'ART-runtime-review' },
+    }));
+    await write(`sessions/${sessionId}/gates.json`, JSON.stringify({
+      schema_version: 'gates/1.0', revision: 1,
+      gates: {
+        'GATE-runtime-browser': {
+          key: 'browser', title: 'Runtime browser proof', scope: 'exit', run_id: runId,
+          required: true, blocking: false, applicable_modes: ['standard'], status: 'waived',
+          check: { type: 'manual', prompt: 'Verify browser' }, evidence_refs: [],
+          waiver: { reason: 'Headless environment', approved_by: 'qa', approved_at: '2026-07-18' },
+        },
+      },
+      summary: { total: 1, passed: 0, blocked: 0, failed: 0, active_gate_ids: [], blocking_run_id: null },
+    }));
+    await write(`sessions/${sessionId}/runs/${runId}/run.json`, JSON.stringify({
+      schema_version: 'command-run/1.1', session_id: sessionId, run_id: runId, sequence: 1,
+      parent_run_id: null, chain_step_id: null, resolved_platform: 'codex', goal_binding: null,
+      checkpoint_expectation: null, checkpoint: null, retry_fence: null,
+      command: {
+        name: 'quality-review', version: '1.0', source_path: '.claude/commands/quality-review.md',
+        content_hash: 'b'.repeat(64), resolved_prompt_hash: 'c'.repeat(64), contract_hash: 'd'.repeat(64),
+      },
+      status: 'sealed', input: { args: ['--strict'], consumes: [], context_identity_revision: 1 },
+      gate_ids: ['GATE-runtime-browser'],
+      output: { produces: ['ART-runtime-review'], primary_artifact_id: 'ART-runtime-review', verdict: 'ready_with_concerns' },
+      handoff: {
+        schema_version: 'command-handoff/1.0', producer_run_id: runId, command: 'quality-review',
+        verdict: 'ready_with_concerns', summary: 'Runtime handoff', constraints: [], decisions: [],
+        concerns: ['Keep gate provenance'], artifact_refs: ['ART-runtime-review'], next: [], details: {},
+      },
+      started_at: '2026-07-18T09:00:00.000Z', completed_at: '2026-07-18T09:30:00.000Z',
+      sealed_at: '2026-07-18T09:40:00.000Z',
+    }));
+    await write(`sessions/${sessionId}/runs/${runId}/outputs/review-findings.json`, JSON.stringify({
+      summary: 'Runtime-shaped review summary',
+    }));
+    await write('search-cache.json', JSON.stringify({ version: 1, generatedAt: 1, mtimeSnapshot: [], entries: [] }));
+
+    const index = await new WikiIndexer({ workflowRoot: tmpRoot }).get();
+    const session = index.byId[`session-${sessionId}`];
+    const run = index.byId[`session-run-${sessionId}-${runId.toLowerCase()}`];
+    expect(session.ext.runCount).toBe(1);
+    expect(session.related).toContain('spec:project:runtime-promoted-rule');
+    expect(index.byId['spec:project:runtime-promoted-rule'].related).toContain(`session-${sessionId}`);
+    expect(run.title).toBe(`quality-review ${runId}`);
+    expect(run.body).toContain('Headless environment (qa @ 2026-07-18)');
+    expect(run.tags).toContain('gate:waived');
+    expect(run.ext.gateSummary).toEqual({ total: 1, waived: 1, failed: 0, blocked: 0 });
+
+    await new Promise(resolve => setTimeout(resolve, 25));
+    expect(JSON.parse(await readFile(join(tmpRoot, 'search-cache.json'), 'utf-8')).version).toBe(2);
   });
 
   it('indexes v1.1 sealed Runs with structured handoff, kinds, provenance, aref edges, and waivers', async () => {

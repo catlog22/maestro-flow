@@ -141,12 +141,12 @@ function generateReference() {
   out += 'Key replacements:\n';
   out += '>\n';
   out += '> - `/maestro-plan`, `/maestro-execute`, `/maestro-quick` → `/maestro`, `/maestro-next`, or `/maestro-ralph`\n';
-  out += '> - `/spec-add`, `/spec-load`, `/spec-remove`, `/spec-setup` → `/spec` subcommands\n';
-  out += '> - `/manage-status`, `/manage-knowhow`, `/manage-issue`, `/manage-harvest` → `/manage` subcommands\n';
-  out += '> - `/quality-review`, `/quality-test`, `/quality-debug` → `/maestro-ralph --engine swarm` or `/odyssey`\n';
-  out += '> - `/learn-decompose`, `/learn-follow`, `/learn-investigate` → `/learn` subcommands\n';
-  out += '> - `/odyssey-debug`, `/odyssey-improve`, `/odyssey-planex` → `/odyssey --mode <name>`\n';
-  out += '> - `/wiki-connect`, `/wiki-digest` → `/manage knowledge wiki` subcommands\n';
+  out += '> - `/spec-add`, `/spec-load`, `/spec-remove`, `/spec-setup` → `/maestro-spec` subcommands\n';
+  out += '> - `/manage-status`, `/manage-knowhow`, `/manage-issue`, `/manage-harvest` → `/maestro-manage` subcommands\n';
+  out += '> - `/quality-review`, `/quality-test`, `/quality-debug` → `/maestro-ralph --engine swarm` or `/maestro-odyssey`\n';
+  out += '> - `/learn-decompose`, `/learn-follow`, `/learn-investigate` → `/maestro-learn` subcommands\n';
+  out += '> - `/odyssey-debug`, `/odyssey-improve`, `/odyssey-planex` → `/maestro-odyssey --mode <name>`\n';
+  out += '> - `/wiki-connect`, `/wiki-digest` → `/maestro-manage knowledge wiki` subcommands\n';
   out += '\n';
 
   return out;

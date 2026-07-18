@@ -34,6 +34,8 @@ import type {
   PersistedEntry,
 } from './wiki-types.js';
 
+const SEARCH_CACHE_VERSION = 2;
+
 function prefixLinkedEntries(entries: WikiEntry[], idPrefix: string, workspace: string): void {
   const idMap = new Map(entries.map(entry => [entry.id, `${idPrefix}${entry.id}`]));
   for (const entry of entries) {
@@ -253,7 +255,7 @@ export class WikiIndexer {
     try {
       const raw = await readFile(cachePath, 'utf-8');
       const cached = JSON.parse(raw);
-      if (cached.version !== 1 || !Array.isArray(cached.entries)) return false;
+      if (cached.version !== SEARCH_CACHE_VERSION || !Array.isArray(cached.entries)) return false;
 
       const snapshot = new Map<string, number>(cached.mtimeSnapshot);
       this.mtimeSnapshot = snapshot;
@@ -296,7 +298,7 @@ export class WikiIndexer {
         try { stream?.destroy(); } catch { /* ignore */ }
       });
 
-      stream.write('{"version":1,"generatedAt":');
+      stream.write(`{"version":${SEARCH_CACHE_VERSION},"generatedAt":`);
       stream.write(String(index.generatedAt));
       stream.write(',"mtimeSnapshot":');
       stream.write(JSON.stringify([...this.mtimeSnapshot.entries()]));
@@ -1316,6 +1318,9 @@ export class WikiIndexer {
     const status = asStatus(data.status) ?? inferStatus(type);
     const related = normalizeRelated(data.related);
     const ext = extractExt(data);
+    // Surface deprecated into ext.status — the CLI search deprecated-filter
+    // reads ext.status (like spec sub-entries), not the top-level field.
+    if (status === 'deprecated') ext.status = 'deprecated';
 
     const category = asString(data.category) || null;
     const specCategory = asString(data.specCategory) || null;
@@ -1473,6 +1478,9 @@ export class WikiIndexer {
     const status = asStatus(data.status) ?? inferStatus(type);
     const related = normalizeRelated(data.related);
     const ext = extractExt(data);
+    // Surface deprecated into ext.status — the CLI search deprecated-filter
+    // reads ext.status (like spec sub-entries), not the top-level field.
+    if (status === 'deprecated') ext.status = 'deprecated';
 
     // Enrichment fields from frontmatter
     const category = asString(data.category) || null;
@@ -1591,9 +1599,12 @@ function asString(value: unknown): string {
 }
 
 function asStatus(value: unknown): WikiStatus | null {
-  const allowed: WikiStatus[] = ['draft', 'active', 'completed', 'blocked', 'archived'];
-  return typeof value === 'string' && (allowed as string[]).includes(value)
-    ? (value as WikiStatus)
+  if (typeof value !== 'string') return null;
+  // `superseded` (decision lifecycle) is the same terminal state as deprecated.
+  const normalized = value === 'superseded' ? 'deprecated' : value;
+  const allowed: WikiStatus[] = ['draft', 'active', 'completed', 'blocked', 'archived', 'deprecated'];
+  return (allowed as string[]).includes(normalized)
+    ? (normalized as WikiStatus)
     : null;
 }
 

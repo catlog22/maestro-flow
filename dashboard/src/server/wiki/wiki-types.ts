@@ -12,7 +12,8 @@ export type WikiStatus =
   | 'active'
   | 'completed'
   | 'blocked'
-  | 'archived';
+  | 'archived'
+  | 'deprecated';
 
 export type WikiScope = 'project' | 'global' | 'team' | 'personal' | 'linked';
 

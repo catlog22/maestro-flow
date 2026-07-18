@@ -696,7 +696,15 @@ interface RunModeSession {
   session_id?: string;
   intent?: string;
   status?: string;
-  lifecycle?: { sealed_at?: string | null; seal_summary?: string | null; promoted?: string[] };
+  lifecycle?: {
+    sealed_at?: string | null;
+    seal_summary?: string | null;
+    /** Read-model promotion refs. */
+    promoted?: string[];
+    /** Canonical SessionStore promotion fields. */
+    promoted_spec_ids?: string[];
+    promoted_knowhow_ids?: string[];
+  };
 }
 
 interface RunModeArtifact {
@@ -877,6 +885,7 @@ async function readRunKnowledge(
 // adapter stays single-schema. Unknown versions are still rejected.
 
 interface LegacyRunModeGate {
+  id?: string;
   title?: string;
   run_id?: string | null;
   status?: string;
@@ -884,23 +893,23 @@ interface LegacyRunModeGate {
 }
 
 function normalizeRunModeSession(raw: Record<string, unknown>): RunModeSession | null {
-  if (raw.schema_version === 'session/1.1') return raw as RunModeSession;
-  if (raw.schema_version !== 'session/1.0') return null;
-  const legacy = raw as RunModeSession & {
-    lifecycle?: { promoted_spec_ids?: string[]; promoted_knowhow_ids?: string[] };
-  };
+  if (raw.schema_version !== 'session/1.0' && raw.schema_version !== 'session/1.1') return null;
+  const session = raw as RunModeSession;
+  const lifecycle = session.lifecycle;
+  const promoted = [
+    ...(lifecycle?.promoted ?? []),
+    ...(lifecycle?.promoted_spec_ids ?? []).map(id => `spec:${id}`),
+    ...(lifecycle?.promoted_knowhow_ids ?? []).map(id => `knowhow:${id}`),
+  ];
   return {
     schema_version: 'session/1.1',
-    session_id: legacy.session_id,
-    intent: legacy.intent,
-    status: legacy.status,
+    session_id: session.session_id,
+    intent: session.intent,
+    status: session.status,
     lifecycle: {
-      sealed_at: legacy.lifecycle?.sealed_at ?? null,
-      seal_summary: legacy.lifecycle?.seal_summary ?? null,
-      promoted: [
-        ...(legacy.lifecycle?.promoted_spec_ids ?? []).map(id => `spec:${id}`),
-        ...(legacy.lifecycle?.promoted_knowhow_ids ?? []).map(id => `knowhow:${id}`),
-      ],
+      sealed_at: lifecycle?.sealed_at ?? null,
+      seal_summary: lifecycle?.seal_summary ?? null,
+      promoted: [...new Set(promoted)],
     },
   };
 }
@@ -935,6 +944,7 @@ interface LegacyRunModeRun {
   run_id?: string;
   command?: { name?: string };
   status?: string;
+  gate_ids?: string[];
   output?: { primary_artifact_id?: string | null };
   handoff?: RunModeRun['handoff'];
   started_at?: string;
@@ -944,9 +954,10 @@ interface LegacyRunModeRun {
 
 function normalizeRunModeRun(raw: Record<string, unknown>, legacyGates: LegacyRunModeGate[]): RunModeRun | null {
   if (raw.schema_version === 'run/1.1') return raw as RunModeRun;
-  if (raw.schema_version !== 'command-run/1.0') return null;
+  if (raw.schema_version !== 'command-run/1.0' && raw.schema_version !== 'command-run/1.1') return null;
   const legacy = raw as LegacyRunModeRun;
   const runId = legacy.run_id;
+  const gateIds = new Set(legacy.gate_ids ?? []);
   return {
     schema_version: 'run/1.1',
     run_id: runId,
@@ -954,7 +965,7 @@ function normalizeRunModeRun(raw: Record<string, unknown>, legacyGates: LegacyRu
     status: legacy.status,
     primary: legacy.output?.primary_artifact_id ?? null,
     gates: legacyGates
-      .filter(gate => gate.run_id === runId)
+      .filter(gate => gateIds.size > 0 ? gateIds.has(gate.id ?? '') : gate.run_id === runId)
       .map(gate => ({
         title: gate.title,
         status: gate.status,
@@ -972,7 +983,7 @@ async function readLegacySessionGates(sessionDir: string): Promise<LegacyRunMode
     const registry = JSON.parse(await readFile(join(sessionDir, 'gates.json'), 'utf-8')) as {
       gates?: Record<string, LegacyRunModeGate>;
     };
-    return Object.values(registry.gates ?? {});
+    return Object.entries(registry.gates ?? {}).map(([id, gate]) => ({ ...gate, id }));
   } catch { return []; }
 }
 
@@ -1026,6 +1037,8 @@ export async function loadRunModeSessionEntries(
     const runRel = `${sessionRelPath.replace(/\/session\.json$/, '')}/runs/${runName}/run.json`;
     const verdictTag = run.handoff?.verdict ? [`verdict:${run.handoff.verdict}`] : [];
     const constraintTag = knowledge.hasLockedConstraints ? ['constraint'] : [];
+    const gateTags = [...new Set((run.gates ?? []).map(gate => gate.status?.trim()).filter(Boolean))]
+      .map(status => `gate:${status}`);
     const arefRunEntries = [...new Set(knowledge.arefArtifactIds
       .map(id => registry.artifacts?.[id]?.run_id)
       .filter((producerRunId): producerRunId is string => Boolean(producerRunId) && producerRunId !== runId)
@@ -1035,7 +1048,7 @@ export async function loadRunModeSessionEntries(
       type: 'knowhow',
       title: `${command} ${runId}`,
       summary: knowledge.summary,
-      tags: ['session', 'run', run.status!, command, ...verdictTag, ...constraintTag, ...knowledge.kinds],
+      tags: ['session', 'run', run.status!, command, ...verdictTag, ...constraintTag, ...gateTags, ...knowledge.kinds],
       status: runModeStatus(run.status),
       created: toIso(run.started_at),
       updated: toIso(run.ended_at ?? run.started_at),
@@ -1046,6 +1059,12 @@ export async function loadRunModeSessionEntries(
       ext: {
         virtualKind: 'session-run', sessionId, runId, command,
         artifactIds: knowledge.artifactIds, arefArtifactIds: knowledge.arefArtifactIds, kinds: knowledge.kinds,
+        gateSummary: {
+          total: run.gates?.length ?? 0,
+          waived: run.gates?.filter(gate => gate.status === 'waived').length ?? 0,
+          failed: run.gates?.filter(gate => gate.status === 'failed').length ?? 0,
+          blocked: run.gates?.filter(gate => gate.status === 'blocked').length ?? 0,
+        },
       },
       scope: null,
       category: RUN_COMMAND_CATEGORY[command] ?? null,

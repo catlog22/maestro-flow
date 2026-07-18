@@ -1,10 +1,23 @@
 // ---------------------------------------------------------------------------
-// Team Session REST API routes -- read-only access to .workflow/.team/ data
+// Team Session REST API routes -- Run-scoped team state with legacy fallback
 // ---------------------------------------------------------------------------
 
 import { Hono } from 'hono';
-import { existsSync, readFileSync, readdirSync, rmSync, statSync } from 'node:fs';
-import { join, resolve, normalize } from 'node:path';
+import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { isAbsolute, join, resolve, normalize, relative, sep } from 'node:path';
+
+import { createDefaultDelegateBroker } from '../../../../src/async/delegate-broker.js';
+import {
+  getTeamSessionCleanupEligibility,
+  rankResumeCandidates,
+  type TeamSessionClassification,
+} from '../../../../src/team/session-lifecycle.js';
+import { readStoredTeamSessionClassificationAt } from '../../../../src/tools/team-msg.js';
+import {
+  findExactTeamWorkLocation,
+  listTeamWorkLocations,
+  type TeamWorkLocation,
+} from '../../../../src/tools/team-run-paths.js';
 
 import type {
   TeamSessionSummary,
@@ -51,7 +64,18 @@ function countLines(filePath: string): number {
   }
 }
 
-function buildSummary(sessionId: string, sessionDir: string): TeamSessionSummary | null {
+type TeamLocation = TeamWorkLocation;
+
+const KNOWN_RUN_STATUSES = new Set([
+  'created', 'running', 'blocked', 'completed', 'paused', 'sealed', 'archived', 'failed',
+]);
+
+function buildSummary(
+  location: TeamLocation,
+  classification: TeamSessionClassification,
+): TeamSessionSummary | null {
+  const sessionId = location.id;
+  const sessionDir = location.stateDir;
   const sessionPath = join(sessionDir, 'team-session.json');
   const metaPath = join(sessionDir, '.msg', 'meta.json');
   const messagesPath = join(sessionDir, '.msg', 'messages.jsonl');
@@ -81,9 +105,6 @@ function buildSummary(sessionId: string, sessionDir: string): TeamSessionSummary
     });
   }
 
-  // Determine status
-  const status = (meta.status as string) || 'active';
-
   // Timestamps
   const createdAt = (meta.created_at as string) || (sessionData.created_at as string) || '';
   const updatedAt = (meta.updated_at as string) || (sessionData.updated_at as string) || createdAt;
@@ -112,7 +133,9 @@ function buildSummary(sessionId: string, sessionDir: string): TeamSessionSummary
     sessionId,
     title: (sessionData.task_description as string) || (sessionData.team_name as string) || (meta.team_name as string) || sessionId,
     description: (sessionData.task_description as string) || '',
-    status: (['active', 'completed', 'failed', 'archived'].includes(status) ? status : 'active') as TeamSessionSummary['status'],
+    status: classification.lifecycle,
+    health: classification.health,
+    cleanupEligible: classification.cleanupEligible,
     skill: inferSkill(sessionId),
     roles,
     taskProgress: { completed, total },
@@ -124,18 +147,27 @@ function buildSummary(sessionId: string, sessionDir: string): TeamSessionSummary
   };
 }
 
-function scanSessionFiles(sessionDir: string, sessionId: string): SessionFileEntry[] {
+function scanSessionFiles(location: TeamLocation): SessionFileEntry[] {
   const files: SessionFileEntry[] = [];
   let fileIdx = 0;
 
-  const categoryDirs: { dir: string; category: SessionFileEntry['category'] }[] = [
-    { dir: 'artifacts', category: 'artifacts' },
-    { dir: 'wisdom', category: 'wisdom' },
-    { dir: 'plan', category: 'role-specs' },
+  const categoryDirs: { dirPath: string; displayPath: string; category: SessionFileEntry['category'] }[] = [
+    ...(location.scope === 'legacy'
+      ? [{ dirPath: join(location.stateDir, 'artifacts'), displayPath: 'artifacts', category: 'artifacts' as const }]
+      : [{ dirPath: join(location.rootDir, 'outputs'), displayPath: 'outputs', category: 'artifacts' as const }]),
+    {
+      dirPath: join(location.stateDir, 'wisdom'),
+      displayPath: location.scope === 'legacy' ? 'wisdom' : 'work/team/wisdom',
+      category: 'wisdom',
+    },
+    {
+      dirPath: join(location.stateDir, 'role-specs'),
+      displayPath: location.scope === 'legacy' ? 'role-specs' : 'work/team/role-specs',
+      category: 'role-specs',
+    },
   ];
 
-  for (const { dir, category } of categoryDirs) {
-    const dirPath = join(sessionDir, dir);
+  for (const { dirPath, displayPath, category } of categoryDirs) {
     try {
       if (!existsSync(dirPath)) continue;
       const entries = readdirSync(dirPath, { withFileTypes: true });
@@ -143,7 +175,7 @@ function scanSessionFiles(sessionDir: string, sessionId: string): SessionFileEnt
         if (!entry.isFile()) continue;
         files.push({
           id: `file-${fileIdx++}`,
-          path: `${dir}/${entry.name}`,
+          path: `${displayPath}/${entry.name}`,
           name: entry.name,
           category,
         });
@@ -156,10 +188,10 @@ function scanSessionFiles(sessionDir: string, sessionId: string): SessionFileEnt
   // Add session-level files
   const sessionFiles = ['team-session.json', 'shared-memory.json'];
   for (const name of sessionFiles) {
-    if (existsSync(join(sessionDir, name))) {
+    if (existsSync(join(location.stateDir, name))) {
       files.push({
         id: `file-${fileIdx++}`,
-        path: name,
+        path: location.scope === 'legacy' ? name : `work/team/${name}`,
         name,
         category: 'session',
       });
@@ -167,7 +199,7 @@ function scanSessionFiles(sessionDir: string, sessionId: string): SessionFileEnt
   }
 
   // Add message bus files
-  const msgDir = join(sessionDir, '.msg');
+  const msgDir = join(location.stateDir, '.msg');
   if (existsSync(msgDir)) {
     try {
       const msgEntries = readdirSync(msgDir, { withFileTypes: true });
@@ -175,7 +207,7 @@ function scanSessionFiles(sessionDir: string, sessionId: string): SessionFileEnt
         if (!entry.isFile()) continue;
         files.push({
           id: `file-${fileIdx++}`,
-          path: `.msg/${entry.name}`,
+          path: location.scope === 'legacy' ? `.msg/${entry.name}` : `work/team/.msg/${entry.name}`,
           name: entry.name,
           category: 'message-bus',
         });
@@ -240,29 +272,83 @@ function buildPipelineWaves(sessionData: Record<string, unknown>, meta: Record<s
   return { waves };
 }
 
+export interface TeamRouteLifecycleOptions {
+  now?: () => string | number | Date;
+  staleTtlMs?: number;
+  inspectLiveBrokerMembers?: (location: TeamLocation) => { count: number; known: boolean };
+}
+
+function inspectLiveBrokerMembers(location: TeamLocation): { count: number; known: boolean } {
+  const membersPath = join(location.stateDir, 'members.json');
+  if (!existsSync(membersPath)) return { count: 0, known: true };
+  const members = readJsonSafe(membersPath);
+  if (!members) return { count: 0, known: false };
+  if (!Array.isArray(members.members)) return { count: 0, known: false };
+
+  try {
+    const broker = createDefaultDelegateBroker();
+    let count = 0;
+    for (const member of members.members) {
+      if (!member || typeof member !== 'object') continue;
+      const jobId = (member as Record<string, unknown>).job_id;
+      if (typeof jobId !== 'string') continue;
+      const job = broker.getJob(jobId);
+      if (!job || ['completed', 'failed', 'cancelled'].includes(job.status)) continue;
+      if (job.metadata?.cancelRequestedAt) continue;
+      if (['queued', 'running', 'input_required'].includes(job.status)) count += 1;
+    }
+    return { count, known: true };
+  } catch {
+    return { count: 0, known: false };
+  }
+}
+
+function classifyLocation(
+  location: TeamLocation,
+  options: TeamRouteLifecycleOptions,
+): TeamSessionClassification {
+  const broker = (options.inspectLiveBrokerMembers ?? inspectLiveBrokerMembers)(location);
+  return readStoredTeamSessionClassificationAt(
+    {
+      stateDir: location.stateDir,
+      ...(location.scope === 'run' ? { runRootDir: location.rootDir } : {}),
+    },
+    {
+      now: options.now?.() ?? new Date(),
+      staleTtlMs: options.staleTtlMs ?? 24 * 60 * 60 * 1_000,
+      liveBrokerMembers: broker.count,
+      livenessKnown: broker.known,
+    },
+  );
+}
+
+function isPathInside(parent: string, child: string): boolean {
+  const rel = relative(resolve(parent), resolve(child));
+  return rel === '' || (rel !== '..' && !rel.startsWith(`..${sep}`) && !isAbsolute(rel));
+}
+
+function exactLocation(workflowRoot: string, id: string): TeamLocation | null {
+  return findExactTeamWorkLocation(id, workflowRoot);
+}
+
 // ---------------------------------------------------------------------------
 // Route factory
 // ---------------------------------------------------------------------------
 
-export function createTeamRoutes(workflowRoot: string | (() => string)): Hono {
+export function createTeamRoutes(
+  workflowRoot: string | (() => string),
+  lifecycleOptions: TeamRouteLifecycleOptions = {},
+): Hono {
   const app = new Hono();
-  const getTeamDir = () => join(typeof workflowRoot === 'function' ? workflowRoot() : workflowRoot, '.team');
+  const getWorkflowRoot = () => typeof workflowRoot === 'function' ? workflowRoot() : workflowRoot;
 
   // GET /api/teams/sessions
   app.get('/api/teams/sessions', async (c) => {
     try {
-      const teamDir = getTeamDir();
-      if (!existsSync(teamDir)) {
-        return c.json([]);
-      }
-
-      const entries = readdirSync(teamDir, { withFileTypes: true });
       let summaries: TeamSessionSummary[] = [];
 
-      for (const entry of entries) {
-        if (!entry.isDirectory()) continue;
-        const sessionDir = join(teamDir, entry.name);
-        const summary = buildSummary(entry.name, sessionDir);
+      for (const location of listTeamWorkLocations(getWorkflowRoot())) {
+        const summary = buildSummary(location, classifyLocation(location, lifecycleOptions));
         if (summary) summaries.push(summary);
       }
 
@@ -292,31 +378,59 @@ export function createTeamRoutes(workflowRoot: string | (() => string)): Hono {
     }
   });
 
+  // GET /api/teams/resume-candidates -- ranking never implies selection.
+  app.get('/api/teams/resume-candidates', async (c) => {
+    try {
+      const locations = listTeamWorkLocations(getWorkflowRoot());
+      const ranking = rankResumeCandidates(
+        locations.map((location) => ({
+          sessionId: location.sessionId ?? location.id,
+          ...(location.runId ? { runId: location.runId } : {}),
+          runDir: location.rootDir,
+          classification: classifyLocation(location, lifecycleOptions),
+        })),
+        {
+          ...(c.req.query('run_id') ? { runId: c.req.query('run_id') } : {}),
+          ...(c.req.query('session_id') ? { sessionId: c.req.query('session_id') } : {}),
+          ...(c.req.query('run_dir') ? { runDir: c.req.query('run_dir') } : {}),
+        },
+      );
+
+      return c.json({
+        ...ranking,
+        selected: ranking.selected ?? null,
+      });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      return c.json({ error: message }, 500);
+    }
+  });
+
   // GET /api/teams/sessions/:sessionId
   app.get('/api/teams/sessions/:sessionId', async (c) => {
     try {
       const sessionId = c.req.param('sessionId');
-      const sessionDir = join(getTeamDir(), sessionId);
+      const location = exactLocation(getWorkflowRoot(), sessionId);
 
-      if (!existsSync(sessionDir)) {
+      if (!location) {
         return c.json({ error: `Session not found: ${sessionId}` }, 404);
       }
 
-      const summary = buildSummary(sessionId, sessionDir);
+      const summary = buildSummary(location, classifyLocation(location, lifecycleOptions));
       if (!summary) {
         return c.json({ error: `Failed to read session: ${sessionId}` }, 500);
       }
 
-      const sessionData = readJsonSafe(join(sessionDir, 'team-session.json')) ?? {};
-      const meta = readJsonSafe(join(sessionDir, '.msg', 'meta.json')) ?? {};
+      const sessionData = readJsonSafe(join(location.stateDir, 'team-session.json')) ?? {};
+      const meta = readJsonSafe(join(location.stateDir, '.msg', 'meta.json')) ?? {};
 
       // Read last 50 messages
-      const allMessages = readJsonlSafe(join(sessionDir, '.msg', 'messages.jsonl')) as unknown as TeamMessage[];
+      const allMessages = readJsonlSafe(join(location.stateDir, '.msg', 'messages.jsonl')) as unknown as TeamMessage[];
       const messages = allMessages.slice(-50);
 
       const roleDetails = buildRoleDetails(sessionData, meta);
       const pipeline = buildPipelineWaves(sessionData, meta);
-      const files = scanSessionFiles(sessionDir, sessionId);
+      const files = scanSessionFiles(location);
 
       const detail: TeamSessionDetail = {
         ...summary,
@@ -333,25 +447,114 @@ export function createTeamRoutes(workflowRoot: string | (() => string)): Hono {
     }
   });
 
-  // DELETE /api/teams/sessions/:sessionId
+  // POST /api/teams/sessions/:sessionId/abandon -- audited transition only.
+  app.post('/api/teams/sessions/:sessionId/abandon', async (c) => {
+    try {
+      const sessionId = c.req.param('sessionId');
+      const location = exactLocation(getWorkflowRoot(), sessionId);
+      if (!location) return c.json({ error: `Session not found: ${sessionId}` }, 404);
+
+      const classification = classifyLocation(location, lifecycleOptions);
+      const run = location.scope === 'run' ? readJsonSafe(join(location.rootDir, 'run.json')) : null;
+      const runStatus = typeof run?.status === 'string' ? run.status : null;
+      const canonicalRunChecked = location.scope === 'legacy' || (runStatus !== null && KNOWN_RUN_STATUSES.has(runStatus));
+      const eligible =
+        canonicalRunChecked &&
+        (classification.lifecycle === 'active' || classification.lifecycle === 'paused') &&
+        classification.health === 'stale_candidate' &&
+        !classification.live;
+      const body = await c.req.json<Record<string, unknown>>().catch(() => ({} as Record<string, unknown>));
+      const confirm = body.confirm === true;
+
+      if (!confirm) {
+        return c.json({
+          ok: false,
+          dryRun: true,
+          eligible,
+          classification,
+          checks: { canonicalRunChecked, runStatus, live: classification.live },
+        });
+      }
+      if (!eligible) {
+        return c.json({
+          error: 'Abandon transition refused by lifecycle checks',
+          classification,
+          checks: { canonicalRunChecked, runStatus, live: classification.live },
+        }, 409);
+      }
+
+      const actor = typeof body.actor === 'string' ? body.actor.trim() : '';
+      const reason = typeof body.reason === 'string' ? body.reason.trim() : '';
+      if (!actor || !reason) {
+        return c.json({ error: 'Confirmed abandon requires non-empty actor and reason' }, 400);
+      }
+
+      const now = lifecycleOptions.now?.() ?? new Date();
+      const at = now instanceof Date ? now.toISOString() : new Date(now).toISOString();
+      const audit = { audited: true, actor, reason, at };
+      const sessionPath = join(location.stateDir, 'team-session.json');
+      const session = readJsonSafe(sessionPath) ?? {};
+      writeFileSync(sessionPath, JSON.stringify({
+        ...session,
+        status: 'abandoned',
+        updated_at: at,
+        abandonment_transition: audit,
+      }, null, 2), 'utf-8');
+
+      const metaDir = join(location.stateDir, '.msg');
+      mkdirSync(metaDir, { recursive: true });
+      const metaPath = join(metaDir, 'meta.json');
+      const meta = readJsonSafe(metaPath) ?? {};
+      writeFileSync(metaPath, JSON.stringify({
+        ...meta,
+        status: 'abandoned',
+        updated_at: at,
+      }, null, 2), 'utf-8');
+
+      return c.json({
+        ok: true,
+        transition: 'abandoned',
+        audit,
+        cleanupPerformed: false,
+        classification: classifyLocation(location, lifecycleOptions),
+      });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      return c.json({ error: message }, 500);
+    }
+  });
+
+  // DELETE /api/teams/sessions/:sessionId -- dry-run by default, second confirmation required.
   app.delete('/api/teams/sessions/:sessionId', async (c) => {
     try {
       const sessionId = c.req.param('sessionId');
-      const sessionDir = join(getTeamDir(), sessionId);
+      const location = exactLocation(getWorkflowRoot(), sessionId);
 
-      if (!existsSync(sessionDir)) {
+      if (!location) {
         return c.json({ error: `Session not found: ${sessionId}` }, 404);
       }
 
-      // Security: validate path stays within team directory
-      const resolvedTeam = resolve(getTeamDir());
-      const resolvedSession = resolve(sessionDir);
-      if (!resolvedSession.startsWith(resolvedTeam)) {
-        return c.json({ error: 'Access denied: path traversal detected' }, 403);
+      const classification = classifyLocation(location, lifecycleOptions);
+      const force = c.req.query('force') === 'true';
+      const cleanup = getTeamSessionCleanupEligibility(classification, { force });
+      const confirm = c.req.query('confirm') === 'true';
+      if (!confirm) {
+        return c.json({ ok: false, dryRun: true, ...cleanup, classification });
+      }
+      if (!cleanup.eligible) {
+        return c.json({ error: cleanup.reason, classification }, 409);
       }
 
-      rmSync(sessionDir, { recursive: true, force: true });
-      return c.json({ ok: true });
+      // Team cleanup removes only stateDir. Run authority and outputs are outside it.
+      if (!isPathInside(getWorkflowRoot(), location.stateDir)) {
+        return c.json({ error: 'Access denied: path traversal detected' }, 403);
+      }
+      if (location.scope === 'run' && resolve(location.stateDir) !== resolve(location.rootDir, 'work', 'team')) {
+        return c.json({ error: 'Access denied: invalid canonical team state path' }, 403);
+      }
+
+      rmSync(location.stateDir, { recursive: true, force: true });
+      return c.json({ ok: true, deleted: location.stateDir, preservedRunRoot: location.scope === 'run' });
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       return c.json({ error: message }, 500);
@@ -362,13 +565,13 @@ export function createTeamRoutes(workflowRoot: string | (() => string)): Hono {
   app.get('/api/teams/sessions/:sessionId/messages', async (c) => {
     try {
       const sessionId = c.req.param('sessionId');
-      const sessionDir = join(getTeamDir(), sessionId);
+      const location = exactLocation(getWorkflowRoot(), sessionId);
 
-      if (!existsSync(sessionDir)) {
+      if (!location) {
         return c.json({ error: `Session not found: ${sessionId}` }, 404);
       }
 
-      const messagesPath = join(sessionDir, '.msg', 'messages.jsonl');
+      const messagesPath = join(location.stateDir, '.msg', 'messages.jsonl');
       let messages = readJsonlSafe(messagesPath) as unknown as TeamMessage[];
 
       // Apply filters
@@ -398,9 +601,9 @@ export function createTeamRoutes(workflowRoot: string | (() => string)): Hono {
   app.get('/api/teams/sessions/:sessionId/files/*', async (c) => {
     try {
       const sessionId = c.req.param('sessionId');
-      const sessionDir = join(getTeamDir(), sessionId);
+      const location = exactLocation(getWorkflowRoot(), sessionId);
 
-      if (!existsSync(sessionDir)) {
+      if (!location) {
         return c.json({ error: `Session not found: ${sessionId}` }, 404);
       }
 
@@ -414,11 +617,11 @@ export function createTeamRoutes(workflowRoot: string | (() => string)): Hono {
       }
 
       // Security: resolve and validate path stays within session directory
-      const resolvedSession = resolve(sessionDir);
-      const resolvedFile = resolve(sessionDir, filePath);
+      const resolvedSession = resolve(location.rootDir);
+      const resolvedFile = resolve(location.rootDir, filePath);
       const normalizedFile = normalize(resolvedFile);
 
-      if (!normalizedFile.startsWith(resolvedSession)) {
+      if (!isPathInside(resolvedSession, normalizedFile)) {
         return c.json({ error: 'Access denied: path traversal detected' }, 403);
       }
 

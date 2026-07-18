@@ -2,33 +2,37 @@
 
 import { readFileSync, readdirSync, existsSync } from 'node:fs';
 import { basename, join, relative } from 'node:path';
-import YAML from 'yaml';
+import {
+  classifySessionRunProfile,
+  parseFrontmatter,
+  SESSION_MODES,
+} from './session-run-profiles.mjs';
 
 const root = process.cwd();
 const errors = [];
 const commandDir = join(root, '.claude', 'commands');
 const skillDir = join(root, '.claude', 'skills');
-const RUN_MODE_REF = '@~/.maestro/workflows/run-mode.md';
 const obsoleteRunMode = /\.workflow\/(?:scratch|\.scratchpad)|Legacy Compatibility Mapping|state\.json\.artifacts\[\]|<run_mode>|## Run Mode Contract|## Run Artifact Boundary|\{run_dir\}\/outputs\/(?:\*|\{YYYYMMDD\}|\$\{date\})/;
+const legacyTeamStateFile = /team-state\.json|(?<!team-)session\.json/;
 
 function field(text, name) {
   return text.match(new RegExp(`^${name}:\\s*([^\\r\\n]+)`, 'm'))?.[1]?.trim() ?? null;
 }
 
-function frontmatter(text) {
-  const match = text.match(/^---\s*\r?\n([\s\S]*?)\r?\n---/);
-  return match ? YAML.parse(match[1]) : null;
-}
+const frontmatter = parseFrontmatter;
 
 function validatePrompt(path, kind) {
   const text = readFileSync(path, 'utf8');
   const mode = field(text, 'session-mode');
   if (!mode) errors.push(`${relative(root, path)}: missing session-mode classification`);
-  if (!['run', 'none', 'brief', 'bootstrap', 'deprecated'].includes(mode ?? '')) {
+  if (!SESSION_MODES.includes(mode ?? '')) {
     errors.push(`${relative(root, path)}: invalid session-mode ${mode}`);
   }
+  const classification = classifySessionRunProfile({
+    path: relative(root, path), kind, text, metadata: frontmatter(text),
+  });
+  for (const error of classification.errors) errors.push(`${relative(root, path)}: ${error}`);
   if (mode === 'run') {
-    if (!text.includes(RUN_MODE_REF)) errors.push(`${relative(root, path)}: run mode missing canonical workflow reference`);
     if (obsoleteRunMode.test(text)) errors.push(`${relative(root, path)}: run mode contains embedded or obsolete lifecycle content`);
     if (kind === 'command') {
       const parsed = frontmatter(text);
@@ -93,13 +97,12 @@ for (const path of walkMarkdown(join(root, 'workflows'))) {
     errors.push(`${relative(root, path)}: missing or invalid workflow session-mode`);
   }
   if (workflowMode === 'inherited') {
-    const canonicalRunMode = path === join(root, 'workflows', 'run-mode.md');
-    const inheritsThroughStepMetadata = typeof metadata?.prepare === 'string';
-    if (!canonicalRunMode && !inheritsThroughStepMetadata && !text.includes(RUN_MODE_REF)) {
-      errors.push(`${relative(root, path)}: inherited workflow missing canonical Run reference`);
-    }
     if (obsoleteRunMode.test(text)) errors.push(`${relative(root, path)}: inherited workflow contains embedded or obsolete lifecycle content`);
   }
+  const workflowProfile = classifySessionRunProfile({
+    path: relative(root, path), kind: 'workflow', text, metadata,
+  });
+  for (const error of workflowProfile.errors) errors.push(`${relative(root, path)}: ${error}`);
   if (workflowMode === 'bootstrap' && !text.includes('## Bootstrap Boundary')) {
     errors.push(`${relative(root, path)}: bootstrap workflow missing boundary`);
   }
@@ -122,11 +125,11 @@ for (const path of walkMarkdown(join(root, 'workflows'))) {
         errors.push(`${relative(root, path)}: associated prepare/${metadata.prepare}.md does not exist`);
       }
     }
-    if (!Array.isArray(metadata.commands) || metadata.commands.length === 0
-      || metadata.commands.some(command => typeof command !== 'string' || command.length === 0)) {
-      errors.push(`${relative(root, path)}: workflow association requires non-empty commands`);
+    const commands = metadata.commands ?? [];
+    if (!Array.isArray(commands) || commands.some(command => typeof command !== 'string' || command.length === 0)) {
+      errors.push(`${relative(root, path)}: workflow association commands must be a string sequence when declared`);
     } else {
-      for (const command of metadata.commands) {
+      for (const command of commands) {
         const previous = associatedCommands.get(command);
         if (previous) errors.push(`${relative(root, path)}: command ${command} already associated by ${previous}`);
         else associatedCommands.set(command, relative(root, path));
@@ -146,12 +149,25 @@ for (const dir of readdirSync(skillDir)) {
   if (!existsSync(skillPath)) continue;
   const skillText = readFileSync(skillPath, 'utf8');
   if (field(skillText, 'session-mode') !== 'run') continue;
-  for (const path of walkMarkdown(join(skillDir, dir))) {
+  const skillMarkdown = walkMarkdown(join(skillDir, dir));
+  if (dir.startsWith('team-')) {
+    for (const path of skillMarkdown) {
+      if (legacyTeamStateFile.test(readFileSync(path, 'utf8'))) {
+        errors.push(`${relative(root, path)}: team skill must use the single team-session.json state authority`);
+      }
+    }
+  }
+  for (const path of skillMarkdown) {
     if (path === skillPath) continue;
     const text = readFileSync(path, 'utf8');
     const rel = relative(join(skillDir, dir), path).replace(/\\/g, '/');
     const executable = rel.startsWith('roles/') || rel.startsWith('phases/') || rel === 'templates/skill-md.md';
-    if (executable && !text.includes(RUN_MODE_REF)) errors.push(`${relative(root, path)}: executable run skill child missing canonical Run reference`);
+    if (executable) {
+      const classification = classifySessionRunProfile({
+        path: relative(root, path), kind: 'skill-child', text,
+      });
+      for (const error of classification.errors) errors.push(`${relative(root, path)}: ${error}`);
+    }
     if (obsoleteRunMode.test(text)) errors.push(`${relative(root, path)}: run skill child contains embedded or obsolete lifecycle content`);
   }
 }
@@ -160,8 +176,26 @@ const canonicalRunMode = join(root, 'workflows', 'run-mode.md');
 if (!existsSync(canonicalRunMode)) errors.push('workflows/run-mode.md: missing canonical Run workflow');
 else {
   const text = readFileSync(canonicalRunMode, 'utf8');
-  for (const token of ['maestro run create', 'same normalized intent', '{run_dir}/outputs/', 'maestro run check', 'maestro run complete']) {
+  for (const token of ['maestro run create', 'same normalized intent', '{run_dir}/outputs/', 'complete top-level `_meta` object', '`kind` and `schema` are required together', 'maestro run check', 'maestro run complete']) {
     if (!text.includes(token)) errors.push(`workflows/run-mode.md: missing ${token}`);
+  }
+}
+
+const canonicalRunModeLite = join(root, 'workflows', 'run-mode-lite.md');
+if (!existsSync(canonicalRunModeLite)) errors.push('workflows/run-mode-lite.md: missing canonical team Run workflow');
+else {
+  const text = readFileSync(canonicalRunModeLite, 'utf8');
+  for (const token of ['Team State Authority', 'team-session.json', 'merge-write', 'complete top-level `_meta` object', '`kind` and `schema` are required together']) {
+    if (!text.includes(token)) errors.push(`workflows/run-mode-lite.md: missing ${token}`);
+  }
+}
+
+const canonicalTeamWorker = join(root, '.claude', 'agents', 'team-worker.md');
+if (!existsSync(canonicalTeamWorker)) errors.push('.claude/agents/team-worker.md: missing canonical team worker');
+else {
+  const text = readFileSync(canonicalTeamWorker, 'utf8');
+  for (const token of ['team-session.json', 'complete top-level `_meta` object', '`kind` and `schema` are an atomic pair']) {
+    if (!text.includes(token)) errors.push(`.claude/agents/team-worker.md: missing ${token}`);
   }
 }
 

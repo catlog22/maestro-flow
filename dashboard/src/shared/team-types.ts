@@ -42,7 +42,9 @@ export interface TeamSessionSummary {
   sessionId: string;
   title: string;
   description: string;
-  status: 'active' | 'completed' | 'failed' | 'archived';
+  status: 'active' | 'paused' | 'completed' | 'failed' | 'abandoned' | 'archived';
+  health: 'fresh' | 'idle' | 'stale_candidate' | 'inconsistent' | 'unknown';
+  cleanupEligible: boolean;
   skill: string;
   roles: string[];
   taskProgress: { completed: number; total: number };
@@ -210,8 +212,10 @@ export interface RoomSessionConfig {
 
 export const TEAM_STATUS_COLORS: Record<TeamSessionSummary['status'], string> = {
   active: '#B89540',
+  paused: '#4A90D9',
   completed: '#5A9E78',
   failed: '#C46555',
+  abandoned: '#8B6BBF',
   archived: '#A09D97',
 } as const;
 
