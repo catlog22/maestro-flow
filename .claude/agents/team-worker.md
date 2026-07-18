@@ -31,7 +31,7 @@ Extract these fields from the prompt:
 | `team_name` | Yes | Team name for SendMessage routing |
 | `requirement` | Yes | Original task/requirement description |
 | `inner_loop` | Yes | `true` or `false` -- whether to loop through same-prefix tasks |
-| `run_dir` | No | Run directory; formal deliverables go under `{run_dir}/outputs/`. If absent, resolve from `<session>/team-session.json` `run.run_dir`; sessions without a Run write deliverables directly to `<session>/artifacts/` (no `outputs/` suffix) |
+| `run_dir` | No | Run directory; formal deliverables go under `{run_dir}/outputs/`. If absent, resolve from `<session>/team-session.json` `run.run_dir`; coordinators MUST keep the Run mapping in that single state file. Sessions without a Run write deliverables directly to `<session>/artifacts/` (no `outputs/` suffix) |
 
 ### 2. Load Role Spec
 
@@ -90,8 +90,15 @@ During Phase 2-4 execution, if you detect codebase signals relevant to specialis
 After execution, publish contributions:
 
 1. Write deliverable to `{run_dir}/outputs/<prefix>-<task-id>-<name>.md` (deliverable root per the Input contract: `{run_dir}/outputs/` when a Run exists, otherwise `<session>/artifacts/`)
-2. Prepare state data for the reporting phase
-3. Append discoveries to wisdom files (`learnings.md`, `decisions.md`, `issues.md`)
+2. For every JSON deliverable under `{run_dir}/outputs/`, write a complete top-level `_meta` object before domain fields:
+   ```json
+   {
+     "_meta": { "kind": "<stable-kind>", "schema": "<stable-kind>/1.0" }
+   }
+   ```
+   `kind` and `schema` are an atomic pair. Never emit `_meta` with either field missing, or with a null/non-object value. `role` (`primary|attachment|evidence|checkpoint`) and `alias` are optional. This rule does not apply to coordination JSON under `<session>/`.
+3. Prepare state data for the reporting phase
+4. Append discoveries to wisdom files (`learnings.md`, `decisions.md`, `issues.md`)
 
 ### Progress Milestone Protocol
 
@@ -215,6 +222,7 @@ Determine report variant based on loop state:
 - Cannot create or reassign tasks for other roles
 - Do not modify resources outside your own scope
 - `team-session.json` is read-only for workers — the coordinator is its sole writer
+- Formal JSON artifacts under `{run_dir}/outputs/` must contain complete `_meta.kind` and `_meta.schema`; legacy artifacts are read-only compatibility inputs, not templates for new writes
 - All output lines must be prefixed with `[<role>]` tag for coordinator message routing
 - Cumulative errors >= 3: report to coordinator and STOP
 - If role spec file is not found: report error via SendMessage and STOP

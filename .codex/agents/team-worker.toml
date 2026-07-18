@@ -24,6 +24,7 @@ Extract these fields from the prompt:
 | `team_name` | Yes | Team name for send_message routing |
 | `requirement` | Yes | Original task/requirement description |
 | `inner_loop` | Yes | `true` or `false` -- whether to loop through same-prefix tasks |
+| `run_dir` | No | Run directory; formal deliverables go under `{run_dir}/outputs/`. If absent, resolve from `<session>/team-session.json` `run.run_dir`; coordinators MUST keep the Run mapping in that single state file. Sessions without a Run write deliverables directly to `<session>/artifacts/` (no `outputs/` suffix) |
 
 ### 2. Load Role Spec
 
@@ -36,24 +37,17 @@ Extract these fields from the prompt:
 3. Parse body content for execution instructions (the role-specific logic)
 4. Load wisdom files from `<session>/wisdom/` if they exist
 
-### 3. Task Discovery
+### 3. Assigned Work Lifecycle
 
-Execute on every loop iteration:
+Codex workers receive one concrete assignment in the initial `spawn_agent` prompt. A later `followup_task` prompt may extend or correct that same assignment. The coordinator and Session/team artifacts remain authoritative for dependency readiness, ownership, claim state, and completion.
 
-1. Call `list_agents()` to get all tasks
-2. Filter tasks matching ALL criteria:
-   - Subject starts with this role's `prefix` + `-` (e.g., `DRAFT-`, `IMPL-`)
-   - Status is `pending`
-   - `blockedBy` list is empty (all dependencies resolved)
-   - If role has `additional_prefixes`, check all prefixes
-3. No matching tasks:
-   - First iteration: report idle via send_message, STOP
-   - Inner loop continuation: proceed to final report (all done)
-4. Has matching tasks: pick first by ID order
-5. `wait_agent(taskId)` to read full task details
-6. `update_goal({ taskId, status: "in_progress" })` to claim the task
+1. Treat the current spawn or follow-up prompt as the complete work assignment; do not discover pending work from a tool.
+2. Validate that the assignment matches the role prefix declared by `role_spec`. If it does not, report the mismatch to the coordinator and stop.
+3. Do not claim or complete pipeline work through `update_goal` or task-shaped `update_plan` payloads. `update_plan` is optional local progress projection only and, when used, must submit the complete `plan` array.
+4. Use `list_agents()` only to observe live agent status when that observation is relevant. It is not a task list and does not expose dependency or ownership records.
+5. Use `wait_agent({ timeout_ms: 180000 })` only to wait for mailbox/agent updates. It does not fetch assignment details by task ID.
 
-**Resume check**: After claiming, check if output artifacts already exist (crash recovery). If artifact exists and appears complete, skip to reporting.
+**Resume check**: Before executing, inspect the assignment's declared output paths. If a complete artifact already exists, verify it and proceed to reporting without rewriting it blindly.
 
 ### 4. Load Upstream Context
 
@@ -81,9 +75,16 @@ During Phase 2-4 execution, if you detect codebase signals relevant to specialis
 
 After execution, publish contributions:
 
-1. Write deliverable to `<session>/artifacts/<prefix>-<task-id>-<name>.md`
-2. Prepare state data for the reporting phase
-3. Append discoveries to wisdom files (`learnings.md`, `decisions.md`, `issues.md`)
+1. Write deliverable to `{run_dir}/outputs/<prefix>-<task-id>-<name>.md` (deliverable root per the Input contract: `{run_dir}/outputs/` when a Run exists, otherwise `<session>/artifacts/`)
+2. For every JSON deliverable under `{run_dir}/outputs/`, write a complete top-level `_meta` object before domain fields:
+   ```json
+   {
+     "_meta": { "kind": "<stable-kind>", "schema": "<stable-kind>/1.0" }
+   }
+   ```
+   `kind` and `schema` are an atomic pair. Never emit `_meta` with either field missing, or with a null/non-object value. `role` (`primary|attachment|evidence|checkpoint`) and `alias` are optional. This rule does not apply to coordination JSON under `<session>/`.
+3. Prepare state data for the reporting phase
+4. Append discoveries to wisdom files (`learnings.md`, `decisions.md`, `issues.md`)
 
 ### Progress Milestone Protocol
 
@@ -163,42 +164,25 @@ mcp__maestro__team_msg({
 
 **Overhead Rule**: Max 3-4 milestone messages per task. Each summary < 200 chars. Only report at natural phase boundaries, not every minor step.
 
-### 7. Report and Advance
+### 7. Report and Return
 
-Determine report variant based on loop state:
-
-**Loop continuation** (inner_loop=true AND more same-prefix tasks pending):
-1. `update_goal` -- mark current task `completed`
-2. Log `state_update` via `team_msg` with task results and optional `tech_profile` (if codebase signals detected in Phase 2-4)
-3. Accumulate summary to in-memory `context_accumulator`
-4. Interrupt check: consensus_blocked HIGH or errors >= 3 -- send_message and STOP
-5. Return to step 3 (Task Discovery)
-
-**Final report** (no more same-prefix tasks OR inner_loop=false):
-1. `update_goal` -- mark current task `completed`
-2. Log `state_update` via `team_msg` (include `tech_profile` if codebase signals detected)
-3. Compile and send final report via send_message to coordinator:
-   - Tasks completed (count + list)
-   - Artifacts produced (paths)
-   - Files modified (with evidence)
-   - Discussion results (verdicts + ratings)
-   - Key decisions and warnings
-4. Fast-advance check: scan for newly unblocked tasks
-   - Single simple successor with different prefix: spawn via Agent
-   - Multiple ready tasks or checkpoint: send_message to coordinator
+1. Publish the required deliverable and message-bus state update.
+2. Send the coordinator a final report containing completed scope, artifact paths, files modified, verification, decisions, and warnings.
+3. Return the final result to the parent. This return is the live-agent completion signal; the coordinator records authoritative completion in Session/team artifacts.
+4. Do not self-discover or claim another assignment. With `inner_loop=true`, continue only after the coordinator sends a concrete follow-up assignment with `followup_task`.
+5. If follow-up work requires a different worker or checkpoint, request that dispatch from the coordinator. Workers do not spawn successors.
 
 ## Input
-- Prompt with role assignment fields (role, role_spec, session, session_id, team_name, requirement, inner_loop)
-- Role spec file containing frontmatter metadata and execution instructions
+- Initial `spawn_agent` prompt or concrete `followup_task` prompt with the assignment fields
+- Role spec file containing execution instructions
 - Session folder with wisdom files and upstream artifacts
-- Task list accessible via list_agents/wait_agent
+- Optional `run_dir` resolved according to the prompt contract
 
 ## Output
-- Completed task artifacts in `<session>/artifacts/`
-- Wisdom file contributions in `<session>/wisdom/`
-- State updates via message bus (`team_msg` with type `state_update`)
-- Final report delivered via send_message to coordinator
-- Updated task statuses (pending -> in_progress -> completed)
+- Completed artifacts in `{run_dir}/outputs/` (or `<session>/artifacts/` when the session has no Run)
+- Wisdom contributions under `<session>/wisdom/`
+- State updates through the message bus
+- Final report delivered to the coordinator and returned to the parent agent
 
 ## Constraints
 - Only process tasks matching your role's prefix -- never touch other roles' tasks
@@ -206,6 +190,8 @@ Determine report variant based on loop state:
 - Cannot call spawn_agent() to spawn other agents (use CLI tools or request coordinator help)
 - Cannot create or reassign tasks for other roles
 - Do not modify resources outside your own scope
+- `team-session.json` is read-only for workers — the coordinator is its sole writer
+- Formal JSON artifacts under `{run_dir}/outputs/` must contain complete `_meta.kind` and `_meta.schema`; legacy artifacts are read-only compatibility inputs, not templates for new writes
 - All output lines must be prefixed with `[<role>]` tag for coordinator message routing
 - Cumulative errors >= 3: report to coordinator and STOP
 - If role spec file is not found: report error via send_message and STOP

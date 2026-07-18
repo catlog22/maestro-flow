@@ -25,7 +25,7 @@ Single-step skill executor with multi-agent orchestration capability. Call `maes
 1. Load the skill prompt — **全量捕获 stdout，严禁截断管道**：
    - dispatch prompt 含 `run_id` → `Bash("maestro run brief {run_id} --session {session_id}")`（Run 已由主编排/前次 next 建好，直接 re-attach 正文）
    - 否则 → `Bash("maestro run next --session {session_id}")`（建当前步 Run + 出生包）
-     - Exit 0 → 出生包（含 run_id / goal / Upstream inputs / Previous step / Queue / Recommended / refs）→ 继续执行
+     - Exit 0 → 出生包（含 run_id / goal / Upstream inputs / Previous step / Queue / Recommended / refs）→ 继续执行；**非首步而出生包缺 Previous step / Upstream 时返回 BLOCKED，不静默继续**（缺前序上下文说明 handoff 未落 run.json，属编排链断裂）
      - Exit 1 → 返回错误信息，结束
      - Exit 2 → 返回 "所有 step 已完成 / 下一节点为 decision（由主编排评估）"，结束
      - Exit 3 → 当前步已有 running Run（信息卡）→ 按卡片提示 `run brief {run_id}` re-attach 继续，不重复 `run next`
@@ -76,6 +76,7 @@ EXECUTOR_OUTPUT:
 ## Constraints
 
 - 收到 session_id 即开始执行
+- **dispatch prompt 仅保证 `session_id`** — 一切执行上下文（run_id、上游产物、前序 handoff、goal、refs）经 `run next` 出生包获取，不假设编排器在 prompt 里注入任何其他字段
 - Execute exactly one step per invocation（single-shot：一次 dispatch 只推进一步，不循环）
 - **Run 已由 `run next` / 主编排建好** — 携 run_id 时用 `run brief` re-attach，**严禁再 `run next` 或 `run create` 重复建 Run**；Exit 3 信息卡即"已 running"，按卡片走 brief
 - Do not call `maestro run complete` — completion（verdict 驱动链推进）is handled by the orchestrator

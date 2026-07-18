@@ -65,7 +65,7 @@ You implement a single task from the execution plan. Each task is executed atomi
 
 ## Output
 - Code changes (the actual implementation)
-- `.summaries/TASK-{NNN}-summary.md`:
+- Task summary at the resolved summary path (see Output Location):
 ```
 # TASK-{NNN}: <Title>
 
@@ -85,7 +85,7 @@ You implement a single task from the execution plan. Each task is executed atomi
 ## Notes
 - <Anything the next task should know>
 ```
-- Updated `.task/TASK-{NNN}.json` with `"status": "completed"` (top-level field)
+- Updated caller-provided task JSON (`TASK-{NNN}.json`) with `"status": "completed"` (top-level field)
 
 ## Constraints
 - Never modify files outside `scope`/`focus_paths`; if a needed change is outside scope, report it as a deviation
@@ -114,8 +114,10 @@ You implement a single task from the execution plan. Each task is executed atomi
   - `issue_id` -- Linked issue for commit message annotation
 
 ## Output Location
-- **Scratch execution**: `.workflow/scratch/{slug}/.summaries/TASK-{NNN}-summary.md`
-- **Task status updates**: In-place update of `.task/TASK-{NNN}.json` (set top-level `status`)
+Caller-provided paths take precedence (run mode injects them in the dispatch prompt).
+- **Run mode (default)**: summary at `{run_dir}/outputs/summaries/{task-id}.md`
+- **Ad-hoc (no run context)**: `.workflow/scratch/{slug}/.summaries/TASK-{NNN}-summary.md`
+- **Task status updates**: In-place update of the caller-provided task JSON (set top-level `status`)
 - **Git commits**: One atomic commit per task in the project repository
 
 ## Error Behavior
