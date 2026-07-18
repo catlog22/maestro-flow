@@ -17,7 +17,9 @@ import {
 import { join, dirname, relative } from 'node:path';
 import { homedir } from 'node:os';
 
-// Re-export from shared core (single source of truth)
+// Re-export from shared core (single source of truth). Use source-relative
+// imports here because the dashboard server is compiled before the root dist
+// package exists in a fresh checkout.
 import {
   createManifest,
   saveManifest,
@@ -25,11 +27,15 @@ import {
   getAllManifests,
   addFile,
   addDir,
-  paths,
-  injectDocFile,
+  type Manifest,
+  type ManifestEntry,
+} from '../../../../src/core/manifest.js';
+import { paths } from '../../../../src/config/paths.js';
+import { injectDocFile } from '../../../../src/core/tag-injector.js';
+import {
   COMPONENT_DEFS,
-} from 'maestro-flow';
-import type { Manifest, ManifestEntry, ComponentDef } from 'maestro-flow';
+  type ComponentDef,
+} from '../../../../src/core/component-defs.js';
 import {
   scanDisabledItems,
   restoreDisabledState,
