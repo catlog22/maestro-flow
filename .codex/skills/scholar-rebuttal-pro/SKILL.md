@@ -19,7 +19,7 @@ allowed-tools:
   - spawn_agent
   - update_plan
 session-mode: run
-version: 0.5.50
+version: 0.5.51
 contract:
   discovery: self-described
   consumes: []

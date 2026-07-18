@@ -25,7 +25,7 @@ contract:
   gates:
     entry: []
     exit: []
-version: 0.5.50
+version: 0.5.51
 ---
 
 <required_reading>
