@@ -6,6 +6,10 @@ import YAML from 'yaml';
 
 const root = process.cwd();
 const write = process.argv.includes('--write');
+const check = process.argv.includes('--check') || !write;
+const onlyIndex = process.argv.findIndex(arg => arg === '--only');
+const only = process.argv.find(arg => arg.startsWith('--only='))?.slice('--only='.length)
+  ?? (onlyIndex >= 0 ? process.argv[onlyIndex + 1] : null);
 const packageVersion = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8')).version;
 const codexRoot = join(root, '.codex', 'skills');
 const claudeCommands = join(root, '.claude', 'commands');
@@ -64,6 +68,15 @@ function removeManagedBlock(body) {
   return body.replace(/^<(?:run_mode|bootstrap_mode|deprecated_command)>\r?\n[\s\S]*?<\/(?:run_mode|bootstrap_mode|deprecated_command)>\r?\n*/u, '');
 }
 
+function removeManagedRunReading(body) {
+  const block = body.match(/^<required_reading>([\s\S]*?)<\/required_reading>\s*/i);
+  if (!block) return body;
+  const refs = block[1].split(/\r?\n/).map(line => line.trim()).filter(Boolean)
+    .filter(ref => ref !== RUN_MODE_REF && ref !== RUN_MODE_LITE_REF && ref !== CODEX_RUN_REF);
+  const replacement = refs.length > 0 ? `<required_reading>\n${refs.join('\n')}\n</required_reading>\n\n` : '';
+  return body.replace(block[0], replacement);
+}
+
 function rewriteObsoleteArtifactPaths(body) {
   return body
     .replaceAll('.workflow/.scratchpad', '{run_dir}/outputs')
@@ -109,6 +122,7 @@ function rewriteObsoleteArtifactPaths(body) {
 let changed = 0;
 for (const entry of readdirSync(codexRoot, { withFileTypes: true })) {
   if (!entry.isDirectory()) continue;
+  if (only && entry.name !== only) continue;
   const path = join(codexRoot, entry.name, 'SKILL.md');
   if (!existsSync(path)) continue;
   const before = readFileSync(path, 'utf8');
@@ -116,13 +130,14 @@ for (const entry of readdirSync(codexRoot, { withFileTypes: true })) {
   const source = sourceMetadata(entry.name);
   let mode = source?.mode ?? null;
   if (!mode) mode = obsoleteArtifactPattern.test(body) ? 'run' : 'none';
-  if (mode === 'none' && obsoleteArtifactPattern.test(body)) mode = 'run';
   if (mode === 'brief') mode = 'none';
   data.version = packageVersion;
   data['session-mode'] = mode;
   if (mode === 'run') data.contract = source?.contract ?? data.contract ?? genericContract();
   if (mode !== 'run') delete data.contract;
-  let cleanBody = mode === 'deprecated' ? '' : rewriteObsoleteArtifactPaths(removeManagedBlock(body)).replace(/^\s+/, '');
+  let cleanBody = mode === 'deprecated'
+    ? ''
+    : rewriteObsoleteArtifactPaths(removeManagedRunReading(removeManagedBlock(body))).replace(/^\s+/, '');
   if (mode === 'run') cleanBody = addRequiredReading(cleanBody, source?.usesLite ?? false);
   const after = `---\n${YAML.stringify(data).trimEnd()}\n---\n\n${specialBlock(mode)}${cleanBody}`.trimEnd() + '\n';
   if (after === before) continue;
@@ -131,4 +146,9 @@ for (const entry of readdirSync(codexRoot, { withFileTypes: true })) {
   console.log(`${write ? 'updated' : 'would update'} ${relative(root, path)}`);
 }
 
-console.log(`${write ? 'updated' : 'planned'} ${changed} Codex skills`);
+if (check && changed > 0) {
+  console.error(`Codex skill mirrors are stale: ${changed} file(s). Run: node scripts/sync-codex-run-mode.mjs --write`);
+  process.exitCode = 1;
+} else {
+  console.log(`${write ? 'updated' : 'checked'} ${changed} Codex skills`);
+}

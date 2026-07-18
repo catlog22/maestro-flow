@@ -1,4 +1,6 @@
 
+> **Plan tracking**: codex 无 TaskCreate/TaskUpdate/TodoWrite 任务板。进度清单用 `update_plan({ explanation?, plan: [{ step, status }] })` 维护（整体提交步骤数组，status: `pending` | `in_progress` | `completed`），权威状态始终在 session 工件中；依赖/认领（addBlockedBy/owner）是工件字段，不是工具参数。
+
 <required_reading>
 @~/.maestro/workflows/run-mode.md
 </required_reading>
@@ -158,8 +160,8 @@ function validateContentQuality(config) {
     }
 
     // Agent prompt preservation
-    const sourceAgents = (sourceBody.match(/spawn_agent\(|agent_type/g) || []).length;
-    const phaseAgents = (phaseContent.match(/spawn_agent\(|agent_type/g) || []).length;
+    const sourceAgents = (sourceBody.match(/Task\(|subagent_type/g) || []).length;
+    const phaseAgents = (phaseContent.match(/Task\(|subagent_type/g) || []).length;
     if (phaseAgents < sourceAgents) {
       results.errors.push(
         `Phase ${phase.number} missing agent calls: source=${sourceAgents}, phase=${phaseAgents}`

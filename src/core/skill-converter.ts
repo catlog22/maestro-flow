@@ -430,8 +430,8 @@ function formatCodexSkill(name: string, args: string | undefined): string {
   const taskName = fm.transforms?.task_name === 'lowercase_underscore'
     ? toSnakeCase(name)
     : name;
-  const argLine = args ? `, args: "${args}"` : '';
-  return `${fm.tool}({ ${fm.fields.skill}: "${taskName}", ${fm.fields.args}: "Execute skill ${name}${argLine}" })`;
+  const message = args ? `Execute skill ${name}, args: ${args}` : `Execute skill ${name}`;
+  return `${fm.tool}({ ${fm.fields.skill}: "${taskName}", ${fm.fields.args}: ${JSON.stringify(message)} })`;
 }
 
 // ---------------------------------------------------------------------------
