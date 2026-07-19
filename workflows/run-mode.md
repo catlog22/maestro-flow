@@ -5,13 +5,20 @@ This file is the single Session/Run lifecycle contract for every command, workfl
 
 Lifecycle verbs: **prepare → create → brief → check → complete**.
 
+## Authority and Reuse
+
+- A Session is a durable **topic grouping/index**. It groups related Runs; it is not an execution result and historical similarity never grants Session mutation authority.
+- A Run is one execution attempt. Its sealed outputs remain immutable and may be consumed by later Runs in the **same Session** through the canonical `upstream`/Artifact Registry map.
+- Reuse references eligible sealed outputs in place. Normal routing does not fork, import, copy, resume, or resolve Sessions to obtain prior work.
+- Historical similarity is read-only evidence. It may explain potentially related work, but it never selects a Session, binds an output, creates a Run, or becomes a next action.
+
 ## Prepare (optional, read-only)
 
 - `maestro run prepare <step>` resolves what a step would consume and produce without side effects.
 - Read-only and idempotent — it never allocates a Session or creates directories.
 - Use it to preview upstream availability and the derived artifact contract before committing to a Run.
 
-## Start or Resume
+## Start or Continue a Run
 
 > **Dispatched by an orchestrator?** When `ralph next` or `maestro run next` invokes you, the Run is already created and its `run_id` / `run_dir` / `upstream` are injected in the birth packet — use them directly and do **NOT** call `maestro run create` (a second create mints an empty duplicate Run). The steps below apply only to a command starting a Run on its own.
 
@@ -21,9 +28,9 @@ Lifecycle verbs: **prepare → create → brief → check → complete**.
    - `--session`: the slug from step 2 (explicit, ASCII-only, ≤64 chars).
    - `--intent`: a short human-readable phrase (1 sentence) describing the goal. May contain Chinese but is NOT used as the session ID.
    - `$ARGUMENTS`: command-specific flags (e.g. `--template <name>`).
-4. The runtime resolves the Session in this order: explicit `--session`, an existing running/paused Session with the same normalized intent, otherwise a newly allocated Session. With step 2–3 followed correctly, the explicit path always wins.
+4. The runtime resolves the Session in this order: an explicit compatible `--session`, an unambiguous canonical topic match, otherwise a newly allocated topic Session. Paused or historical similarity is read-only and never authorizes selection, resume, or mutation.
 5. Retain the returned `session_id`, `run_id`, `run_dir`, and `upstream`. Do not locate Sessions or artifacts with glob, mtime, directory ordering, or hidden command folders.
-6. `maestro run brief <run_id>` returns the Resume Packet — prior artifacts, upstream map, and open decisions — for continuing an existing Run.
+6. `maestro run brief <run_id>` returns the Resume Packet — same-Session sealed artifacts, the authoritative upstream map, and open decisions — for continuing an existing Run.
 
 **Session slug examples:**
 ```
@@ -53,8 +60,13 @@ maestro run create odyssey --session 20260715-odyssey-planex-todo -- --mode plan
 
 1. Run `maestro run check {run_id}` and repair any blocking artifact or exit gate it reports.
 2. When every gate is clean, `run check` emits a `finish` checklist — handoff frontmatter, knowledge record, conflict marking (supersede / contest stale spec-knowhow entries), verdict choice, plus norms declared by the workflow. Work through it before completing; it is prompt-layer guidance, never a blocking gate.
-3. Run `maestro run complete {run_id}`. The artifact gate is derived from the Run contract and evaluated automatically.
-4. Report success only when the Run is completed. Completed artifacts are immutable; revisions create new Runs/artifacts.
+3. Run `maestro run complete {run_id}`. The artifact gate is derived from the Run contract and evaluated automatically. Completion may return a structured `suggest_only` next action, but it never executes that action or creates another Run.
+4. The caller explicitly invokes `maestro run next --session {session_id}` only after accepting the suggestion and its preconditions. `run next` is the sole normal allocator for the next chain-bound Run.
+5. Report success only when the Run is completed. Completed artifacts are immutable; later Runs in the same Session reuse eligible sealed outputs through `upstream` rather than copying them.
+
+## Legacy/Admin Compatibility
+
+`maestro run recall-confirm`, `run fork`, `run import`, `run new`, `run rebind`, `maestro session resolve`, and `session resume` are deprecated admin-only compatibility commands. They may remain callable while legacy records exist, but normal topic resolution, output reuse, recall recommendations, and next-action routing MUST NOT invoke or recommend them. They provide no force bypass; durability and recovery internals remain runtime-owned.
 
 **Workflow-specific finish norms**: declare a `finish:` list in the workflow file's YAML frontmatter; each entry is one norm line appended to the `run check` finish checklist.
 

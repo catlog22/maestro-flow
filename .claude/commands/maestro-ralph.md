@@ -28,9 +28,9 @@ contract:
 </required_reading>
 
 <purpose>
-Adaptive lifecycle orchestrator: locate step → resolve args → load context → dispatch [@subagent] Agent(ralph-executor) per step (agent 调 `run next`/`run brief` + 执行) → extract signals → drift check → `run complete --verdict` → evaluate decision → next step → loop.
+Adaptive lifecycle orchestrator: locate a topic-grouping Session → locate step → resolve args → load same-Session sealed outputs from `run next`/`run brief` → dispatch [@subagent] Agent(ralph-executor) per step → extract signals → drift check → `run complete --verdict` → evaluate decision → explicit next step → loop.
 
-Session: `.workflow/sessions/{id}/session.json`（engine=ralph；orchestration 为唯一编排真相源，含 chain/decision_points/position/decomposition/lease/executor）。步进进度看 run.json handoff/anchor，非 session.json 内的 step 明细。
+Session: `.workflow/sessions/{id}/session.json`（topic grouping/index；engine=ralph 的 orchestration 含 chain/decision_points/position/decomposition/lease/executor）。执行、handoff、anchor 与 sealed outputs 归 Run。
 `{session_dir}` = `.workflow/sessions/{id}/`（标准 session 目录）。
 遗留 `ralph-meta.json` 仅作旧 session 的 legacy 读兜底，不再写入。
 </purpose>
@@ -68,7 +68,7 @@ Remaining      → intent (amend_mode 时为 change_request)
 ```
 
 **State files**:
-- `.workflow/state.json` — project state + session index
+- `.workflow/state.json` — project projection only；不得作为 topic resolution 或 artifact reuse authority
 - `.workflow/sessions/{id}/session.json` — 唯一编排真相源（engine=ralph；orchestration.chain/decision_points/position/decomposition/lease/executor）
 - `.workflow/sessions/{id}/runs/{run_id}/run.json` — 每步 Run 的 handoff/anchor（步进进度单源）
 - `.workflow/sessions/{id}/ralph-meta.json` — legacy 兜底（旧 session 未迁移时的读取源；新 session 不写）
@@ -92,7 +92,7 @@ Remaining      → intent (amend_mode 时为 change_request)
 12. **step command 在 A_BUILD_STEPS 解析** — 通过 `maestro ralph skills --platform claude --steps --json --quiet` 预校验（`--steps` 引入 prepare/workflows 步骤注册表，覆盖生命周期 step 名）
 13. **执行 step 内容加载** — 由 `maestro run next` CLI 通过 `resolveStepContent()` 在执行期完成
 14. **Decomposition is outcome-oriented** — sub-goals 为可观测交付，禁止 lifecycle 复刻
-15. **Sessions are independent work units** — skill args 统一用 `--session {session}` 模式，无 phase/milestone 占位符
+15. **Sessions are topic grouping/indexes** — Run 才是 execution/output 单元；skill args 统一用 `--session {session}` 模式，无 phase/milestone 占位符；后续 Run 仅经 canonical upstream 引用同 Session sealed outputs
 16. **task_decomposition 驱动 steps[] 动态生长** — `post-goal-audit` 按 unmet 子目标插入 scoped mini-loop
 17. **Invariant violation = BLOCK** — 违反上述任一 invariant 即阻断当前操作
 18. **Evaluate fallback 必须标记** — 评估 Agent 解析 verdict 失败时 fallback 为 "fix"，MUST 在 decisions.ndjson 记录 `"parse_failed": true, "confidence_score": 0`
@@ -101,6 +101,7 @@ Remaining      → intent (amend_mode 时为 change_request)
 21. **控制权优先级（范式治理）** — FSM 独占 session 生命周期 + step 排序 + retry/fix/escalate + cross-step decision 节点
 22. **引擎只做并行加速，不做状态决策** — `--engine swarm|universal` 通过 Workflow 引擎并行执行单个 step，MUST NOT 修改 session state、MUST NOT 推进 step、MUST NOT 触碰 decision 节点；引擎产出写入该 step 的 Run output dir（格式兼容对应命令产物），由主流程照常 `run complete --verdict`。生成/固定脚本对引擎只读（`wf-*.js` 从不被编辑；`uwf-*.js` 仅由 universal 生成器按幂等命名覆盖）。
 23. **Goal tracking 与 session 双写** — 主流程在 session 创建、step 派发、step 完成时同步创建/更新 goal，补充 session.json 的 UI 可见进度。
+24. **Compatibility commands are out of band** — 正常 Ralph 路由禁止调用或推荐 `run recall-confirm|fork|import|new|rebind` 与 `session resolve|resume`；historical similarity 只读，deprecated admin-only CLI 不参与 topic resolution、output reuse 或 next routing，且无 force bypass。
 </invariants>
 
 <task_tracking>
@@ -249,24 +250,19 @@ S_SESSION_DONE:
 
 前置于 A_INFER_POSITION。产出 `session_id` + `session_is_new`。
 
-**Priority:**
+Session 只承载 topic grouping/index；不得按 `state.json.active_session_id`、slug 相似度、mtime 或 historical similarity 猜测 authority。
 
 | Step | 行为 | session_is_new |
 |------|------|----------------|
-| 1 | intent 含 `--session <id>` 显式指定 → 取该 session_id | false |
-| 2 | intent 派生短语（slug）→ 在 `state.json.sessions[*].session_id` / `sessions[*].slug` 匹配 | false (匹配) / true (无匹配) |
-| 3 | 未派生 → 取 `state.json.active_session_id` | false |
-| 4 | 仍无 → state.json 首个 dep-ready（依赖已满足）的 pending session | false |
-| 5 | position 将是 brainstorm/blueprint/init/roadmap/analyze-macro → session_id = null | n/a |
-| 6 | 仍模糊 → `[@ask] AskUserQuestion` | 由用户回答确定 |
+| 1 | intent 含 `--session <id>` → 读取 canonical SessionStore 并验证 topic compatibility | false |
+| 2 | 已注入 `run_id` / `session_id` birth packet → 使用其 authoritative locator，并以 `run brief` 续接 | false |
+| 3 | `maestro run recall maestro-ralph --intent "{intent}" --json` 只读返回唯一 running topic locator → 取其 `session_id` | false |
+| 4 | 多个 running locator → `[@ask] AskUserQuestion` 显式选择；不得以相似度自动挑选 | false |
+| 5 | 无 running locator → 为 `session create --chain-file` 派生稳定 topic slug | true |
 
-**Session resolution priority**（优先级链）：explicit `--session` > slug match in `sessions[]` > `active_session_id` > first dep-ready session > ask user。
+Paused/sealed/archived/historical candidates 仅供只读说明；不得调用 `session resolve|resume`，不得 fork/import/new，也不得跨 Session 复制 outputs。
 
-**写入 session**: `session_id`, `session_is_new`。
-
-**新派生 session 时处理**：
-- intent 派生新 session slug → 写入 `session.session_id` 作为标识；`state.json.sessions[]` 由 step `roadmap` / session-seal 创建
-- session_is_new=true → 该 session 尚无上游产出，lifecycle 从 analyze 起
+**写入内存上下文**：`session_id`, `session_is_new`。实际 Session 仅由 CLI 创建/更新；`session_is_new=true` 时尚无同 Session sealed outputs，lifecycle 从 analyze 起。
 
 ### A_INFER_POSITION
 
@@ -296,20 +292,19 @@ wants_roadmap = (--roadmap flag)
 | Has `.workflow/` but no state.json | `init` |
 | Has state.json | → session-aware artifact inference |
 
-**Session-aware artifact inference** (使用 A_RESOLVE_SESSION 已写入的 `session.session_id` + `session.session_is_new`)：
+**Session-aware artifact inference**（使用 canonical SessionStore/Artifact Registry；只看同 Session sealed Runs）：
 
 | Condition | Position |
 |-----------|----------|
 | `session_is_new == true` (新 session) | `analyze` |
-| no roadmap-produced sessions AND has analyze macro artifact | `roadmap` if `wants_roadmap` else `plan` (--from analyze) |
-| no roadmap-produced sessions AND no analyze artifact | `analyze-macro` |
-| `session_id == null` (grill/brainstorm/blueprint/init/roadmap/analyze-macro override 已定) | n/a |
-| session 已存在 + 无任何 artifact | `analyze` |
-| session 已存在 + 最新 artifact = analyze | `plan` |
-| session 已存在 + 最新 artifact = plan | `execute` |
-| session 已存在 + 最新 artifact = execute | → refine from post-execute results |
+| no same-Session sealed analyze output AND has standalone analyze macro artifact | `roadmap` if `wants_roadmap` else `plan`（显式 standalone `--from analyze`） |
+| no same-Session sealed analyze output AND no standalone analyze artifact | `analyze-macro` |
+| session 已存在 + 无 sealed output | `analyze` |
+| session 已存在 + canonical upstream 最新 kind = analyze | `plan` |
+| session 已存在 + canonical upstream 最新 kind = plan | `execute` |
+| session 已存在 + canonical upstream 最新 kind = execute | → refine from post-execute results |
 
-**关键不变量**：artifact 过滤按 `session.session_id`，不读 `state.json.current_phase`。`session_is_new` → 直接 `analyze`。
+**关键不变量**：artifact reuse 只接受同 `session_id` 的 eligible sealed outputs，并由 `run next`/`run brief` 的 upstream map 暴露；不读 `state.json.current_phase`/`state.json.artifacts`，不使用 historical similarity 绑定产物。`session_is_new` → 直接 `analyze`。
 
 ### A_RESOLVE_SCOPE_VERDICT
 
@@ -449,10 +444,8 @@ Generate steps from `session.lifecycle_position` to `session-seal`（`session.se
     - `analyze_macro_id` 存在且当前 step 是 `roadmap` → args 改为 `--from analyze:{analyze_macro_id}`
     - `analyze_macro_id` 存在且当前 `plan` step 处于 standalone 列（即非 wants_roadmap 路径：`medium`/`small`，或 `large` 但非 `wants_roadmap`）→ args 改为 `--from analyze:{analyze_macro_id}`
     - `blueprint_id` 存在 → 当前 step 是 `plan` → args 改为 `--from blueprint:{blueprint_id}`（优先级低于 `--session` 参数）
-    - **session-level deferred chaining**（step 含 `--session {session}`）：build 阶段前序 artifact 尚未产出，由 A_STEP_RESOLVE_ARGS 运行时从 state.json 查找同 session_id 最新 completed artifact，经 `session chain replace --args` 注入：
-      - `plan` step → `--from analyze:{session_analyze_id}`
-      - `execute` step → `--dir {plan_path}`（现有逻辑）
-    - 出处随 args 携带以便审计（chain step 无独立 source_artifact_ref 字段）
+    - **session-level deferred chaining**（step 含 `--session {session}`）：不在 prompt 层查 `state.json`、不重写 `--from`/`--dir`。执行期由 `run next`/`run brief` 从同 Session eligible sealed outputs 构造 canonical upstream map，consumer 按 contract consumes 读取。
+    - 只有显式 standalone `--from analyze:{id}` / `--from blueprint:{id}` 保留在 args；Session 内来源由 Run input/upstream provenance 审计，不复制到私有侧字段。
 13. **动态插入步骤**（A_APPLY_*）同样应用规则 7-12
 
 ### A_CREATE_SESSION
@@ -484,7 +477,7 @@ Generate steps from `session.lifecycle_position` to `session-seal`（`session.se
 
 ### A_STEP_RESOLVE_ARGS
 
-解析占位符 + 丰富参数。在 `run next` 之前执行（多数 args 已在建链时定死，仅 session-level deferred chaining 需运行时补）。
+解析占位符 + 丰富非 artifact 参数。在 `run next` 之前执行；Session 内 artifact binding 由 `run next`/`run brief` 负责，prompt 层不扫描投影或改写来源。
 
 **1. Placeholder substitution:**
 
@@ -493,10 +486,10 @@ Generate steps from `session.lifecycle_position` to `session-seal`（`session.se
 | `{session}` | session.session_id |
 | `{intent}` | session.intent |
 | `{description}` | session.intent (alias) |
-| `{run_dir}` | 最新 artifact path（state.json.artifacts 解析） |
-| `{plan_dir}` | 最新 plan artifact path（state.json.artifacts） |
-| `{analysis_dir}` | 最新 analyze artifact path（state.json.artifacts） |
-| `{issue_id}` | intent 派生 / state.json |
+| `{run_dir}` | 当前 Run birth packet 的 `run_dir` |
+| `{plan_dir}` | canonical upstream map 中同 Session sealed plan output（若 contract 声明） |
+| `{analysis_dir}` | canonical upstream map 中同 Session sealed analyze output（若 contract 声明） |
+| `{issue_id}` | intent 或显式参数派生；不得从 state projection 猜测 |
 
 **2. Per-skill enrichment** (when args empty or minimal):
 
@@ -510,22 +503,17 @@ Generate steps from `session.lifecycle_position` to `session-seal`（`session.se
 | debug | gap context | Read previous step's error/gap |
 | review/test/auto-test | session | `--session {session}` |
 
-**3. --from auto-injection (session-level artifact chaining):**
+**3. Canonical upstream binding (session-level artifact chaining):**
 
 ```
-Read state.json.artifacts（含 session 内归档 artifacts）
-→ filter by session_id={session.session_id} + status=="completed"
-
-plan step（含 --session 占位符，args 无 --from 且无 --dir）:
-  1. 查同 session_id 最新 completed type=="analyze" artifact → id = ANL-xxx
-  2. 命中 → 经 session chain replace --step {plan_step_id} --args "... --from analyze:{id}"
-
-execute step（含 --session 占位符，args 无 --dir）:
-  1. 查同 session_id 最新 completed type=="plan" artifact → id = PLN-xxx, path = scratch/...
-  2. 命中 → 经 session chain replace --step {execute_step_id} --args "... --dir {run_dir}/outputs/{path}"
+run next --session {session.session_id}
+→ runtime reads canonical Artifact Registry
+→ filters eligible sealed outputs from the same Session by consumer contract
+→ writes Run input references and emits aliases in birth.upstream
+→ run brief repeats the authoritative map and provenance
 ```
 
-兜底：查询无结果 → 不注入，由命令自身 discovery 逻辑处理。已有 `--from` 或 `--dir` 的 step 不覆盖（仅改 pending step）。
+无 required upstream 时可继续；required consumes 缺失时由 runtime/consumer gate 阻断并报告。Historical similarity 只能显示为只读线索，绝不绑定、复制或触发 compatibility commands。显式 standalone `--from`/`--dir` 不在本节改写。
 
 **4. Goal context injection:**
 
@@ -538,7 +526,7 @@ if goal:
   → 传递给 A_STEP_DISPATCH 注入 agent prompt
 ```
 
-**5. Write** enriched args back to the chain step via `maestro session chain replace --session {session} --step {step_id} --args "{enriched}"`（仅 pending step 可改；`source_artifact_ref` 作为审计信息随 args 注入，不单独落侧文件）。已在建链时定死的 args 无需重写。
+**5. Write** 仅将 placeholder/skill 参数补全结果经 `maestro session chain replace --session {session} --step {step_id} --args "{enriched}"` 写回 pending step。Artifact source 不进入 args 或侧文件；其 provenance 只存在于 Run input/upstream authority。
 
 ### A_STEP_DISPATCH
 
@@ -696,7 +684,7 @@ if goal:
    | `--caveats` / `--deferred` | `--note`（可重复） |
    | `--evidence` | `--evidence`（可重复；`--artifact` 用于 outputs 扫描外的产物） |
 
-   verdict 驱动链推进（CLI 管）：done/done-with-concerns → step completed+seal；needs-retry → step 回 pending + retry.count++；blocked → step failed + session paused。完成后 CLI 输出 `next: maestro run next` 指针闭环。
+   verdict 驱动链推进（CLI 管）：done/done-with-concerns → step completed+seal；needs-retry → step 回 pending + retry.count++；blocked → step failed + session paused。CLI 的 next 仅为 `suggest_only`，complete 不执行建议、不创建 Run；主循环回到 S_STEP_LOCATE 后才在 A_STEP_DISPATCH 显式调用 `maestro run next`。
 2. Display: `[{index}/{total}] ✓ {step.command} → {SUMMARY}`（上下文信号已随 handoff 落 run.json，下一步 `run next` 出生包自源透出，无需回写侧文件）
 3. Loop back to S_STEP_LOCATE
 
@@ -1294,6 +1282,8 @@ Engine 模式新增（`--engine swarm|universal`，见 `<engines>`）：
 - [ ] Verdict 解析保持 `---VERDICT---` 格式，parse 失败 → fallback fix + parse_failed: true
 - [ ] decisions.ndjson 追加：source 字段为 `"ralph"`
 - [ ] Session schema: `session/1.2`，Run schema: `command-run/1.2`；orchestration 单源，CLI 建/写
+- [ ] Session 仅作 topic grouping/index；同 Session eligible sealed outputs 仅经 `run next`/`run brief` canonical upstream 复用；historical similarity 只读
+- [ ] 正常流程不调用或推荐 deprecated admin-only `recall-confirm|fork|import|new|rebind|session resolve|session resume`
 - [ ] Chain building（S_RESOLVE_SESSION through S_BUILD_CHAIN）自包含执行，经 `session create --chain-file`（stdin JSON）落盘
 - [ ] A_STEP_DISPATCH 不再手工拼装前序产出/goal context —— run next 出生包（Upstream/Previous step/Queue/Recommended/refs）+ run brief 单源覆盖
 - [ ] display 标识含 stage prefix（grl/brn/anm/ana/pln/exe/rev/tst/dbg）——仅用于 display/日志，不落 session state

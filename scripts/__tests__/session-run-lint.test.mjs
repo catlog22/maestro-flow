@@ -116,6 +116,24 @@ test('source lint accepts alias-free Odyssey workflows while enforcing prepare a
   const full = readFileSync(join(repoRoot, 'workflows', 'run-mode.md'), 'utf8');
   assert.match(full, /complete top-level `_meta` object/);
   assert.match(full, /`kind` and `schema` are required together/);
+  assert.match(full, /Session is a durable \*\*topic grouping\/index\*\*/);
+  assert.match(full, /same Session.*canonical `upstream`\/Artifact Registry map/);
+  assert.match(full, /Historical similarity is read-only evidence/);
+  assert.match(full, /Completion may return a structured `suggest_only` next action, but it never executes that action or creates another Run/);
+  assert.match(full, /deprecated admin-only compatibility commands/);
+  assert.doesNotMatch(full, /same normalized intent/);
+
+  const maestro = readFileSync(join(repoRoot, '.claude', 'commands', 'maestro.md'), 'utf8');
+  assert.match(maestro, /Compatibility commands are out of band/);
+  assert.match(maestro, /Historical similarity remains read-only evidence/);
+  assert.doesNotMatch(maestro, /resolved paused Session.*maestro session resume/);
+  assert.doesNotMatch(maestro, /offer confirmation-token fork\/import/);
+
+  const ralph = readFileSync(join(repoRoot, '.claude', 'commands', 'maestro-ralph.md'), 'utf8');
+  assert.match(ralph, /Sessions are topic grouping\/indexes/);
+  assert.match(ralph, /Compatibility commands are out of band/);
+  assert.match(ralph, /canonical upstream map/);
+  assert.doesNotMatch(ralph, /Read state\.json\.artifacts/);
 });
 
 test('package release gate orders source lint, generation, freshness, then parity', () => {

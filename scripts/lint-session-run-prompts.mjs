@@ -176,9 +176,10 @@ const canonicalRunMode = join(root, 'workflows', 'run-mode.md');
 if (!existsSync(canonicalRunMode)) errors.push('workflows/run-mode.md: missing canonical Run workflow');
 else {
   const text = readFileSync(canonicalRunMode, 'utf8');
-  for (const token of ['maestro run create', 'same normalized intent', '{run_dir}/outputs/', 'complete top-level `_meta` object', '`kind` and `schema` are required together', 'maestro run check', 'maestro run complete']) {
+  for (const token of ['maestro run create', 'topic grouping/index', 'same Session', 'Historical similarity is read-only', '{run_dir}/outputs/', 'complete top-level `_meta` object', '`kind` and `schema` are required together', 'maestro run check', 'maestro run complete', 'suggest_only', 'maestro run next', 'deprecated admin-only']) {
     if (!text.includes(token)) errors.push(`workflows/run-mode.md: missing ${token}`);
   }
+  if (text.includes('same normalized intent')) errors.push('workflows/run-mode.md: obsolete intent-only Session routing remains');
 }
 
 const canonicalRunModeLite = join(root, 'workflows', 'run-mode-lite.md');
