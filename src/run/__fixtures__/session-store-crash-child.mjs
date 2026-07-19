@@ -1,12 +1,45 @@
 import fs from 'node:fs';
+import { createHash } from 'node:crypto';
 import { syncBuiltinESMExports } from 'node:module';
 import { join, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { z } from 'zod';
 
 const [mode, projectRootArg, sessionId = 'durability-session', boundaryArg = '1', writerArg = '0'] = process.argv.slice(2);
 const projectRoot = resolve(projectRootArg);
-const distStoreUrl = new URL('../../../dist/src/run/store.js', import.meta.url);
 const authorityNames = new Set(['session.json', 'gates.json', 'artifacts.json', 'evidence.json']);
+
+function sha256(path) {
+  return createHash('sha256').update(fs.readFileSync(path)).digest('hex');
+}
+
+async function loadCurrentSourceStore() {
+  const storeModuleUrl = process.env.MAESTRO_DURABILITY_STORE_URL;
+  const sourcePath = process.env.MAESTRO_DURABILITY_SOURCE_PATH;
+  const expectedSourceSha256 = process.env.MAESTRO_DURABILITY_SOURCE_SHA256;
+  const expectedCompiledSha256 = process.env.MAESTRO_DURABILITY_COMPILED_SHA256;
+  if (!storeModuleUrl || !sourcePath || !expectedSourceSha256 || !expectedCompiledSha256) {
+    throw new Error('Durability child requires an isolated current-source store build');
+  }
+  const sourceSha256 = sha256(sourcePath);
+  if (sourceSha256 !== expectedSourceSha256) {
+    throw new Error(`SessionStore source changed after the isolated durability build: expected ${expectedSourceSha256}, got ${sourceSha256}`);
+  }
+  const compiledSha256 = sha256(fileURLToPath(storeModuleUrl));
+  if (compiledSha256 !== expectedCompiledSha256) {
+    throw new Error(`Isolated durability store changed after compilation: expected ${expectedCompiledSha256}, got ${compiledSha256}`);
+  }
+  const storeModule = await import(storeModuleUrl);
+  return {
+    SessionStore: storeModule.SessionStore,
+    provenance: {
+      store_module_url: storeModuleUrl,
+      source_path: sourcePath,
+      source_sha256: sourceSha256,
+      compiled_sha256: compiledSha256,
+    },
+  };
+}
 
 function emit(value) {
   process.stdout.write(`${JSON.stringify(value)}\n`);
@@ -47,7 +80,7 @@ if (mode === 'crash-after-partial-shell') {
     return originalStat(path, ...args);
   };
   syncBuiltinESMExports();
-  const { SessionStore } = await import(distStoreUrl.href);
+  const { SessionStore } = await loadCurrentSourceStore();
   const started = Date.now();
   let error = null;
   try {
@@ -94,10 +127,12 @@ if (mode === 'crash-after-partial-shell') {
     syncBuiltinESMExports();
   }
 
-  const { SessionStore } = await import(distStoreUrl.href);
+  const { SessionStore, provenance } = await loadCurrentSourceStore();
   const store = new SessionStore(projectRoot);
 
-  if (mode === 'update-counter' || mode === 'update-counter-stress') {
+  if (mode === 'report-store-source') {
+    emit(provenance);
+  } else if (mode === 'update-counter' || mode === 'update-counter-stress') {
     let stress = null;
     if (mode === 'update-counter-stress') {
       const barrierDir = resolve(sessionId);

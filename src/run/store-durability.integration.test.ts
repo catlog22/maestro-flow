@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { spawn, type ChildProcess } from 'node:child_process';
+import { spawn, spawnSync, type ChildProcess } from 'node:child_process';
 import {
   existsSync,
   mkdirSync,
@@ -13,17 +13,23 @@ import {
 } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
-import { fileURLToPath } from 'node:url';
-import { afterEach, describe, expect, it } from 'vitest';
+import { fileURLToPath, pathToFileURL } from 'node:url';
+import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
 
 import { SessionStore } from './store.js';
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..');
 const childFixture = join(repoRoot, 'src', 'run', '__fixtures__', 'session-store-crash-child.mjs');
-const distStore = join(repoRoot, 'dist', 'src', 'run', 'store.js');
+const sourceStore = join(repoRoot, 'src', 'run', 'store.ts');
+const repositoryDistStore = join(repoRoot, 'dist', 'src', 'run', 'store.js');
+const staleBuildSentinel = 'MAESTRO_STALE_DURABILITY_STORE_SENTINEL';
 const roots: string[] = [];
 const authorityFiles = ['session.json', 'gates.json', 'artifacts.json', 'evidence.json'];
-const hasBuiltStore = existsSync(distStore);
+let sourceBuildRoot = '';
+let sourceBuildStore = '';
+let sourceStoreSha256 = '';
+let sourceBuildStoreSha256 = '';
+let staleBuildStoreSha256 = '';
 
 interface ChildResult {
   code: number | null;
@@ -62,10 +68,61 @@ function createRoot(): string {
   return root;
 }
 
+function buildCurrentSourceStore(): void {
+  const sourceBuildBase = join(repoRoot, '.workflow', 'tmp');
+  mkdirSync(sourceBuildBase, { recursive: true });
+  sourceBuildRoot = mkdtempSync(join(sourceBuildBase, 'maestro-store-source-build-'));
+  sourceBuildStore = join(sourceBuildRoot, 'src', 'run', 'store.js');
+  sourceStoreSha256 = sha(sourceStore);
+  mkdirSync(dirname(sourceBuildStore), { recursive: true });
+  writeFileSync(sourceBuildStore, `throw new Error('${staleBuildSentinel}');\n`);
+  staleBuildStoreSha256 = sha(sourceBuildStore);
+
+  const compiler = join(repoRoot, 'node_modules', 'typescript', 'bin', 'tsc');
+  const result = spawnSync(process.execPath, [
+    compiler,
+    '--project', join(repoRoot, 'tsconfig.json'),
+    '--outDir', sourceBuildRoot,
+    '--declaration', 'false',
+    '--declarationMap', 'false',
+    '--sourceMap', 'false',
+    '--incremental', 'false',
+    '--pretty', 'false',
+  ], {
+    cwd: repoRoot,
+    encoding: 'utf8',
+    windowsHide: true,
+    maxBuffer: 16 * 1024 * 1024,
+  });
+  if (result.error) throw result.error;
+  if (result.status !== 0) {
+    throw new Error(`Failed to compile current SessionStore source for durability tests (exit ${result.status ?? 'unknown'}):\n${result.stdout}${result.stderr}`);
+  }
+  if (!existsSync(sourceBuildStore)) {
+    throw new Error(`TypeScript compiler did not emit the durability test store: ${sourceBuildStore}`);
+  }
+  const emitted = readFileSync(sourceBuildStore, 'utf8');
+  if (emitted.includes(staleBuildSentinel)) {
+    throw new Error(`TypeScript compiler left the stale durability test store in place: ${sourceBuildStore}`);
+  }
+  const sourceSha256AfterBuild = sha(sourceStore);
+  if (sourceSha256AfterBuild !== sourceStoreSha256) {
+    throw new Error(`SessionStore source changed during the isolated durability build: expected ${sourceStoreSha256}, got ${sourceSha256AfterBuild}`);
+  }
+  sourceBuildStoreSha256 = sha(sourceBuildStore);
+}
+
 function runChild(args: string[], timeoutMs = 20_000): Promise<ChildResult> {
   return new Promise(resolveResult => {
     const child = spawn(process.execPath, [childFixture, ...args], {
       cwd: repoRoot,
+      env: {
+        ...process.env,
+        MAESTRO_DURABILITY_STORE_URL: pathToFileURL(sourceBuildStore).href,
+        MAESTRO_DURABILITY_SOURCE_PATH: sourceStore,
+        MAESTRO_DURABILITY_SOURCE_SHA256: sourceStoreSha256,
+        MAESTRO_DURABILITY_COMPILED_SHA256: sourceBuildStoreSha256,
+      },
       windowsHide: true,
       stdio: ['ignore', 'pipe', 'pipe'],
     });
@@ -162,11 +219,41 @@ function startLockLifecycleMonitor(lock: string, directory: string): {
   };
 }
 
+beforeAll(() => {
+  buildCurrentSourceStore();
+}, 60_000);
+
 afterEach(() => {
   for (const root of roots.splice(0)) rmSync(root, { recursive: true, force: true });
 });
 
-describe.skipIf(!hasBuiltStore)('SessionStore multi-process and crash durability', () => {
+afterAll(() => {
+  if (sourceBuildRoot) rmSync(sourceBuildRoot, { recursive: true, force: true });
+});
+
+describe('SessionStore multi-process and crash durability', () => {
+  it('binds child processes to a fresh isolated build of the current source revision', async () => {
+    const result = await runChild(['report-store-source', createRoot()]);
+    const line = result.stdout.trim().split(/\r?\n/).at(-1);
+    const observation = line ? JSON.parse(line) as {
+      store_module_url: string;
+      source_path: string;
+      source_sha256: string;
+      compiled_sha256: string;
+    } : null;
+
+    expect(result).toMatchObject({ code: 0, timedOut: false, stderr: '' });
+    expect(sourceBuildStoreSha256).not.toBe(staleBuildStoreSha256);
+    expect(readFileSync(sourceBuildStore, 'utf8')).not.toContain(staleBuildSentinel);
+    expect(observation).toEqual({
+      store_module_url: pathToFileURL(sourceBuildStore).href,
+      source_path: sourceStore,
+      source_sha256: sourceStoreSha256,
+      compiled_sha256: sourceBuildStoreSha256,
+    });
+    expect(observation?.store_module_url).not.toBe(pathToFileURL(repositoryDistStore).href);
+  });
+
   it('INV-01 refuses a live child owner while its lock is young', async () => {
     const root = createRoot();
     const store = new SessionStore(root);
@@ -377,7 +464,6 @@ describe.skipIf(!hasBuiltStore)('SessionStore multi-process and crash durability
 });
 
 const windowsIt = process.platform === 'win32' ? it : it.skip;
-const windowsBuiltIt = process.platform === 'win32' && hasBuiltStore ? it : it.skip;
 
 it('reconciles a whitelisted partial shell after a pre-authority child crash', async () => {
   const root = createRoot();
@@ -397,7 +483,7 @@ it('reconciles a whitelisted partial shell after a pre-authority child crash', a
   expect(readFileSync(join(store.sessionDir(sessionId), 'context.md'), 'utf8')).toBe('# partial shell recovery\n');
 });
 
-windowsBuiltIt('bounds persistent Windows lock errors', async () => {
+windowsIt('bounds persistent Windows lock errors', async () => {
   const result = await runChild(['persistent-lock-stat-error', createRoot()], 15_000);
   const line = result.stdout.trim().split(/\r?\n/).at(-1);
   const observation = line ? JSON.parse(line) as { elapsed_ms: number; error: string | null } : null;
@@ -409,7 +495,6 @@ windowsBuiltIt('bounds persistent Windows lock errors', async () => {
 }, 20_000);
 
 windowsIt('INV-06 Windows capability: injected EPERM unlink window retains every authority file', async () => {
-  if (!hasBuiltStore) return;
   const root = createRoot();
   const sessionId = 'windows-unlink-boundary';
   const store = new SessionStore(root);
