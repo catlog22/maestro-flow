@@ -9,6 +9,28 @@ import {
   type TransitionOutcome,
   type TransitionRequest,
 } from './protocol-schemas.js';
+import type { LeaseClaim } from './lease.js';
+import type { SessionState } from './schemas.js';
+
+export interface TransitionMutationOptions {
+  requestId: string;
+  expectedIdentityRevision: number;
+  expectedActivityRevision: number;
+  leaseClaim?: LeaseClaim;
+}
+
+export interface TransitionMutationReceipt {
+  request_id: string;
+  transition_id: string;
+  status: 'applied' | 'replayed';
+}
+
+export type TransitionMutationResult<T> = T & { transition: TransitionMutationReceipt };
+
+export interface PreparedTransitionMutation {
+  request: TransitionRequest;
+  options: TransitionMutationOptions;
+}
 
 export function stableJsonUtf8(value: unknown): string {
   const normalize = (item: unknown): unknown => {
@@ -51,12 +73,118 @@ export function createTransitionRequest(
 
 export class TransitionReceiptError extends Error {
   constructor(
-    readonly code: 'REQUEST_CONFLICT' | 'REPLAY_STATE_DIVERGED' | 'INVALID_TRANSITION_RECEIPT',
+    readonly code: 'REQUEST_CONFLICT' | 'REPLAY_STATE_DIVERGED' | 'INVALID_TRANSITION_RECEIPT' | 'FENCE_CONFLICT',
     message: string,
   ) {
     super(message);
     this.name = 'TransitionReceiptError';
   }
+}
+
+function transitionRecord(
+  session: SessionState,
+  requestId: string,
+): PersistedTransitionRecord | undefined {
+  return session.requests.find(item => (
+    item.type === 'transition' && item.request_id === requestId && 'outcome' in item
+  )) as PersistedTransitionRecord | undefined;
+}
+
+function numberFromPayload(value: unknown): number | undefined {
+  return typeof value === 'number' && Number.isInteger(value) && value >= 0 ? value : undefined;
+}
+
+function leaseFromPayload(value: unknown): LeaseClaim | undefined {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return undefined;
+  const raw = value as Record<string, unknown>;
+  return {
+    ...(typeof raw.executionOwner === 'string' ? { executionOwner: raw.executionOwner } : {}),
+    ...(typeof raw.ownerEpoch === 'number' ? { ownerEpoch: raw.ownerEpoch } : {}),
+    ...(typeof raw.leaseId === 'string' ? { leaseId: raw.leaseId } : {}),
+  };
+}
+
+/**
+ * Prepare one normalized retryable mutation request. Existing receipts supply
+ * their original timestamp, precondition fence and omitted guard values so a
+ * caller may retry with only the same request ID without changing its hash.
+ */
+export function prepareTransitionMutation(input: {
+  session: SessionState;
+  currentFence: TransitionFence;
+  operation: TransitionRequest['operation'];
+  subject: TransitionRequest['subject'];
+  payload: Record<string, unknown>;
+  options?: Partial<TransitionMutationOptions>;
+}): PreparedTransitionMutation {
+  const requestId = input.options?.requestId?.trim() || `req_${randomUUID()}`;
+  const existing = transitionRecord(input.session, requestId);
+  const existingPayload = existing?.payload.payload ?? {};
+  const expectedIdentityRevision = input.options?.expectedIdentityRevision
+    ?? numberFromPayload(existingPayload.expected_identity_revision)
+    ?? input.currentFence.session_identity_revision;
+  const expectedActivityRevision = input.options?.expectedActivityRevision
+    ?? numberFromPayload(existingPayload.expected_activity_revision)
+    ?? input.currentFence.session_activity_revision;
+  const leaseClaim = input.options?.leaseClaim ?? leaseFromPayload(existingPayload.lease);
+  const options: TransitionMutationOptions = {
+    requestId,
+    expectedIdentityRevision,
+    expectedActivityRevision,
+    ...(leaseClaim ? { leaseClaim } : {}),
+  };
+  const payload = {
+    ...input.payload,
+    expected_identity_revision: expectedIdentityRevision,
+    expected_activity_revision: expectedActivityRevision,
+    lease: leaseClaim ?? {},
+  };
+  const subject = existing
+    && existing.payload.subject.session_id === input.subject.session_id
+    && existing.payload.subject.run_id === input.subject.run_id
+    ? existing.payload.subject
+    : input.subject;
+  return {
+    options,
+    request: createTransitionRequest({
+      request_id: requestId,
+      operation: input.operation,
+      subject,
+      requested_at: existing?.payload.requested_at ?? new Date().toISOString(),
+      preconditions: existing?.payload.preconditions ?? input.currentFence,
+      payload,
+    }),
+  };
+}
+
+export function assertTransitionMutationRevisions(
+  session: SessionState,
+  options: TransitionMutationOptions,
+): void {
+  if (session.identity_revision !== options.expectedIdentityRevision) {
+    throw new TransitionReceiptError(
+      'FENCE_CONFLICT',
+      `stale identity revision: expected ${options.expectedIdentityRevision}, current ${session.identity_revision}`,
+    );
+  }
+  if (session.activity_revision !== options.expectedActivityRevision) {
+    throw new TransitionReceiptError(
+      'FENCE_CONFLICT',
+      `stale activity revision: expected ${options.expectedActivityRevision}, current ${session.activity_revision}`,
+    );
+  }
+}
+
+export function transitionMutationReceipt(
+  request: TransitionRequest,
+  outcome: TransitionOutcome,
+  replayed: boolean,
+): TransitionMutationReceipt {
+  return {
+    request_id: request.request_id,
+    transition_id: outcome.transition_id,
+    status: replayed ? 'replayed' : 'applied',
+  };
 }
 
 function sameFence(left: TransitionFence, right: TransitionFence): boolean {

@@ -121,6 +121,7 @@ describe('Session/Run runtime', () => {
       'rebind',
       'complete',
       'brief',
+      'accept-reuse',
       'recall',
       'recall-confirm',
       'fork',

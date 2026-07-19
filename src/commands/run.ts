@@ -1,6 +1,7 @@
 import { resolve } from 'node:path';
 import type { Command } from 'commander';
 import {
+  acceptRunReuse,
   briefRun,
   checkRun,
   completeRun,
@@ -41,6 +42,15 @@ function collect(value: string, previous: string[]): string[] {
 }
 function print(value: unknown): void {
   console.log(JSON.stringify(value, null, 2));
+}
+
+function mutationTransitionOptions(opts: any): any {
+  return {
+    requestId: opts.requestId,
+    expectedIdentityRevision: opts.expectedIdentityRevision,
+    expectedActivityRevision: opts.expectedActivityRevision,
+    leaseClaim: { executionOwner: opts.executionOwner, ownerEpoch: opts.ownerEpoch, leaseId: opts.leaseId },
+  };
 }
 
 const ADMIN_COMPATIBILITY_PREFIX = '[DEPRECATED, ADMIN-ONLY]';
@@ -293,6 +303,9 @@ Compatibility boundary:
     .option('--execution-owner <owner>', 'lease execution owner (checked against session.orchestration.lease)')
     .option('--owner-epoch <epoch>', 'lease owner epoch', Number.parseInt)
     .option('--lease-id <id>', 'lease identifier for concurrency safety')
+    .option('--request-id <id>', 'idempotent completion request ID')
+    .option('--expected-identity-revision <n>', 'expected Session identity revision', Number.parseInt)
+    .option('--expected-activity-revision <n>', 'expected Session activity revision', Number.parseInt)
     .option('--json', 'emit one run-response/1.0 envelope on stdout')
     .option('--workflow-root <path>', 'project root containing .workflow', process.cwd())
     .action((runIdArg: string | undefined, opts: {
@@ -324,6 +337,7 @@ Compatibility boundary:
             notes: opts.note,
             extraArtifacts: opts.artifact,
             summaryFallback: opts.summary,
+            transition: mutationTransitionOptions(opts),
           });
           if (opts.json) {
             if (result.sealed) machineSuccess('complete', result, { session_id: result.session_id, run_id: result.run_id });
@@ -384,6 +398,7 @@ Compatibility boundary:
             ownerEpoch: opts.ownerEpoch,
             leaseId: opts.leaseId,
           },
+          transition: mutationTransitionOptions(opts),
         });
         if (opts.json) {
           if (result.run_sealed) machineSuccess('complete', result, { session_id: result.session_id, run_id: result.run_id });
@@ -411,6 +426,32 @@ Compatibility boundary:
         if (opts.json) machineSuccess('brief', result, { session_id: result.session_id, run_id: result.run_id }); else print(result);
       } catch (error) {
         if (opts.json) machineError('brief', error); else reportError(error);
+      }
+    });
+
+  run
+    .command('accept-reuse <run-id>')
+    .description('Explicitly accept one exact REVIEW assessment and bind its artifact to run.input.consumes')
+    .requiredOption('--session <id>', 'exact Session ID')
+    .requiredOption('--assessment-hash <sha256>', 'exact reuse assessment hash shown by run brief')
+    .requiredOption('--request-id <id>', 'idempotent acceptance request ID')
+    .requiredOption('--expected-identity-revision <n>', 'expected Session identity revision', Number.parseInt)
+    .requiredOption('--expected-activity-revision <n>', 'expected Session activity revision', Number.parseInt)
+    .option('--execution-owner <owner>', 'lease execution owner')
+    .option('--owner-epoch <epoch>', 'lease owner epoch', Number.parseInt)
+    .option('--lease-id <id>', 'lease identifier for concurrency safety')
+    .option('--workflow-root <path>', 'project root containing .workflow', process.cwd())
+    .action((runId: string, opts: any) => {
+      try {
+        print(acceptRunReuse(
+          resolve(opts.workflowRoot),
+          runId,
+          opts.assessmentHash,
+          opts.session,
+          mutationTransitionOptions(opts),
+        ));
+      } catch (error) {
+        reportError(error);
       }
     });
 
@@ -509,6 +550,12 @@ Compatibility boundary:
     .requiredOption('--confidence <level>', 'evaluation confidence: high|medium|low')
     .option('--summary <text>', 'one-line rationale, recorded in decisions.ndjson + evidence_ref fallback')
     .option('--evidence <path>', 'evidence path/reference recorded on decision_point.evidence_ref')
+    .option('--request-id <id>', 'idempotent decision request ID')
+    .option('--expected-identity-revision <n>', 'expected Session identity revision', Number.parseInt)
+    .option('--expected-activity-revision <n>', 'expected Session activity revision', Number.parseInt)
+    .option('--execution-owner <owner>', 'lease execution owner')
+    .option('--owner-epoch <epoch>', 'lease owner epoch', Number.parseInt)
+    .option('--lease-id <id>', 'lease identifier for concurrency safety')
     .option('--workflow-root <path>', 'project root containing .workflow', process.cwd())
     .action((pointId: string, opts: {
       session: string;
@@ -536,6 +583,7 @@ Compatibility boundary:
           confidence: confidence as DecisionConfidence,
           summary: opts.summary,
           evidence: opts.evidence,
+          transition: mutationTransitionOptions(opts),
         });
         print(result);
         process.stderr.write(`next: ${result.next.command}\n      ${result.next.reason}\n`);

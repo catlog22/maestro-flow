@@ -8,8 +8,8 @@
 // src/run must never import src/ralph), so `chainStepId` lives here rather than
 // in src/ralph/session-adapter.ts.
 //
-// All writes go through the single SessionStore.update path so validation,
-// backup, and revision bumps stay consistent with the rest of the store.
+// Retryable edits go through SessionStore.replayOrApplyTransition so authority
+// and the idempotency receipt share one StoreTransaction.
 // ---------------------------------------------------------------------------
 
 import { z } from 'zod';
@@ -22,6 +22,16 @@ import type {
   SessionState,
 } from './schemas.js';
 import { validateSessionId } from './ids.js';
+import { checkLease } from './lease.js';
+import {
+  assertTransitionMutationRevisions,
+  createTransitionOutcome,
+  prepareTransitionMutation,
+  transitionMutationReceipt,
+  type TransitionMutationOptions,
+  type TransitionMutationResult,
+} from './transition-receipts.js';
+import type { SessionBundle } from './store.js';
 
 // ── Step id convention (canonical) ───────────────────────────────────────────
 // Mirrors the historic ralph convention `step-{NNN}-{command}` so migrated and
@@ -306,6 +316,124 @@ export interface InsertChainStepOpts {
   goalRef?: string | null;
   insertedBy: string;
   decisionRef?: string | null;
+  transition?: Partial<TransitionMutationOptions>;
+}
+
+type ChainMutation =
+  | { operation: 'insert'; options: InsertChainStepOpts }
+  | { operation: 'skip'; stepId: string }
+  | { operation: 'replace'; stepId: string; options: ReplaceChainStepOpts };
+
+function assertMutationGuards(bundle: SessionBundle, options: TransitionMutationOptions): void {
+  if (bundle.session.status === 'sealed' || bundle.session.status === 'archived') {
+    throw new Error(`Session ${bundle.session.session_id} is ${bundle.session.status} and immutable`);
+  }
+  assertTransitionMutationRevisions(bundle.session, options);
+  const leaseConflict = checkLease(bundle.session.orchestration.lease, options.leaseClaim ?? {});
+  if (leaseConflict) throw new Error(leaseConflict);
+}
+
+/** Apply exactly one chain edit to an in-memory authority draft. */
+export function applyChainMutation(bundle: SessionBundle, mutation: ChainMutation): OrchestrationStep {
+  const chain = bundle.session.orchestration.chain;
+  if (mutation.operation === 'insert') {
+    const opts = mutation.options;
+    const afterIdx = resolveAfterIndex(chain, opts.after);
+    const insertPos = afterIdx + 1;
+    const boundary = activeBoundary(chain);
+    if (insertPos < boundary) {
+      throw new Error(
+        `cannot insert before the active position: insert slot ${insertPos} < active boundary ${boundary} `
+        + `(a completed/running/sealed/skipped step occupies index ${boundary - 1})`,
+      );
+    }
+    const decisionRef = opts.decisionRef ?? null;
+    const step: OrchestrationStep = {
+      step_id: uniqueStepId(chain, insertPos, opts.command), command: opts.command, status: 'pending',
+      run_id: null, inserted_by: opts.insertedBy, decision_ref: decisionRef,
+    };
+    if (opts.args !== undefined) step.args = opts.args;
+    if (opts.stage !== undefined) step.stage = opts.stage;
+    if (opts.goalRef !== undefined) step.goal_ref = opts.goalRef;
+    if (!decisionRef) step.retry = { count: 0, max: DEFAULT_RETRY_MAX };
+    if (decisionRef && !bundle.session.orchestration.decision_points.some(point => point.point_id === decisionRef)) {
+      bundle.session.orchestration.decision_points.push({
+        point_id: decisionRef, after_step_id: chain[afterIdx]?.step_id ?? null, status: 'pending',
+        retry_count: 0, max_retries: DEFAULT_DECISION_MAX_RETRIES, evidence_ref: null,
+      });
+    }
+    chain.splice(insertPos, 0, step);
+    bundle.session.activity_revision++;
+    return step;
+  }
+
+  const index = chain.findIndex(step => step.step_id === mutation.stepId);
+  if (index === -1) throw new Error(`chain step not found: ${mutation.stepId}`);
+  const step = chain[index];
+  if (step.status !== 'pending') {
+    throw new Error(`only pending steps can be ${mutation.operation === 'skip' ? 'skipped' : 'replaced'}; ${mutation.stepId} is ${step.status}`);
+  }
+  if (mutation.operation === 'skip') {
+    step.status = 'skipped';
+    step.run_id = null;
+  } else {
+    const opts = mutation.options;
+    if (opts.command !== undefined) {
+      step.command = opts.command;
+      step.step_id = uniqueStepId(chain, index, opts.command, step);
+    }
+    if (opts.args !== undefined) step.args = opts.args;
+    if (opts.stage !== undefined) step.stage = opts.stage;
+    if (opts.goalRef !== undefined) step.goal_ref = opts.goalRef;
+  }
+  bundle.session.activity_revision++;
+  return step;
+}
+
+function runChainMutation(
+  projectRoot: string,
+  sessionId: string,
+  operation: 'chain-insert' | 'chain-replace' | 'chain-skip',
+  payload: Record<string, unknown>,
+  mutation: ChainMutation,
+  transition?: Partial<TransitionMutationOptions>,
+): TransitionMutationResult<OrchestrationStep> {
+  const store = new SessionStore(projectRoot);
+  if (!store.sessionExists(sessionId)) throw new Error(`session not found: ${sessionId}`);
+  const prepared = prepareTransitionMutation({
+    session: store.readBundle(sessionId).session,
+    currentFence: store.readSessionFence(sessionId),
+    operation,
+    subject: { session_id: sessionId, run_id: null, chain_step_id: null },
+    payload,
+    options: transition,
+  });
+  const evaluated = store.replayOrApplyTransition(sessionId, prepared.request, draft => {
+    assertMutationGuards(draft, prepared.options);
+    const value = structuredClone(applyChainMutation(draft, mutation));
+    return createTransitionOutcome({
+      request_id: prepared.request.request_id,
+      request_hash: prepared.request.normalized_request_hash,
+      operation,
+      status: 'applied',
+      applied_at: new Date().toISOString(),
+      subject: prepared.request.subject,
+      postconditions: {
+        session_identity_revision: draft.session.identity_revision,
+        session_activity_revision: draft.session.activity_revision,
+        active_run_id: draft.session.active_run_id,
+        run_hash: null,
+        artifact_registry_revision: draft.artifacts.revision,
+      },
+      exit_code: 0,
+      error_code: null,
+      result: { value },
+    });
+  });
+  const value = structuredClone(evaluated.outcome.result.value) as OrchestrationStep;
+  return Object.assign(value, {
+    transition: transitionMutationReceipt(prepared.request, evaluated.outcome, evaluated.replayed),
+  });
 }
 
 /**
@@ -318,46 +446,11 @@ export function insertChainStep(
   projectRoot: string,
   sessionId: string,
   opts: InsertChainStepOpts,
-): OrchestrationStep {
-  const store = new SessionStore(projectRoot);
-  return store.update(sessionId, (draft) => {
-    const chain = draft.session.orchestration.chain;
-    const afterIdx = resolveAfterIndex(chain, opts.after);
-    const insertPos = afterIdx + 1;
-    const boundary = activeBoundary(chain);
-    if (insertPos < boundary) {
-      throw new Error(
-        `cannot insert before the active position: insert slot ${insertPos} < active boundary ${boundary} `
-        + `(a completed/running/sealed/skipped step occupies index ${boundary - 1})`,
-      );
-    }
-    const decisionRef = opts.decisionRef ?? null;
-    const step: OrchestrationStep = {
-      step_id: uniqueStepId(chain, insertPos, opts.command),
-      command: opts.command,
-      status: 'pending',
-      run_id: null,
-      inserted_by: opts.insertedBy,
-      decision_ref: decisionRef,
-    };
-    if (opts.args !== undefined) step.args = opts.args;
-    if (opts.stage !== undefined) step.stage = opts.stage;
-    if (opts.goalRef !== undefined) step.goal_ref = opts.goalRef;
-    if (!decisionRef) step.retry = { count: 0, max: DEFAULT_RETRY_MAX };
-    if (decisionRef && !draft.session.orchestration.decision_points.some(point => point.point_id === decisionRef)) {
-      draft.session.orchestration.decision_points.push({
-        point_id: decisionRef,
-        after_step_id: chain[afterIdx]?.step_id ?? null,
-        status: 'pending',
-        retry_count: 0,
-        max_retries: DEFAULT_DECISION_MAX_RETRIES,
-        evidence_ref: null,
-      });
-    }
-    chain.splice(insertPos, 0, step);
-    draft.session.activity_revision++;
-    return step;
-  });
+): TransitionMutationResult<OrchestrationStep> {
+  return runChainMutation(projectRoot, sessionId, 'chain-insert', {
+    after: opts.after, command: opts.command, args: opts.args ?? null, stage: opts.stage ?? null,
+    goal_ref: opts.goalRef ?? null, inserted_by: opts.insertedBy, decision_ref: opts.decisionRef ?? null,
+  }, { operation: 'insert', options: opts }, opts.transition);
 }
 
 /**
@@ -371,19 +464,11 @@ export function skipChainStep(
   projectRoot: string,
   sessionId: string,
   stepId: string,
-): OrchestrationStep {
-  const store = new SessionStore(projectRoot);
-  return store.update(sessionId, (draft) => {
-    const step = draft.session.orchestration.chain.find(s => s.step_id === stepId);
-    if (!step) throw new Error(`chain step not found: ${stepId}`);
-    if (step.status !== 'pending') {
-      throw new Error(`only pending steps can be skipped; ${stepId} is ${step.status}`);
-    }
-    step.status = 'skipped';
-    step.run_id = null;
-    draft.session.activity_revision++;
-    return step;
-  });
+  transition?: Partial<TransitionMutationOptions>,
+): TransitionMutationResult<OrchestrationStep> {
+  return runChainMutation(projectRoot, sessionId, 'chain-skip', { step_id: stepId }, {
+    operation: 'skip', stepId,
+  }, transition);
 }
 
 export interface ReplaceChainStepOpts {
@@ -391,6 +476,7 @@ export interface ReplaceChainStepOpts {
   args?: string;
   stage?: string | null;
   goalRef?: string | null;
+  transition?: Partial<TransitionMutationOptions>;
 }
 
 /**
@@ -403,26 +489,18 @@ export function replaceChainStep(
   sessionId: string,
   stepId: string,
   opts: ReplaceChainStepOpts,
-): OrchestrationStep {
-  const store = new SessionStore(projectRoot);
-  return store.update(sessionId, (draft) => {
-    const chain = draft.session.orchestration.chain;
-    const index = chain.findIndex(s => s.step_id === stepId);
-    if (index === -1) throw new Error(`chain step not found: ${stepId}`);
-    const step = chain[index];
-    if (step.status !== 'pending') {
-      throw new Error(`only pending steps can be replaced; ${stepId} is ${step.status}`);
-    }
-    if (opts.command !== undefined) {
-      step.command = opts.command;
-      step.step_id = uniqueStepId(chain, index, opts.command, step);
-    }
-    if (opts.args !== undefined) step.args = opts.args;
-    if (opts.stage !== undefined) step.stage = opts.stage;
-    if (opts.goalRef !== undefined) step.goal_ref = opts.goalRef;
-    draft.session.activity_revision++;
-    return step;
-  });
+): TransitionMutationResult<OrchestrationStep> {
+  return runChainMutation(projectRoot, sessionId, 'chain-replace', {
+    step_id: stepId,
+    command: opts.command ?? null,
+    has_command: opts.command !== undefined,
+    args: opts.args ?? null,
+    has_args: opts.args !== undefined,
+    stage: opts.stage ?? null,
+    has_stage: opts.stage !== undefined,
+    goal_ref: opts.goalRef ?? null,
+    has_goal_ref: opts.goalRef !== undefined,
+  }, { operation: 'replace', stepId, options: opts }, opts.transition);
 }
 
 // ── Orchestration meta update (position / decomposition整块替换) ───────────────
@@ -432,6 +510,7 @@ export interface MetaUpdateOpts {
   position?: OrchestrationPosition | null;
   /** Parsed JSON validated against decompositionSchema; null clears the block. */
   decomposition?: OrchestrationDecomposition | null;
+  transition?: Partial<TransitionMutationOptions>;
 }
 
 export interface MetaUpdateResult {
@@ -439,6 +518,28 @@ export interface MetaUpdateResult {
   updated: Array<'position' | 'decomposition'>;
   position: OrchestrationPosition | null;
   decomposition: OrchestrationDecomposition | null;
+  transition: ReturnType<typeof transitionMutationReceipt>;
+}
+
+/** Apply an integral meta replacement to an in-memory authority draft. */
+export function applyMetaMutation(bundle: SessionBundle, opts: MetaUpdateOpts): Omit<MetaUpdateResult, 'transition'> {
+  const orchestration = bundle.session.orchestration;
+  const updated: Array<'position' | 'decomposition'> = [];
+  if (opts.position !== undefined) {
+    orchestration.position = opts.position;
+    updated.push('position');
+  }
+  if (opts.decomposition !== undefined) {
+    orchestration.decomposition = opts.decomposition;
+    updated.push('decomposition');
+  }
+  bundle.session.activity_revision++;
+  return {
+    session_id: bundle.session.session_id,
+    updated,
+    position: orchestration.position ?? null,
+    decomposition: orchestration.decomposition ?? null,
+  };
 }
 
 /**
@@ -462,7 +563,7 @@ export function parseDecompositionInput(raw: unknown): OrchestrationDecompositio
  * it here rather than editing session.json directly. At least one block must be
  * provided (enforced by the caller). Blocks are validated by the caller via
  * parsePositionInput / parseDecompositionInput before this replaces them; the
- * store.update re-parse is the final guard.
+ * transition transaction re-parse is the final guard.
  */
 export function updateSessionMeta(
   projectRoot: string,
@@ -473,23 +574,39 @@ export function updateSessionMeta(
   if (!store.sessionExists(sessionId)) {
     throw new Error(`session not found: ${sessionId}`);
   }
-  return store.update(sessionId, (draft) => {
-    const o = draft.session.orchestration;
-    const updated: Array<'position' | 'decomposition'> = [];
-    if (opts.position !== undefined) {
-      o.position = opts.position;
-      updated.push('position');
-    }
-    if (opts.decomposition !== undefined) {
-      o.decomposition = opts.decomposition;
-      updated.push('decomposition');
-    }
-    draft.session.activity_revision++;
-    return {
-      session_id: sessionId,
-      updated,
-      position: o.position ?? null,
-      decomposition: o.decomposition ?? null,
-    };
+  const prepared = prepareTransitionMutation({
+    session: store.readBundle(sessionId).session,
+    currentFence: store.readSessionFence(sessionId),
+    operation: 'meta-update',
+    subject: { session_id: sessionId, run_id: null, chain_step_id: null },
+    payload: {
+      position: opts.position ?? null,
+      has_position: opts.position !== undefined,
+      decomposition: opts.decomposition ?? null,
+      has_decomposition: opts.decomposition !== undefined,
+    },
+    options: opts.transition,
   });
+  const evaluated = store.replayOrApplyTransition(sessionId, prepared.request, draft => {
+    assertMutationGuards(draft, prepared.options);
+    const value = applyMetaMutation(draft, opts);
+    return createTransitionOutcome({
+      request_id: prepared.request.request_id,
+      request_hash: prepared.request.normalized_request_hash,
+      operation: 'meta-update', status: 'applied', applied_at: new Date().toISOString(),
+      subject: prepared.request.subject,
+      postconditions: {
+        session_identity_revision: draft.session.identity_revision,
+        session_activity_revision: draft.session.activity_revision,
+        active_run_id: draft.session.active_run_id,
+        run_hash: null,
+        artifact_registry_revision: draft.artifacts.revision,
+      },
+      exit_code: 0, error_code: null, result: { value },
+    });
+  });
+  return {
+    ...(structuredClone(evaluated.outcome.result.value) as Omit<MetaUpdateResult, 'transition'>),
+    transition: transitionMutationReceipt(prepared.request, evaluated.outcome, evaluated.replayed),
+  };
 }

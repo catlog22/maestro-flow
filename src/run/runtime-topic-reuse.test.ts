@@ -137,30 +137,40 @@ describe('same-Session reuse assessment', () => {
     const schema = createRun({ projectRoot, command: 'consume-v2', sessionId: first.session_id, topic: 'reuse guards' });
     expect(schema.upstream).toEqual({});
     expect(schema.reuse_assessments[0]).toMatchObject({ decision: 'REJECT', reason_codes: expect.arrayContaining(['ARTIFACT_SCHEMA_MISMATCH']) });
-    expect(completeRun(projectRoot, schema.run_id, schema.session_id).sealed).toBe(true);
+    const rejectedRequired = completeRun(projectRoot, schema.run_id, schema.session_id);
+    expect(rejectedRequired.sealed).toBe(false);
+    expect(rejectedRequired.gates.blocking.length).toBeGreaterThan(0);
 
-    const store = new SessionStore(projectRoot);
-    store.update(first.session_id, draft => { draft.session.identity_revision++; });
-    const fresh = createRun({ projectRoot, command: 'consume', sessionId: first.session_id, topic: 'reuse guards' });
+    const guardRoot = root();
+    commandFile(guardRoot, 'produce', producerContract);
+    commandFile(guardRoot, 'consume', consumerContract);
+    commandFile(guardRoot, 'consume-other-alias', consumerContract
+      .replaceAll('current-context', 'other-context')
+      .replace('    required: true', '    required: false'));
+    const guardFirst = createRun({ projectRoot: guardRoot, command: 'produce', topic: 'reuse guards' });
+    sealContext(guardRoot, guardFirst.session_id, guardFirst.run_id, 'one');
+    const store = new SessionStore(guardRoot);
+    store.update(guardFirst.session_id, draft => { draft.session.identity_revision++; });
+    const fresh = createRun({ projectRoot: guardRoot, command: 'consume', sessionId: guardFirst.session_id, topic: 'reuse guards' });
     expect(fresh.upstream['current-context']).toBeDefined();
     expect(fresh.reuse_assessments[0]).toMatchObject({ decision: 'REUSE' });
-    expect(completeRun(projectRoot, fresh.run_id, fresh.session_id).sealed).toBe(true);
+    expect(completeRun(guardRoot, fresh.run_id, fresh.session_id).sealed).toBe(true);
 
-    const aliasMismatch = createRun({ projectRoot, command: 'consume-other-alias', sessionId: first.session_id, topic: 'reuse guards' });
+    const aliasMismatch = createRun({ projectRoot: guardRoot, command: 'consume-other-alias', sessionId: guardFirst.session_id, topic: 'reuse guards' });
     expect(aliasMismatch.upstream).toEqual({});
     expect(aliasMismatch.reuse_assessments).toEqual([]);
-    expect(completeRun(projectRoot, aliasMismatch.run_id, aliasMismatch.session_id).sealed).toBe(true);
+    expect(completeRun(guardRoot, aliasMismatch.run_id, aliasMismatch.session_id).sealed).toBe(true);
 
-    const fenced = createRun({ projectRoot, command: 'consume', sessionId: first.session_id, topic: 'reuse guards' });
+    const fenced = createRun({ projectRoot: guardRoot, command: 'consume', sessionId: guardFirst.session_id, topic: 'reuse guards' });
     expect(fenced.upstream['current-context']).toBeDefined();
 
-    const artifact = Object.values(store.readBundle(first.session_id).artifacts.artifacts)[0];
-    writeFileSync(join(store.sessionDir(first.session_id), artifact.relative_path), '{"tampered":true}');
-    const brief = briefRun(projectRoot, fenced.run_id, fenced.session_id);
+    const artifact = Object.values(store.readBundle(guardFirst.session_id).artifacts.artifacts)[0];
+    writeFileSync(join(store.sessionDir(guardFirst.session_id), artifact.relative_path), '{"tampered":true}');
+    const brief = briefRun(guardRoot, fenced.run_id, fenced.session_id);
     expect(brief.upstream).toEqual({});
     expect(brief.reuse_assessments[0]).toMatchObject({ decision: 'REJECT', reason_codes: expect.arrayContaining(['ARTIFACT_HASH_MISMATCH']) });
-    expect(checkRun(projectRoot, fenced.run_id, fenced.session_id).errors).toEqual(expect.arrayContaining([expect.stringContaining('reuse fence')]));
-    expect(completeRun(projectRoot, fenced.run_id, fenced.session_id).sealed).toBe(false);
+    expect(checkRun(guardRoot, fenced.run_id, fenced.session_id).errors).toEqual(expect.arrayContaining([expect.stringContaining('reuse fence')]));
+    expect(completeRun(guardRoot, fenced.run_id, fenced.session_id).sealed).toBe(false);
   });
 
   it('records alias lineage and reports conflict only for multiple unsequenced current candidates', () => {

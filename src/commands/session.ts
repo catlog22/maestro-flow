@@ -100,6 +100,25 @@ function transitionOptions(opts: any, target?: any): any {
   };
 }
 
+function mutationTransitionOptions(opts: any): any {
+  return {
+    requestId: opts.requestId,
+    expectedIdentityRevision: opts.expectedIdentityRevision,
+    expectedActivityRevision: opts.expectedActivityRevision,
+    leaseClaim: { executionOwner: opts.executionOwner, ownerEpoch: opts.ownerEpoch, leaseId: opts.leaseId },
+  };
+}
+
+function addMutationOptions(command: Command): Command {
+  return command
+    .option('--request-id <id>', 'idempotent mutation request ID')
+    .option('--expected-identity-revision <n>', 'expected Session identity revision', Number.parseInt)
+    .option('--expected-activity-revision <n>', 'expected Session activity revision', Number.parseInt)
+    .option('--execution-owner <owner>', 'lease owner')
+    .option('--owner-epoch <n>', 'lease epoch', Number.parseInt)
+    .option('--lease-id <id>', 'lease ID');
+}
+
 export function registerSessionCommand(program: Command): void {
   const session = program
     .command('session')
@@ -215,8 +234,8 @@ export function registerSessionCommand(program: Command): void {
     .command('chain')
     .description('Edit a Session chain (insert / skip / replace pending steps)');
 
-  chain
-    .command('insert')
+  addMutationOptions(chain
+    .command('insert'))
     .description('Insert a pending step after another step (step_id or index). Cannot insert before the active position')
     .requiredOption('--session <id>', 'Session ID')
     .requiredOption('--after <step_id|index>', 'insert after this step (step_id or numeric index)')
@@ -247,6 +266,7 @@ export function registerSessionCommand(program: Command): void {
           goalRef: opts.goalRef,
           decisionRef: opts.decisionRef,
           insertedBy: opts.insertedBy,
+          transition: mutationTransitionOptions(opts),
         });
         print({ session_id: opts.session, inserted: step });
       } catch (error) {
@@ -254,23 +274,23 @@ export function registerSessionCommand(program: Command): void {
       }
     });
 
-  chain
-    .command('skip')
+  addMutationOptions(chain
+    .command('skip'))
     .description('Skip a pending chain step (marks status=skipped; only pending steps)')
     .requiredOption('--session <id>', 'Session ID')
     .requiredOption('--step <step_id>', 'step to skip')
     .option('--workflow-root <path>', 'project root containing .workflow', process.cwd())
     .action((opts: { session: string; step: string; workflowRoot: string }) => {
       try {
-        const step = skipChainStep(resolve(opts.workflowRoot), opts.session, opts.step);
+        const step = skipChainStep(resolve(opts.workflowRoot), opts.session, opts.step, mutationTransitionOptions(opts));
         print({ session_id: opts.session, skipped: step });
       } catch (error) {
         reportError(error);
       }
     });
 
-  chain
-    .command('replace')
+  addMutationOptions(chain
+    .command('replace'))
     .description('Replace fields of a pending chain step in place (only pending steps)')
     .requiredOption('--session <id>', 'Session ID')
     .requiredOption('--step <step_id>', 'step to replace')
@@ -294,6 +314,7 @@ export function registerSessionCommand(program: Command): void {
           args: opts.args,
           stage: opts.stage,
           goalRef: opts.goalRef,
+          transition: mutationTransitionOptions(opts),
         });
         print({ session_id: opts.session, replaced: step });
       } catch (error) {
@@ -305,8 +326,8 @@ export function registerSessionCommand(program: Command): void {
     .command('meta')
     .description('Update session orchestration meta (position / decomposition)');
 
-  meta
-    .command('update')
+  addMutationOptions(meta
+    .command('update'))
     .description('Integral-replace orchestration.position and/or decomposition (schema-validated). At least one --*-file required')
     .requiredOption('--session <id>', 'Session ID')
     .option('--position-file <path>', 'position block JSON file; "-" reads stdin')
@@ -333,7 +354,10 @@ export function registerSessionCommand(program: Command): void {
         if (opts.decompositionFile) {
           update.decomposition = parseDecompositionInput(await readJson(opts.decompositionFile, 'decomposition-file'));
         }
-        print(updateSessionMeta(resolve(opts.workflowRoot), opts.session, update));
+        print(updateSessionMeta(resolve(opts.workflowRoot), opts.session, {
+          ...update,
+          transition: mutationTransitionOptions(opts),
+        }));
       } catch (error) {
         reportError(error);
       }

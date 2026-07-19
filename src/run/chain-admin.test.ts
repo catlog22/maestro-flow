@@ -214,6 +214,30 @@ function seededSession(projectRoot: string, statuses: string[]): string {
 }
 
 describe('insertChainStep', () => {
+  it('does not create step-001-fix-2 when an insert request is replayed', () => {
+    const projectRoot = root();
+    const sessionId = seededSession(projectRoot, ['running', 'pending']);
+    const store = new SessionStore(projectRoot);
+    const before = store.readBundle(sessionId).session;
+    const after = before.orchestration.chain[0].step_id;
+    const transition = {
+      requestId: 'req-insert-fix-once',
+      expectedIdentityRevision: before.identity_revision,
+      expectedActivityRevision: before.activity_revision,
+    };
+    const first = insertChainStep(projectRoot, sessionId, {
+      after, command: 'fix', insertedBy: 'test', transition,
+    });
+    const replay = insertChainStep(projectRoot, sessionId, {
+      after, command: 'fix', insertedBy: 'test', transition,
+    });
+    expect(first.transition.status).toBe('applied');
+    expect(replay.transition.status).toBe('replayed');
+    const serialized = JSON.stringify(store.readBundle(sessionId).session.orchestration.chain);
+    expect(serialized.match(/step-001-fix/g)).toHaveLength(1);
+    expect(serialized).not.toContain('step-001-fix-2');
+  });
+
   it('inserts after the active (running) step — the fix-loop case', () => {
     const projectRoot = root();
     const sessionId = seededSession(projectRoot, ['completed', 'running', 'pending']);

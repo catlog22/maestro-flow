@@ -59,6 +59,47 @@ function request() {
 }
 
 describe('transition request/outcome receipts', () => {
+  it('applies and replays every retryable mutation operation', () => {
+    const operations = [
+      'chain-insert', 'chain-replace', 'chain-skip', 'meta-update', 'decide', 'complete', 'accept-reuse',
+    ] as const;
+    for (const operation of operations) {
+      let revision = 0;
+      const req = createTransitionRequest({
+        request_id: `req-${operation}`,
+        operation,
+        subject: { session_id: 's', run_id: operation === 'complete' ? 'r' : null, chain_step_id: null },
+        requested_at: '2026-07-19T00:00:00.000Z',
+        preconditions: fence(0),
+        payload: { operation, value: 1 },
+      });
+      const first = replayOrApplyTransition([], req, fence(0), () => {
+        revision++;
+        return createTransitionOutcome({
+          request_id: req.request_id, request_hash: req.normalized_request_hash, operation,
+          status: 'applied', applied_at: '2026-07-19T00:00:01.000Z', subject: req.subject,
+          postconditions: fence(1), exit_code: 0, error_code: null, result: { revision },
+        });
+      });
+      expect(first.replayed).toBe(false);
+      const replay = replayOrApplyTransition([first.record], req, fence(1), () => {
+        revision++;
+        return first.outcome;
+      });
+      expect(replay.replayed).toBe(true);
+      expect(revision).toBe(1);
+      const driftedPayload = createTransitionRequest({
+        request_id: req.request_id, operation, subject: req.subject,
+        requested_at: req.requested_at, preconditions: req.preconditions,
+        payload: { operation, value: 2 },
+      });
+      expect(() => replayOrApplyTransition([first.record], driftedPayload, fence(1), () => first.outcome))
+        .toThrowError(expect.objectContaining({ code: 'REQUEST_CONFLICT' }));
+      expect(() => replayOrApplyTransition([first.record], req, fence(2), () => first.outcome))
+        .toThrowError(expect.objectContaining({ code: 'REPLAY_STATE_DIVERGED' }));
+    }
+  });
+
   it('applies once and replays the identical request without invoking mutation', () => {
     const req = request();
     let applied = 0;

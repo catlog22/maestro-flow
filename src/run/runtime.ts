@@ -56,7 +56,7 @@ import {
   buildProgressSection,
   buildSignalsSection,
 } from './inject.js';
-import { SessionStore, type SessionBundle } from './store.js';
+import { SessionStore, type SessionBundle, type StoreTransaction } from './store.js';
 import { createGateRegistry } from './defaults.js';
 import {
   nextPendingDecisionIndex,
@@ -65,6 +65,16 @@ import {
 } from './chain.js';
 import { canonicalRunDir, resolveRunContext, resolveTargetPlatform } from './context.js';
 import { checkLease, claimLease, type LeaseClaim } from './lease.js';
+import {
+  assertTransitionMutationRevisions,
+  createTransitionOutcome,
+  prepareTransitionMutation,
+  stableJsonUtf8,
+  transitionMutationReceipt,
+  TransitionReceiptError,
+  type TransitionMutationOptions,
+  type TransitionMutationReceipt,
+} from './transition-receipts.js';
 import { validateSessionId } from './ids.js';
 import {
   ensureSessionProjection,
@@ -170,6 +180,17 @@ export interface RebindRunResult {
   audit_path: string;
 }
 
+export interface AcceptReuseResult {
+  session_id: string;
+  run_id: string;
+  artifact_id: string;
+  assessment_hash: string;
+  run_status: CommandRun['status'];
+  consumes: string[];
+  entry_gates: GateSummary;
+  transition: TransitionMutationReceipt;
+}
+
 export interface SealSessionResult {
   session_id: string;
   status: 'sealed';
@@ -217,6 +238,7 @@ export interface CompleteRunResult extends CheckRunResult {
     step_status: string;
     retry: { count: number; max: number; exhausted: boolean } | null;
   } | null;
+  transition: TransitionMutationReceipt;
 }
 
 export interface PrepareConsumeStatus {
@@ -322,6 +344,8 @@ export interface CompleteRunOptions {
   leaseClaim?: LeaseClaim;
   /** Internal chain transition used by completeRunWithVerdict. */
   chainVerdict?: CompletionVerdict;
+  /** Audited retry/revision/lease authority for completion. */
+  transition?: Partial<TransitionMutationOptions>;
 }
 
 /** Chain-advancement instruction carried by `run complete --verdict`. */
@@ -358,15 +382,17 @@ interface EvaluationContext {
   scan: ArtifactScanResult;
   evidence: SessionBundle['evidence'];
   reportDecisions?: Array<{ id: string; status: string }>;
+  /** Entry artifact gates must bind to this Run's actual consumes authority. */
+  run: CommandRun;
 }
 
 const explicitGateCheckSchema = gateSchema.shape.check;
 
-function sha256(value: string): string {
+function sha256(value: string | Buffer): string {
   return createHash('sha256').update(value).digest('hex');
 }
 
-function protocolSha256(value: string): string {
+function protocolSha256(value: string | Buffer): string {
   return `sha256:${sha256(value)}`;
 }
 
@@ -781,6 +807,24 @@ interface RevalidatedRunReuse {
   blockers: string[];
 }
 
+function hasAcceptedReviewReceipt(
+  bundle: SessionBundle,
+  run: CommandRun,
+  assessment: ReuseAssessment,
+): boolean {
+  return bundle.session.requests.some(item => {
+    if (item.type !== 'transition' || !('outcome' in item)
+      || item.outcome.operation !== 'accept-reuse' || item.outcome.status !== 'applied') return false;
+    const acceptance = item.outcome.result.acceptance;
+    if (!acceptance || typeof acceptance !== 'object' || Array.isArray(acceptance)) return false;
+    const raw = acceptance as Record<string, unknown>;
+    return raw.run_id === run.run_id
+      && raw.assessment_hash === assessment.assessment_hash
+      && raw.artifact_id === assessment.source_fence.artifact_id
+      && stableJsonUtf8(raw.source_fence) === stableJsonUtf8(assessment.source_fence);
+  });
+}
+
 function revalidateRunReuse(
   projectRoot: string,
   store: SessionStore,
@@ -813,13 +857,22 @@ function revalidateRunReuse(
       && item.consumer.alias === original.consumer.alias);
     const aliasCurrent = original.consumer.alias === null
       || bundle.artifacts.aliases[original.consumer.alias] === original.source_fence.artifact_id;
-    const fenceCurrent = refreshed?.decision === 'REUSE'
+    const sourceFenceCurrent = refreshed !== undefined
       && refreshed.source_fence.artifact_registry_revision === original.source_fence.artifact_registry_revision
       && refreshed.source_fence.artifact_hash === original.source_fence.artifact_hash
       && refreshed.source_fence.observed_artifact_hash === original.source_fence.observed_artifact_hash
       && refreshed.source_fence.producer_run_hash === original.source_fence.producer_run_hash
       && aliasCurrent;
-    if (!fenceCurrent) {
+    const originalReuseCurrent = original.decision === 'REUSE'
+      && refreshed?.decision === 'REUSE'
+      && sourceFenceCurrent;
+    const acceptedReviewCurrent = original.decision === 'REVIEW'
+      && refreshed?.decision === 'REVIEW'
+      && refreshed.assessment_hash === original.assessment_hash
+      && stableJsonUtf8(refreshed.source_fence) === stableJsonUtf8(original.source_fence)
+      && sourceFenceCurrent
+      && hasAcceptedReviewReceipt(bundle, run, original);
+    if (!originalReuseCurrent && !acceptedReviewCurrent) {
       const assessment: ReuseAssessment = refreshed
         ? {
             ...refreshed,
@@ -830,11 +883,16 @@ function revalidateRunReuse(
           }
         : { ...original, decision: 'REJECT', reason_codes: [...new Set([...original.reason_codes, 'ARTIFACT_INVALID' as const])] };
       assessments.push(assessment);
-      if (original.decision === 'REUSE') blockers.push(`artifact ${original.source_fence.artifact_id} reuse fence is no longer current`);
+      if (run.input.consumes.includes(original.source_fence.artifact_id)) {
+        blockers.push(`artifact ${original.source_fence.artifact_id} reuse fence is no longer current or accepted`);
+      }
       continue;
     }
     assessments.push(refreshed);
-    if (original.decision !== 'REUSE' || !run.input.consumes.includes(original.source_fence.artifact_id)) continue;
+    if (!run.input.consumes.includes(original.source_fence.artifact_id)) {
+      blockers.push(`artifact ${original.source_fence.artifact_id} is not bound in run.input.consumes`);
+      continue;
+    }
     const alias = original.consumer.alias ?? original.source_fence.artifact_id;
     const artifact = bundle.artifacts.artifacts[original.source_fence.artifact_id];
     upstream[alias] = {
@@ -845,6 +903,125 @@ function revalidateRunReuse(
     };
   }
   return { upstream, assessments, blockers };
+}
+
+/**
+ * Explicitly accept one REVIEW assessment. The receipt binds the exact
+ * assessment hash and source fence; run.input.consumes is updated in the same
+ * authority transaction, so an Artifact Registry candidate alone never opens
+ * the required consume gate.
+ */
+export function acceptRunReuse(
+  projectRoot: string,
+  runId: string,
+  assessmentHash: string,
+  sessionId: string | undefined,
+  transition: Partial<TransitionMutationOptions>,
+): AcceptReuseResult {
+  const store = new SessionStore(projectRoot);
+  const located = store.findRun(runId, sessionId);
+  const initialBundle = store.readBundle(located.sessionId);
+  const initialRun = located.run;
+  const assessment = (initialRun.input.reuse_assessments as ReuseAssessment[])
+    .find(item => item.assessment_hash === assessmentHash);
+  if (!assessment) throw new Error(`reuse assessment not found: ${assessmentHash}`);
+  if (assessment.decision !== 'REVIEW') {
+    throw new Error(`reuse assessment ${assessmentHash} is ${assessment.decision}, expected REVIEW`);
+  }
+  const resolvedContract = contractForRun(projectRoot, initialRun).contract;
+  const prepared = prepareTransitionMutation({
+    session: initialBundle.session,
+    currentFence: store.readSessionFence(located.sessionId, runId),
+    operation: 'accept-reuse',
+    subject: { session_id: located.sessionId, run_id: runId, chain_step_id: initialRun.chain_step_id },
+    payload: {
+      run_id: runId,
+      assessment_hash: assessment.assessment_hash,
+      artifact_id: assessment.source_fence.artifact_id,
+      source_fence: assessment.source_fence,
+    },
+    options: transition,
+  });
+  const evaluated = store.replayOrApplyTransition(located.sessionId, prepared.request, (draft, tx) => {
+    assertTransitionMutationRevisions(draft.session, prepared.options);
+    const leaseConflict = checkLease(draft.session.orchestration.lease, prepared.options.leaseClaim ?? {});
+    if (leaseConflict) throw new Error(leaseConflict);
+    const run = tx.readRun(runId);
+    if (run.status === 'sealed' || run.status === 'completed') {
+      throw new Error(`Run ${runId} is ${run.status} and immutable`);
+    }
+    const stored = (run.input.reuse_assessments as ReuseAssessment[])
+      .find(item => item.assessment_hash === assessment.assessment_hash);
+    const current = collectReusableUpstream(
+      projectRoot, store, draft.session, draft.artifacts, draft.gates, resolvedContract,
+    ).assessments.find(item => item.assessment_hash === assessment.assessment_hash);
+    if (!stored || stored.decision !== 'REVIEW'
+      || !current || current.decision !== 'REVIEW'
+      || stableJsonUtf8(stored.source_fence) !== stableJsonUtf8(assessment.source_fence)
+      || stableJsonUtf8(current.source_fence) !== stableJsonUtf8(assessment.source_fence)) {
+      throw new TransitionReceiptError(
+        'FENCE_CONFLICT',
+        `reuse assessment ${assessment.assessment_hash} no longer matches its REVIEW source fence`,
+      );
+    }
+    if (!run.input.consumes.includes(assessment.source_fence.artifact_id)) {
+      run.input.consumes.push(assessment.source_fence.artifact_id);
+    }
+    const context: EvaluationContext = {
+      projectRoot,
+      runDir: store.runDir(located.sessionId, runId),
+      session: draft.session,
+      registry: draft.artifacts,
+      scan: { artifacts: [], warnings: [], errors: [] },
+      evidence: draft.evidence,
+      run,
+    };
+    for (const gateId of run.gate_ids) {
+      const gate = draft.gates.gates[gateId];
+      if (gate?.scope === 'entry') gate.status = evaluateGate(gate, context);
+    }
+    summarizeRegistry(draft.gates);
+    const entryGates = gateSummary(
+      draft.gates,
+      run.gate_ids.filter(gateId => draft.gates.gates[gateId]?.scope === 'entry'),
+    );
+    if (run.status === 'blocked' && entryGates.blocking.length === 0) run.status = 'running';
+    draft.session.activity_revision++;
+    tx.writeRun(run);
+    const acceptance = {
+      run_id: runId,
+      assessment_hash: assessment.assessment_hash,
+      artifact_id: assessment.source_fence.artifact_id,
+      source_fence: assessment.source_fence,
+    };
+    const result = {
+      session_id: located.sessionId,
+      run_id: runId,
+      artifact_id: assessment.source_fence.artifact_id,
+      assessment_hash: assessment.assessment_hash,
+      run_status: run.status,
+      consumes: [...run.input.consumes],
+      entry_gates: entryGates,
+    };
+    return createTransitionOutcome({
+      request_id: prepared.request.request_id,
+      request_hash: prepared.request.normalized_request_hash,
+      operation: 'accept-reuse', status: 'applied', applied_at: new Date().toISOString(),
+      subject: prepared.request.subject,
+      postconditions: {
+        session_identity_revision: draft.session.identity_revision,
+        session_activity_revision: draft.session.activity_revision,
+        active_run_id: draft.session.active_run_id,
+        run_hash: protocolSha256(`${JSON.stringify(run, null, 2)}\n`),
+        artifact_registry_revision: draft.artifacts.revision,
+      },
+      exit_code: 0, error_code: null, result: { acceptance, value: result },
+    });
+  });
+  return {
+    ...(structuredClone(evaluated.outcome.result.value) as Omit<AcceptReuseResult, 'transition'>),
+    transition: transitionMutationReceipt(prepared.request, evaluated.outcome, evaluated.replayed),
+  };
 }
 
 function argumentHint(raw: string): string {
@@ -1139,13 +1316,17 @@ function artifactForGate(gate: Gate, context: EvaluationContext): { status: stri
       );
       return found ? { status: 'draft', schema: found.schemaVersion } : null;
     }
+    const consumed = new Set(context.run.input.consumes);
     if (check.alias) {
       const artifactId = context.registry.aliases[check.alias];
       const artifact = artifactId ? context.registry.artifacts[artifactId] : undefined;
-      if (artifact && artifact.kind === check.kind) return { status: artifact.status, schema: artifact.schema_version };
+      if (artifactId && consumed.has(artifactId) && artifact && artifact.kind === check.kind) {
+        return { status: artifact.status, schema: artifact.schema_version };
+      }
       return null;
     }
-    const artifact = Object.values(context.registry.artifacts).find(item => item.kind === check.kind);
+    const artifact = Object.entries(context.registry.artifacts)
+      .find(([artifactId, item]) => consumed.has(artifactId) && item.kind === check.kind)?.[1];
     if (artifact) return { status: artifact.status, schema: artifact.schema_version };
     return null;
   }
@@ -1635,6 +1816,7 @@ export function createRun(options: CreateRunOptions): CreateRunResult {
       registry: bundle.artifacts,
       scan: emptyScan,
       evidence: bundle.evidence,
+      run,
     };
     for (const id of gateIds) {
       const gate = bundle.gates.gates[id];
@@ -1800,6 +1982,7 @@ export function checkRun(projectRoot: string, runId: string, sessionId?: string)
       scan,
       evidence: bundle.evidence,
       reportDecisions: frontmatter.decisions.map(item => ({ id: item.id, status: item.status })),
+      run,
     };
     const gates = evaluateRunGates(bundle, run, context);
     if (run.status === 'created') run.status = 'running';
@@ -2166,116 +2349,225 @@ function applyChainVerdict(
   return { step_id: step.step_id, index, step_status: step.status, retry };
 }
 
+interface PreparedCompleteFile {
+  path: string;
+  hash: string | null;
+}
+
+export interface PreparedCompleteInputs {
+  projectRoot: string;
+  sessionId: string;
+  runId: string;
+  runDir: string;
+  sessionDir: string;
+  store: SessionStore;
+  contract: CommandContract;
+  warning: string | null;
+  scan: ArtifactScanResult;
+  extraArtifacts: DiscoveredArtifact[];
+  frontmatter: ReportFrontmatter;
+  state: StateJsonV2;
+  options: CompleteRunOptions;
+  files: PreparedCompleteFile[];
+}
+
+type CompleteAuthorityResult = Omit<CompleteRunResult, 'transition'>;
+
+function preparedPathHash(path: string): string | null {
+  if (!existsSync(path)) return null;
+  const stat = statSync(path);
+  return stat.isDirectory()
+    ? protocolSha256(hashDirectory(path).hash)
+    : protocolSha256(readFileSync(path));
+}
+
+/** Prepare report/output/state inputs and immutable hashes outside the transition lock. */
+export function prepareCompleteInputs(
+  projectRoot: string,
+  runId: string,
+  sessionId: string | undefined,
+  options: CompleteRunOptions,
+): PreparedCompleteInputs {
+  const store = new SessionStore(projectRoot);
+  const located = store.findRun(runId, sessionId);
+  const resolved = contractForRun(projectRoot, located.run);
+  const runDir = store.runDir(located.sessionId, runId);
+  const sessionDir = store.sessionDir(located.sessionId);
+  const scan = scanOutputs(runDir, sessionDir, resolved.contract);
+  validateStrictArtifactContract(runDir, resolved.contract, scan);
+  const extraArtifacts = discoverExtraArtifacts(runDir, sessionDir, options.extraArtifacts ?? []);
+  const paths = new Set<string>([
+    join(runDir, 'run.json'),
+    join(runDir, 'report.md'),
+    join(runDir, 'outputs'),
+    join(store.workflowRoot, 'state.json'),
+    ...scan.artifacts.map(item => item.absolutePath),
+    ...extraArtifacts.map(item => item.absolutePath),
+  ]);
+  return {
+    projectRoot,
+    sessionId: located.sessionId,
+    runId,
+    runDir,
+    sessionDir,
+    store,
+    contract: resolved.contract,
+    warning: resolved.warning,
+    scan,
+    extraArtifacts,
+    frontmatter: readReportFrontmatter(runDir),
+    state: projectState(projectRoot),
+    options,
+    files: [...paths].sort().map(path => ({ path, hash: preparedPathHash(path) })),
+  };
+}
+
+function revalidatePreparedCompleteInputs(prepared: PreparedCompleteInputs): void {
+  for (const file of prepared.files) {
+    if (preparedPathHash(file.path) !== file.hash) {
+      throw new TransitionReceiptError('FENCE_CONFLICT', `prepared completion input changed: ${file.path}`);
+    }
+  }
+}
+
+/** Apply complete authority using only the prepared inputs and StoreTransaction. */
+export function applyCompleteRunMutation(
+  draft: SessionBundle,
+  tx: StoreTransaction,
+  prepared: PreparedCompleteInputs,
+): { result: CompleteAuthorityResult; run: CommandRun } {
+  const { store, runId, projectRoot, scan, frontmatter, options } = prepared;
+  const run = tx.readRun(runId);
+  if (run.status === 'sealed') throw new Error(`Run ${runId} is sealed and immutable`);
+  const reuse = revalidateRunReuse(projectRoot, store, draft, run);
+  scan.errors.push(...reuse.blockers.filter(blocker => !scan.errors.includes(blocker)));
+  if (prepared.warning && !scan.warnings.includes(prepared.warning)) scan.warnings.unshift(prepared.warning);
+  run.status = 'completed';
+  run.completed_at = localISO();
+  const context: EvaluationContext = {
+    projectRoot,
+    runDir: prepared.runDir,
+    session: draft.session,
+    registry: draft.artifacts,
+    scan,
+    evidence: draft.evidence,
+    reportDecisions: frontmatter.decisions.map(item => ({ id: item.id, status: item.status })),
+    run,
+  };
+  const gates = evaluateRunGates(draft, run, context);
+  const blocked = scan.errors.length > 0 || gates.blocking.length > 0;
+  draft.session.activity_revision++;
+  if (blocked) {
+    run.status = 'blocked';
+    tx.writeRun(run);
+    tx.writeJson(join(store.workflowRoot, 'state.json'), ensureSessionProjection(
+      prepared.state, projectSessionEntry(draft.session),
+    ));
+    return {
+      run,
+      result: {
+        session_id: prepared.sessionId, run_id: runId, status: run.status, gates,
+        artifacts: scanSummary(scan), warnings: scan.warnings, errors: scan.errors,
+        upstream: reuse.upstream, reuse_assessments: reuse.assessments, sealed: false,
+        primary_artifact_id: null, artifact_ids: [],
+        next_action: {
+          suggest_only: true, action: 'repair_run', command: `maestro run check ${runId}`,
+          reason: 'Run gates are blocking; fix outputs before advancing the chain',
+          preconditions: ['repair blocking outputs or gates', 'run check must report no blocking gates'],
+        },
+        chain_transition: null,
+      },
+    };
+  }
+
+  const artifactIds = registerArtifacts(draft.artifacts, run, [...scan.artifacts, ...prepared.extraArtifacts]);
+  const primary = artifactIds.find(id => draft.artifacts.artifacts[id]?.role === 'primary') ?? null;
+  const evidenceRefs = recordCompletionEvidence(draft, run, artifactIds, frontmatter);
+  run.output = { produces: artifactIds, primary_artifact_id: primary, verdict: frontmatter.verdict };
+  run.handoff = deriveHandoff(frontmatter, runId, run.command.name, artifactIds, evidenceRefs);
+  if (!run.handoff.summary.trim() && options.summaryFallback?.trim()) {
+    run.handoff.summary = options.summaryFallback.trim();
+  }
+  mergeNotesIntoConcerns(run.handoff, options.notes ?? []);
+  mergeDecisionsIntoHandoff(run.handoff, options.decisions ?? []);
+  run.status = 'sealed';
+  run.sealed_at = localISO();
+  draft.session.latest_completed_run_id = runId;
+  if (draft.session.active_run_id === runId) draft.session.active_run_id = null;
+  const chainTransition = options.chainVerdict
+    ? applyChainVerdict(draft.session, run, options.chainVerdict)
+    : null;
+  summarizeRegistry(draft.gates);
+  tx.writeRun(run);
+  tx.writeJson(join(store.workflowRoot, 'state.json'), ensureSessionProjection(
+    prepared.state, projectSessionEntry(draft.session),
+  ));
+  return {
+    run,
+    result: {
+      session_id: prepared.sessionId, run_id: runId, status: run.status, gates,
+      artifacts: scanSummary(scan), warnings: scan.warnings, errors: scan.errors,
+      upstream: reuse.upstream, reuse_assessments: reuse.assessments, sealed: true,
+      primary_artifact_id: primary, artifact_ids: artifactIds,
+      next_action: completionNextPointer(draft.session, runId), chain_transition: chainTransition,
+    },
+  };
+}
+
 export function completeRun(
   projectRoot: string,
   runId: string,
   sessionId?: string,
   options: CompleteRunOptions = {},
 ): CompleteRunResult {
-  const store = new SessionStore(projectRoot);
-  const located = store.findRun(runId, sessionId);
-  if (located.run.status === 'sealed') throw new Error(`Run ${runId} is sealed and immutable`);
-  const resolvedContract = contractForRun(projectRoot, located.run);
-  const reuse = revalidateRunReuse(projectRoot, store, store.readBundle(located.sessionId), located.run);
-  const runDir = store.runDir(located.sessionId, runId);
-  const sessionDir = store.sessionDir(located.sessionId);
-  const scan = scanOutputs(runDir, sessionDir, resolvedContract.contract);
-  scan.errors.push(...reuse.blockers);
-  if (resolvedContract.warning) scan.warnings.unshift(resolvedContract.warning);
-  const extraArtifacts = discoverExtraArtifacts(runDir, sessionDir, options.extraArtifacts ?? []);
-  const frontmatter = readReportFrontmatter(runDir);
-  const notes = options.notes ?? [];
-
-  return store.update(located.sessionId, (bundle, tx) => {
-    const leaseConflict = checkLease(bundle.session.orchestration.lease, options.leaseClaim ?? {});
-    if (leaseConflict) throw new Error(leaseConflict);
-    const run = tx.readRun(runId);
-    if (run.status === 'sealed') throw new Error(`Run ${runId} is sealed and immutable`);
-    run.status = 'completed';
-    run.completed_at = localISO();
-    const state = projectState(projectRoot);
-    const context: EvaluationContext = {
-      projectRoot,
-      runDir: store.runDir(located.sessionId, runId),
-      session: bundle.session,
-      registry: bundle.artifacts,
-      scan,
-      evidence: bundle.evidence,
-      reportDecisions: frontmatter.decisions.map(item => ({ id: item.id, status: item.status })),
-    };
-    const gates = evaluateRunGates(bundle, run, context);
-    const blocked = scan.errors.length > 0 || gates.blocking.length > 0;
-    if (blocked) {
-      run.status = 'blocked';
-      tx.writeRun(run);
-      return {
-        session_id: located.sessionId,
-        run_id: runId,
-        status: run.status,
-        gates,
-        artifacts: scanSummary(scan),
-        warnings: scan.warnings,
-        errors: scan.errors,
-        upstream: reuse.upstream,
-        reuse_assessments: reuse.assessments,
-        sealed: false,
-        primary_artifact_id: null,
-        artifact_ids: [],
-        next_action: {
-          suggest_only: true,
-          action: 'repair_run',
-          command: `maestro run check ${runId}`,
-          reason: 'Run gates are blocking; fix outputs before advancing the chain',
-          preconditions: ['repair blocking outputs or gates', 'run check must report no blocking gates'],
-        },
-        chain_transition: null,
-      };
-    }
-
-    const artifactIds = registerArtifacts(bundle.artifacts, run, [...scan.artifacts, ...extraArtifacts]);
-    const primary = artifactIds.find(id => bundle.artifacts.artifacts[id]?.role === 'primary') ?? null;
-    const evidenceRefs = recordCompletionEvidence(bundle, run, artifactIds, frontmatter);
-    run.output = {
-      produces: artifactIds,
-      primary_artifact_id: primary,
-      verdict: frontmatter.verdict,
-    };
-    run.handoff = deriveHandoff(frontmatter, runId, run.command.name, artifactIds, evidenceRefs);
-    if (!run.handoff.summary.trim() && options.summaryFallback?.trim()) {
-      run.handoff.summary = options.summaryFallback.trim();
-    }
-    mergeNotesIntoConcerns(run.handoff, notes);
-    mergeDecisionsIntoHandoff(run.handoff, options.decisions ?? []);
-    run.status = 'sealed';
-    run.sealed_at = localISO();
-    bundle.session.latest_completed_run_id = runId;
-    if (bundle.session.active_run_id === runId) bundle.session.active_run_id = null;
-    const chainTransition = options.chainVerdict
-      ? applyChainVerdict(bundle.session, run, options.chainVerdict)
-      : null;
-    bundle.session.activity_revision++;
-    summarizeRegistry(bundle.gates);
-    tx.writeRun(run);
-
-    const nextState = ensureSessionProjection(state, projectSessionEntry(bundle.session));
-    tx.writeJson(join(store.workflowRoot, 'state.json'), nextState);
-    return {
-      session_id: located.sessionId,
+  const preparedInputs = prepareCompleteInputs(projectRoot, runId, sessionId, options);
+  const { store } = preparedInputs;
+  const initialBundle = store.readBundle(preparedInputs.sessionId);
+  const prepared = prepareTransitionMutation({
+    session: initialBundle.session,
+    currentFence: store.readSessionFence(preparedInputs.sessionId, runId),
+    operation: 'complete',
+    subject: { session_id: preparedInputs.sessionId, run_id: runId, chain_step_id: store.readRun(preparedInputs.sessionId, runId).chain_step_id },
+    payload: {
       run_id: runId,
-      status: run.status,
-      gates,
-      artifacts: scanSummary(scan),
-      warnings: scan.warnings,
-      errors: scan.errors,
-      upstream: reuse.upstream,
-      reuse_assessments: reuse.assessments,
-      sealed: true,
-      primary_artifact_id: primary,
-      artifact_ids: artifactIds,
-      next_action: completionNextPointer(bundle.session, runId),
-      chain_transition: chainTransition,
-    };
+      notes: options.notes ?? [],
+      extra_artifacts: options.extraArtifacts ?? [],
+      summary_fallback: options.summaryFallback ?? null,
+      decisions: options.decisions ?? [],
+      chain_verdict: options.chainVerdict ?? null,
+    },
+    options: options.transition ?? { leaseClaim: options.leaseClaim },
   });
+  const evaluated = store.replayOrApplyTransition(preparedInputs.sessionId, prepared.request, (draft, tx) => {
+    assertTransitionMutationRevisions(draft.session, prepared.options);
+    const leaseConflict = checkLease(draft.session.orchestration.lease, prepared.options.leaseClaim ?? {});
+    if (leaseConflict) throw new Error(leaseConflict);
+    if (draft.artifacts.revision !== prepared.request.preconditions.artifact_registry_revision) {
+      throw new TransitionReceiptError('FENCE_CONFLICT', 'complete authority fence changed after preparation');
+    }
+    revalidatePreparedCompleteInputs(preparedInputs);
+    const applied = applyCompleteRunMutation(draft, tx, preparedInputs);
+    return createTransitionOutcome({
+      request_id: prepared.request.request_id,
+      request_hash: prepared.request.normalized_request_hash,
+      operation: 'complete', status: 'applied', applied_at: new Date().toISOString(),
+      subject: prepared.request.subject,
+      postconditions: {
+        session_identity_revision: draft.session.identity_revision,
+        session_activity_revision: draft.session.activity_revision,
+        active_run_id: draft.session.active_run_id,
+        run_hash: protocolSha256(`${JSON.stringify(applied.run, null, 2)}\n`),
+        artifact_registry_revision: draft.artifacts.revision,
+      },
+      exit_code: applied.result.sealed ? 0 : 1,
+      error_code: applied.result.sealed ? null : 'RUN_GATES_BLOCKING',
+      result: { value: applied.result },
+    });
+  });
+  return {
+    ...(structuredClone(evaluated.outcome.result.value) as CompleteAuthorityResult),
+    transition: transitionMutationReceipt(prepared.request, evaluated.outcome, evaluated.replayed),
+  };
 }
 
 export interface CompleteVerdictOptions extends CompleteRunOptions {
@@ -2403,6 +2695,7 @@ export function completeRunWithVerdict(
     decisions: options.decisions,
     leaseClaim: options.leaseClaim,
     chainVerdict: verdict,
+    transition: options.transition,
   });
 
   const after = store.readBundle(sessionId).session;

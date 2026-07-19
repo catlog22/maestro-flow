@@ -168,7 +168,10 @@ export const transitionFenceSchema = z.object({
 export const transitionRequestSchema = z.object({
   schema_version: z.literal('transition-request/1.0'),
   request_id: nonEmptyString,
-  operation: z.enum(['create', 'next', 'complete', 'resolve', 'resume', 'fork', 'import', 'ralph-retry']),
+  operation: z.enum([
+    'create', 'next', 'complete', 'resolve', 'resume', 'fork', 'import', 'ralph-retry',
+    'chain-insert', 'chain-replace', 'chain-skip', 'meta-update', 'decide', 'accept-reuse',
+  ]),
   subject: z.object({
     session_id: nonEmptyString,
     run_id: z.string().min(1).nullable(),

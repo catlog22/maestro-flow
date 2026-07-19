@@ -8,7 +8,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { Command } from 'commander';
-import { runDecide } from './decide.js';
+import { ensureDecisionLogProjection, runDecide } from './decide.js';
 import { runNextStep } from './next.js';
 import { SessionStore } from './store.js';
 import { registerRunCommand } from '../commands/run.js';
@@ -193,6 +193,42 @@ describe('run decide — escalate', () => {
 });
 
 describe('run decide — evidence + decisions.ndjson', () => {
+  it('repairs the decision projection from a committed receipt', () => {
+    const projectRoot = root();
+    stepCommand(projectRoot, 'demo');
+    seedSession(projectRoot, 's', [{ command: 'gate', decision_ref: 'DP-1' }], [{ point_id: 'DP-1' }]);
+    const store = new SessionStore(projectRoot);
+    const before = store.readBundle('s').session;
+    const transition = {
+      requestId: 'req-decide-projection-repair',
+      expectedIdentityRevision: before.identity_revision,
+      expectedActivityRevision: before.activity_revision,
+    };
+    const logPath = join(store.sessionDir('s'), 'decisions.ndjson');
+    mkdirSync(logPath);
+    const first = runDecide(projectRoot, 's', 'DP-1', {
+      verdict: 'fix', confidence: 'medium', summary: 'repair needed', transition,
+    });
+    expect(first.projection_pending).toBe(true);
+    expect(first.transition.status).toBe('applied');
+    expect(orchOf(projectRoot, 's').decision_points[0].retry_count).toBe(1);
+
+    rmSync(logPath, { recursive: true, force: true });
+    const replay = runDecide(projectRoot, 's', 'DP-1', {
+      verdict: 'fix', confidence: 'medium', summary: 'repair needed', transition,
+    });
+    expect(replay.transition.status).toBe('replayed');
+    expect(replay.projection_pending).toBe(false);
+    expect(orchOf(projectRoot, 's').decision_points[0].retry_count).toBe(1);
+    const lines = readFileSync(logPath, 'utf8').trim().split(/\r?\n/).map(line => JSON.parse(line));
+    expect(lines).toHaveLength(1);
+    expect(lines[0].transition_id).toBe(first.transition.transition_id);
+
+    rmSync(logPath, { force: true });
+    expect(ensureDecisionLogProjection(projectRoot, 's', first.transition.transition_id)).toBe(true);
+    expect(readFileSync(logPath, 'utf8').trim().split(/\r?\n/)).toHaveLength(1);
+  });
+
   it('lands evidence on evidence_ref and appends to decisions.ndjson', () => {
     const projectRoot = root();
     stepCommand(projectRoot, 'demo');

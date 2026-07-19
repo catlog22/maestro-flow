@@ -79,6 +79,31 @@ describe('parse helpers', () => {
 });
 
 describe('updateSessionMeta', () => {
+  it('replays without a second revision bump and rejects payload drift', () => {
+    const projectRoot = root();
+    seed(projectRoot, 's');
+    const store = new SessionStore(projectRoot);
+    const before = store.readBundle('s').session;
+    const transition = {
+      requestId: 'req-meta-once',
+      expectedIdentityRevision: before.identity_revision,
+      expectedActivityRevision: before.activity_revision,
+    };
+    const first = updateSessionMeta(projectRoot, 's', {
+      position: parsePositionInput(validPosition), transition,
+    });
+    const afterFirst = store.readBundle('s').session.activity_revision;
+    const replay = updateSessionMeta(projectRoot, 's', {
+      position: parsePositionInput(validPosition), transition,
+    });
+    expect(first.transition.status).toBe('applied');
+    expect(replay.transition.status).toBe('replayed');
+    expect(store.readBundle('s').session.activity_revision).toBe(afterFirst);
+    expect(() => updateSessionMeta(projectRoot, 's', {
+      position: parsePositionInput({ ...validPosition, lifecycle: 'changed' }), transition,
+    })).toThrowError(expect.objectContaining({ code: 'REQUEST_CONFLICT' }));
+  });
+
   it('replaces position only', () => {
     const projectRoot = root();
     seed(projectRoot, 's');

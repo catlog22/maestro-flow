@@ -4,7 +4,7 @@
 // handoff derivation), then asserts the chain / session transitions.
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { Command } from 'commander';
@@ -16,6 +16,7 @@ import { SessionStore } from './store.js';
 import { registerRunCommand } from '../commands/run.js';
 import { writeStateJson, migrateV1toV2 } from '../utils/state-schema.js';
 import type { SessionState } from './schemas.js';
+import { prepareTransitionMutation } from './transition-receipts.js';
 
 const roots: string[] = [];
 
@@ -258,6 +259,166 @@ describe('run complete — verdict chain transitions', () => {
 });
 
 describe('run complete — completion gate integrity', () => {
+  it('commits complete authority and receipt in one StoreTransaction', () => {
+    const projectRoot = root();
+    stepCommand(projectRoot, 'demo');
+    seedSession(projectRoot, 's', [{ command: 'demo' }]);
+    const runId = startStep(projectRoot, 's', 0);
+    const store = new SessionStore(projectRoot);
+    const before = store.readBundle('s').session;
+    const transition = {
+      requestId: 'req-complete-atomic',
+      expectedIdentityRevision: before.identity_revision,
+      expectedActivityRevision: before.activity_revision,
+    };
+    const authorityPaths = [
+      join(store.sessionDir('s'), 'session.json'), join(store.sessionDir('s'), 'gates.json'),
+      join(store.sessionDir('s'), 'artifacts.json'), join(store.sessionDir('s'), 'evidence.json'),
+      join(store.runDir('s', runId), 'run.json'), join(projectRoot, '.workflow', 'state.json'),
+    ];
+    const snapshots = new Map(authorityPaths.map(path => [path, readFileSync(path, 'utf8')]));
+    const original = (SessionStore.prototype as any).writeBatchUnlocked;
+    const failed = vi.spyOn(SessionStore.prototype as any, 'writeBatchUnlocked')
+      .mockImplementationOnce(() => { throw new Error('injected writeBatch fault'); });
+    expect(() => completeRunWithVerdict(projectRoot, runId, 's', {
+      verdict: 'done', transition,
+    })).toThrow(/injected writeBatch fault/);
+    failed.mockRestore();
+    for (const [path, value] of snapshots) expect(readFileSync(path, 'utf8')).toBe(value);
+    expect(store.readBundle('s').session.requests.some(item => item.request_id === transition.requestId)).toBe(false);
+
+    const batches: string[][] = [];
+    const capture = vi.spyOn(SessionStore.prototype as any, 'writeBatchUnlocked')
+      .mockImplementation(function (this: SessionStore, writes: Array<{ path: string }>) {
+        batches.push(writes.map(write => write.path));
+        return original.call(this, writes);
+      });
+    const result = completeRunWithVerdict(projectRoot, runId, 's', { verdict: 'done', transition });
+    capture.mockRestore();
+    expect(result.seal.transition.status).toBe('applied');
+    expect(store.readBundle('s').session.requests.some(item => item.request_id === transition.requestId)).toBe(true);
+    expect(batches).toHaveLength(1);
+    for (const path of authorityPaths) expect(batches[0]).toContain(path);
+
+    const committed = new Map(authorityPaths.map(path => [path, readFileSync(path, 'utf8')]));
+    const replay = completeRunWithVerdict(projectRoot, runId, 's', { verdict: 'done', transition });
+    expect(replay.seal.transition.status).toBe('replayed');
+    for (const [path, value] of committed) expect(readFileSync(path, 'utf8')).toBe(value);
+  });
+
+  it('replays needs-retry without duplicating retry authority or replacement Runs', () => {
+    const projectRoot = root();
+    stepCommand(projectRoot, 'demo');
+    seedSession(projectRoot, 's', [{ command: 'demo' }]);
+    const runId = startStep(projectRoot, 's', 0);
+    const store = new SessionStore(projectRoot);
+    const before = store.readBundle('s').session;
+    const transition = {
+      requestId: 'req-complete-retry-once',
+      expectedIdentityRevision: before.identity_revision,
+      expectedActivityRevision: before.activity_revision,
+    };
+    const first = completeRunWithVerdict(projectRoot, runId, 's', { verdict: 'needs-retry', transition });
+    const runDirs = readdirSync(join(store.sessionDir('s'), 'runs'));
+    const bundleAfterFirst = store.readBundle('s');
+    const storedRequest = bundleAfterFirst.session.requests.find(item => item.request_id === transition.requestId);
+    const reconstructed = prepareTransitionMutation({
+      session: bundleAfterFirst.session,
+      currentFence: store.readSessionFence('s', runId),
+      operation: 'complete',
+      subject: { session_id: 's', run_id: runId, chain_step_id: store.readRun('s', runId).chain_step_id },
+      payload: {
+        run_id: runId, notes: [], extra_artifacts: [], summary_fallback: null,
+        decisions: [], chain_verdict: 'needs-retry',
+      },
+      options: transition,
+    });
+    expect(reconstructed.request).toEqual((storedRequest as any).payload);
+    const replay = completeRunWithVerdict(projectRoot, runId, 's', { verdict: 'needs-retry', transition });
+    expect(first.seal.transition.status).toBe('applied');
+    expect(replay.seal.transition.status).toBe('replayed');
+    expect(chainOf(projectRoot, 's')[0].retry?.count).toBe(1);
+    expect(readdirSync(join(store.sessionDir('s'), 'runs'))).toEqual(runDirs);
+  });
+
+  it('revalidates prepared complete inputs inside the transition lock', () => {
+    const projectRoot = root();
+    stepCommand(projectRoot, 'demo');
+    seedSession(projectRoot, 's', [{ command: 'demo' }]);
+    const runId = startStep(projectRoot, 's', 0);
+    const store = new SessionStore(projectRoot);
+    const before = store.readBundle('s').session;
+    const transition = {
+      requestId: 'req-complete-input-fence',
+      expectedIdentityRevision: before.identity_revision,
+      expectedActivityRevision: before.activity_revision,
+    };
+    const sessionPath = join(store.sessionDir('s'), 'session.json');
+    const runPath = join(store.runDir('s', runId), 'run.json');
+    const statePath = join(projectRoot, '.workflow', 'state.json');
+    const authority = [sessionPath, runPath, statePath].map(path => readFileSync(path, 'utf8'));
+    const reportPath = join(store.runDir('s', runId), 'report.md');
+    const originalReplay = SessionStore.prototype.replayOrApplyTransition;
+    const intercept = vi.spyOn(SessionStore.prototype, 'replayOrApplyTransition')
+      .mockImplementation(function (this: SessionStore, sessionId, request, apply) {
+        writeFileSync(reportPath, `${readFileSync(reportPath, 'utf8')}\nchanged after prepare\n`, 'utf8');
+        return originalReplay.call(this, sessionId, request, apply);
+      });
+    expect(() => completeRunWithVerdict(projectRoot, runId, 's', {
+      verdict: 'done', transition,
+    })).toThrowError(expect.objectContaining({ code: 'FENCE_CONFLICT' }));
+    intercept.mockRestore();
+    expect([sessionPath, runPath, statePath].map(path => readFileSync(path, 'utf8'))).toEqual(authority);
+    expect(store.readBundle('s').session.requests.some(item => item.request_id === transition.requestId)).toBe(false);
+  });
+
+  it('uses one SessionStore lock for complete mutation application', () => {
+    const projectRoot = root();
+    stepCommand(projectRoot, 'demo');
+    seedSession(projectRoot, 's', [{ command: 'demo' }]);
+    const runId = startStep(projectRoot, 's', 0);
+    const store = new SessionStore(projectRoot);
+    const before = store.readBundle('s').session;
+    let insideApply = false;
+    let nestedCalls = 0;
+    let replayCalls = 0;
+    const originalReplay = SessionStore.prototype.replayOrApplyTransition;
+    const originalUpdate = SessionStore.prototype.update;
+    const originalWithLock = SessionStore.prototype.withLock;
+    const originalAppend = SessionStore.prototype.appendLine;
+    const replaySpy = vi.spyOn(SessionStore.prototype, 'replayOrApplyTransition')
+      .mockImplementation(function (this: SessionStore, sessionId, request, apply) {
+        replayCalls++;
+        return originalReplay.call(this, sessionId, request, (draft, tx) => {
+          insideApply = true;
+          try { return apply(draft, tx); } finally { insideApply = false; }
+        });
+      });
+    const updateSpy = vi.spyOn(SessionStore.prototype, 'update').mockImplementation(function (this: SessionStore, ...args: any[]) {
+      if (insideApply) nestedCalls++;
+      return originalUpdate.apply(this, args as any);
+    });
+    const lockSpy = vi.spyOn(SessionStore.prototype, 'withLock').mockImplementation(function (this: SessionStore, ...args: any[]) {
+      if (insideApply) nestedCalls++;
+      return originalWithLock.apply(this, args as any);
+    });
+    const appendSpy = vi.spyOn(SessionStore.prototype, 'appendLine').mockImplementation(function (this: SessionStore, ...args: any[]) {
+      if (insideApply) nestedCalls++;
+      return originalAppend.apply(this, args as any);
+    });
+    completeRunWithVerdict(projectRoot, runId, 's', {
+      verdict: 'done',
+      transition: {
+        requestId: 'req-complete-one-lock',
+        expectedIdentityRevision: before.identity_revision,
+        expectedActivityRevision: before.activity_revision,
+      },
+    });
+    replaySpy.mockRestore(); updateSpy.mockRestore(); lockSpy.mockRestore(); appendSpy.mockRestore();
+    expect(replayCalls).toBe(1);
+    expect(nestedCalls).toBe(0);
+  });
+
   it('does not advance the chain when the Run cannot seal', () => {
     const projectRoot = root();
     stepCommand(projectRoot, 'demo');
