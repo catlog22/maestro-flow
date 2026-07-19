@@ -448,7 +448,16 @@ Compatibility boundary:
           throw new Error(`unknown platform "${platform}", valid: ${VALID_PLATFORMS.join(', ')}`);
         }
         const result = briefRun(resolve(opts.workflowRoot), runId, opts.session, platform);
-        if (opts.json) machineSuccess('brief', result, { session_id: result.session_id, run_id: result.run_id }); else print(result);
+        if (opts.json) {
+          machineSuccess(
+            'brief',
+            result,
+            { session_id: result.session.session_id, run_id: result.run.run_id },
+            undefined,
+            undefined,
+            result.recovery.next,
+          );
+        } else print(result);
       } catch (error) {
         if (opts.json) machineError('brief', error); else reportError(error);
       }

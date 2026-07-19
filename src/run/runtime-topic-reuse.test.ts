@@ -119,7 +119,6 @@ describe('same-Session reuse assessment', () => {
       expect.objectContaining({ decision: 'REUSE', consumer: expect.objectContaining({ schema: 'context/1.0', role: 'primary' }) }),
     ]);
     const brief = briefRun(projectRoot, consumer.run_id, consumer.session_id);
-    expect(brief.reuse_assessments).toEqual(consumer.reuse_assessments);
     expect(brief.execution_contract.reuse_assessments).toEqual(consumer.reuse_assessments);
   });
 
@@ -167,8 +166,8 @@ describe('same-Session reuse assessment', () => {
     const artifact = Object.values(store.readBundle(guardFirst.session_id).artifacts.artifacts)[0];
     writeFileSync(join(store.sessionDir(guardFirst.session_id), artifact.relative_path), '{"tampered":true}');
     const brief = briefRun(guardRoot, fenced.run_id, fenced.session_id);
-    expect(brief.upstream).toEqual({});
-    expect(brief.reuse_assessments[0]).toMatchObject({ decision: 'REJECT', reason_codes: expect.arrayContaining(['ARTIFACT_HASH_MISMATCH']) });
+    expect(brief.execution_contract.inputs.every(input => input.resolved === null)).toBe(true);
+    expect(brief.execution_contract.reuse_assessments[0]).toMatchObject({ decision: 'REJECT', reason_codes: expect.arrayContaining(['ARTIFACT_HASH_MISMATCH']) });
     expect(checkRun(guardRoot, fenced.run_id, fenced.session_id).errors).toEqual(expect.arrayContaining([expect.stringContaining('reuse fence')]));
     expect(completeRun(guardRoot, fenced.run_id, fenced.session_id).sealed).toBe(false);
   });
@@ -247,7 +246,7 @@ gates: { entry: [], exit: [] }`);
       expect.objectContaining({ name: '--mode', missing: false, source: 'actual-arg', default: 'safe' }),
     ]);
     const brief = briefRun(projectRoot, dispatched.result!.run_id, 'args');
-    expect(brief.argument_requirements).toEqual(dispatched.result?.argument_requirements);
+    expect(brief.execution_contract.argument_requirements).toEqual(dispatched.result?.argument_requirements);
 
     const actualRoot = root();
     commandFile(actualRoot, 'args-demo', `contract_version: 2.1

@@ -36,9 +36,11 @@ import {
   type SessionState,
 } from './schemas.js';
 import {
+  briefResultV10Schema,
   commandRebindAuditSchema,
   executionContractV11Schema,
   guidanceSnapshotSchema,
+  type BriefResult,
   type CreationProvenance,
   type ExecutionContract,
   type ArgumentRequirement,
@@ -279,38 +281,7 @@ export interface SkillContentResult {
   goal_mode: { platform: string; instructions: string } | null;
 }
 
-export interface BriefRunResult {
-  session_id: string;
-  run_id: string;
-  run_dir: string;
-  chain_step_id: string | null;
-  resolved_platform: TargetPlatform;
-  status: CommandRun['status'];
-  command: string;
-  goal: string;
-  /** Verbatim invocation arguments persisted on the Run. */
-  args: string[];
-  argument_requirements: ArgumentRequirement[];
-  reuse_assessments: ReuseAssessment[];
-  gates: GateSummary;
-  prepare: { path: string; content: string } | null;
-  workflow: { path: string; content: string } | null;
-  run_mode: { path: string; summary: string } | null;
-  /** Prepare-declared deferred-reading refs (path + when). Manifest only. */
-  refs: Array<{ path: string; when: string }>;
-  outputs: Array<{ artifact_id: string; kind: string; role: string; path: string; status: string }>;
-  goal_mode: { platform: string; instructions: string } | null;
-  /** Aliases this Run consumed, resolved back to upstream artifacts. */
-  upstream: Record<string, RunUpstream>;
-  /** Handoff of the most recent sealed Run before this one (null if none). */
-  prev_handoff: PrevHandoff | null;
-  /** Session anchor grounding (Intent / Boundary Contract / Execution Progress). */
-  anchor: AnchorSection;
-  /** Additive, independently executable read model; persistence uses command-run/1.3 authority. */
-  execution_contract: ExecutionContractView;
-  /** Next lifecycle verb pointer, closing next→brief→check→complete. */
-  next: { command: string; reason: string };
-}
+export type BriefRunResult = BriefResult;
 
 export type ExecutionContractView = ExecutionContract;
 
@@ -411,6 +382,30 @@ function buildGuidanceSnapshot(
     workflow_hash: guidance.workflow ? protocolSha256(guidance.workflow.raw) : null,
     run_mode_hash: guidance.runMode ? protocolSha256(guidance.runMode.raw) : null,
   });
+}
+
+function guidanceFreshness(
+  projectRoot: string,
+  run: CommandRun,
+): BriefResult['guidance']['freshness'] {
+  const source = resolveCommandSource(projectRoot, run.command.name);
+  const current = buildGuidanceSnapshot(projectRoot, run.command.name, source);
+  const captured = run.guidance_snapshot ?? null;
+  if (!captured) return { status: 'unavailable', changed: [], captured, current };
+
+  const comparisons: Array<[
+    BriefResult['guidance']['freshness']['changed'][number],
+    string | null,
+    string | null,
+  ]> = [
+    ['command', captured.content_hash, current.content_hash],
+    ['resolved_prompt', captured.resolved_prompt_hash, current.resolved_prompt_hash],
+    ['prepare', captured.prepare_hash, current.prepare_hash],
+    ['workflow', captured.workflow_hash, current.workflow_hash],
+    ['run_mode', captured.run_mode_hash, current.run_mode_hash],
+  ];
+  const changed = comparisons.filter(([, before, after]) => before !== after).map(([key]) => key);
+  return { status: changed.length > 0 ? 'changed' : 'none', changed, captured, current };
 }
 
 function stableJson(value: unknown): string {
@@ -2924,6 +2919,7 @@ export function briefRun(
   const upstream = validatedReuse.upstream;
   const prevHandoff = latestHandoffBefore(store, located.sessionId, run.sequence);
   const anchor = buildAnchorSections(store, bundle.session);
+  const freshness = guidanceFreshness(projectRoot, run);
   const resolvedContract = contractForRun(projectRoot, run);
   const contract = resolvedContract.contract;
   const argumentRequirements = resolveArgumentRequirements(projectRoot, run.command.name, run.input.args);
@@ -2993,37 +2989,47 @@ export function briefRun(
     reuse_assessments: reuseAssessments,
   });
 
-  return {
+  return briefResultV10Schema.parse({
+    schema_version: 'brief-result/1.0',
     session_id: located.sessionId,
     run_id: runId,
     run_dir: context.run_dir,
-    chain_step_id: context.chain_step_id,
-    resolved_platform: resolvedPlatform,
-    status: run.status,
-    command: run.command.name,
-    goal: run.handoff?.summary || bundle.session.intent,
-    args: [...run.input.args],
-    argument_requirements: argumentRequirements,
-    reuse_assessments: reuseAssessments,
-    gates: gateSummary(bundle.gates, run.gate_ids),
-    prepare: content.prepare
-      ? { path: content.prepare.path, content: tx(content.prepare.raw) }
-      : null,
-    workflow: content.workflow
-      ? { path: content.workflow.path, content: tx(content.workflow.raw) }
-      : null,
-    run_mode: content.runMode
-      ? { path: content.runMode.path, summary: summarizeRunMode(tx(content.runMode.raw)) }
-      : null,
-    refs: content.refs,
-    outputs,
-    goal_mode: resolveGoalMode(content.prepare?.raw, resolvedPlatform),
     upstream,
-    prev_handoff: prevHandoff,
-    anchor,
+    session: {
+      session_id: located.sessionId,
+      intent: bundle.session.intent,
+      status: bundle.session.status,
+      identity_revision: bundle.session.identity_revision,
+      activity_revision: bundle.session.activity_revision,
+      active_run_id: bundle.session.active_run_id,
+      open_decisions: bundle.session.orchestration.decision_points
+        .filter(point => point.status !== 'passed'),
+    },
+    run: {
+      run_id: runId,
+      run_dir: context.run_dir,
+      chain_step_id: context.chain_step_id,
+      resolved_platform: resolvedPlatform,
+      status: run.status,
+    },
+    guidance: {
+      prepare: content.prepare
+        ? { path: content.prepare.path, content: tx(content.prepare.raw) }
+        : null,
+      workflow: content.workflow
+        ? { path: content.workflow.path, content: tx(content.workflow.raw) }
+        : null,
+      run_mode: content.runMode
+        ? { path: content.runMode.path, content: tx(content.runMode.raw) }
+        : null,
+      refs: content.refs,
+      goal_mode: resolveGoalMode(content.prepare?.raw, resolvedPlatform),
+      freshness,
+    },
     execution_contract: executionContract,
-    next: briefNext(located.sessionId, runId, run.status),
-  };
+    continuity: { prev_handoff: prevHandoff, anchor },
+    recovery: { next: briefNext(bundle.session, runId, run.status) },
+  });
 }
 
 /**
@@ -3032,17 +3038,43 @@ export function briefRun(
  * does not seal); a sealed Run points at `run next` to advance the chain.
  */
 function briefNext(
-  sessionId: string,
+  session: SessionState,
   runId: string,
   status: CommandRun['status'],
-): { command: string; reason: string } {
-  if (status === 'sealed' || status === 'completed') {
+): BriefResult['recovery']['next'] {
+  if (session.status !== 'running') {
     return {
-      command: `maestro run next --session ${sessionId}`,
+      suggest_only: true,
+      command: null,
+      reason: `session ${session.session_id} is ${session.status}; resolve or resume Session authority before continuing`,
+    };
+  }
+  if (session.active_run_id && session.active_run_id !== runId) {
+    return {
+      suggest_only: true,
+      command: `maestro run brief ${session.active_run_id} --session ${session.session_id}`,
+      reason: `session already has active Run ${session.active_run_id}; re-attach it instead of allocating another Run`,
+    };
+  }
+  if (status === 'sealed' || status === 'completed') {
+    const nextExecutionIndex = nextPendingIndex(session, true);
+    const decisionIndex = nextPendingDecisionIndex(session);
+    if (decisionIndex !== null && (nextExecutionIndex === null || decisionIndex < nextExecutionIndex)) {
+      const decision = session.orchestration.chain[decisionIndex];
+      return {
+        suggest_only: true,
+        command: `maestro run next --session ${session.session_id}`,
+        reason: `next chain node is unresolved decision ${decision.decision_ref}; run next surfaces its decision card without allocating a Run`,
+      };
+    }
+    return {
+      suggest_only: true,
+      command: `maestro run next --session ${session.session_id}`,
       reason: 'run sealed — advance the chain',
     };
   }
   return {
+    suggest_only: true,
     command: `maestro run check ${runId}`,
     reason: `pre-completion gate check (does not seal); when clean it emits the finish checklist — work through it, then run: maestro run complete ${runId}`,
   };

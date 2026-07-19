@@ -74,6 +74,28 @@ describe('built-bin run-response/1.0', () => {
     expect(missing.stderr).toBe(''); expect(platform.stderr).toBe('');
   });
 
+  it('emits a strict brief-result and one canonical next pointer', () => {
+    const { root } = fixture();
+    const created = invoke(root, ['run', 'create', 'demo', '--session', 'brief-machine', '--json']);
+    const locator = (created.body as any).result as { session_id: string; run_id: string };
+    const brief = invoke(root, ['run', 'brief', locator.run_id, '--session', locator.session_id, '--json']);
+    expect(brief.body).toMatchObject({
+      operation: 'brief',
+      ok: true,
+      next: { suggest_only: true, command: `maestro run check ${locator.run_id}` },
+      result: {
+        schema_version: 'brief-result/1.0',
+        session: { session_id: locator.session_id, open_decisions: [] },
+        run: { run_id: locator.run_id },
+        recovery: { next: { suggest_only: true, command: `maestro run check ${locator.run_id}` } },
+      },
+    });
+    expect((brief.body as any).next).toEqual((brief.body as any).result.recovery.next);
+    for (const removed of ['args', 'argument_requirements', 'reuse_assessments', 'gates', 'outputs']) {
+      expect((brief.body as any).result).not.toHaveProperty(removed);
+    }
+  });
+
   it('covers complete and recall machine surfaces without stderr payloads', () => {
     const { root } = fixture();
     new SessionStore(root).createSession('live', 'demo intent', { command: 'demo' });

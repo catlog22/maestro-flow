@@ -327,6 +327,91 @@ export const executionContractV11Schema = executionContractV10Schema
 
 export const executionContractSchema = z.union([executionContractV11Schema, executionContractV10Schema]);
 
+const briefTargetPlatformSchema = z.enum(['claude', 'codex', 'agy', 'agents-standard', 'pi']);
+const briefRunStatusSchema = z.enum(['created', 'running', 'blocked', 'failed', 'completed', 'sealed']);
+const briefSessionStatusSchema = z.enum(['running', 'paused', 'sealed', 'archived', 'failed']);
+const briefDecisionPointSchema = z.object({
+  point_id: nonEmptyString,
+  after_step_id: z.string().nullable(),
+  status: z.enum(['pending', 'escalated']),
+  retry_count: z.number().int().nonnegative(),
+  max_retries: z.number().int().nonnegative(),
+  evidence_ref: z.string().nullable(),
+}).strict();
+const briefNextSchema = z.object({
+  suggest_only: z.literal(true),
+  command: z.string().nullable(),
+  reason: nonEmptyString,
+}).strict();
+const briefPrevHandoffSchema = z.object({
+  run_id: nonEmptyString,
+  command: nonEmptyString,
+  verdict: z.enum(['ready', 'ready_with_concerns', 'blocked', 'failed']),
+  summary: z.string(),
+  decisions: z.array(z.string()),
+  concerns: z.array(z.string()),
+}).strict();
+const briefAnchorSchema = z.object({
+  intent: z.string().nullable(),
+  boundary_contract: z.string().nullable(),
+  progress: z.string().nullable(),
+  signals: z.string().nullable(),
+}).strict();
+const briefGuidancePartSchema = z.object({ path: z.string(), content: z.string() }).strict();
+const briefGuidanceDriftKeySchema = z.enum(['command', 'resolved_prompt', 'prepare', 'workflow', 'run_mode']);
+
+/**
+ * Canonical Resume Packet. Compatibility aliases intentionally do not live in
+ * this schema: invocation, reuse, gates, and outputs each have exactly one home
+ * under execution_contract. The top-level upstream map is the deliberate Pi
+ * bridge compatibility projection of inputs[].resolved.
+ */
+export const briefResultV10Schema = z.object({
+  schema_version: z.literal('brief-result/1.0'),
+  // Human-mode locator and Pi bridge compatibility. Machine mode also carries
+  // session_id/run_id in the run-response locator envelope.
+  session_id: nonEmptyString,
+  run_id: nonEmptyString,
+  run_dir: nonEmptyString,
+  // Deliberate self-sufficiency overlap with execution_contract.inputs[].resolved.
+  upstream: z.record(z.string(), runUpstreamSchema),
+  session: z.object({
+    session_id: nonEmptyString,
+    intent: nonEmptyString,
+    status: briefSessionStatusSchema,
+    identity_revision: z.number().int().nonnegative(),
+    activity_revision: z.number().int().nonnegative(),
+    active_run_id: z.string().nullable(),
+    open_decisions: z.array(briefDecisionPointSchema),
+  }).strict(),
+  run: z.object({
+    run_id: nonEmptyString,
+    run_dir: nonEmptyString,
+    chain_step_id: z.string().nullable(),
+    resolved_platform: briefTargetPlatformSchema,
+    status: briefRunStatusSchema,
+  }).strict(),
+  guidance: z.object({
+    prepare: briefGuidancePartSchema.nullable(),
+    workflow: briefGuidancePartSchema.nullable(),
+    run_mode: briefGuidancePartSchema.nullable(),
+    refs: z.array(z.object({ path: z.string(), when: z.string() }).strict()),
+    goal_mode: z.object({ platform: z.string(), instructions: z.string() }).strict().nullable(),
+    freshness: z.object({
+      status: z.enum(['none', 'changed', 'unavailable']),
+      changed: z.array(briefGuidanceDriftKeySchema),
+      captured: guidanceSnapshotSchema.nullable(),
+      current: guidanceSnapshotSchema,
+    }).strict(),
+  }).strict(),
+  execution_contract: executionContractV11Schema,
+  continuity: z.object({
+    prev_handoff: briefPrevHandoffSchema.nullable(),
+    anchor: briefAnchorSchema,
+  }).strict(),
+  recovery: z.object({ next: briefNextSchema }).strict(),
+}).strict();
+
 const recallExactCandidateSchema = z.object({
   candidate_id: nonEmptyString,
   session_id: nonEmptyString,
@@ -543,16 +628,31 @@ const responseCommonSchema = z.object({
   operation: runOperationSchema,
   request_id: z.string().min(1).nullable(),
   locator: z.object({ session_id: z.string().nullable(), run_id: z.string().nullable() }).strict().nullable(),
-  next: z.object({ suggest_only: z.literal(true), command: z.string().nullable(), reason: z.string() }).strict().nullable(),
+  next: briefNextSchema.nullable(),
   replay: z.object({ status: z.enum(['applied', 'replayed']), transition_id: nonEmptyString }).strict().nullable(),
 });
 
-export const runResponseSuccessSchema = responseCommonSchema.extend({
-  ok: z.literal(true),
-  exit_code: z.literal(0),
-  result: z.unknown(),
-  error: z.null(),
-}).strict();
+const nonBriefRunOperationSchema = z.enum([
+  'create', 'next', 'complete', 'recall', 'resolve', 'resume', 'fork', 'import',
+  'check', 'decide', 'seal-session', 'chain-insert', 'chain-replace', 'chain-skip', 'meta-update',
+]);
+
+export const runResponseSuccessSchema = z.union([
+  responseCommonSchema.extend({
+    operation: z.literal('brief'),
+    ok: z.literal(true),
+    exit_code: z.literal(0),
+    result: briefResultV10Schema,
+    error: z.null(),
+  }).strict(),
+  responseCommonSchema.extend({
+    operation: nonBriefRunOperationSchema,
+    ok: z.literal(true),
+    exit_code: z.literal(0),
+    result: z.unknown(),
+    error: z.null(),
+  }).strict(),
+]);
 
 export const runResponseErrorSchema = responseCommonSchema.extend({
   ok: z.literal(false),
@@ -565,7 +665,7 @@ export const runResponseErrorSchema = responseCommonSchema.extend({
   }).strict(),
 }).strict();
 
-export const runResponseSchema = z.discriminatedUnion('ok', [runResponseSuccessSchema, runResponseErrorSchema]);
+export const runResponseSchema = z.union([runResponseSuccessSchema, runResponseErrorSchema]);
 
 export const sessionTransitionSchema = z.object({
   schema_version: z.literal('session-transition/1.0'),
@@ -617,6 +717,7 @@ export type TransitionOutcome = z.infer<typeof transitionOutcomeSchema>;
 export type PersistedTransitionRecord = z.infer<typeof persistedTransitionRecordSchema>;
 export type TransitionPointer = z.infer<typeof transitionPointerSchema>;
 export type ExecutionContract = z.infer<typeof executionContractV11Schema>;
+export type BriefResult = z.infer<typeof briefResultV10Schema>;
 export type RunRecall = z.infer<typeof runRecallV11Schema>;
 export type RecallConfirmationTargetIdentity = z.infer<typeof recallConfirmationTargetIdentitySchema>;
 export type RecallConfirmationFinalTarget = z.infer<typeof recallConfirmationFinalTargetSchema>;

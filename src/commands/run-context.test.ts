@@ -43,9 +43,9 @@ describe('maestro run durable context CLI', () => {
     const brief = JSON.parse(logs.at(-1)!) as Record<string, unknown>;
 
     expect(created.resolved_platform).toBe('codex');
-    expect(brief.resolved_platform).toBe('codex');
-    expect(brief.run_dir).toBe(created.run_dir);
-    expect(brief.chain_step_id).toBeNull();
+    expect((brief.run as any).resolved_platform).toBe('codex');
+    expect((brief.run as any).run_dir).toBe(created.run_dir);
+    expect((brief.run as any).chain_step_id).toBeNull();
   });
 
   it('removes free-form parent linkage and accepts only retry-token lineage', () => {

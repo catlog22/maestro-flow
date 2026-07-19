@@ -14,6 +14,49 @@ afterEach(() => {
 
 describe('run-response/1.0', () => {
   it('accepts every required run-response operation', () => {
+    const next = { suggest_only: true as const, command: 'maestro run check r', reason: 'check the Run' };
+    const hash = `sha256:${'a'.repeat(64)}`;
+    const briefResult = {
+      schema_version: 'brief-result/1.0' as const,
+      session_id: 's', run_id: 'r', run_dir: '.workflow/sessions/s/runs/r', upstream: {},
+      session: {
+        session_id: 's', intent: 'test brief', status: 'running' as const,
+        identity_revision: 0, activity_revision: 0, active_run_id: 'r', open_decisions: [],
+      },
+      run: {
+        run_id: 'r', run_dir: '.workflow/sessions/s/runs/r', chain_step_id: null,
+        resolved_platform: 'codex' as const, status: 'running' as const,
+      },
+      guidance: {
+        prepare: null, workflow: null, run_mode: null, refs: [], goal_mode: null,
+        freshness: {
+          status: 'unavailable' as const, changed: [], captured: null,
+          current: {
+            schema_version: 'guidance-snapshot/1.0' as const,
+            source_path: '.claude/commands/demo.md', content_hash: hash, resolved_prompt_hash: hash,
+            prepare_hash: null, workflow_hash: null, run_mode_hash: null,
+          },
+        },
+      },
+      execution_contract: {
+        schema_version: 'execution-contract/1.1' as const,
+        command: 'demo', invocation: { args: [] },
+        guidance: { prepare_path: null, workflow_path: null, run_mode_path: null },
+        inputs: [], outputs: { declared: [], actual: [] }, gates: { registry_revision: 0, items: [] },
+        contract: { version: 'command-contract/1.0' as const, snapshot_hash: null, warnings: [], drift: 'none' as const },
+        freshness: {
+          captured_at: '2026-07-19T00:00:00.000Z', run_context_identity_revision: 0,
+          session_identity_revision: 0, session_activity_revision: 0,
+          identity_current: true, command_contract_hash: null,
+        },
+        argument_requirements: [], reuse_assessments: [],
+      },
+      continuity: {
+        prev_handoff: null,
+        anchor: { intent: null, boundary_contract: null, progress: null, signals: null },
+      },
+      recovery: { next },
+    };
     const operations = [
       'create', 'next', 'complete', 'brief', 'recall', 'resolve', 'resume', 'fork', 'import',
       'check', 'decide', 'seal-session', 'chain-insert', 'chain-replace', 'chain-skip', 'meta-update',
@@ -28,7 +71,8 @@ describe('run-response/1.0', () => {
         request_id: replay ? `req-${operation}` : null,
         locator: { session_id: 's', run_id: operation === 'check' ? 'r' : null },
         replay,
-        result: { operation },
+        result: operation === 'brief' ? briefResult : { operation },
+        next: operation === 'brief' ? next : undefined,
       });
       const failure = createRunResponseError({
         operation,

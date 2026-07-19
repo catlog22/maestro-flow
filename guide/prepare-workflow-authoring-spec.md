@@ -44,11 +44,11 @@ Maestro 的 step 内容分三层，各有既有规范管辖：
 |------|------|-----------|------|
 | `run prepare <step>` | **prepare 全文**、workflow 路径+行数、run-mode 摘要、refs(path+when) | workflow 全文 | `runtime.ts:884-904` |
 | `run create <step>` | session_id、run_id、run_dir、**upstream（alias→artifact 注入）**、entry_gates、**next（渐进提示，指向 brief）** | 任何文件内容 | `runtime.ts:539-620` |
-| `run brief <run-id>` | **workflow 全文**、run-mode 摘要、goal、gate 状态、outputs | **prepare** | `runtime.ts:925-968` |
+| `run brief <run-id>` | `brief-result/1.0`：Session/Run authority、**prepare + workflow + run-mode 全文**、guidance drift、canonical upstream、execution contract、handoff/anchor、recovery next | 顶层 args / requirements / reuse / gates / outputs 兼容副本 | `briefResultV10Schema`、`briefRun` |
 | `run skill <step>` | **prepare + workflow 全文**、refs | run-mode、session 状态 | `runtime.ts:906-923` |
 | `run check / complete` | gate 评估、artifact 扫描/注册结果 | 内容 | `runtime.ts:622+` |
 
-`next` 是**单一指针** `{command, reason}`（正常 → brief + 「check → complete」收口提示；entry gate 阻塞 → brief + 排障提示），区别于 report frontmatter / handoff 的 `next[]` 数组（`{command, reason, needs}`，`schemas.ts:175-179, 235-239`）——前者指路生命周期下一步，后者声明跨 step 交接。
+`next` 是**单一 suggest-only 指针** `{suggest_only, command, reason}`；`brief --json` 的 envelope `next` 与 `result.recovery.next` 必须相同。它区别于 report frontmatter / handoff 的 `next[]` 数组（`{command, reason, needs}`）——前者指路生命周期下一步，后者声明跨 step 交接。
 
 注意：`create` 是写事务（建会话、注册 gates、解析 upstream、落盘 run.json），它读 step 源文件只为取 contract 和记录溯源哈希（`content_hash` / `resolved_prompt_hash`），原文不进返回值。内容加载由三个只读端点（prepare / skill / brief）负责——读写分离。
 

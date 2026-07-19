@@ -46,9 +46,9 @@ describe('durable Run context', () => {
     expect(persisted.schema_version).toBe('command-run/1.3');
     expect(persisted.resolved_platform).toBe('codex');
     expect(created.resolved_platform).toBe('codex');
-    expect(brief.resolved_platform).toBe('codex');
-    expect(brief.run_dir).toBe(created.run_dir);
-    expect(brief.workflow?.content).toContain('codex workflow');
+    expect(brief.run.resolved_platform).toBe('codex');
+    expect(brief.run.run_dir).toBe(created.run_dir);
+    expect(brief.guidance.workflow?.content).toContain('codex workflow');
     expect(() => briefRun(projectRoot, created.run_id, 's', 'agy')).toThrow(/bound to platform/);
   });
 

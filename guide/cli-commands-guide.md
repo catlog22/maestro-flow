@@ -370,6 +370,14 @@ maestro run complete <run-id> --session <id> --json
 maestro run seal-session <session-id> --json
 ```
 
+`run brief` 的成功结果固定为 `brief-result/1.0`：`session`/`run` 是 durable authority，
+`guidance` 携带 prepare、workflow、完整 run-mode 以及 captured/current hash drift，
+`execution_contract` 是 invocation、inputs、outputs、gates、reuse 的唯一结构化执行视图，
+`continuity` 携带 handoff/anchor，`recovery.next` 与外层 envelope `next` 必须完全一致。
+顶层只保留 human locator（`session_id/run_id/run_dir`）和 Pi bridge 使用的 canonical
+`upstream` map；不再重复输出 args、argument requirements、reuse assessments、gate summary
+或 outputs。
+
 Canonical paused recovery 必须按 `resolve` → `resume` 执行：
 
 ```bash
@@ -393,7 +401,7 @@ maestro run next --session <id> --json
 | `create` | `run create`；legacy confirmed `run new` | `create` 需要 command；Session identity 建议显式传 `--session` |
 | `next` | `run next` | 可选 `--session`/`--pick`；选择 pending step 并分配 chain Run |
 | `complete` | `run complete` | 可选 run ID；verdict path 支持 request/revision/lease guards |
-| `brief` | `run brief <run-id>` | 返回 Resume Packet |
+| `brief` | `run brief <run-id>` | 返回强校验的 `brief-result/1.0` Resume Packet；外层与结果层 next 一致 |
 | `recall` | `run recall <command> --intent <text>` | 只读 advisory projection，不授权 mutation |
 | `fork` | legacy `run recall-confirm fork` / `run fork` | confirmation-token 管理兼容面 |
 | `import` | legacy `run recall-confirm import` / `run import` | confirmation-token 管理兼容面 |

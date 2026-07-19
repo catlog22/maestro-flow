@@ -14,7 +14,7 @@ import { mkdtempSync } from 'node:fs';
 import { Command } from 'commander';
 import { createSessionState } from './defaults.js';
 import { sessionStateSchema } from './schemas.js';
-import { commandRebindAuditSchema, executionContractSchema } from './protocol-schemas.js';
+import { briefResultV10Schema, commandRebindAuditSchema, executionContractSchema } from './protocol-schemas.js';
 import { SessionStore } from './store.js';
 import {
   briefRun,
@@ -761,20 +761,22 @@ gates:
 
     const brief = briefRun(projectRoot, execRun.run_id, execRun.session_id);
     // upstream reverse-lookup by consumed artifact ids
-    expect(brief.upstream['current-plan']).toBeDefined();
-    expect(brief.upstream['current-plan'].kind).toBe('plan');
+    expect(brief.upstream['current-plan']?.kind).toBe('plan');
+    const currentPlan = brief.execution_contract.inputs.find(input => input.alias === 'current-plan')?.resolved;
+    expect(currentPlan).toBeDefined();
+    expect(currentPlan?.kind).toBe('plan');
     // previous sealed handoff
-    expect(brief.prev_handoff?.run_id).toBe(planRun.run_id);
-    expect(brief.prev_handoff?.summary).toBe('Plan ready');
+    expect(brief.continuity.prev_handoff?.run_id).toBe(planRun.run_id);
+    expect(brief.continuity.prev_handoff?.summary).toBe('Plan ready');
     // anchor grounding — intent always present; boundary empty here
-    expect(brief.anchor.intent).toBe('**Intent**: brief anchor demo');
-    expect(brief.anchor.boundary_contract).toBeNull();
+    expect(brief.continuity.anchor.intent).toBe('**Intent**: brief anchor demo');
+    expect(brief.continuity.anchor.boundary_contract).toBeNull();
     // deferred-reading refs manifest (G3)
-    expect(brief.refs).toEqual([{ path: 'docs/schema.md', when: 'before touching the store' }]);
+    expect(brief.guidance.refs).toEqual([{ path: 'docs/schema.md', when: 'before touching the store' }]);
     // next pointer for a live Run — check gate, not seal (G4)
-    expect(brief.next.command).toBe(`maestro run check ${execRun.run_id}`);
-    expect(brief.next.reason).toContain('does not seal');
-    expect(brief.next.reason).toContain(`maestro run complete ${execRun.run_id}`);
+    expect(brief.recovery.next.command).toBe(`maestro run check ${execRun.run_id}`);
+    expect(brief.recovery.next.reason).toContain('does not seal');
+    expect(brief.recovery.next.reason).toContain(`maestro run complete ${execRun.run_id}`);
   });
 
   it('persists caller-supplied creation authority for confirmation-driven consumers', () => {
@@ -842,9 +844,15 @@ gates:
     });
 
     const brief = briefRun(projectRoot, created.run_id, created.session_id);
-    expect(brief.args).toEqual(['--target', 'core']);
-    expect(brief.prepare).toBeNull();
-    expect(brief.workflow?.content).toContain('Perform the bounded task');
+    expect(brief.schema_version).toBe('brief-result/1.0');
+    expect(brief.execution_contract.invocation.args).toEqual(['--target', 'core']);
+    expect(brief.guidance.prepare).toBeNull();
+    expect(brief.guidance.workflow?.content).toContain('Perform the bounded task');
+    expect(brief.guidance.freshness).toMatchObject({ status: 'none', changed: [] });
+    expect(briefResultV10Schema.parse(brief)).toEqual(brief);
+    for (const removed of ['command', 'goal', 'args', 'argument_requirements', 'reuse_assessments', 'gates', 'outputs']) {
+      expect(brief).not.toHaveProperty(removed);
+    }
     expect(brief.execution_contract).toMatchObject({
       schema_version: 'execution-contract/1.1',
       command: 'self-contained',
@@ -870,6 +878,64 @@ gates:
       ...brief.execution_contract,
       schema_version: 'execution-contract/2.0',
     })).toThrow();
+  });
+
+  it('reports guidance drift and fails recovery closed on unresolved Session authority', () => {
+    const projectRoot = root();
+    commandFile(projectRoot, 'drift-demo', `consumes: []
+produces: []
+gates:
+  entry: []
+  exit: []`);
+    const workflowDir = join(projectRoot, 'workflows');
+    mkdirSync(workflowDir, { recursive: true });
+    writeFileSync(join(workflowDir, 'drift-demo.md'), '# Workflow\n\nOriginal guidance.\n', 'utf8');
+    writeFileSync(join(workflowDir, 'run-mode.md'), '# Run mode\n\n## Completion\n\nRun check, then complete.\n', 'utf8');
+    const created = createRun({ projectRoot, command: 'drift-demo', intent: 'drift-safe brief' });
+
+    writeFileSync(join(workflowDir, 'drift-demo.md'), '# Workflow\n\nChanged guidance.\n', 'utf8');
+    const store = new SessionStore(projectRoot);
+    store.update(created.session_id, draft => {
+      draft.session.orchestration.decision_points.push({
+        point_id: 'DP-BRIEF',
+        after_step_id: null,
+        status: 'pending',
+        retry_count: 0,
+        max_retries: 1,
+        evidence_ref: null,
+      });
+      draft.session.orchestration.chain.push({
+        step_id: 'step-001-decision',
+        command: 'decision',
+        status: 'pending',
+        run_id: null,
+        inserted_by: 'test',
+        decision_ref: 'DP-BRIEF',
+      });
+    });
+
+    const brief = briefRun(projectRoot, created.run_id, created.session_id);
+    expect(brief.guidance.workflow?.content).toContain('Changed guidance');
+    expect(brief.guidance.run_mode?.content).toContain('## Completion');
+    expect(brief.guidance.freshness).toMatchObject({ status: 'changed', changed: ['workflow'] });
+    expect(brief.session.open_decisions).toEqual([
+      expect.objectContaining({ point_id: 'DP-BRIEF', status: 'pending' }),
+    ]);
+    expect(brief.recovery.next).toMatchObject({
+      suggest_only: true,
+      command: `maestro run check ${created.run_id}`,
+    });
+
+    expect(completeRun(projectRoot, created.run_id, created.session_id).sealed).toBe(true);
+    const decision = briefRun(projectRoot, created.run_id, created.session_id);
+    expect(decision.recovery.next.command).toBe(`maestro run next --session ${created.session_id}`);
+    expect(decision.recovery.next.reason).toContain('unresolved decision DP-BRIEF');
+
+    store.update(created.session_id, draft => { draft.session.status = 'paused'; });
+    const paused = briefRun(projectRoot, created.run_id, created.session_id);
+    expect(paused.session.status).toBe('paused');
+    expect(paused.recovery.next).toMatchObject({ command: null });
+    expect(paused.recovery.next.reason).toContain('is paused');
   });
 
   it('enforces command-contract/2.0 role, required output and schema metadata', () => {
@@ -922,9 +988,9 @@ gates:
     expect(completeRun(projectRoot, planRun.run_id).sealed).toBe(true);
 
     const brief = briefRun(projectRoot, planRun.run_id, planRun.session_id);
-    expect(brief.status).toBe('sealed');
-    expect(brief.next.command).toBe(`maestro run next --session ${planRun.session_id}`);
-    expect(brief.next.reason).toContain('run sealed');
+    expect(brief.run.status).toBe('sealed');
+    expect(brief.recovery.next.command).toBe(`maestro run next --session ${planRun.session_id}`);
+    expect(brief.recovery.next.reason).toContain('run sealed');
   });
 
   it('prepare --session attaches the previous handoff and consume status; bare prepare is unchanged', () => {
@@ -1038,10 +1104,10 @@ gates:
     // A downstream run consuming the plan sees the alias and the note in prev handoff.
     const execRun = createRun({ projectRoot, command: 'demo-exec', sessionId: planRun.session_id, intent: 'closed loop' });
     const brief = briefRun(projectRoot, execRun.run_id, execRun.session_id);
-    expect(brief.upstream['current-plan']).toBeUndefined();
-    expect(brief.reuse_assessments).toEqual([
+    expect(brief.execution_contract.inputs.find(input => input.alias === 'current-plan')?.resolved).toBeNull();
+    expect(brief.execution_contract.reuse_assessments).toEqual([
       expect.objectContaining({ decision: 'REVIEW', reason_codes: expect.arrayContaining(['QUALITY_MEDIUM']) }),
     ]);
-    expect(brief.prev_handoff?.concerns).toContain('watch the migration order');
+    expect(brief.continuity.prev_handoff?.concerns).toContain('watch the migration order');
   });
 });
