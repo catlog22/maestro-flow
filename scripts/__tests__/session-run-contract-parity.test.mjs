@@ -11,6 +11,7 @@ const fixtureFiles = [
   'src/run/schemas.ts',
   'src/run/protocol-schemas.ts',
   'src/commands/run.ts',
+  'scripts/check-session-run-release-machine.mjs',
   'dashboard/src/server/wiki/virtual-wiki-adapters.ts',
   'dashboard/src/server/wiki/wiki-indexer.ts',
   'guide/search-system-guide.md',
@@ -59,9 +60,11 @@ describe('Session Run contract parity release gate', () => {
     expect(result.stdout).toContain('PASS reader.session.compatibility');
     expect(result.stdout).toContain('PASS cache.search.version');
     expect(result.stdout).toContain('PASS response.operations.complete');
-    expect(result.stdout).toContain('PASS cli.accept-reuse.machine-option');
+    expect(result.stdout).toContain('PASS cli.accept-reuse.machine-handler');
+    expect(result.stdout).toContain('PASS release-machine.coverage');
     expect(result.stdout).toContain('PASS docs.search.zh');
     expect(result.stdout).toContain('PASS package.prepublish.order');
+    expect(result.stdout).toContain('PASS package.release-machine.command');
   });
 
   it('fails each independent Session Run contract drift dimension', () => {
@@ -101,11 +104,29 @@ describe('Session Run contract parity release gate', () => {
       },
       {
         dimension: 'commander-json',
-        id: 'cli.accept-reuse.machine-option',
+        id: 'cli.accept-reuse.machine-handler',
         mutate(root) {
           replaceOnce(root, 'src/commands/run.ts',
             ".option('--json', 'emit one run-response/1.0 envelope on stdout')\n    .option('--workflow-root <path>', 'project root containing .workflow', process.cwd())\n    .action((runId: string, opts: any) => {",
             ".option('--workflow-root <path>', 'project root containing .workflow', process.cwd())\n    .action((runId: string, opts: any) => {");
+        },
+      },
+      {
+        dimension: 'commander-handler',
+        id: 'cli.accept-reuse.machine-handler',
+        mutate(root) {
+          replaceOnce(root, 'src/commands/run.ts',
+            'const result = acceptRunReuse(',
+            'const result = disabledAcceptRunReuse(');
+        },
+      },
+      {
+        dimension: 'release-machine-coverage',
+        id: 'release-machine.coverage',
+        mutate(root) {
+          replaceOnce(root, 'scripts/check-session-run-release-machine.mjs',
+            "assert.equal(replay.replay?.status, 'replayed');",
+            "assert.equal(replay.replay?.status, 'disabled-replay');");
         },
       },
       {
@@ -120,6 +141,24 @@ describe('Session Run contract parity release gate', () => {
         id: 'package.command',
         mutate(root) {
           replaceOnce(root, 'package.json', 'node scripts/check-session-run-contract-parity.mjs', 'node scripts/incorrect-contract-gate.mjs');
+        },
+      },
+      {
+        dimension: 'package-release-machine',
+        id: 'package.release-machine.command',
+        mutate(root) {
+          replaceOnce(root, 'package.json',
+            'node scripts/check-session-run-release-machine.mjs',
+            'node scripts/incorrect-release-machine.mjs');
+        },
+      },
+      {
+        dimension: 'package-release-order',
+        id: 'package.prepublish.order',
+        mutate(root) {
+          replaceOnce(root, 'package.json',
+            'npm run build && npm run check:session-run-release-machine && npm run build:mirrors',
+            'npm run build && npm run build:mirrors && npm run check:session-run-release-machine');
         },
       },
     ];

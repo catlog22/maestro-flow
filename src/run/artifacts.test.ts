@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, renameSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
@@ -160,6 +160,74 @@ describe('scanOutputs JSON metadata', () => {
       schemaVersion: 'review-analysis/2.0',
       role: 'primary',
     });
+  });
+
+  it('fails closed when an inspected file is atomically replaced by an external symlink before read', () => {
+    const { runDir, sessionDir } = createRun();
+    const artifactPath = join(runDir, 'outputs', 'result.json');
+    const externalPath = join(sessionDir, 'external.json');
+    const swapPath = join(runDir, 'outputs', '.result-swap');
+    writeFileSync(artifactPath, JSON.stringify({
+      _meta: { kind: 'internal-result', schema: 'internal-result/1.0', role: 'primary' },
+      value: 'internal-bytes',
+    }));
+    writeFileSync(externalPath, JSON.stringify({
+      _meta: { kind: 'external-result', schema: 'external-result/1.0', role: 'primary' },
+      value: 'external-bytes-must-not-be-read',
+    }));
+    symlinkSync(externalPath, swapPath, 'file');
+    const declaredContract: CommandContract = {
+      consumes: [],
+      produces: [{ path: 'outputs/result.json', kind: 'internal-result', primary: true }],
+      gates: { entry: [], exit: [] },
+    };
+    let swapped = false;
+
+    const result = scanOutputs(runDir, sessionDir, declaredContract, {
+      afterFileInspection(path) {
+        if (path !== artifactPath || swapped) return;
+        renameSync(swapPath, artifactPath);
+        swapped = true;
+      },
+    });
+
+    expect(swapped).toBe(true);
+    expect(result.artifacts).toEqual([]);
+    expect(result.errors.some(error => error.includes('unsafe path changed during artifact scan'))).toBe(true);
+    expect(result.errors.join('\n')).not.toContain('external-bytes-must-not-be-read');
+    expect(result.warnings).toContain('Expected outputs/result.json was not produced');
+  });
+
+  it('uses the same verified buffers while hashing directory artifacts', () => {
+    const { runDir, sessionDir } = createRun();
+    const bundlePath = join(runDir, 'outputs', 'bundle');
+    const artifactPath = join(bundlePath, 'result.json');
+    const externalPath = join(sessionDir, 'external-directory-result.json');
+    const swapPath = join(bundlePath, '.result-swap');
+    mkdirSync(bundlePath, { recursive: true });
+    writeFileSync(artifactPath, '{"value":"internal-directory-bytes"}');
+    writeFileSync(externalPath, '{"value":"external-directory-bytes-must-not-be-read"}');
+    symlinkSync(externalPath, swapPath, 'file');
+    const directoryContract: CommandContract = {
+      consumes: [],
+      produces: [{ path: 'outputs/bundle', kind: 'result-bundle', primary: true }],
+      gates: { entry: [], exit: [] },
+    };
+    let swapped = false;
+
+    const result = scanOutputs(runDir, sessionDir, directoryContract, {
+      afterFileInspection(path) {
+        if (path !== artifactPath || swapped) return;
+        renameSync(swapPath, artifactPath);
+        swapped = true;
+      },
+    });
+
+    expect(swapped).toBe(true);
+    expect(result.artifacts).toEqual([]);
+    expect(result.errors.some(error => error.includes('unsafe path changed during artifact scan'))).toBe(true);
+    expect(result.errors.join('\n')).not.toContain('external-directory-bytes-must-not-be-read');
+    expect(result.warnings).toContain('Expected outputs/bundle was not produced');
   });
 
   it.each([

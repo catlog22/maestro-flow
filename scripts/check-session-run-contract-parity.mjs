@@ -8,6 +8,8 @@ const REQUIRED_OPERATIONS = [
   'check', 'decide', 'seal-session', 'chain-insert', 'chain-replace', 'chain-skip', 'meta-update', 'accept-reuse',
 ];
 
+const RELEASE_MACHINE_COMMAND = 'node scripts/check-session-run-release-machine.mjs';
+
 const GUIDE_REQUIREMENTS = [
   {
     id: 'docs.search.zh',
@@ -133,11 +135,34 @@ addCheck('response.operations.complete', operations, REQUIRED_OPERATIONS, sameVa
 
 const runCommands = read('src/commands/run.ts');
 const acceptReuseCommand = block(runCommands, ".command('accept-reuse <run-id>')", "\n  run.command(");
+const acceptReuseMachineHandler = {
+  command: acceptReuseCommand.includes(".command('accept-reuse <run-id>')"),
+  json: acceptReuseCommand.includes(".option('--json'"),
+  business: /const\s+result\s*=\s*acceptRunReuse\s*\(/.test(acceptReuseCommand),
+  success: /machineSuccess\s*\(\s*['"]accept-reuse['"]/.test(acceptReuseCommand),
+  error: /machineError\s*\(\s*['"]accept-reuse['"]/.test(acceptReuseCommand),
+};
 addCheck(
-  'cli.accept-reuse.machine-option',
-  { command: acceptReuseCommand.includes(".command('accept-reuse <run-id>')"), json: acceptReuseCommand.includes(".option('--json'") },
-  { command: true, json: true },
-  acceptReuseCommand.includes(".command('accept-reuse <run-id>')") && acceptReuseCommand.includes(".option('--json'"),
+  'cli.accept-reuse.machine-handler',
+  acceptReuseMachineHandler,
+  { command: true, json: true, business: true, success: true, error: true },
+  Object.values(acceptReuseMachineHandler).every(Boolean),
+);
+
+const releaseMachine = read('scripts/check-session-run-release-machine.mjs');
+const releaseMachineCoverage = {
+  childProcess: releaseMachine?.includes('spawnSync') ?? false,
+  acceptReuse: releaseMachine?.includes("'accept-reuse'") ?? false,
+  mutations: releaseMachine?.includes("'mutations'") ?? false,
+  commanderUsage: releaseMachine?.includes("'COMMANDER_USAGE'") ?? false,
+  applied: releaseMachine?.includes("'applied'") ?? false,
+  replayed: releaseMachine?.includes("'replayed'") ?? false,
+};
+addCheck(
+  'release-machine.coverage',
+  releaseMachineCoverage,
+  { childProcess: true, acceptReuse: true, mutations: true, commanderUsage: true, applied: true, replayed: true },
+  Object.values(releaseMachineCoverage).every(Boolean),
 );
 
 for (const requirement of GUIDE_REQUIREMENTS) {
@@ -159,10 +184,18 @@ addCheck(
   'node scripts/check-session-run-contract-parity.mjs',
   packageCommand === 'node scripts/check-session-run-contract-parity.mjs',
 );
+const releaseMachineCommand = packageJson?.scripts?.['check:session-run-release-machine'] ?? null;
+addCheck(
+  'package.release-machine.command',
+  releaseMachineCommand,
+  RELEASE_MACHINE_COMMAND,
+  releaseMachineCommand === RELEASE_MACHINE_COMMAND,
+);
 const prepublishSteps = String(packageJson?.scripts?.prepublishOnly ?? '').split('&&').map(step => step.trim()).filter(Boolean);
 const expectedReleaseOrder = [
   'npm run check:session-run-contract-parity',
   'npm run build',
+  'npm run check:session-run-release-machine',
   'npm run build:mirrors',
 ];
 const releaseIndexes = expectedReleaseOrder.map(step => prepublishSteps.indexOf(step));

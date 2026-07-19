@@ -55,12 +55,13 @@
     "sync:docs-reference": "node scripts/sync-docs-reference.mjs",
     "check:docs-reference": "node scripts/sync-docs-reference.mjs --check",
     "check:session-run-contract-parity": "node scripts/check-session-run-contract-parity.mjs",
+    "check:session-run-release-machine": "node scripts/check-session-run-release-machine.mjs",
     "lint:codex-skills": "node scripts/lint-session-run-mirrors.mjs",
     "lint:codex-agents": "node scripts/sync-codex-agents.mjs --check",
     "migrate:session-run-prompts": "node scripts/migrate-session-run-prompts.mjs --write",
     "clean": "rm -rf dist",
     "build:mirrors": "node scripts/lint-session-run-prompts.mjs && node scripts/convert-claude-to-agy.mjs && node scripts/build-agents-standard.mjs && node scripts/sync-codex-run-mode.mjs --write && node scripts/sync-codex-run-mode.mjs --check && node scripts/sync-codex-agents.mjs --check && node scripts/lint-session-run-mirrors.mjs",
-    "prepublishOnly": "node scripts/lint-invocation-policy.mjs && node scripts/lint-session-run-prompts.mjs && npm run check:docs-reference && npm run check:session-run-contract-parity && npm run build && npm run build:mirrors"
+    "prepublishOnly": "node scripts/lint-invocation-policy.mjs && node scripts/lint-session-run-prompts.mjs && npm run check:docs-reference && npm run check:session-run-contract-parity && npm run build && npm run check:session-run-release-machine && npm run build:mirrors"
   },
   "engines": {
     "node": ">=22.19.0"

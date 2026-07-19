@@ -247,8 +247,17 @@ describe('built-bin run-response/1.0', () => {
     const result = spawnSync(process.execPath, [
       resolve('bin/maestro.js'), 'run', 'mutations', '--json', '--workflow-root', root,
     ], { encoding: 'utf8', cwd: resolve('.') });
-    expect(result.status).not.toBe(0);
+    expect(result.status).toBe(1);
     expect(result.stdout).toBe('');
-    expect(result.stderr).toContain("unknown option '--json'");
+    expect(result.stderr).toMatch(/^error: unknown option '--json'\r?\n$/);
+  });
+
+  it('passes the build-backed release machine child-process smoke', () => {
+    const result = spawnSync(process.execPath, [
+      resolve('scripts/check-session-run-release-machine.mjs'),
+    ], { encoding: 'utf8', cwd: resolve('.') });
+    expect(result.status, result.stderr).toBe(0);
+    expect(result.stderr).toBe('');
+    expect(result.stdout).toContain('session-run release machine parity passed');
   });
 });
