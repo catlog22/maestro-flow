@@ -10,7 +10,7 @@
 //   retry      Sugar for `complete <idx> --status NEEDS_RETRY`
 //   ledger     Verification ledger interface
 //
-// Data contract: drives `.workflow/sessions/{id}/session.json` (session/1.1,
+// Data contract: drives `.workflow/sessions/{id}/session.json` (session/1.2,
 //                orchestration is the single source). `ralph-meta.json` is a
 //                legacy read-fallback for unmigrated sessions only; next/
 //                complete/retry are deprecated aliases for the `run` verbs.

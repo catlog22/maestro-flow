@@ -1128,11 +1128,11 @@ Build rules 0.5-13 全部适用，包括 spec-setup 预检（rule 0.5）、grill
 
 ### Session Schema
 
-**session.json** (`session/1.1`，engine=ralph；orchestration 为唯一编排真相源，原 ralph-meta 字段已归位)。**由 CLI 建/写，prompt 层不直写**：
+**session.json** (`session/1.2`，engine=ralph；orchestration 为唯一编排真相源，原 ralph-meta 字段已归位)。**由 CLI 建/写，prompt 层不直写**：
 
 ```json
 {
-  "schema_version": "session/1.1",
+  "schema_version": "session/1.2",
   "session_id": "{id}",
   "intent": "", "status": "running|paused|sealed|archived|failed",
   "boundary_contract": {
@@ -1191,7 +1191,7 @@ Build rules 0.5-13 全部适用，包括 spec-setup 预检（rule 0.5）、grill
 
 **步进进度**：不落 session.json；由各步 `runs/{run_id}/run.json` 的 handoff/anchor 承担，下一步 `run next` 出生包自源透出。
 
-**legacy `ralph-meta.json`**：旧 session（`session/1.0` + ralph-meta）未迁移前，评估/审计 prompt 可兜底读其 `task_decomposition`/`context`/`goal_changelog`；新 session 一律走上面 `session/1.1` 形态，`ralph-meta.json` 不再写。迁移经 `maestro session migrate [--session <id>]`（幂等，拒迁有 running step 的 session）。
+**legacy `ralph-meta.json`**：旧 session（`session/1.0` + ralph-meta）未迁移前，评估/审计 prompt 可兜底读其 `task_decomposition`/`context`/`goal_changelog`；新 session 一律走上面 `session/1.2` 形态，`ralph-meta.json` 不再写。迁移经 `maestro session migrate [--session <id>]`（幂等，拒迁有 running step 的 session）。
 
 ### Fix-Loop Templates
 
@@ -1293,7 +1293,7 @@ Engine 模式新增（`--engine swarm|universal`，见 `<engines>`）：
 - [ ] dual 模式合并策略：一致取共识、分歧保守降级、CLI 未返回用 Agent 结果
 - [ ] Verdict 解析保持 `---VERDICT---` 格式，parse 失败 → fallback fix + parse_failed: true
 - [ ] decisions.ndjson 追加：source 字段为 `"ralph"`
-- [ ] Session schema: `session/1.1`，orchestration 单源（chain/decision_points/position/decomposition/lease/executor），CLI 建/写
+- [ ] Session schema: `session/1.2`，Run schema: `command-run/1.2`；orchestration 单源，CLI 建/写
 - [ ] Chain building（S_RESOLVE_SESSION through S_BUILD_CHAIN）自包含执行，经 `session create --chain-file`（stdin JSON）落盘
 - [ ] A_STEP_DISPATCH 不再手工拼装前序产出/goal context —— run next 出生包（Upstream/Previous step/Queue/Recommended/refs）+ run brief 单源覆盖
 - [ ] display 标识含 stage prefix（grl/brn/anm/ana/pln/exe/rev/tst/dbg）——仅用于 display/日志，不落 session state

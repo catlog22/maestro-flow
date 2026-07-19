@@ -131,7 +131,7 @@ export function registerSessionCommand(program: Command): void {
 
   session
     .command('migrate')
-    .description('Fold legacy ralph-meta.json into session.json and stamp session/1.1 (idempotent)')
+    .description('Fold legacy ralph-meta.json into session.json and stamp session/1.2 (idempotent)')
     .option('--session <id>', 'migrate one Session; omit to migrate every Session under .workflow/sessions/')
     .option('--workflow-root <path>', 'project root containing .workflow', process.cwd())
     .action((opts: { session?: string; workflowRoot: string }) => {

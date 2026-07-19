@@ -61,9 +61,9 @@ $ARGUMENTS — user intent text, or special keywords.
 6. **执行步骤统一通过 `maestro run next` 加载** — `command_scope`/`command_path` 由 `maestro ralph skills --platform claude --steps --json --quiet` 预校验（project 覆盖 global；command/skill 来自 `.claude/`，step 来自 prepare/workflows 步骤注册表）；decision 节点由主流程通过 [@subagent] Agent() 评估、经 `run decide` 落盘，不 handoff 到其他 skill
 7. **Topology awareness** — chain catalog 含 grill / brainstorm / blueprint / analyze-macro / analyze / roadmap / plan(三路径) / execute / ...；scope_verdict 由链内 `post-analyze-scope` decision 节点落盘决定，本命令不预判
 8. **Grill `-y` 透传** — `-y` auto mode 透传 `-y` 到 grill args（grill 自身 Auto mode 用代码代答），不删除 grill stage；grill 仍产出 grill-report/terminology/context-package 供下游 brainstorm
-9. **D-007-S session 解析** — session 由 `state.json.sessions[]` 的 `session_id` 或 intent slug 匹配
+9. **D-007-S session 解析** — live exact resume 由 `intent-identity/1.0` + SessionStore 判定；历史相似 Session 仅通过 `maestro run recall` 返回 `automatic=false` 的 fork/import 建议，绝不自动 resume
 10. **每个 step 由 verdict 驱动链推进** — 由 `maestro run complete --verdict done|done-with-concerns`（免 run-id）驱动 chain step 完成+推进
-11. **schema** — session.json 为 `session/1.1`；orchestration 单源（chain/decision_points/position/decomposition/lease/executor），新增字段全部可选
+11. **schema** — session.json 为 `session/1.2`、run.json 为 `command-run/1.2`；orchestration 单源，contract v2 仅显式 opt-in
 12. **Invariant violation = BLOCK** — 违反上述任一 invariant 即阻断当前操作，不可绕过。特别是 invariant 1（dispatch via Agent(ralph-executor)）和 invariant 2（session before execution）和 invariant 10（verdict 驱动链推进由 CLI 写入）为硬约束。
 13. **Classification evidence** — S_CLASSIFY 的 chain 选择决策 MUST 记录（匹配了哪个 pattern、排除了哪些备选、confidence level）作为分类留痕。无记录的分类不可进入 S_CREATE。
 14. **禁止以上下文消耗为由中断执行** — harness 自动处理 context compression，以"上下文不足"或"避免 context overflow"为由中断属于 invariant violation
@@ -216,8 +216,9 @@ S_FALLBACK:
 
 ### A_LOCATE_SESSION
 
-1. Scan `.workflow/sessions/*/session.json`, filter `status == "running" || status == "paused"`, sort DESC（或 `maestro ralph session` 取当前 ralph session）
-2. Take most recent; if not found → S_FALLBACK
+1. Run `maestro run recall maestro --intent "{intent}" --json`. Only `exact_candidates` may authorize live resume; multiple exact candidates are ambiguous and require explicit user selection.
+2. For one exact candidate: active Run → `maestro run brief <run_id>`; resolved paused Session → `maestro session resume --session <id> --reason "..." --evidence "..."`; running Session → continue with its explicit `session_id`.
+3. Historical candidates are advisory-only (`automatic=false`): offer confirmation-token fork/import, never resume them automatically. No exact candidate → S_FALLBACK.
 
 ### A_COMPOSE_TEMPLATE
 
@@ -434,7 +435,7 @@ post-analyze-scope 触发：读 macro analyze artifact → 提取 scope_verdict 
 - [ ] Intent classified with task_type, complexity, clarity_score
 - [ ] Chain catalog 覆盖 grill / brainstorm / blueprint / analyze-macro / analyze / roadmap / plan(三路径) / execute / quality pipeline
 - [ ] `-y` 模式透传 `-y` 到 grill（grill 以 Auto mode 代码代答执行，stage 不跳过）
-- [ ] D-007-S: session 步骤的 `session_ref` 通过 `state.json.sessions[]` 的 session_id 或 intent slug 匹配
+- [ ] D-007-S: exact live resume 通过 Unicode-safe intent identity；historical similarity 仅 suggest-only，不授予 mutation authority
 - [ ] macro analyze 后跟 `decision:post-analyze-scope`（decision 节点评估 scope_verdict 决定下游链路）
 - [ ] plan 支持 `--session {session}` / `--from analyze:{ANL_ID}` / `--from blueprint:{BLP_ID}` 三路径；chain step args 携出处
 - [ ] Broad lifecycle intents decomposed (≤3 boundary questions); narrow/single-step skip
@@ -444,7 +445,7 @@ post-analyze-scope 触发：读 macro analyze artifact → 提取 scope_verdict 
 - [ ] Session created via `session create --chain-file` before execution; decomposition 随 chain-file 建入
 - [ ] 执行 step 携 `command`/`args`/`stage`/`goal_ref`/`retry`；decision step 由 `decision_ref` 标识
 - [ ] skill 名由 `maestro ralph skills --platform claude --steps --json --quiet` 预校验（project 覆盖 global，含步骤注册表），缺失阻断建链
-- [ ] Session schema 为 `session/1.1`；orchestration 单源，新增字段可选
+- [ ] Session schema 为 `session/1.2`、Run schema 为 `command-run/1.2`；旧版兼容读，contract v2 显式 opt-in
 - [ ] 用户传入 `-y` 时透传到 skill args
 - [ ] All chains dispatched via Agent(ralph-executor) — maestro 拥有完整执行循环
 - [ ] One agent per step — unnamed Agent({ subagent_type: "ralph-executor" }) 派发
