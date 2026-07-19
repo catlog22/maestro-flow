@@ -187,8 +187,40 @@ export function transitionMutationReceipt(
   };
 }
 
-function sameFence(left: TransitionFence, right: TransitionFence): boolean {
+function sameFence(left: unknown, right: unknown): boolean {
   return stableJsonUtf8(left) === stableJsonUtf8(right);
+}
+
+function invalidReceipt(message: string): never {
+  throw new TransitionReceiptError('INVALID_TRANSITION_RECEIPT', message);
+}
+
+function assertRequestHash(request: TransitionRequest): void {
+  const { normalized_request_hash: _storedHash, ...unhashed } = request;
+  if (normalizedTransitionRequestHash(unhashed) !== request.normalized_request_hash) {
+    invalidReceipt(`transition request ${request.request_id} normalized request hash is invalid`);
+  }
+}
+
+export function validatePersistedTransitionRecord(recordInput: unknown): PersistedTransitionRecord {
+  const parsed = persistedTransitionRecordSchema.safeParse(recordInput);
+  if (!parsed.success) invalidReceipt('persisted transition record does not satisfy its schema');
+  const record = parsed.data;
+  assertRequestHash(record.payload);
+  if (sha256Digest(stableJsonUtf8(record.outcome.result)) !== record.outcome.result_hash) {
+    invalidReceipt(`transition ${record.outcome.transition_id} result hash is invalid`);
+  }
+  if (record.request_id !== record.payload.request_id
+    || record.request_id !== record.outcome.request_id
+    || record.status !== record.outcome.status
+    || record.payload.operation !== record.outcome.operation
+    || !sameFence(record.payload.subject, record.outcome.subject)
+    || record.outcome.request_hash !== record.payload.normalized_request_hash
+    || record.claimed_by_run_id !== record.payload.subject.run_id
+    || record.claimed_by_run_id !== record.outcome.subject.run_id) {
+    invalidReceipt(`transition record ${record.request_id} is not cross-bound to its request and outcome`);
+  }
+  return record;
 }
 
 export interface ReplayOrApplyTransitionResult {
@@ -206,17 +238,21 @@ export function replayOrApplyTransition(
   requestInput: TransitionRequest,
   currentFence: TransitionFence,
   apply: () => TransitionOutcome,
+  validateReplay?: (record: PersistedTransitionRecord) => void,
 ): ReplayOrApplyTransitionResult {
   const request = transitionRequestSchema.parse(requestInput);
-  const existing = records.find(record => record.request_id === request.request_id);
+  assertRequestHash(request);
+  const parsedRecords = records.map(validatePersistedTransitionRecord);
+  const existing = parsedRecords.find(record => record.request_id === request.request_id);
   if (existing) {
-    const parsed = persistedTransitionRecordSchema.parse(existing);
+    const parsed = existing;
     if (parsed.payload.normalized_request_hash !== request.normalized_request_hash) {
       throw new TransitionReceiptError(
         'REQUEST_CONFLICT',
         `request_id ${request.request_id} was already used with a different normalized request hash`,
       );
     }
+    validateReplay?.(parsed);
     if (!sameFence(parsed.outcome.postconditions, currentFence)) {
       throw new TransitionReceiptError(
         'REPLAY_STATE_DIVERGED',
@@ -229,7 +265,9 @@ export function replayOrApplyTransition(
   const outcome = transitionOutcomeSchema.parse(apply());
   if (outcome.request_id !== request.request_id
     || outcome.request_hash !== request.normalized_request_hash
-    || outcome.operation !== request.operation) {
+    || outcome.operation !== request.operation
+    || !sameFence(outcome.subject, request.subject)
+    || sha256Digest(stableJsonUtf8(outcome.result)) !== outcome.result_hash) {
     throw new TransitionReceiptError(
       'INVALID_TRANSITION_RECEIPT',
       `transition outcome does not bind request ${request.request_id}`,
@@ -243,6 +281,7 @@ export function replayOrApplyTransition(
     claimed_by_run_id: outcome.subject.run_id,
     outcome,
   });
+  validatePersistedTransitionRecord(record);
   return { outcome, record, replayed: false };
 }
 

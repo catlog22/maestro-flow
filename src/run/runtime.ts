@@ -38,15 +38,18 @@ import {
 import {
   briefResultV10Schema,
   commandRebindAuditSchema,
+  completeInputSnapshotSchema,
   executionContractV11Schema,
   guidanceSnapshotSchema,
   type BriefResult,
+  type CompleteInputSnapshot,
   type CreationProvenance,
   type ExecutionContract,
   type ArgumentRequirement,
   type GuidanceSnapshot,
   type IntentIdentity,
   type SessionProvenance,
+  type PersistedTransitionRecord,
   type TransitionPointer,
 } from './protocol-schemas.js';
 import { createIntentIdentity } from './intent-identity.js';
@@ -74,6 +77,7 @@ import {
   stableJsonUtf8,
   transitionMutationReceipt,
   TransitionReceiptError,
+  validatePersistedTransitionRecord,
   type TransitionMutationOptions,
   type TransitionMutationReceipt,
 } from './transition-receipts.js';
@@ -191,6 +195,12 @@ export interface AcceptReuseResult {
   consumes: string[];
   entry_gates: GateSummary;
   transition: TransitionMutationReceipt;
+}
+
+export interface AcceptReuseOptions extends Partial<TransitionMutationOptions> {
+  actor: string;
+  reason: string;
+  evidence: string[];
 }
 
 export interface SealSessionResult {
@@ -911,8 +921,14 @@ export function acceptRunReuse(
   runId: string,
   assessmentHash: string,
   sessionId: string | undefined,
-  transition: Partial<TransitionMutationOptions>,
+  options: AcceptReuseOptions,
 ): AcceptReuseResult {
+  const actor = options.actor.trim();
+  const reason = options.reason.trim();
+  const evidence = options.evidence.map(item => item.trim()).filter(Boolean);
+  if (!actor) throw new Error('reuse acceptance requires a non-empty actor');
+  if (!reason) throw new Error('reuse acceptance requires a non-empty reason');
+  if (evidence.length === 0) throw new Error('reuse acceptance requires at least one evidence reference');
   const store = new SessionStore(projectRoot);
   const located = store.findRun(runId, sessionId);
   const initialBundle = store.readBundle(located.sessionId);
@@ -934,8 +950,11 @@ export function acceptRunReuse(
       assessment_hash: assessment.assessment_hash,
       artifact_id: assessment.source_fence.artifact_id,
       source_fence: assessment.source_fence,
+      actor,
+      reason,
+      evidence,
     },
-    options: transition,
+    options,
   });
   const evaluated = store.replayOrApplyTransition(located.sessionId, prepared.request, (draft, tx) => {
     assertTransitionMutationRevisions(draft.session, prepared.options);
@@ -988,6 +1007,9 @@ export function acceptRunReuse(
       assessment_hash: assessment.assessment_hash,
       artifact_id: assessment.source_fence.artifact_id,
       source_fence: assessment.source_fence,
+      actor,
+      reason,
+      evidence,
     };
     const result = {
       session_id: located.sessionId,
@@ -2364,6 +2386,7 @@ export interface PreparedCompleteInputs {
   state: StateJsonV2;
   options: CompleteRunOptions;
   files: PreparedCompleteFile[];
+  completionInputSnapshot: CompleteInputSnapshot;
 }
 
 type CompleteAuthorityResult = Omit<CompleteRunResult, 'transition'>;
@@ -2376,6 +2399,53 @@ function preparedPathHash(path: string): string | null {
     : protocolSha256(readFileSync(path));
 }
 
+function completeInputSnapshot(runDir: string, paths: readonly string[]): CompleteInputSnapshot {
+  const runRoot = resolvePath(runDir);
+  const files = [...new Set(paths.map(path => resolvePath(path)))]
+    .map(path => {
+      if (path !== runRoot && !path.startsWith(`${runRoot}${sep}`)) {
+        throw new Error(`complete input path escapes run directory: ${path}`);
+      }
+      return {
+        path: relative(runRoot, path).replaceAll('\\', '/') || '.',
+        content_hash: preparedPathHash(path),
+      };
+    })
+    .sort((left, right) => left.path.localeCompare(right.path));
+  const unhashed = { schema_version: 'complete-input-snapshot/1.0' as const, files };
+  return completeInputSnapshotSchema.parse({
+    ...unhashed,
+    snapshot_hash: protocolSha256(stableJsonUtf8(unhashed)),
+  });
+}
+
+function assertCompleteReplayInputs(
+  runDir: string,
+  record: PersistedTransitionRecord,
+): void {
+  const parsed = completeInputSnapshotSchema.safeParse(record.payload.payload.completion_input_snapshot);
+  if (!parsed.success) {
+    throw new TransitionReceiptError('INVALID_TRANSITION_RECEIPT', 'complete receipt has no valid input snapshot');
+  }
+  const { snapshot_hash: _storedHash, ...unhashed } = parsed.data;
+  if (protocolSha256(stableJsonUtf8(unhashed)) !== parsed.data.snapshot_hash) {
+    throw new TransitionReceiptError('INVALID_TRANSITION_RECEIPT', 'complete receipt input snapshot hash is invalid');
+  }
+  let current: CompleteInputSnapshot;
+  try {
+    const paths = parsed.data.files.map(file => resolvePath(runDir, file.path));
+    current = completeInputSnapshot(runDir, paths);
+  } catch {
+    throw new TransitionReceiptError('INVALID_TRANSITION_RECEIPT', 'complete receipt input snapshot contains an unsafe path');
+  }
+  if (stableJsonUtf8(current) !== stableJsonUtf8(parsed.data)) {
+    throw new TransitionReceiptError(
+      'FENCE_CONFLICT',
+      `complete request ${record.request_id} external input bytes changed since the original application`,
+    );
+  }
+}
+
 /** Prepare report/output/state inputs and immutable hashes outside the transition lock. */
 export function prepareCompleteInputs(
   projectRoot: string,
@@ -2385,12 +2455,39 @@ export function prepareCompleteInputs(
 ): PreparedCompleteInputs {
   const store = new SessionStore(projectRoot);
   const located = store.findRun(runId, sessionId);
+  const replayRequestId = options.transition?.requestId?.trim();
+  if (replayRequestId) {
+    const replayRecord = store.readBundle(located.sessionId).session.requests.find(item => (
+      item.type === 'transition' && 'outcome' in item && item.request_id === replayRequestId
+    ));
+    if (replayRecord) {
+      const validated = validatePersistedTransitionRecord(replayRecord);
+      if (validated.payload.operation !== 'complete'
+        || validated.payload.subject.session_id !== located.sessionId
+        || validated.payload.subject.run_id !== runId) {
+        throw new TransitionReceiptError(
+          'REQUEST_CONFLICT',
+          `request_id ${replayRequestId} was already used for another transition subject`,
+        );
+      }
+      assertCompleteReplayInputs(
+        store.runDir(located.sessionId, runId),
+        validated,
+      );
+    }
+  }
   const resolved = contractForRun(projectRoot, located.run);
   const runDir = store.runDir(located.sessionId, runId);
   const sessionDir = store.sessionDir(located.sessionId);
   const scan = scanOutputs(runDir, sessionDir, resolved.contract);
   validateStrictArtifactContract(runDir, resolved.contract, scan);
   const extraArtifacts = discoverExtraArtifacts(runDir, sessionDir, options.extraArtifacts ?? []);
+  const completionPaths = [
+    join(runDir, 'report.md'),
+    ...resolved.contract.produces.flatMap(item => item.path ? [join(runDir, item.path)] : []),
+    ...scan.artifacts.map(item => item.absolutePath),
+    ...extraArtifacts.map(item => item.absolutePath),
+  ];
   const paths = new Set<string>([
     join(runDir, 'run.json'),
     join(runDir, 'report.md'),
@@ -2414,6 +2511,7 @@ export function prepareCompleteInputs(
     state: projectState(projectRoot),
     options,
     files: [...paths].sort().map(path => ({ path, hash: preparedPathHash(path) })),
+    completionInputSnapshot: completeInputSnapshot(runDir, completionPaths),
   };
 }
 
@@ -2518,6 +2616,12 @@ export function completeRun(
   const preparedInputs = prepareCompleteInputs(projectRoot, runId, sessionId, options);
   const { store } = preparedInputs;
   const initialBundle = store.readBundle(preparedInputs.sessionId);
+  const requestId = options.transition?.requestId?.trim();
+  const priorRecord = requestId
+    ? initialBundle.session.requests.find(item => item.type === 'transition'
+      && 'outcome' in item && item.request_id === requestId) as PersistedTransitionRecord | undefined
+    : undefined;
+  const priorSnapshot = priorRecord?.payload.payload.completion_input_snapshot;
   const prepared = prepareTransitionMutation({
     session: initialBundle.session,
     currentFence: store.readSessionFence(preparedInputs.sessionId, runId),
@@ -2530,6 +2634,7 @@ export function completeRun(
       summary_fallback: options.summaryFallback ?? null,
       decisions: options.decisions ?? [],
       chain_verdict: options.chainVerdict ?? null,
+      completion_input_snapshot: priorSnapshot ?? preparedInputs.completionInputSnapshot,
     },
     options: options.transition ?? { leaseClaim: options.leaseClaim },
   });
@@ -2558,7 +2663,7 @@ export function completeRun(
       error_code: applied.result.sealed ? null : 'RUN_GATES_BLOCKING',
       result: { value: applied.result },
     });
-  });
+  }, record => assertCompleteReplayInputs(preparedInputs.runDir, record));
   return {
     ...(structuredClone(evaluated.outcome.result.value) as CompleteAuthorityResult),
     transition: transitionMutationReceipt(prepared.request, evaluated.outcome, evaluated.replayed),

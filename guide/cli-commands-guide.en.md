@@ -253,6 +253,7 @@ Each `resolve` handles exactly one escalated decision (`--decision` + `proceed|r
 | `chain-replace` | `session chain replace` | Requires `--session --step`; pending steps only |
 | `chain-skip` | `session chain skip` | Requires `--session --step`; pending steps only |
 | `meta-update` | `session meta update` | Requires `--session` and at least one of `--position-file`/`--decomposition-file` |
+| `accept-reuse` | `run accept-reuse <run-id>` | Requires request/revision guards, `--actor`, `--reason`, and at least one `--evidence`; receipt-backed |
 
 For `decide`, recovery, chain, and meta mutations, `--request-id` supplies the idempotent transition receipt; `--expected-identity-revision`, `--expected-activity-revision`, and the complete lease triple supply the fence. `resolve`/`resume` make the audit/revision fields required; chain/meta mutations accept the same guard options.
 

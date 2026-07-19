@@ -5,7 +5,7 @@ import { join, resolve } from 'node:path';
 
 const REQUIRED_OPERATIONS = [
   'create', 'next', 'complete', 'brief', 'recall', 'resolve', 'resume', 'fork', 'import',
-  'check', 'decide', 'seal-session', 'chain-insert', 'chain-replace', 'chain-skip', 'meta-update',
+  'check', 'decide', 'seal-session', 'chain-insert', 'chain-replace', 'chain-skip', 'meta-update', 'accept-reuse',
 ];
 
 const GUIDE_REQUIREMENTS = [
@@ -130,6 +130,15 @@ addCheck('cache.search.version', Number.isNaN(cacheVersion) ? null : cacheVersio
 const protocolSchemas = read('src/run/protocol-schemas.ts');
 const operations = enumLiterals(protocolSchemas, 'export const runOperationSchema', 'const responseCommonSchema');
 addCheck('response.operations.complete', operations, REQUIRED_OPERATIONS, sameValues(operations, REQUIRED_OPERATIONS));
+
+const runCommands = read('src/commands/run.ts');
+const acceptReuseCommand = block(runCommands, ".command('accept-reuse <run-id>')", "\n  run.command(");
+addCheck(
+  'cli.accept-reuse.machine-option',
+  { command: acceptReuseCommand.includes(".command('accept-reuse <run-id>')"), json: acceptReuseCommand.includes(".option('--json'") },
+  { command: true, json: true },
+  acceptReuseCommand.includes(".command('accept-reuse <run-id>')") && acceptReuseCommand.includes(".option('--json'"),
+);
 
 for (const requirement of GUIDE_REQUIREMENTS) {
   const text = read(requirement.path);

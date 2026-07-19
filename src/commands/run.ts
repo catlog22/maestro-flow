@@ -469,23 +469,39 @@ Compatibility boundary:
     .requiredOption('--session <id>', 'exact Session ID')
     .requiredOption('--assessment-hash <sha256>', 'exact reuse assessment hash shown by run brief')
     .requiredOption('--request-id <id>', 'idempotent acceptance request ID')
+    .requiredOption('--actor <name>', 'operator accepting the REVIEW assessment')
+    .requiredOption('--reason <text>', 'auditable acceptance reason')
+    .requiredOption('--evidence <ref>', 'evidence reference supporting acceptance', collect, [])
     .requiredOption('--expected-identity-revision <n>', 'expected Session identity revision', Number.parseInt)
     .requiredOption('--expected-activity-revision <n>', 'expected Session activity revision', Number.parseInt)
     .option('--execution-owner <owner>', 'lease execution owner')
     .option('--owner-epoch <epoch>', 'lease owner epoch', Number.parseInt)
     .option('--lease-id <id>', 'lease identifier for concurrency safety')
+    .option('--json', 'emit one run-response/1.0 envelope on stdout')
     .option('--workflow-root <path>', 'project root containing .workflow', process.cwd())
     .action((runId: string, opts: any) => {
       try {
-        print(acceptRunReuse(
+        const result = acceptRunReuse(
           resolve(opts.workflowRoot),
           runId,
           opts.assessmentHash,
           opts.session,
-          mutationTransitionOptions(opts),
-        ));
+          { ...mutationTransitionOptions(opts), actor: opts.actor, reason: opts.reason, evidence: opts.evidence },
+        );
+        if (opts.json) {
+          machineSuccess(
+            'accept-reuse', result, { session_id: result.session_id, run_id: result.run_id },
+            { status: result.transition.status, transition_id: result.transition.transition_id },
+            result.transition.request_id,
+          );
+        } else print(result);
       } catch (error) {
-        reportError(error);
+        if (opts.json) {
+          machineError('accept-reuse', error, {
+            requestId: opts.requestId,
+            locator: { session_id: opts.session, run_id: runId },
+          });
+        } else reportError(error);
       }
     });
 
@@ -717,17 +733,12 @@ Compatibility boundary:
     .command('mutations')
     .description('List recorded out-of-run mutations')
     .option('--workflow-root <path>', 'project root', process.cwd())
-    .option('--json', 'emit raw JSON lines')
-    .action((opts: { workflowRoot: string; json?: boolean }) => {
+    .action((opts: { workflowRoot: string }) => {
       try {
         const entries = readLedger(resolve(opts.workflowRoot));
-        if (opts.json) {
-          for (const entry of entries) console.log(JSON.stringify(entry));
-        } else {
-          if (entries.length === 0) { console.log('No mutations recorded.'); return; }
-          for (const entry of entries) {
-            console.log(`${entry.timestamp}  ${entry.actor.padEnd(20)}  ${entry.mutation_type.padEnd(7)}  ${entry.target}`);
-          }
+        if (entries.length === 0) { console.log('No mutations recorded.'); return; }
+        for (const entry of entries) {
+          console.log(`${entry.timestamp}  ${entry.actor.padEnd(20)}  ${entry.mutation_type.padEnd(7)}  ${entry.target}`);
         }
       } catch (error) {
         reportError(error);

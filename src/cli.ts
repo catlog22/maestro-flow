@@ -82,11 +82,22 @@ const commandLoaders: Record<string, () => Promise<(p: Command) => void>> = {
 // Determine which command is being invoked from argv (if any)
 const argv = process.argv.slice(2);
 const requestedCommand = argv.find(a => !a.startsWith('-'));
-const runMachineMode = (requestedCommand === 'run' || requestedCommand === 'session') && argv.includes('--json');
+const runMachineSubcommands = new Set([
+  'create', 'new', 'next', 'complete', 'brief', 'recall', 'recall-confirm', 'fork', 'import',
+  'check', 'decide', 'seal-session', 'accept-reuse',
+]);
+const sessionMachineSubcommands = new Set(['create', 'resolve', 'resume', 'chain', 'meta']);
+const requestedCommandIndex = requestedCommand ? argv.indexOf(requestedCommand) : -1;
+const requestedSubcommand = requestedCommandIndex >= 0 ? argv[requestedCommandIndex + 1] : undefined;
+const runMachineMode = argv.includes('--json') && (
+  (requestedCommand === 'run' && runMachineSubcommands.has(requestedSubcommand ?? ''))
+  || (requestedCommand === 'session' && sessionMachineSubcommands.has(requestedSubcommand ?? ''))
+);
 
 type MachineOperation =
   | 'create' | 'next' | 'complete' | 'brief' | 'recall' | 'resolve' | 'resume' | 'fork' | 'import'
-  | 'check' | 'decide' | 'seal-session' | 'chain-insert' | 'chain-replace' | 'chain-skip' | 'meta-update';
+  | 'check' | 'decide' | 'seal-session' | 'chain-insert' | 'chain-replace' | 'chain-skip' | 'meta-update'
+  | 'accept-reuse';
 
 function inferMachineOperation(command: 'run' | 'session', args: string[]): MachineOperation {
   const commandIndex = args.indexOf(command);
@@ -98,6 +109,7 @@ function inferMachineOperation(command: 'run' | 'session', args: string[]): Mach
     if (primary === 'recall-confirm') return 'recall';
     const operations: MachineOperation[] = [
       'create', 'next', 'complete', 'brief', 'recall', 'fork', 'import', 'check', 'decide', 'seal-session',
+      'accept-reuse',
     ];
     return operations.includes(primary as MachineOperation) ? primary as MachineOperation : 'next';
   }

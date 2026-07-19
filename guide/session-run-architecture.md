@@ -115,11 +115,11 @@ store.update(sessionId) ← 事务写入
 ### 2.2 当前 authority、transition receipt 与 machine response
 
 - **版本 authority**：runtime writer 固定写出 `session/1.3` 与 `command-run/1.3`；兼容 reader 接受 `session/1.0`–`session/1.3`、`command-run/1.0`–`command-run/1.3`，未知版本 fail closed。`session.json`、`run.json` 与 `artifacts.json` 是 canonical authority，Wiki/search/cache 只是可重建 projection。
-- **Transition receipt**：`create`、`next`、`complete`、`resolve`、`resume`、`decide`、`chain-insert`、`chain-replace`、`chain-skip`、`meta-update` 等 mutation 由 `transition-request/1.0` + `transition-outcome/1.0` 记录 request ID、pre/post fence、result hash 与 applied/rejected outcome；同 request replay 只能返回可验证的既有 outcome，状态漂移时 fail closed。
+- **Transition receipt**：`create`、`next`、`complete`、`resolve`、`resume`、`decide`、`chain-insert`、`chain-replace`、`chain-skip`、`meta-update` 等 mutation 由 `transition-request/1.0` + `transition-outcome/1.0` 记录 request ID、pre/post fence、result hash 与 applied/rejected outcome；replay 前重算 request/result hash，并交叉核对 record/payload/outcome 的 request、status、operation、subject 与 claimed Run。`complete` 额外固化 report、declared outputs 与 extra artifacts 的输入 snapshot；重放时任一字节漂移均以 `FENCE_CONFLICT` fail closed。
 - **Canonical recovery**：`maestro session resolve` 与 `maestro session resume` 都要求 exact Session ID、actor/reason/evidence、identity/activity revision，并可带完整 lease triple。`resolve` 后仍 paused，`resume` 不分配 Run；`maestro run next` 是恢复后的唯一 chain allocator。
 - **Machine envelope**：显式 `--json` 时，Run/Session machine surface 统一输出一个 `run-response/1.0` stdout JSON line，stderr 为空，process status 与 `exit_code` 一致；success/error/Commander usage 都不要求调用方解析 human 文本。Envelope 统一携带 `operation`、`request_id`、`locator`、suggest-only `next`、`replay`、`result`/`error`。
 
-完整 operation matrix 为：`create`、`next`、`complete`、`brief`、`recall`、`fork`、`import`、`check`、`decide`、`seal-session`、`resolve`、`resume`、`chain-insert`、`chain-replace`、`chain-skip`、`meta-update`。其中 `decide`、`resolve`、`resume`、chain mutations 与 `meta-update` 从 canonical transition receipt 投影 `request_id` 和 applied/replayed `transition_id`；`seal-session` 不是 receipt-backed mutation，因此成功 envelope 的 `replay` 为 `null`。
+完整 operation matrix 为：`create`、`next`、`complete`、`brief`、`recall`、`fork`、`import`、`check`、`decide`、`seal-session`、`resolve`、`resume`、`chain-insert`、`chain-replace`、`chain-skip`、`meta-update`、`accept-reuse`。其中 `decide`、`resolve`、`resume`、chain mutations、`meta-update` 与 `accept-reuse` 从 canonical transition receipt 投影 `request_id` 和 applied/replayed `transition_id`；`accept-reuse` 还要求非空 actor、reason 和至少一个 evidence，并把它们绑定到 normalized request 与 outcome acceptance；`seal-session` 不是 receipt-backed mutation，因此成功 envelope 的 `replay` 为 `null`。
 
 ---
 

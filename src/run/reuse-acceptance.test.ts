@@ -1,12 +1,12 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
-import { Command } from 'commander';
+import { join, resolve } from 'node:path';
+import { spawnSync } from 'node:child_process';
 
 import { acceptRunReuse, checkRun, completeRun, createRun } from './runtime.js';
 import { SessionStore } from './store.js';
-import { registerRunCommand } from '../commands/run.js';
+import { runResponseSchema } from './protocol-schemas.js';
 
 const roots: string[] = [];
 
@@ -115,6 +115,9 @@ describe('explicit REVIEW reuse acceptance', () => {
       requestId: 'req-accept-reviewed-plan',
       expectedIdentityRevision: beforeSession.identity_revision,
       expectedActivityRevision: beforeSession.activity_revision,
+      actor: 'reviewer',
+      reason: 'reviewed exact source fence',
+      evidence: ['outputs/review.json'],
     };
     const first = acceptRunReuse(projectRoot, execute.run_id, review!.assessment_hash, 's', transition);
     const replay = acceptRunReuse(projectRoot, execute.run_id, review!.assessment_hash, 's', transition);
@@ -123,6 +126,13 @@ describe('explicit REVIEW reuse acceptance', () => {
     expect(replay.transition.transition_id).toBe(first.transition.transition_id);
     expect(store.readRun('s', execute.run_id).input.consumes).toEqual([review!.source_fence.artifact_id]);
     expect(first.entry_gates.blocking).toEqual([]);
+    const acceptanceRecord = store.readBundle('s').session.requests.find(item => item.request_id === transition.requestId) as any;
+    expect(acceptanceRecord.payload.payload).toMatchObject({
+      actor: 'reviewer', reason: 'reviewed exact source fence', evidence: ['outputs/review.json'],
+    });
+    expect(acceptanceRecord.outcome.result.acceptance).toMatchObject({
+      actor: 'reviewer', reason: 'reviewed exact source fence', evidence: ['outputs/review.json'],
+    });
 
     const validated = checkRun(projectRoot, execute.run_id, 's');
     expect(validated.errors).toEqual([]);
@@ -135,27 +145,43 @@ describe('explicit REVIEW reuse acceptance', () => {
     expect(drifted.errors.some(error => error.includes('no longer current or accepted'))).toBe(true);
   });
 
-  it('exposes canonical run accept-reuse CLI with request, revision and lease fences', async () => {
+  it('exposes canonical built run accept-reuse machine CLI with audited acceptance and fences', () => {
     const projectRoot = root();
     const execute = seedReviewedPlan(projectRoot);
     const store = new SessionStore(projectRoot);
     const run = store.readRun('s', execute.run_id);
     const review = run.input.reuse_assessments.find(item => item.decision === 'REVIEW')!;
     const session = store.readBundle('s').session;
-    const program = new Command();
-    program.exitOverride();
-    registerRunCommand(program);
-    const log = vi.spyOn(console, 'log').mockImplementation(() => undefined);
-    await program.parseAsync([
-      'node', 'maestro', 'run', 'accept-reuse', execute.run_id,
+    const invoked = spawnSync(process.execPath, [
+      resolve('bin/maestro.js'), 'run', 'accept-reuse', execute.run_id,
       '--session', 's', '--assessment-hash', review.assessment_hash,
       '--request-id', 'req-cli-accept-review',
+      '--actor', 'release-reviewer', '--reason', 'review evidence approved',
+      '--evidence', 'outputs/review.json',
       '--expected-identity-revision', String(session.identity_revision),
       '--expected-activity-revision', String(session.activity_revision),
+      '--json',
       '--workflow-root', projectRoot,
-    ]);
-    const output = JSON.parse(String(log.mock.calls.at(-1)?.[0]));
-    expect(output.transition.status).toBe('applied');
+    ], { encoding: 'utf8', cwd: resolve('.') });
+    const lines = invoked.stdout.trim().split(/\r?\n/).filter(Boolean);
+    expect(invoked.status, invoked.stderr).toBe(0);
+    expect(invoked.stderr).toBe('');
+    expect(lines).toHaveLength(1);
+    const output = runResponseSchema.parse(JSON.parse(lines[0]));
+    expect(output).toMatchObject({
+      operation: 'accept-reuse', ok: true, exit_code: 0,
+      request_id: 'req-cli-accept-review', replay: { status: 'applied' },
+    });
     expect(store.readRun('s', execute.run_id).input.consumes).toContain(review.source_fence.artifact_id);
+  });
+
+  it('rejects acceptance without actor, reason, or evidence', () => {
+    const projectRoot = root();
+    const execute = seedReviewedPlan(projectRoot);
+    const store = new SessionStore(projectRoot);
+    const review = store.readRun('s', execute.run_id).input.reuse_assessments.find(item => item.decision === 'REVIEW')!;
+    expect(() => acceptRunReuse(projectRoot, execute.run_id, review.assessment_hash, 's', {
+      requestId: 'req-incomplete-acceptance', actor: '', reason: '', evidence: [],
+    })).toThrow(/non-empty actor/);
   });
 });

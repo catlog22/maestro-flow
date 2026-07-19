@@ -330,6 +330,7 @@ describe('run complete — completion gate integrity', () => {
       payload: {
         run_id: runId, notes: [], extra_artifacts: [], summary_fallback: null,
         decisions: [], chain_verdict: 'needs-retry',
+        completion_input_snapshot: (storedRequest as any).payload.payload.completion_input_snapshot,
       },
       options: transition,
     });
@@ -370,6 +371,49 @@ describe('run complete — completion gate integrity', () => {
     intercept.mockRestore();
     expect([sessionPath, runPath, statePath].map(path => readFileSync(path, 'utf8'))).toEqual(authority);
     expect(store.readBundle('s').session.requests.some(item => item.request_id === transition.requestId)).toBe(false);
+  });
+
+  it('rejects replay when persisted report, declared output, or extra artifact bytes drift', () => {
+    const cases = ['report', 'declared', 'extra', 'extra-deleted'] as const;
+    for (const kind of cases) {
+      const projectRoot = root();
+      stepCommand(projectRoot, 'demo');
+      if (kind === 'declared') {
+        const commandPath = join(projectRoot, '.claude', 'commands', 'demo.md');
+        writeFileSync(commandPath, [
+          '<contract>', 'consumes: []', 'produces:', '  - kind: plan',
+          '    primary: true', '    path: outputs/plan.json',
+          'gates:', '  entry: []', '  exit: []', '</contract>', '',
+        ].join('\n'), 'utf8');
+      }
+      seedSession(projectRoot, 's', [{ command: 'demo' }]);
+      const runId = startStep(projectRoot, 's', 0);
+      const store = new SessionStore(projectRoot);
+      const runDir = store.runDir('s', runId);
+      const completionOptions: any = { verdict: 'done' };
+      let target = join(runDir, 'report.md');
+      if (kind === 'declared') {
+        target = join(runDir, 'outputs', 'plan.json');
+        writeFileSync(target, JSON.stringify({ _meta: { kind: 'plan', role: 'primary' } }), 'utf8');
+      } else if (kind === 'extra' || kind === 'extra-deleted') {
+        mkdirSync(join(runDir, 'evidence'), { recursive: true });
+        target = join(runDir, 'evidence', 'review.txt');
+        writeFileSync(target, 'approved\n', 'utf8');
+        completionOptions.extraArtifacts = ['evidence/review.txt'];
+      }
+      const before = store.readBundle('s').session;
+      completionOptions.transition = {
+        requestId: `req-complete-drift-${kind}`,
+        expectedIdentityRevision: before.identity_revision,
+        expectedActivityRevision: before.activity_revision,
+      };
+      const first = completeRunWithVerdict(projectRoot, runId, 's', completionOptions);
+      expect(first.seal.transition.status).toBe('applied');
+      if (kind === 'extra-deleted') rmSync(target);
+      else writeFileSync(target, `${readFileSync(target, 'utf8')}tampered\n`, 'utf8');
+      expect(() => completeRunWithVerdict(projectRoot, runId, 's', completionOptions))
+        .toThrowError(expect.objectContaining({ code: 'FENCE_CONFLICT' }));
+    }
   });
 
   it('uses one SessionStore lock for complete mutation application', () => {

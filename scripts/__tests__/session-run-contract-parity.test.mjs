@@ -10,6 +10,7 @@ const fixtureFiles = [
   'package.json',
   'src/run/schemas.ts',
   'src/run/protocol-schemas.ts',
+  'src/commands/run.ts',
   'dashboard/src/server/wiki/virtual-wiki-adapters.ts',
   'dashboard/src/server/wiki/wiki-indexer.ts',
   'guide/search-system-guide.md',
@@ -58,6 +59,7 @@ describe('Session Run contract parity release gate', () => {
     expect(result.stdout).toContain('PASS reader.session.compatibility');
     expect(result.stdout).toContain('PASS cache.search.version');
     expect(result.stdout).toContain('PASS response.operations.complete');
+    expect(result.stdout).toContain('PASS cli.accept-reuse.machine-option');
     expect(result.stdout).toContain('PASS docs.search.zh');
     expect(result.stdout).toContain('PASS package.prepublish.order');
   });
@@ -92,9 +94,18 @@ describe('Session Run contract parity release gate', () => {
           replaceOnce(
             root,
             'src/run/protocol-schemas.ts',
+            "'check', 'decide', 'seal-session', 'chain-insert', 'chain-replace', 'chain-skip', 'meta-update', 'accept-reuse',",
             "'check', 'decide', 'seal-session', 'chain-insert', 'chain-replace', 'chain-skip', 'meta-update',",
-            "'check', 'decide', 'seal-session', 'chain-insert', 'chain-replace', 'chain-skip',",
           );
+        },
+      },
+      {
+        dimension: 'commander-json',
+        id: 'cli.accept-reuse.machine-option',
+        mutate(root) {
+          replaceOnce(root, 'src/commands/run.ts',
+            ".option('--json', 'emit one run-response/1.0 envelope on stdout')\n    .option('--workflow-root <path>', 'project root containing .workflow', process.cwd())\n    .action((runId: string, opts: any) => {",
+            ".option('--workflow-root <path>', 'project root containing .workflow', process.cwd())\n    .action((runId: string, opts: any) => {");
         },
       },
       {

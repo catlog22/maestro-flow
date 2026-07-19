@@ -225,6 +225,7 @@ describe('built-bin run-response/1.0', () => {
       { args: ['run', 'check', '--json'], operation: 'check' },
       { args: ['run', 'decide', '--json'], operation: 'decide' },
       { args: ['run', 'seal-session', '--json'], operation: 'seal-session' },
+      { args: ['run', 'accept-reuse', 'missing', '--json'], operation: 'accept-reuse' },
       { args: ['run', 'check', 'missing', '--unknown-option', '--json'], operation: 'check' },
     ];
     for (const item of cases) {
@@ -239,5 +240,15 @@ describe('built-bin run-response/1.0', () => {
         error: { code: 'COMMANDER_USAGE' },
       });
     }
+  });
+
+  it('rejects the non-machine mutations --json flag instead of succeeding silently', () => {
+    const { root } = fixture();
+    const result = spawnSync(process.execPath, [
+      resolve('bin/maestro.js'), 'run', 'mutations', '--json', '--workflow-root', root,
+    ], { encoding: 'utf8', cwd: resolve('.') });
+    expect(result.status).not.toBe(0);
+    expect(result.stdout).toBe('');
+    expect(result.stderr).toContain("unknown option '--json'");
   });
 });

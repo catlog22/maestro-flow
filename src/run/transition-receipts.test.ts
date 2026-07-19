@@ -188,6 +188,39 @@ describe('transition request/outcome receipts', () => {
     expect(() => transitionRequestSchema.parse({ ...req, schema_version: 'transition-request/2.0' })).toThrow();
     expect(() => transitionOutcomeSchema.parse({ ...first.outcome, request_hash: 'bad' })).toThrow();
   });
+
+  it('fails closed when a schema-valid persisted receipt is content-tampered', () => {
+    const req = request();
+    const first = replayOrApplyTransition([], req, fence(0), () => createTransitionOutcome({
+      request_id: req.request_id,
+      request_hash: req.normalized_request_hash,
+      operation: req.operation,
+      status: 'applied',
+      applied_at: '2026-07-19T00:00:01.000Z',
+      subject: req.subject,
+      postconditions: fence(1),
+      exit_code: 0,
+      error_code: null,
+      result: { status: 'running' },
+    }));
+    const tampered = [
+      (record: typeof first.record) => { record.request_id = 'req-other'; },
+      (record: typeof first.record) => { record.payload.normalized_request_hash = otherHash; },
+      (record: typeof first.record) => { record.payload.request_id = 'req-other'; },
+      (record: typeof first.record) => { record.status = 'rejected'; },
+      (record: typeof first.record) => { record.outcome.operation = 'complete'; },
+      (record: typeof first.record) => { record.outcome.subject.run_id = 'run-other'; },
+      (record: typeof first.record) => { record.outcome.request_hash = otherHash; },
+      (record: typeof first.record) => { record.outcome.result_hash = otherHash; },
+      (record: typeof first.record) => { record.claimed_by_run_id = 'run-other'; },
+    ];
+    for (const mutate of tampered) {
+      const record = structuredClone(first.record);
+      mutate(record);
+      expect(() => replayOrApplyTransition([record], req, fence(1), () => first.outcome))
+        .toThrowError(expect.objectContaining({ code: 'INVALID_TRANSITION_RECEIPT' }));
+    }
+  });
 });
 
 describe('canonical paused recovery transitions', () => {

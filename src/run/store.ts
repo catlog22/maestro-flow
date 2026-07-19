@@ -57,6 +57,7 @@ import {
   type RecallReservationMarker,
   type RecallReservationObservation,
   type RecallReservationReconciliation,
+  type PersistedTransitionRecord,
   type SessionProvenance,
   type StaleRecallReservation,
   type TransitionFence,
@@ -969,6 +970,7 @@ export class SessionStore {
     sessionId: string,
     request: TransitionRequest,
     apply: (draft: SessionBundle, tx: StoreTransaction) => TransitionOutcome,
+    validateReplay?: (record: PersistedTransitionRecord) => void,
   ): { outcome: TransitionOutcome; replayed: boolean } {
     return this.withLock(() => {
       const current = this.readBundleUnlocked(sessionId);
@@ -978,7 +980,13 @@ export class SessionStore {
         .map(item => item as Extract<SessionState['requests'][number], { type: 'transition' }>);
       const draft = clone(current);
       const tx = new StoreTransaction(this, sessionId);
-      const evaluated = replayOrApplyTransition(records, request, currentFence, () => apply(draft, tx));
+      const evaluated = replayOrApplyTransition(
+        records,
+        request,
+        currentFence,
+        () => apply(draft, tx),
+        validateReplay,
+      );
       if (evaluated.replayed) return { outcome: clone(evaluated.outcome), replayed: true };
       const actualPost = this.sessionFenceForBundle(draft, request.subject.run_id, tx);
       if (JSON.stringify(actualPost) !== JSON.stringify(evaluated.outcome.postconditions)) {

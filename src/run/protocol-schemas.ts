@@ -165,6 +165,15 @@ export const transitionFenceSchema = z.object({
   artifact_registry_revision: z.number().int().nonnegative().nullable(),
 }).strict();
 
+export const completeInputSnapshotSchema = z.object({
+  schema_version: z.literal('complete-input-snapshot/1.0'),
+  files: z.array(z.object({
+    path: nonEmptyString,
+    content_hash: nullableSha256Schema,
+  }).strict()),
+  snapshot_hash: sha256Schema,
+}).strict();
+
 export const transitionRequestSchema = z.object({
   schema_version: z.literal('transition-request/1.0'),
   request_id: nonEmptyString,
@@ -621,7 +630,7 @@ export const runErrorCodeSchema = z.enum([
 
 export const runOperationSchema = z.enum([
   'create', 'next', 'complete', 'brief', 'recall', 'resolve', 'resume', 'fork', 'import',
-  'check', 'decide', 'seal-session', 'chain-insert', 'chain-replace', 'chain-skip', 'meta-update',
+  'check', 'decide', 'seal-session', 'chain-insert', 'chain-replace', 'chain-skip', 'meta-update', 'accept-reuse',
 ]);
 const responseCommonSchema = z.object({
   schema_version: z.literal('run-response/1.0'),
@@ -634,7 +643,7 @@ const responseCommonSchema = z.object({
 
 const nonBriefRunOperationSchema = z.enum([
   'create', 'next', 'complete', 'recall', 'resolve', 'resume', 'fork', 'import',
-  'check', 'decide', 'seal-session', 'chain-insert', 'chain-replace', 'chain-skip', 'meta-update',
+  'check', 'decide', 'seal-session', 'chain-insert', 'chain-replace', 'chain-skip', 'meta-update', 'accept-reuse',
 ]);
 
 export const runResponseSuccessSchema = z.union([
@@ -712,6 +721,7 @@ export type ContractSnapshot = z.infer<typeof contractSnapshotSchema>;
 export type GuidanceSnapshot = z.infer<typeof guidanceSnapshotSchema>;
 export type CommandRebindAudit = z.infer<typeof commandRebindAuditSchema>;
 export type TransitionFence = z.infer<typeof transitionFenceSchema>;
+export type CompleteInputSnapshot = z.infer<typeof completeInputSnapshotSchema>;
 export type TransitionRequest = z.infer<typeof transitionRequestSchema>;
 export type TransitionOutcome = z.infer<typeof transitionOutcomeSchema>;
 export type PersistedTransitionRecord = z.infer<typeof persistedTransitionRecordSchema>;
