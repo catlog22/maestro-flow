@@ -35,7 +35,7 @@ import type {
 } from './wiki-types.js';
 import { recallSnapshotSchema, type RecallSnapshot } from './wiki-types.js';
 
-const SEARCH_CACHE_VERSION = 2;
+const SEARCH_CACHE_VERSION = 3;
 
 function prefixLinkedEntries(entries: WikiEntry[], idPrefix: string, workspace: string): void {
   const idMap = new Map(entries.map(entry => [entry.id, `${idPrefix}${entry.id}`]));

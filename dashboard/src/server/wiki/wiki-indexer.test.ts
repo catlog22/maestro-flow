@@ -5,6 +5,7 @@ import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { WikiIndexer } from './wiki-indexer.js';
+import { createRuntimeSessionFixture } from './__fixtures__/runtime-session.js';
 import { buildGraph, detectOrphans, detectHubs, computeHealth } from './graph-analysis.js';
 import { buildInvertedIndex, searchBM25, tokenize } from './search.js';
 import { WikiWriter, WikiWriteError } from './writer.js';
@@ -867,7 +868,103 @@ describe('virtual adapters: run-mode sessions', () => {
     expect(run.ext.gateSummary).toEqual({ total: 1, waived: 1, failed: 0, blocked: 0 });
 
     await new Promise(resolve => setTimeout(resolve, 25));
-    expect(JSON.parse(await readFile(join(tmpRoot, 'search-cache.json'), 'utf-8')).version).toBe(2);
+    expect(JSON.parse(await readFile(join(tmpRoot, 'search-cache.json'), 'utf-8')).version).toBe(3);
+  });
+
+  it('indexes session and command-run schemas 1.0 through 1.3', async () => {
+    const fixture = createRuntimeSessionFixture(join(tmpRoot, 'runtime-source'));
+    const sessionVersions = ['session/1.0', 'session/1.1', 'session/1.2', 'session/1.3'] as const;
+    const runVersions = ['command-run/1.0', 'command-run/1.1', 'command-run/1.2', 'command-run/1.3'] as const;
+    const expectedSessionIds: string[] = [];
+    const expectedRunIds: string[] = [];
+
+    for (let index = 0; index < sessionVersions.length; index++) {
+      const suffix = String(index).padStart(2, '0');
+      const sessionId = `20260719-schema-${suffix}`;
+      const runId = `20260719-${String(index + 1).padStart(3, '0')}-wiki-runtime-fixture`;
+      const session = structuredClone(fixture.session);
+      session.schema_version = sessionVersions[index];
+      session.session_id = sessionId;
+      session.latest_completed_run_id = runId;
+      if (sessionVersions[index] !== 'session/1.3') delete session.topic_identity;
+      if (sessionVersions[index] === 'session/1.0' || sessionVersions[index] === 'session/1.1') {
+        delete session.intent_identity;
+        delete session.provenance;
+        delete session.ralph_authority;
+      }
+
+      const run = structuredClone(fixture.run);
+      run.schema_version = runVersions[index];
+      run.session_id = sessionId;
+      run.run_id = runId;
+      run.gate_ids = [];
+      run.output = { produces: [], primary_artifact_id: null, verdict: 'ready' };
+      const handoff = run.handoff as Record<string, unknown> | null;
+      if (handoff) handoff.producer_run_id = runId;
+      const input = run.input as Record<string, unknown>;
+      if (runVersions[index] !== 'command-run/1.3') delete input.reuse_assessments;
+      if (runVersions[index] === 'command-run/1.0' || runVersions[index] === 'command-run/1.1') {
+        delete run.contract_snapshot;
+        delete run.guidance_snapshot;
+        delete run.creation_decision;
+        delete run.creation_provenance;
+        delete run.transition;
+      }
+      if (runVersions[index] === 'command-run/1.0') {
+        delete run.chain_step_id;
+        delete run.resolved_platform;
+        delete run.goal_binding;
+        delete run.checkpoint_expectation;
+        delete run.checkpoint;
+        delete run.retry_fence;
+      }
+
+      await write(`sessions/${sessionId}/session.json`, JSON.stringify(session));
+      await write(`sessions/${sessionId}/artifacts.json`, JSON.stringify({
+        schema_version: 'artifacts/1.1', artifacts: {}, aliases: {},
+      }));
+      await write(`sessions/${sessionId}/gates.json`, JSON.stringify({
+        schema_version: 'gates/1.0', revision: 0, gates: {},
+        summary: { total: 0, passed: 0, blocked: 0, failed: 0, active_gate_ids: [], blocking_run_id: null },
+      }));
+      await write(`sessions/${sessionId}/runs/${runId}/run.json`, JSON.stringify(run));
+      expectedSessionIds.push(`session-${sessionId}`);
+      expectedRunIds.push(`session-run-${sessionId}-${runId}`);
+    }
+
+    const index = await new WikiIndexer({ workflowRoot: tmpRoot }).get();
+    for (const id of expectedSessionIds) expect(index.byId[id], id).toBeDefined();
+    for (const id of expectedRunIds) expect(index.byId[id], id).toBeDefined();
+    expect(index.entries.filter(entry => entry.ext.virtualKind === 'session-run')).toHaveLength(4);
+  });
+
+  it('projects a SessionStore runtime 1.3 fixture with summary, kind, and provenance', async () => {
+    const fixture = createRuntimeSessionFixture(join(tmpRoot, 'runtime-project'));
+    const index = await new WikiIndexer({ workflowRoot: fixture.workflowRoot }).get();
+    const session = index.byId[`session-${fixture.sessionId}`];
+    const run = index.byId[`session-run-${fixture.sessionId}-${fixture.runId}`];
+
+    expect(fixture.session.schema_version).toBe('session/1.3');
+    expect(fixture.run.schema_version).toBe('command-run/1.3');
+    expect(session.ext.runCount).toBe(1);
+    expect(run.summary).toContain(fixture.summary);
+    expect(run.tags).toContain(fixture.kind);
+    expect(run.sourceRef).toBe(fixture.runId);
+    expect(run.related).toContain(`session-${fixture.sessionId}`);
+  });
+
+  it('invalidates v2 search cache and persists v3', async () => {
+    await write('specs/cache-v3.md', '---\ntitle: Cache v3\n---\n# Cache v3\nProjection cache sentinel.');
+    await write('search-cache.json', JSON.stringify({
+      version: 2, generatedAt: 1, mtimeSnapshot: [], entries: [],
+    }));
+
+    const index = await new WikiIndexer({ workflowRoot: tmpRoot }).get();
+    expect(index.byId['spec:project:cache-v3']).toBeDefined();
+    await expect.poll(async () => {
+      try { return JSON.parse(await readFile(join(tmpRoot, 'search-cache.json'), 'utf-8')).version; }
+      catch { return null; }
+    }).toBe(3);
   });
 
   it('indexes v1.1 sealed Runs with structured handoff, kinds, provenance, aref edges, and waivers', async () => {
@@ -959,37 +1056,36 @@ describe('virtual adapters: run-mode sessions', () => {
     expect(index.entries.filter(e => e.source.path.startsWith('sessions/'))).toEqual([]);
   });
 
-  it('fails closed for unknown and Wave 2 placeholder persistence versions', async () => {
-    for (const schemaVersion of ['session/9.9', 'session/1.2']) {
+  it('rejects unknown Session and Run schema versions', async () => {
+    for (const schemaVersion of ['session/1.4', 'session/9.9']) {
       await write(`sessions/${schemaVersion.replace('/', '-')}/session.json`, JSON.stringify({
         schema_version: schemaVersion,
         session_id: schemaVersion,
-        intent: 'Unsupported placeholder',
+        intent: 'Unsupported Session schema',
         status: 'sealed',
       }));
     }
-    const index = await new WikiIndexer({ workflowRoot: tmpRoot }).get();
-    expect(index.entries.filter(entry => entry.source.path.includes('session-1.2'))).toEqual([]);
-    expect(index.entries.filter(entry => entry.source.path.includes('session-9.9'))).toEqual([]);
-  });
-
-  it('keeps command-run/1.2 as a fail-closed converter placeholder until Wave 2 supplies its shape', async () => {
-    const sessionId = '20260718-run-placeholder';
-    const runId = '20260718-001-placeholder';
+    const sessionId = '20260719-unknown-runs';
     await write(`sessions/${sessionId}/session.json`, JSON.stringify({
-      schema_version: 'session/1.1', session_id: sessionId, intent: 'Run placeholder', status: 'sealed',
-      lifecycle: { sealed_at: '2026-07-18T10:00:00.000Z', seal_summary: 'No speculative conversion', promoted: [] },
+      schema_version: 'session/1.3', session_id: sessionId, intent: 'Reject unknown Run schemas', status: 'sealed',
+      lifecycle: { sealed_at: '2026-07-19T10:00:00.000Z', seal_summary: 'Unknown Runs stay hidden', promoted: [] },
     }));
     await write(`sessions/${sessionId}/artifacts.json`, JSON.stringify({
       schema_version: 'artifacts/1.1', artifacts: {}, aliases: {},
     }));
-    await write(`sessions/${sessionId}/runs/${runId}/run.json`, JSON.stringify({
-      schema_version: 'command-run/1.2', run_id: runId, command: { name: 'review' }, status: 'sealed',
-    }));
+    for (const schemaVersion of ['command-run/1.4', 'command-run/9.9']) {
+      const runId = schemaVersion.replace('/', '-');
+      await write(`sessions/${sessionId}/runs/${runId}/run.json`, JSON.stringify({
+        schema_version: schemaVersion, run_id: runId, command: { name: 'review' }, status: 'sealed',
+      }));
+    }
 
     const index = await new WikiIndexer({ workflowRoot: tmpRoot }).get();
     expect(index.byId[`session-${sessionId}`]?.ext.runCount).toBe(0);
-    expect(index.entries.some(entry => entry.sourceRef === runId)).toBe(false);
+    expect(index.entries.filter(entry => entry.source.path.includes('session-1.4'))).toEqual([]);
+    expect(index.entries.filter(entry => entry.source.path.includes('session-9.9'))).toEqual([]);
+    expect(index.entries.some(entry => entry.sourceRef === 'command-run-1.4')).toBe(false);
+    expect(index.entries.some(entry => entry.sourceRef === 'command-run-9.9')).toBe(false);
   });
 
   it('exposes linked Session history only through explicit session sharing and fences fork/resume', async () => {

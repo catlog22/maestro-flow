@@ -692,7 +692,7 @@ const RUN_COMMAND_CATEGORY: Record<string, string> = {
 };
 
 interface RunModeSession {
-  schema_version?: 'session/1.1';
+  schema_version?: 'session/1.3';
   session_id?: string;
   intent?: string;
   status?: string;
@@ -878,11 +878,10 @@ async function readRunKnowledge(
   };
 }
 
-// ── v1.0 schema normalization ───────────────────────────────────────────
-// The run runtime still writes v1.0 documents (src/run/schemas.ts); until the
-// v1.1 CLI convergence lands, both generations must index identically.
-// Normalize v1.0 into the v1.1 shape at the read boundary so the rest of the
-// adapter stays single-schema. Unknown versions are still rejected.
+// ── Session/Run persistence normalization ───────────────────────────────
+// Runtime writes session/1.3 + command-run/1.3 and keeps compatible readers
+// for 1.0-1.2. Mirror that read boundary here without importing runtime code
+// into the dashboard production bundle. Unknown versions stay fail-closed.
 
 interface LegacyRunModeGate {
   id?: string;
@@ -893,7 +892,12 @@ interface LegacyRunModeGate {
 }
 
 function normalizeRunModeSession(raw: Record<string, unknown>): RunModeSession | null {
-  if (raw.schema_version !== 'session/1.0' && raw.schema_version !== 'session/1.1') return null;
+  if (
+    raw.schema_version !== 'session/1.0'
+    && raw.schema_version !== 'session/1.1'
+    && raw.schema_version !== 'session/1.2'
+    && raw.schema_version !== 'session/1.3'
+  ) return null;
   const session = raw as RunModeSession;
   const lifecycle = session.lifecycle;
   const promoted = [
@@ -902,7 +906,7 @@ function normalizeRunModeSession(raw: Record<string, unknown>): RunModeSession |
     ...(lifecycle?.promoted_knowhow_ids ?? []).map(id => `knowhow:${id}`),
   ];
   return {
-    schema_version: 'session/1.1',
+    schema_version: 'session/1.3',
     session_id: session.session_id,
     intent: session.intent,
     status: session.status,
@@ -940,7 +944,7 @@ function legacyWaiverText(waiver: NonNullable<LegacyRunModeGate['waiver']>): str
   return `${reason} (${waiver.approved_by} @ ${waiver.approved_at ?? '?'})`;
 }
 
-interface LegacyRunModeRun {
+interface PersistedRunModeRun {
   run_id?: string;
   command?: { name?: string };
   status?: string;
@@ -954,16 +958,21 @@ interface LegacyRunModeRun {
 
 function normalizeRunModeRun(raw: Record<string, unknown>, legacyGates: LegacyRunModeGate[]): RunModeRun | null {
   if (raw.schema_version === 'run/1.1') return raw as RunModeRun;
-  if (raw.schema_version !== 'command-run/1.0' && raw.schema_version !== 'command-run/1.1') return null;
-  const legacy = raw as LegacyRunModeRun;
-  const runId = legacy.run_id;
-  const gateIds = new Set(legacy.gate_ids ?? []);
+  if (
+    raw.schema_version !== 'command-run/1.0'
+    && raw.schema_version !== 'command-run/1.1'
+    && raw.schema_version !== 'command-run/1.2'
+    && raw.schema_version !== 'command-run/1.3'
+  ) return null;
+  const persisted = raw as PersistedRunModeRun;
+  const runId = persisted.run_id;
+  const gateIds = new Set(persisted.gate_ids ?? []);
   return {
     schema_version: 'run/1.1',
     run_id: runId,
-    command: legacy.command?.name,
-    status: legacy.status,
-    primary: legacy.output?.primary_artifact_id ?? null,
+    command: persisted.command?.name,
+    status: persisted.status,
+    primary: persisted.output?.primary_artifact_id ?? null,
     gates: legacyGates
       .filter(gate => gateIds.size > 0 ? gateIds.has(gate.id ?? '') : gate.run_id === runId)
       .map(gate => ({
@@ -971,13 +980,13 @@ function normalizeRunModeRun(raw: Record<string, unknown>, legacyGates: LegacyRu
         status: gate.status,
         waiver: gate.waiver ? legacyWaiverText(gate.waiver) : null,
       })),
-    handoff: legacy.handoff ?? null,
-    started_at: legacy.started_at,
-    ended_at: legacy.sealed_at ?? legacy.completed_at ?? null,
+    handoff: persisted.handoff ?? null,
+    started_at: persisted.started_at,
+    ended_at: persisted.sealed_at ?? persisted.completed_at ?? null,
   };
 }
 
-/** v1.0 keeps gates in a session-level gates.json; v1.1 inlines them per run. */
+/** command-run generations keep canonical gate details in session-level gates.json. */
 async function readLegacySessionGates(sessionDir: string): Promise<LegacyRunModeGate[]> {
   try {
     const registry = JSON.parse(await readFile(join(sessionDir, 'gates.json'), 'utf-8')) as {
