@@ -1,8 +1,8 @@
 ---
 name: maestro-next
 disable-model-invocation: false
-description: "Primary default entry for development intents — score intent + project state, recommend one atomic step, execute after confirmation. Multi-step intents use a user-confirmed manual-engine chain or hand off to /maestro"
-argument-hint: "<intent>|--list|--suggest [-y] [--dry-run]"
+description: "Unified entry for all development intents — classify intent, assess complexity, route to the correct execution channel: /maestro-companion (lightweight), standard single run, or /maestro (multi-step with manual/ralph engine). Pure router, never runs execution loops itself"
+argument-hint: "<intent>|--list|--suggest [-y] [--dry-run] [--lite] [--run]"
 allowed-tools:
   - Read
   - Write
@@ -23,12 +23,12 @@ contract:
 </required_reading>
 
 <purpose>
-Default interactive entry for development intents. Parse intent + project state → score candidates from the step registry → assess complexity → route to the appropriate channel:
-- **Companion** (lightweight): execute directly with any tools, continuously record to `{run_dir}/evidence/` — minimal run lifecycle (create + complete only)
+Unified interactive entry for all development intents. Pure router: parse intent + project state → classify → assess complexity → route to the appropriate channel:
+- **Companion** (lightweight): route to `/maestro-companion "<intent>"` — minimal run lifecycle, continuous evidence recording
 - **Standard** (single run): recommend a step → confirm → execute via `maestro run prepare` + `maestro run create`
-- **Multi-step**: user-confirmed manual-engine chain, stepwise, or handoff to /maestro
+- **Multi-step**: route to `/maestro "<intent>"` with engine hint (manual for stepwise control, ralph for closed-loop orchestration)
 
-Also provides companion utilities: structured note recording (--note) and insight promotion (--promote). Never auto-orchestrates.
+This command is the single entry point. It classifies and routes. Multi-step execution loops (manual or orchestrated) live in `/maestro`.
 </purpose>
 
 <context>
@@ -38,138 +38,86 @@ $ARGUMENTS — intent text + optional flags.
 
 | Flag | Effect |
 |------|--------|
-| `-y` / `--yes` | Skip confirmation, execute top pick directly |
+| `-y` / `--yes` | Skip confirmation, execute/route top pick directly |
 | `--dry-run` | Show recommendation only, do not execute |
 | `--top N` | Show top N candidates (default 3) |
 | `--list` | List all available steps grouped by workflow cluster |
 | `--suggest` | Suggest-only mode: show recommendation + prepare content, NEVER auto-execute |
-| `--note <text>` | Append a structured note to the active run's evidence log |
-| `--promote` | Interactively promote run insights to spec/knowhow |
-| `--lite` | Force companion channel: full task execution with minimal run lifecycle (create + complete), continuous recording |
+| `--lite` | Force companion channel: route to `/maestro-companion "<intent>"` |
 | `--run` | Force standard channel (create a run even for simple tasks) |
-| `--chain` | Force manual-engine chain creation for a multi-step intent (skip detection, go straight to S_CHAIN_CREATE) |
 
 **Mode detection (priority order):**
-1. `--note` → S_NOTE (companion note mode)
-2. `--promote` → S_PROMOTE (companion promote mode)
-3. `--lite` → S_COMPANION_CTX (companion channel: direct execution + recording)
-4. `--chain` → S_CHAIN_CREATE (build a manual-engine chain from the intent)
-5. `--suggest` → S_RANK → S_PRESENT (suggest only, never execute)
-6. `--list` → S_LIST
-7. Active manual-engine chain with pending steps AND intent empty/"continue" → S_CHAIN_CONT
-8. Intent text present → S_STATE → S_RANK → S_COMPANION_CTX (lightweight) | S_PRESENT (standard/multi-step)
-9. No arguments → lifecycle inference for natural next step
+1. `--lite` → route to `/maestro-companion "<intent>"` (suggest invocation, execute if -y)
+2. `--suggest` → S_RANK → S_PRESENT (suggest only, never execute)
+3. `--list` → S_LIST
+4. Intent text present → S_STATE → S_RANK → route by complexity verdict
+5. No arguments → lifecycle inference for natural next step
 
 **Candidate pool:** All 15 first-tier steps registered in `prepare/` + `workflows/`. Pipeline orchestrators (`maestro`, `maestro-ralph*`) are NEVER in the candidate pool.
 </context>
 
 <invariants>
-1. **No auto-orchestration** — chains only via explicit user confirmation, always `--engine manual`, never auto-dispatched. Every chain step requires per-step confirmation; with `-y` execute the current step only, then stop with a continuation hint — never walk the chain unattended. Chain state lives in session.json and is written via CLI verbs only (`run next` / `run complete --verdict`) — never written directly
-2. **Pipeline orchestrators excluded** — only recommend registered steps
+1. **Pure router for multi-step** — this command never runs execution loops (manual chain or orchestrated). All multi-step execution is delegated to `/maestro`
+2. **Pipeline orchestrators excluded** — only recommend registered steps as single-run targets
 3. **Empty intent or "continue"/"next"** → lifecycle_position inference for natural next step
 4. **Literal match priority** — keyword match takes precedence; lifecycle is tie-breaker
 5. **Argument pass-through** — intent text becomes first arg to target step; user can modify at confirmation; `-y` only passes through when user provided it
 6. **--suggest never executes** — show recommendation + prepare content only
-7. **--note is append-only** — never overwrite or reorder existing entries
-8. **--promote delegates** — spec/knowhow promotion routes through `maestro-spec add` / `maestro-manage knowledge capture`, never writes directly
-9. **Manual campaigns excluded** — `team-*` and `maestro-odyssey` are never candidates, recommendations, retained utilities, chain steps, or handoff targets
-10. **Retained commands are suggest-only** — route retained commands to an exact slash command. Never execute them in this turn; `-y` applies only to first-tier steps
-11. **Companion channel is minimal-run** — single Run in a chainless Session, skipping prepare/brief/check. Only `run create` + `run complete` lifecycle verbs apply. Execution recording goes to `{run_dir}/evidence/companion-log.md` (non-formal, never enters gates). No contract enforcement (consumes/produces/gates all empty)
+7. **Manual campaigns excluded** — `team-*` and `maestro-odyssey` are never candidates, recommendations, retained utilities, or handoff targets
+8. **Retained commands are suggest-only** — route retained commands to an exact slash command. Never execute them in this turn; `-y` applies only to first-tier steps
+9. **Companion routing is suggest-or-execute** — when complexity == lightweight, output `/maestro-companion "<intent>"` invocation. With `-y`, invoke it directly; otherwise present it as the recommended channel for user confirmation
+10. **Multi-step always routes to /maestro** — when intent spans ≥2 steps or needs orchestration, output `/maestro "<intent>"` with appropriate engine hint. This command never creates sessions or manages chains itself
 </invariants>
 
 <state_machine>
 
 <states>
-S_PARSE     — Parse arguments, extract flags, detect mode
-S_NOTE      — Append structured note to active companion doc
-S_PROMOTE   — Review companion/run outputs, promote insights to spec/knowhow
-S_CHAIN_CREATE — Compose chain definition from intent → create manual-engine session → step
-S_CHAIN_CONT   — Resume active manual-engine chain: show progress, advance the queue head
-S_CHAIN_STEP   — One chain step: `run next` → confirm → execute → `run complete --verdict`
-S_STATE     — Read project state, infer lifecycle_position
-S_RANK      — Score candidates, assess complexity, generate top-N
-S_LIST      — --list mode: grouped display of all steps
-S_PRESENT   — Show top pick + alternatives + reasoning + prepare content
-S_CONFIRM   — [@ask] AskUserQuestion for confirmation (skipped by -y)
-S_EXECUTE   — Run prepare + create for selected step
-S_FALLBACK  — Intent empty after clarification
-
---- Companion sub-workflow (minimal-run execution channel) ---
-S_COMPANION_CTX  — Create minimal run (`run create companion`), load context, open evidence log
-S_COMPANION_EXEC — Execute the task directly (any tool, any action); record each meaningful step to {run_dir}/evidence/companion-log.md
-S_COMPANION_SEAL — `run complete`, summarize outcome, offer optional promote to spec/knowhow
+S_PARSE    — Parse arguments, extract flags, detect mode
+S_STATE    — Read project state, infer lifecycle_position
+S_RANK     — Score candidates, assess complexity, determine channel
+S_LIST     — --list mode: grouped display of all steps
+S_PRESENT  — Show top pick + alternatives + reasoning + channel verdict
+S_CONFIRM  — [@ask] AskUserQuestion for confirmation (skipped by -y)
+S_EXECUTE  — Run prepare + create for selected single step
+S_FALLBACK — Intent empty after clarification
 </states>
 
 <transitions>
 
 S_PARSE:
-  → S_NOTE           WHEN: --note flag
-  → S_PROMOTE        WHEN: --promote flag
-  → S_COMPANION_CTX  WHEN: --lite flag
-  → S_CHAIN_CREATE   WHEN: --chain flag
-  → S_LIST           WHEN: --list flag
-  → S_CHAIN_CONT     WHEN: active manual-engine chain has pending steps AND intent empty/"continue"
-  → S_STATE          WHEN: intent present / "continue"/"next"/"go"
-  → S_PARSE          WHEN: no intent (1 clarify round via [@ask] AskUserQuestion)
-  → S_FALLBACK       WHEN: clarification empty
-
-S_NOTE:
-  → END          DO: append entry to active run's `{run_dir}/evidence/companion-log.md`
-
-S_PROMOTE:
-  → END          DO: review outputs → suggest `/maestro-spec add ...` / `/maestro-manage knowledge capture ...` after explicit user confirmation
-
-S_CHAIN_CREATE:
-  → S_CHAIN_STEP WHEN: user confirms the chain definition    DO: A_CREATE_CHAIN
-  → END          WHEN: user cancels
-
-S_CHAIN_CONT:
-  → S_CHAIN_STEP WHEN: pending steps remain    DO: show chain progress (step k/n)
-  → END          WHEN: chain exhausted → completion summary
-
-S_CHAIN_STEP:
-  → S_CHAIN_STEP WHEN: step completed AND user confirms "Continue next step"
-  → END          WHEN: user stops / -y single step done / chain exhausted
-  DO: A_STEP_CHAIN
+  → S_LIST     WHEN: --list flag
+  → S_STATE    WHEN: intent present / "continue"/"next"/"go" / --lite / --run
+  → S_PARSE    WHEN: no intent (1 clarify round via [@ask] AskUserQuestion)
+  → S_FALLBACK WHEN: clarification empty
 
 S_STATE:
-  → S_RANK       DO: A_INFER_LIFECYCLE
+  → S_RANK     DO: A_INFER_LIFECYCLE
 
 S_RANK:
-  → S_COMPANION_CTX  WHEN: complexity == lightweight AND no --run override    DO: A_SCORE_CANDIDATES
-  → S_PRESENT        WHEN: complexity >= standard OR multi_step               DO: A_SCORE_CANDIDATES
+  → S_PRESENT  DO: A_SCORE_CANDIDATES (channel verdict embedded in presentation)
 
 S_LIST:
-  → END          DO: group steps by cluster, display with descriptions
+  → END        DO: group steps by cluster, display with descriptions
 
 S_PRESENT:
-  → END          WHEN: target_kind == retained-command    DO: display exact slash command; suggest only, NEVER auto-execute (`-y` does not override)
-  → END          WHEN: --dry-run OR --suggest
-  → S_EXECUTE    WHEN: -y
-  → S_CONFIRM    WHEN: interactive
+  → END        WHEN: target_kind == retained-command    DO: display exact slash command; suggest only
+  → END        WHEN: --dry-run OR --suggest             DO: display recommendation + channel
+  → S_EXECUTE  WHEN: -y AND channel == standard
+  → END        WHEN: -y AND channel == companion        DO: output `/maestro-companion "<intent>" -y`
+  → END        WHEN: -y AND channel == multi-step       DO: output `/maestro "<intent>" -y`
+  → S_CONFIRM  WHEN: interactive
 
 S_CONFIRM:
-  → S_EXECUTE      WHEN: user confirms / selects alternative / modifies args
-  → S_CHAIN_CREATE WHEN: multi_step AND user picks "Create a manual chain"
-  → END            WHEN: user cancels
+  → S_EXECUTE  WHEN: user confirms standard step / selects alternative / modifies args
+  → END        WHEN: user picks companion → output `/maestro-companion "<intent>"`
+  → END        WHEN: user picks multi-step → output `/maestro "<intent>"`
+  → END        WHEN: user cancels
 
 S_EXECUTE:
-  → END          DO: A_EXECUTE_STEP
+  → END        DO: A_EXECUTE_STEP
 
 S_FALLBACK:
-  → END          DO: raise E001
-
---- Companion sub-workflow transitions ---
-
-S_COMPANION_CTX:
-  → S_COMPANION_EXEC   DO: A_COMPANION_CTX (run create, load context, init evidence log)
-
-S_COMPANION_EXEC:
-  → S_COMPANION_EXEC   WHEN: task has more actions remaining    DO: execute next action + A_COMPANION_RECORD
-  → S_COMPANION_SEAL   WHEN: task complete                      DO: A_COMPANION_RECORD (final entry)
-
-S_COMPANION_SEAL:
-  → END          DO: A_COMPANION_SEAL (run complete + summarize + optional promote offer)
+  → END        DO: raise E001
 
 </transitions>
 
@@ -221,7 +169,33 @@ init → {brainstorm | blueprint | analyze-macro} → roadmap
 | Recent activity avoidance | Low | Recently completed steps demoted |
 | Precondition unmet | Exclude | Remove from pool entirely |
 
-**Multi-step detection:** intent matches keywords of ≥2 distinct steps in the routing table → set `multi_step`. Candidate pool unchanged — orchestrators stay excluded (invariant 2); the flag drives the advisory banner + `Channel: multi-step` in S_PRESENT, offering three continuation modes: a user-confirmed manual-engine chain (S_CHAIN_CREATE), stepwise without a chain, or handoff to /maestro.
+**Complexity assessment (determines channel):**
+
+| Complexity | Channel | Criteria | Engine hint |
+|-----------|---------|----------|-------------|
+| Lightweight | `/maestro-companion` | ≤1-2 files, no typed artifact handoff, no gate value, quick lookup/fix/exploration | — |
+| Standard | Single step (one run) | Produces typed artifacts, needs downstream handoff or gate checks | — |
+| Multi-step (manual) | `/maestro` | Intent spans ≥2 distinct steps, user wants stepwise control, no auto-retry needed | `--engine manual` |
+| Multi-step (orchestrated) | `/maestro` | Intent needs closed-loop: decision nodes, drift analysis, auto-retry, decomposition | `--engine ralph` (default) |
+
+**Routing preference: prefer Standard over Lightweight.** When uncertain, create a run. A run with a thin report is better than a missed artifact. Companion is chosen only when there is clearly no handoff value.
+
+**Lightweight signals (all must hold):**
+- Intent involves ≤1-2 files or is a pure lookup/question
+- No typed artifact needs to be consumed by a downstream step
+- No gate/verdict needs to be recorded for lifecycle tracking
+- Task can complete in a single conversational turn or a few tool calls
+
+**Multi-step detection:** intent matches keywords of ≥2 distinct steps in the routing table → set `multi_step`.
+
+**Engine hint logic (for /maestro routing):**
+- Manual: user explicitly asks for stepwise/per-step control, or intent is a simple sequential pipeline without quality gates
+- Ralph (default): intent implies closed-loop quality (broad refactoring, migration, "end-to-end", "full lifecycle"), or needs decision gates/drift analysis
+
+**Override flags:**
+- `--lite` forces Companion channel regardless of complexity assessment
+- `--run` forces Standard channel (single run) regardless of complexity assessment
+- Neither flag: auto-detect from the signals above; verdict shown to user before routing
 
 **Intent routing table:** first-tier rows enter the executable candidate pool. Retained-command rows are advisory routes: show the exact slash command and stop.
 
@@ -254,6 +228,8 @@ init → {brainstorm | blueprint | analyze-macro} → roadmap
 | UI design / design system / polish / impeccable | `/maestro-impeccable "<intent>" ...` (retained command) | Suggest exact slash command; user invokes it |
 | harvest / extract knowledge | `/maestro-manage knowledge harvest ...` (retained command) | Suggest exact slash command; user invokes it |
 | fork / parallel dev | `/maestro-fork ...` (retained command) | Suggest exact slash command; user invokes it |
+| note / record observation | `/maestro-companion --note "<text>"` (companion utility) | Route to companion note mode |
+| promote / distill insights | `/maestro-companion --promote` (companion utility) | Route to companion promote mode |
 
 **Auxiliary workflow clusters:**
 
@@ -265,7 +241,7 @@ init → {brainstorm | blueprint | analyze-macro} → roadmap
 
 ### A_EXECUTE_STEP
 
-Non-chain path (standalone single run). Steps inside a manual-engine chain advance via A_STEP_CHAIN instead — never mix the two for one step.
+Single-run path only. Multi-step execution is handled by `/maestro`.
 
 For first-tier steps (those with prepare/ + workflows/ files):
 
@@ -290,150 +266,29 @@ maestro run brief <run_id> --workflow-root .
 maestro run complete <run_id> --workflow-root .
 ```
 
-After `run complete`: re-infer lifecycle and surface the natural next step as a continuation hint — stepwise multi-step work proceeds by re-invoking `/maestro-next`.
+After `run complete`: re-infer lifecycle and surface the natural next step as a continuation hint — stepwise multi-step work proceeds by re-invoking `/maestro-next` or `/maestro -c`.
 
 For retained commands, output the exact slash command as a suggest-only result. Do not execute it, including under `-y`; the user invokes it explicitly in a subsequent message.
-
-### A_CREATE_CHAIN
-
-1. Compose 2-5 steps from the routing-table hits, ordered by the lifecycle main line; `command` values limited to first-tier steps.
-2. Present the chain for confirmation (ordered step list + intent). User can drop/reorder steps before creation.
-3. Create the session — chain definition JSON via stdin, slug per run-mode convention (`YYYYMMDD-next-<topic>`, ASCII ≤64):
-
-```bash
-echo '{"intent":"<phrase>","steps":[{"command":"plan"},{"command":"execute"},{"command":"test"}]}' \
-  | maestro session create YYYYMMDD-next-<topic> --chain-file - --engine manual --intent "<phrase>" --workflow-root .
-```
-
-4. Capture the returned `session_id`. Leave the lease unset — interactive sessions stay unlocked. Proceed to S_CHAIN_STEP.
-
-### A_STEP_CHAIN
-
-1. `maestro run next --session <session_id> --workflow-root .` — the birth packet carries `run_id` / `run_dir` / `upstream`. NEVER call `run create` for this step (birth-packet red line, run-mode.md).
-2. Present the step + chain progress (`step k/n`) → [@ask] AskUserQuestion: **Execute** / **Skip this step** (`maestro session chain skip`) / **Modify step** (`maestro session chain replace`) / **Stop chain**.
-3. Execute the workflow (re-attach context via `maestro run brief <run_id>` when needed), then `maestro run complete <run_id> --verdict done` — the chain step advances atomically.
-4. Pending steps remain → offer **Continue next step** (loop to 1) or stop with a continuation hint (`/maestro-next` resumes the chain). With `-y`: execute the current step only, then stop with the hint — never walk the chain unattended.
-5. No pending steps → chain completion summary (steps done/skipped, artifact paths).
-
-### A_COMPANION_CTX
-
-Entry point for the companion channel. Minimal-run: create + complete only, skip prepare/brief/check.
-
-1. **Create minimal run** (chainless single-step session):
-   ```bash
-   maestro run create companion --session YYYYMMDD-companion-<topic> --intent "<intent>" --workflow-root .
-   ```
-   Returns: `run_id`, `run_dir`. No chain, no contract enforcement, no gates.
-
-2. **Load context** (best-effort, non-blocking):
-   ```bash
-   maestro search "<intent keywords>" --type spec --type knowhow
-   ```
-   Load top 2-3 relevant entries. If nothing found, proceed without context.
-
-3. **Initialize evidence log** at `{run_dir}/evidence/companion-log.md`:
-   ```markdown
-   # Companion Log: {intent summary}
-   > run_id: {run_id} | session: {session_id}
-
-   ## Context
-   - {spec/knowhow entries loaded, or "none"}
-
-   ## Work Log
-   ```
-
-4. Proceed to S_COMPANION_EXEC.
-
-### A_COMPANION_RECORD
-
-Append a timestamped entry to `{run_dir}/evidence/companion-log.md` under `## Work Log`. Called after each meaningful action during S_COMPANION_EXEC.
-
-**Entry format:**
-```markdown
-### {HH:MM} — {action summary}
-{what was done, what was found, what changed}
-{files touched: path1, path2 (if any)}
-```
-
-**Recording rules:**
-- One entry per meaningful action (file edit, command run, discovery, decision)
-- Trivial reads (single file lookup) can be batched into one entry
-- Never overwrite or reorder existing entries (invariant 7 applies)
-- Keep entries concise: 1-5 lines each, focus on outcome not process
-- Evidence dir is non-formal: never enters gates or artifact registry
-
-### A_COMPANION_SEAL
-
-Wrap up the companion run:
-
-1. **Append outcome** to `{run_dir}/evidence/companion-log.md`:
-   ```markdown
-   ## Outcome
-   **Status:** done | partial
-   **Summary:** {1-2 sentence result}
-   **Artifacts:** {files created/modified, or "none"}
-   **Follow-up:** {suggested next step if any, or "none"}
-   ```
-
-2. **Complete the run**:
-   ```bash
-   maestro run complete <run_id> --verdict done --workflow-root .
-   ```
-
-3. **Optional promote offer** — if the work produced reusable insights (patterns, decisions, pitfalls):
-   - Suggest: `/maestro-spec add <category> "title" "content"` or `/manage-knowhow-capture`
-   - Only suggest, never auto-execute (invariant 8)
-
-4. Display completion summary to user:
-   ```
-   Companion done. Run: {run_id} | Evidence: {run_dir}/evidence/companion-log.md
-   Outcome: {summary}
-   {promote suggestion if applicable}
-   ```
 
 </actions>
 
 </state_machine>
 
-<complexity_routing>
-
-### Three-way complexity routing
-
-Assess task complexity at S_RANK. The verdict determines the execution channel:
-
-| Complexity | Channel | Criteria | Action |
-|-----------|---------|----------|--------|
-| Lightweight | Companion (minimal-run) | ≤1-2 files, no typed artifact handoff, no gate value, quick lookup/fix/exploration | Execute directly with any tools; record to `{run_dir}/evidence/` |
-| Standard | Single step (one run) | Produces typed artifacts, needs downstream handoff or gate checks | prepare → create → brief → complete |
-| Multi-step | Chain or stepwise | Intent spans ≥2 distinct steps | User-confirmed manual-engine chain (S_CHAIN_CREATE), stepwise, or hand off to `/maestro` |
-
-**Companion channel capabilities:** The companion channel can do anything the LLM can do — read/write files, run commands, search code, edit code. It is NOT limited to knowledge loading. Protocol overhead is minimal: one `run create` + one `run complete`, with continuous recording to `{run_dir}/evidence/companion-log.md` (invariant 11). This preserves the original companion value: small tasks don't carry full lifecycle cost (no prepare/brief/check/gates).
-
-**Routing preference: prefer Standard over Lightweight.** When uncertain, create a run. A run with a thin report is better than a missed artifact. Companion is chosen only when there is clearly no handoff value.
-
-**Lightweight signals (all must hold):**
-- Intent involves ≤1-2 files or is a pure lookup/question
-- No typed artifact needs to be consumed by a downstream step
-- No gate/verdict needs to be recorded for lifecycle tracking
-- Task can complete in a single conversational turn or a few tool calls
-
-**Override flags:**
-- `--lite` forces Companion channel regardless of complexity assessment
-- `--run` forces Standard channel (single run) regardless of complexity assessment
-- Neither flag: auto-detect from the signals above; verdict shown to user before execution
-
-</complexity_routing>
-
 <presentation>
 
 ### --list mode
 
-Group all 15 first-tier steps by cluster + show retained commands separately with their slash invocation form. Do not list `team-*` or `maestro-odyssey`:
+Group all 15 first-tier steps by cluster + show channels and retained commands:
 
 ```
 Core Chain:  analyze → plan → execute → verify
 Quality:     review, test, auto-test, debug, retrospective
 Discovery:   grill, collab, brainstorm, blueprint, roadmap, quick
+
+Channels:
+  /maestro-companion       — lightweight tasks (≤1-2 files, no artifact handoff)
+  /maestro --engine manual — multi-step stepwise (per-step confirm, no gates)
+  /maestro                 — multi-step orchestrated (decision nodes, drift, auto-retry)
 
 Retained Commands (manual): /quality-refactor, /maestro-manage ..., /maestro-learn ..., /maestro-spec ..., /maestro-impeccable ...
 ```
@@ -441,16 +296,18 @@ Retained Commands (manual): /quality-refactor, /maestro-manage ..., /maestro-lea
 ### Normal mode
 
 ```
-[⚠ Multi-step intent — create a manual chain, take just the first step, or hand off to /maestro "<intent>"]   ← only when multi_step
+[⚠ Multi-step intent detected]   ← only when multi_step
 
 Target: /<step-name>
-Kind: first-tier step | retained command
+Kind: first-tier step | retained command | companion | multi-step
   <description>
   Reason: <match rule + lifecycle position>
-  Channel: companion (minimal-run) | single run | multi-step (stepwise / chain)
+  Channel: /maestro-companion | single run | /maestro (manual) | /maestro (ralph)
   Invocation:
-    first-tier step → Confirm to execute through Maestro Run lifecycle
-    retained command → Run manually: /<command> <subcommand> <args> (suggest only; not executed now)
+    companion       → /maestro-companion "<intent>"
+    single run      → Confirm to execute through Maestro Run lifecycle
+    multi-step      → /maestro "<intent>" (stepwise or orchestrated)
+    retained        → Run manually: /<command> <subcommand> <args> (suggest only)
 
 Alternatives:
   2. /<alt-1> — <description> — <invocation method>
@@ -459,15 +316,26 @@ Alternatives:
 Args: <args>
 ```
 
-When `multi_step`: the executable recommendation stays the best first step, and the confirmation menu becomes three-way — **Create a manual chain** (Recommended; → S_CHAIN_CREATE), **Just this step** (stepwise; lifecycle inference recommends the follow-up), **Hand off to /maestro**.
+**Confirmation menu varies by channel verdict:**
 
-`--dry-run` / `--suggest`: display and stop.
-`-y`: execute immediately.
-Otherwise: [@ask] AskUserQuestion (single-select, header: "Confirm"):
+When `channel == companion`:
+- **Run as companion** (Recommended) → `/maestro-companion "<intent>"`
+- **Upgrade to standard run** → S_EXECUTE
+- **Cancel**
+
+When `channel == standard`:
 - **Execute recommendation** (Recommended)
 - **Choose alternative**
 - **Modify arguments**
 - **Cancel**
+
+When `multi_step`:
+- **Hand off to /maestro** (Recommended) → `/maestro "<intent>"`
+- **Just this step** (execute only the top pick as single run)
+- **Cancel**
+
+`--dry-run` / `--suggest`: display and stop.
+`-y`: execute/route immediately per channel.
 
 </presentation>
 
@@ -478,9 +346,7 @@ Otherwise: [@ask] AskUserQuestion (single-select, header: "Confirm"):
 | E001 | error | Intent empty after clarification | Provide intent or use --list |
 | E002 | error | No steps found in registry | Check prepare/ and workflows/ directories |
 | E003 | error | Selected step has no prepare/workflow files | Verify step installation |
-| E004 | error | Multiple running manual chains, ambiguous resolution | Pass --session <id> explicitly (`run next` lists candidates) |
 | W001 | warning | Top-1 and top-2 scores too close | Force show top 3 for user decision |
-| W002 | warning | No good match for intent | Suggest /maestro or /maestro-ralph for orchestration |
-| W003 | warning | Chain step skipped or replaced | Recorded in chain (status=skipped); remaining steps unaffected |
+| W002 | warning | No good match for intent | Suggest /maestro for orchestration |
 
 </error_codes>
