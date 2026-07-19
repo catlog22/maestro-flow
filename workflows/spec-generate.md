@@ -379,9 +379,9 @@ MANDATORY: apply ~/.maestro/workflows/roadmap-common.md **Roadmap Template** for
 
 | Option | Action |
 |--------|--------|
-| Initialize project | Skill({ skill: "maestro-init" }) |
+| Initialize project | Recommend `/maestro-init` |
 | Plan first phase | step `plan 1` |
-| Create issues | Generate issues per phase via Skill({ skill: "maestro-manage", args: "issue create" }) |
+| Create issues | Recommend `/maestro-manage issue create ...` per phase |
 | Export only | Spec + roadmap complete, no further action |
 
 ### Step 12: Final Report

@@ -99,7 +99,7 @@ Display: changed files, affected components/features/requirements, specs updated
 
 | Code | Meaning |
 |------|---------|
-| E001 | .workflow/ not initialized — suggest running Skill({ skill: "maestro-init" }) first |
+| E001 | .workflow/ not initialized — suggest `/maestro-init` first |
 | W001 | No changes detected since last sync — report clean state, skip updates |
 
 | Error | Action |

@@ -1,5 +1,6 @@
 ---
 name: maestro-learn
+disable-model-invocation: true
 description: User-invoked learning toolkit — guided reading, investigation, pattern extraction, or second opinions. Manual `/maestro-learn` only; NEVER auto-invoke for code exploration or analysis — route those intents to the analyze step via /maestro-next
 argument-hint: "follow|investigate|decompose|consult [args...]"
 allowed-tools:
@@ -381,7 +382,7 @@ Arguments — target path/module and optional flags.
 
 **Flags**:
 - `--patterns <list>`: Comma-separated pattern names to look for (default: detect all)
-- `--save-spec`: `[@skill] Skill("maestro-spec")` (add subcommand) for each new pattern
+- `--save-spec`: recommend `/maestro-spec add ...` for each new pattern
 - `--save-wiki`: create wiki note per dimension group
 - `-y`: Skip confirmation prompts for knowhow/spec writes
 
@@ -515,7 +516,7 @@ Arguments — target and optional mode flag.
 - `--mode review|challenge|consult` (default: review)
 - `-y`: Skip confirmation prompts for knowhow/spec writes
 
-**Pre-load** (optional): `[@skill] Skill("maestro-spec")` (load subcommand) for conventions + `maestro search "<target topic>"` for related entries.
+**Pre-load** (optional): recommend `/maestro-spec load ...` for conventions + `maestro search "<target topic>"` for related entries.
 
 **Output**: `.workflow/knowhow/KNW-opinion-{slug}-{YYYY-MM-DD}.md`
 

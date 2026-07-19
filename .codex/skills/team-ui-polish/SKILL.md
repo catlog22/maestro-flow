@@ -1,5 +1,6 @@
 ---
 name: team-ui-polish
+disable-model-invocation: true
 description: Unified team skill for UI polish. Auto-discover and fix UI design
   issues using Impeccable design standards. Anti-AI-slop detection,
   color/typography/spacing quality, motion, interaction states, visual

@@ -1,5 +1,6 @@
 ---
 name: workflow-skill-designer
+disable-model-invocation: true
 description: Meta-skill for designing orchestrator+phases structured workflow
   skills. Creates SKILL.md coordinator with progressive phase loading, TodoWrite
   patterns, and data flow. Triggers on "design workflow skill", "create workflow

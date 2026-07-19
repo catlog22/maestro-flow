@@ -1,5 +1,6 @@
 ---
 name: team-frontend-debug
+disable-model-invocation: true
 description: Frontend debugging team using Chrome DevTools MCP. Dual-mode —
   feature-list testing or bug-report debugging. Triggers on
   "team-frontend-debug", "frontend debug".

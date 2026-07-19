@@ -1,5 +1,6 @@
 ---
 name: maestro-overlay
+disable-model-invocation: true
 description: Create or edit command overlays from natural language, or auto-generate them from workflow deficiency signals
 argument-hint: "<intent> | --amend [--scan] [--dry-run] [-y]"
 allowed-tools:
@@ -113,7 +114,7 @@ Use [@ask] AskUserQuestion to confirm:
 
 ### 2.5. Skill chain configuration
 
-After confirming the injection point, ask whether this overlay should chain to another skill upon completion. This enables the overlay's injected content to hand off to a skill via [@ask] AskUserQuestion at runtime, using `[@skill] Skill({ skill: "...", args: "..." })` syntax.
+After confirming the injection point, ask whether this overlay should recommend another retained command upon completion. Emit its exact slash command after confirmation. `team-*` and `maestro-odyssey` are not valid handoff targets.
 
 Use [@ask] AskUserQuestion:
 - **"No chain"** — standard overlay, no skill handoff
@@ -169,7 +170,7 @@ On user selection:
 
 Handoff rules:
 - Always include a **"Skip"** option — the user can always decline the chain
-- Use `[@skill] Skill({ skill: "<name>", args: "..." })` syntax for handoff calls
+- Use an exact slash command for confirmed retained-command handoffs
 - Mark handoff heading with `(overlay)` tag
 - Support runtime variable placeholders: `{phase}`, `{description}`, `{session_id}`
 - Keep handoff block under 10 lines of markdown
@@ -315,7 +316,7 @@ Default mode:
 - [ ] Re-running `maestro overlay apply` produces no file changes (idempotent)
 - [ ] User shown the report with target list and removal instructions
 - [ ] Injection point preview shown (with existing overlays + `>>>` marker) and confirmed before drafting
-- [ ] If chain configured, `content` includes Skill Handoff block with [@ask] AskUserQuestion + Skip option + `[@skill] Skill()` calls
+- [ ] If chain configured, `content` includes a retained-command recommendation with [@ask] AskUserQuestion + Skip option
 
 Amend mode:
 - [ ] Signals classified: command deficiency vs code bug

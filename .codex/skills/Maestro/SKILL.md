@@ -1,5 +1,6 @@
 ---
 name: maestro
+disable-model-invocation: false
 description: Auto-route intent to optimal command chain
 argument-hint: <intent> [-y] [-c] [--dry-run] [--super]
 allowed-tools:

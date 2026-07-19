@@ -1,5 +1,6 @@
 ---
 name: scholar-publish
+disable-model-invocation: true
 description: Post-acceptance conference preparation workflow covering presentation slides, academic posters, and promotion content. Triggers on "scholar publish", "conference preparation", "prepare presentation", "create poster", "write promotion", "post-acceptance".
 allowed-tools: AskUserQuestion(*), TodoWrite(*), Read(*), Write(*), Edit(*), Bash(*), Glob(*), Grep(*)
 session-mode: none

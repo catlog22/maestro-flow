@@ -1,5 +1,6 @@
 ---
 name: team-tech-debt
+disable-model-invocation: true
 description: Unified team skill for tech debt identification and remediation.
   Scans codebase for tech debt, assesses severity, plans and executes fixes with
   validation. Uses team-worker agent architecture with roles/ for domain logic.

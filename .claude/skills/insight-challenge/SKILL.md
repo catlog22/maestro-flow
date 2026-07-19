@@ -1,5 +1,6 @@
 ---
 name: insight-challenge
+disable-model-invocation: true
 description: "Adversarial review of code quality findings. Challenges insights with counter-evidence, verifies claims against source code, and produces structured verdicts. Triggers on 'insight-challenge', 'challenge finding', '审查发现'."
 allowed-tools: Read(*), Glob(*), Grep(*), Bash(*), Write(*)
 session-mode: none

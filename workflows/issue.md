@@ -182,8 +182,8 @@ If no issues found:
 ```
 No issues found{with applied filters}.
 
-Create one: Skill({ skill: "maestro-manage", args: "issue create --title \"...\"" })
-Discover issues: Skill({ skill: "maestro-manage", args: "issue discover" })
+Create one: recommend `/maestro-manage issue create --title "..."`
+Discover issues: recommend `/maestro-manage issue discover`
 ```
 
 ---
@@ -338,4 +338,3 @@ Suggest: status {ISSUE_ID}, update --status in_progress.
 - **Storage**: `.workflow/issues/issues.jsonl` (active), `.workflow/issues/issue-history.jsonl` (closed)
 - **Format**: One JSON object per line (JSONL), append-friendly
 - **ID scheme**: `ISS-YYYYMMDD-NNN` (NNN auto-incremented per day)
-

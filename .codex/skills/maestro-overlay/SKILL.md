@@ -1,5 +1,6 @@
 ---
 name: maestro-overlay
+disable-model-invocation: true
 description: Create or edit command overlays from natural language, or
   auto-generate them from workflow deficiency signals
 argument-hint: <intent> | --amend [description] [--from-verify <dir>]

@@ -1,5 +1,6 @@
 ---
 name: prompt-generator
+disable-model-invocation: true
 description: Generate or convert Claude Code prompt files — command orchestrators, skill files, agent role definitions, or style conversion of existing files. Follows GSD-style content separation with built-in quality gates. Triggers on "create command", "new command", "create skill", "new skill", "create agent", "new agent", "convert command", "convert skill", "convert agent", "prompt generator", "优化".
 allowed-tools: Read, Write, Edit, Bash, Glob, AskUserQuestion
 session-mode: none

@@ -1,5 +1,6 @@
 ---
 name: scholar-review
+disable-model-invocation: true
 description: Systematic academic paper review workflow covering self-review
   before submission and rebuttal writing after receiving reviewer feedback.
   Triggers on "review paper", "self-review", "write rebuttal", "respond to

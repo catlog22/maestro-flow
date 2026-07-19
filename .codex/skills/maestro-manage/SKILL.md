@@ -1,5 +1,6 @@
 ---
 name: maestro-manage
+disable-model-invocation: true
 description: Project management hub — status, issues, knowledge stores, and
   drift/rebuild sync. knowledge 子命令覆盖 capture（knowhow 沉淀）/ audit（知识审计）/ harvest
   / wiki / domain；约束类规则走 /maestro-spec add。Triggers on "项目状态", "issue 管理",

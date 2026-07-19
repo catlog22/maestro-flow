@@ -1,5 +1,6 @@
 ---
 name: quality-refactor
+disable-model-invocation: true
 description: Use when accumulated tech debt needs systematic identification and
   safe reduction
 argument-hint:

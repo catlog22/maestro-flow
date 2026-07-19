@@ -8,7 +8,7 @@
 > 本文件是 `/maestro` 命令体（A_CLASSIFY_INTENT）消费的**语义目录**：意图 → task_type → chain。
 > 执行流程（状态机、session 创建、`Agent(ralph-executor)` 派发、决策评估、compose/play 模板系统）全部在命令体内定义，本文件不含执行语义。
 >
-> **cmd 记法**：裸名称（`plan`、`execute`、`review`…）= first-tier step，来自 prepare/workflows 步骤注册表（build 期经 `maestro ralph skills --steps` 预校验，执行期由 `run next` 的 `resolveStepContent()` 加载）；`manage X` / `spec X` = dispatcher 命令 + 子命令参数；`maestro-*`、`quality-refactor`、`team-*` = 独立 command/skill 名。
+> **cmd 记法**：裸名称（`plan`、`execute`、`review`…）= first-tier step；`maestro-*` 与 `quality-refactor` = 独立 command 名。`team-*` 与 `maestro-odyssey` 是用户手动入口，明确排除在本目录的分类和 chain routing 之外。
 
 ## Intent → task_type
 
@@ -70,12 +70,6 @@ Directly match user intent to the best `task_type` (maps to chain in chainMap). 
 | `issue_analyze` | Analyze a specific issue |
 | `issue_plan` | Plan fix for an issue |
 | `issue_execute` | Fix issue end-to-end (auto-upgrades to issue-full) |
-| `team_coordinate` | Team multi-agent coordination (general) |
-| `team_review` | Team code review |
-| `team_test` | Team testing |
-| `team_qa` | Team QA, debugging |
-| `team_tech_debt` | Team tech debt remediation |
-| `team_lifecycle` | Team full lifecycle (plan+dev+test+review) |
 | `full-lifecycle` | Complete phase: plan→execute→review→test→session-seal |
 | `grill` | Stress-test a plan/idea against codebase reality (Socratic; `-y` → Auto mode code-answers, stage NOT skipped) |
 | `blueprint` | Formal spec package — 7-phase spec-generate |
@@ -188,16 +182,6 @@ const chainMap = {
   'fork':               [{ cmd: 'maestro-fork', args: '-m {milestone_num}' }],
   'merge':              [{ cmd: 'maestro-merge', args: '-m {milestone_num}' }],
 
-  // ── Team skills ──
-  'team_lifecycle':     [{ cmd: 'team-lifecycle-v4', args: '"{description}"' }],
-  'team_coordinate':    [{ cmd: 'team-coordinate', args: '"{description}"' }],
-  'team_design':        [{ cmd: 'team-coordinate', args: '"{description}"' }],
-  'team_execute':       [{ cmd: 'team-executor', args: '"{description}"' }],
-  'team_qa':            [{ cmd: 'team-quality-assurance', args: '"{description}"' }],
-  'team_test':          [{ cmd: 'team-testing', args: '"{description}"' }],
-  'team_review':        [{ cmd: 'team-review', args: '"{description}"' }],
-  'team_tech_debt':     [{ cmd: 'team-tech-debt', args: '"{description}"' }],
-
   // ── Multi-step chains ──
   'full-lifecycle':       [{ cmd: 'plan', args: '{phase}' }, { cmd: 'execute', args: '{phase}' }, { cmd: 'review', args: '{phase}' }, { cmd: 'test', args: '{phase}' }, { cmd: 'maestro-session-seal' }, { cmd: 'harvest', args: '--auto' }],
   'spec-driven':          [{ cmd: 'maestro-init' }, { cmd: 'roadmap', args: '--mode full "{description}"' }, { cmd: 'plan', args: '{phase}' }, { cmd: 'execute', args: '{phase}' }, { cmd: 'harvest', args: '--auto' }],
@@ -298,7 +282,6 @@ detectNextAction(state):
 | `"优化界面交互"` | impeccable_improve | maestro-impeccable --chain improve |
 | `"refactor auth module"` | refactor | quality-refactor "auth module" |
 | `"复盘 phase 2"` | retrospective | retrospective 2 |
-| `"team review code"` | team_review | team-review |
 | `"next phase"` | milestone-close | maestro-session-seal |
 | `-y "implement X"` | execute | execute (auto) |
 | `"从需求开始做完整个项目"` | spec-driven | init→spec→plan→execute |

@@ -1,5 +1,6 @@
 ---
 name: team-arch-opt
+disable-model-invocation: true
 description: Unified team skill for architecture optimization. Uses team-worker
   agent architecture with role directories for domain logic. Coordinator
   orchestrates pipeline, workers are team-worker agents. Triggers on "team

@@ -1,5 +1,6 @@
 ---
 name: team-ultra-analyze
+disable-model-invocation: true
 description: Deep collaborative analysis team skill. Multi-role investigation with coordinator-driven synthesis. Triggers on "team ultra-analyze", "team analyze".
 allowed-tools: TeamCreate(*), TeamDelete(*), SendMessage(*), TaskCreate(*), TaskUpdate(*), TaskList(*), TaskGet(*), Agent(*), AskUserQuestion(*), Read(*), Write(*), Edit(*), Bash(*), Glob(*), Grep(*), mcp__maestro__team_msg(*)
 session-mode: run

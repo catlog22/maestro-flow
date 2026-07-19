@@ -1,5 +1,6 @@
 ---
 name: maestro-init
+disable-model-invocation: true
 description: Initialize project with auto state detection
 argument-hint: "[-y] [--from <source>] [--from-brainstorm SESSION-ID]"
 allowed-tools:

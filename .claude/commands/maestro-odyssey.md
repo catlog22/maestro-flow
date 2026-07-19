@@ -1,5 +1,6 @@
 ---
 name: maestro-odyssey
+disable-model-invocation: true
 description: "Long-running iterative cycle — one entry, five modes (debug|improve|planex|review|ui). Shared archaeology/audit → fix → verify → generalize → discover → persist skeleton with mode-specific dimensions. User-invoked campaign entry; single-step fixes route via /maestro-next"
 argument-hint: "<intent> --mode debug|improve|planex|review|ui [--auto] [-y] [-c]"
 allowed-tools:

@@ -1,5 +1,6 @@
 ---
 name: skill-tuning
+disable-model-invocation: true
 description: Universal skill diagnosis and optimization tool. Detect and fix skill execution issues including context explosion, long-tail forgetting, data flow disruption, and agent coordination failures. Supports Agy CLI for deep analysis. Triggers on "skill tuning", "tune skill", "skill diagnosis", "optimize skill", "skill debug".
 allowed-tools: Agent, AskUserQuestion, Read, Write, Bash, Glob, Grep, 
 session-mode: run

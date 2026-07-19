@@ -1,5 +1,6 @@
 ---
 name: team-motion-design
+disable-model-invocation: true
 description: Unified team skill for motion design. Animation token systems,
   scroll choreography, GPU-accelerated transforms, reduced-motion fallback. Uses
   team-worker agent architecture. Triggers on "team motion design", "animation

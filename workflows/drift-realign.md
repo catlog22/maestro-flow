@@ -295,7 +295,7 @@ for each actionable finding:
 | `skip` | 写 drift-log.jsonl 一条 action=skipped 记录（不标记 reviewed，下次 re-run 重现）|
 | `update` | 在目标文件头部插入 TODO 注释块：`<!-- DRIFT-TODO: {update_hint} (DFT-{id}, {date}) -->` |
 | `archive` | 移动文件到 `.trash/{timestamp}/` + 更新 state.json 引用 |
-| `rebuild` | 收集 rebuild 目标；全部其他 action 完成后：通过 `Skill()` 自动调用 `/maestro-manage sync codebase --full` |
+| `rebuild` | 收集 rebuild 目标；全部其他 action 完成后推荐 `/maestro-manage sync codebase --full` |
 
 rebuild 后处理：
 - 若 W001 或重大结构变更 → MUST run `/maestro-manage sync rebuild`

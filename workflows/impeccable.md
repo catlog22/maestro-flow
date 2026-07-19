@@ -62,7 +62,7 @@ Map sub-command to knowhow type:
 
 ### Conversation-source commands (all others)
 
-Summarize from the conversation context that is available after Skill() returns:
+Summarize from the conversation context available after the retained command returns:
 - **What decisions were made** (color strategy, font choice, spacing system, etc.)
 - **What values were chosen** (OKLCH values, scale ratios, timing curves, etc.)
 - **Why** (rationale, constraints, user requirements)

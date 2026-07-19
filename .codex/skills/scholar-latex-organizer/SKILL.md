@@ -1,5 +1,6 @@
 ---
 name: scholar-latex-organizer
+disable-model-invocation: true
 description: Organize messy conference LaTeX template .zip files into clean
   Overleaf-ready structure. Extracts, analyzes, cleans up, and generates README
   with submission requirements. Triggers on "organize LaTeX template", "clean up

@@ -1,5 +1,6 @@
 ---
 name: team-planex
+disable-model-invocation: true
 description: Unified team skill for plan-and-execute pipeline. Pure router — coordinator always. Beat model is coordinator-only in monitor.md. Triggers on "team planex".
 allowed-tools: Agent(*), TaskCreate(*), TaskList(*), TaskGet(*), TaskUpdate(*), TeamCreate(*), TeamDelete(*), SendMessage(*), AskUserQuestion(*), Read(*), Write(*), Edit(*), Bash(*), Glob(*), Grep(*), mcp__maestro__team_msg(*)
 session-mode: run

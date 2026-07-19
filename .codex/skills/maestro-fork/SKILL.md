@@ -1,5 +1,6 @@
 ---
 name: maestro-fork
+disable-model-invocation: true
 description: Create or sync session worktree for parallel dev
 argument-hint: --session <session_id> [--base <branch>] [--sync]
 allowed-tools:

@@ -1,5 +1,6 @@
 ---
 name: maestro-merge
+disable-model-invocation: true
 description: Merge session worktree branch back to main
 argument-hint: "--session <session_id> [--force] [--dry-run] [--no-cleanup] [--continue]"
 allowed-tools:
@@ -69,13 +70,13 @@ options:
     description: "不记录，直接完成"
 ```
 
-User selects "记录经验" → prompt for title/insight, then persist via `[@skill] Skill("maestro-spec", "add learning \"<title>\" \"<insight>\" --keywords <kw1>,<kw2> --description \"<summary>\"")`. User selects "跳过" → proceed to next-step routing.
+User selects "记录经验" → prompt for title/insight, then recommend `/maestro-spec add learning "<title>" "<insight>" --keywords <kw1>,<kw2> --description "<summary>"`. User selects "跳过" → proceed to next-step routing.
 
 ### Next-step routing
 
 | Condition | Suggestion |
 |-----------|-----------|
-| Merge complete | [@skill] Skill({ skill: "maestro-manage", args: "status" }) |
+| Merge complete | Recommend `/maestro-manage status` |
 | Next dep-ready session | step `analyze` for session (`maestro run prepare analyze --session {next-dep-ready-slug}` + `maestro run create analyze --session {next-dep-ready-slug} --intent "{goal}"`) |
 </completion>
 

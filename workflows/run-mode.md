@@ -70,6 +70,6 @@ finish:
 
 ## Team Skills and FSM Chains
 
-`team-*` skills are independent user entry points — invoked directly via `Skill(...)`, never dispatched as a step inside a `ralph next` / `maestro run next` FSM chain. They do not appear in any chain catalog or Stage Mapping.
+`team-*` skills are independent user entry points — invoked directly by the user with `/team-*`, never dispatched as a step inside a `ralph next` / `maestro run next` FSM chain. They do not appear in any chain catalog or Stage Mapping.
 
 A team skill owns its own Run lifecycle: its coordinator resolves and completes the Run under the `run-mode-lite.md` contract. The FSM chain contract above governs only lifecycle steps dispatched by the orchestrators.

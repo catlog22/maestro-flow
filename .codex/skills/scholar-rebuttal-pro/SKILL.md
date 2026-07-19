@@ -1,5 +1,6 @@
 ---
 name: scholar-rebuttal-pro
+disable-model-invocation: true
 description: Enhanced academic paper review response workflow with Agy/CLI
   collaborative analysis and multi-perspective discussion. Produces structured
   rebuttal documents with evidence-based strategies. Triggers on "rebuttal",

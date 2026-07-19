@@ -1,5 +1,6 @@
 ---
 name: maestro-session-seal
+disable-model-invocation: true
 description: Seal current session with knowledge extraction and DAG progression
 argument-hint: "[--session <session_id>] [-y] [--skip-knowledge]"
 allowed-tools:

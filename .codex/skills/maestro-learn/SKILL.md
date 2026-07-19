@@ -1,5 +1,6 @@
 ---
 name: maestro-learn
+disable-model-invocation: true
 description: Understand code through guided reading, investigation, pattern
   extraction, or second opinions
 argument-hint: <subcommand> [args...] where subcommand = follow|investigate|decompose|consult

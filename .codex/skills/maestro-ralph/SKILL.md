@@ -1,5 +1,6 @@
 ---
 name: maestro-ralph
+disable-model-invocation: false
 description: Adaptive lifecycle orchestrator — compose, dispatch executor via
   collaboration.spawn_agent, evaluate, loop
 argument-hint: <intent> [-y] [--amend [change]] [--roadmap] [--engine

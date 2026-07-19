@@ -1,5 +1,6 @@
 ---
 name: scholar-anti-ai-writing
+disable-model-invocation: true
 description: Remove AI writing patterns from academic prose. Detects and fixes
   inflated symbolism, promotional language, superficial analyses, vague
   attributions, AI vocabulary, and formulaic structures. Supports English and

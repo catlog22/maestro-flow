@@ -1,5 +1,6 @@
 ---
 name: team-coordinate
+disable-model-invocation: true
 description: Universal team coordination skill with dynamic role generation.
   Uses team-worker agent architecture with role-spec files. Only coordinator is
   built-in -- all worker roles are generated at runtime as role-specs and

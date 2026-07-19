@@ -241,8 +241,8 @@ Seven sub-phases producing guidance-specification.md:
 
 **Condition**: `ui-designer` selected AND `.workflow/impeccable/DESIGN.md` does not exist. Skip with `--skip-design`.
 
-1. If PRODUCT.md missing: `Skill({ skill: "maestro-impeccable", args: "teach" })`
-2. `Skill({ skill: "maestro-impeccable", args: "explore" })` → produces DESIGN.md
+1. If PRODUCT.md missing: recommend `/maestro-impeccable teach`
+2. Recommend `/maestro-impeccable explore` → produces DESIGN.md when invoked
 3. Record `design_system_established: true` in session metadata
 
 `--yes`: auto-selects variant 1.

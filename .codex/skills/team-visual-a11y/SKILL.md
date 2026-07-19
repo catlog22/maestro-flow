@@ -1,5 +1,6 @@
 ---
 name: team-visual-a11y
+disable-model-invocation: true
 description: Unified team skill for visual accessibility QA. OKLCH color
   contrast, typography readability, focus management, WCAG AA/AAA audit at
   rendered level. Uses team-worker agent architecture. Triggers on "team visual

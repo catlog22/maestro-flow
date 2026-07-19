@@ -1,5 +1,6 @@
 ---
 name: team-ultra-analyze
+disable-model-invocation: true
 description: Deep collaborative analysis team skill. Multi-role investigation
   with coordinator-driven synthesis. Triggers on "team ultra-analyze", "team
   analyze".

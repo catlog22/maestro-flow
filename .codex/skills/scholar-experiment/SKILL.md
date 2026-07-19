@@ -1,5 +1,6 @@
 ---
 name: scholar-experiment
+disable-model-invocation: true
 description: Systematic experimental results analysis workflow for ML/AI
   research papers. Connects experimental data to publication-ready Results
   sections with statistical validation, visualizations, and quality checks.

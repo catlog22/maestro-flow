@@ -1,5 +1,6 @@
 ---
 name: scholar-writing
+disable-model-invocation: true
 description: End-to-end academic paper writing workflow. Takes a research
   repository and produces a publication-ready LaTeX manuscript for top ML/AI
   conferences (NeurIPS, ICML, ICLR, ACL, AAAI, COLM). Covers repo understanding,

@@ -1,5 +1,6 @@
 ---
 name: quality-refactor
+disable-model-invocation: true
 description: "Systematic tech-debt identification and safe reduction — plan → confirm → execute with per-change test verification. For explicit refactoring requests; casual tech-debt mentions route via /maestro-next"
 argument-hint: "[<scope>]"
 allowed-tools:
@@ -76,7 +77,7 @@ Follow '~/.maestro/workflows/refactor.md' completely.
 - BLOCKED if tests fail: fix regressions before completing.
 
 **Knowledge inquiry on completion:**
-After successful refactoring, ask user once: "Record refactoring pattern as coding convention?" If yes → `[@skill] Skill("maestro-spec", "add coding \"<title>\" \"<pattern>\" --keywords <kw1>,<kw2> --description \"<summary>\"")`.
+After successful refactoring, ask user once: "Record refactoring pattern as coding convention?" If yes → recommend `/maestro-spec add coding "<title>" "<pattern>" --keywords <kw1>,<kw2> --description "<summary>"`.
 </execution>
 
 <completion>

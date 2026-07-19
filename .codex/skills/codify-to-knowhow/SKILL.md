@@ -1,5 +1,6 @@
 ---
 name: codify-to-knowhow
+disable-model-invocation: true
 description: Manifest-driven knowledge asset generator — converts any structured
   package into maestro knowhow + spec entries with ref linking. Triggers on
   "codify-to-knowhow", "style to knowhow", "知识固化".

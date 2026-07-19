@@ -1,5 +1,6 @@
 ---
 name: team-swarm
+disable-model-invocation: true
 description: Swarm intelligence team skill — ACO-driven multi-agent exploration
   with hybrid LLM coordinator + Python optimization controller. Coordinator
   generates swarm-config from user task, then runs K iterations of N parallel

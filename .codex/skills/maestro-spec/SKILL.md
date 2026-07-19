@@ -1,5 +1,6 @@
 ---
 name: maestro-spec
+disable-model-invocation: true
 description: Manage project specs — add, load, remove entries, or initialize the
   spec system. Spec = 项目约束规则（编码规范、架构约束、质量标准）；可复用知识文档走 /maestro-manage knowledge
   capture。Triggers on "maestro-spec add", "记录规范", "添加约束", "添加规则", "加载规范",

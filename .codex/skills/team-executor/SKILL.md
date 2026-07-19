@@ -1,5 +1,6 @@
 ---
 name: team-executor
+disable-model-invocation: true
 description: Lightweight session execution skill. Resumes existing
   team-coordinate sessions for pure execution via team-worker agents. No
   analysis, no role generation -- only loads and executes. Session path

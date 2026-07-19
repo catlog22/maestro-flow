@@ -1,6 +1,7 @@
 ---
 name: maestro-ralph
-description: "Adaptive lifecycle orchestrator — compose, dispatch ralph-executor agent, evaluate decision, loop"
+disable-model-invocation: false
+description: "Adaptive lifecycle orchestrator for explicit Ralph lifecycle, continuation, or engine requests"
 argument-hint: "<intent>|status|continue [-y] [--amend] [--roadmap]"
 allowed-tools:
   - Read
@@ -9,7 +10,6 @@ allowed-tools:
   - Bash
   - Glob
   - Grep
-  - Skill
   - AskUserQuestion
   - Agent
   - SendMessage

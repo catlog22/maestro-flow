@@ -1,5 +1,6 @@
 ---
 name: delegation-check
+disable-model-invocation: true
 description: Check workflow delegation prompts against agent role definitions
   for content separation violations. Detects conflicts, duplication, boundary
   leaks, and missing contracts. Triggers on "check delegation", "delegation

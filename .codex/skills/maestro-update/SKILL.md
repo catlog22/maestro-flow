@@ -1,5 +1,6 @@
 ---
 name: maestro-update
+disable-model-invocation: true
 description: Detect version, preview changes, apply workflow upgrades
 argument-hint: "[--dry-run] [--force] [--setup-only]"
 allowed-tools:

@@ -1,5 +1,6 @@
 ---
 name: skill-generator
+disable-model-invocation: true
 description: Meta-skill for creating new Claude Code skills with configurable
   execution modes. Supports sequential (fixed order) and autonomous (stateless)
   phase patterns. Use for skill scaffolding, skill creation, or building new

@@ -1,5 +1,6 @@
 ---
 name: skill-iter-tune
+disable-model-invocation: true
 description: Iterative skill tuning via execute-evaluate-improve feedback loop.
   Uses maestro delegate Claude to execute skill, Agy to evaluate quality, and
   Agent to apply improvements. Iterates until quality threshold or max

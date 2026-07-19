@@ -1,5 +1,6 @@
 ---
 name: team-swarm
+disable-model-invocation: true
 description: Swarm intelligence team skill — ACO-driven multi-agent exploration with hybrid LLM coordinator + Python optimization controller. Coordinator generates swarm-config from user task, then runs K iterations of N parallel ants guided by pheromone state. Universal task space via config (nodes + scoring rule). Triggers on "team swarm", "swarm intelligence", "蚁群".
 allowed-tools: TeamCreate(*), TeamDelete(*), SendMessage(*), TaskCreate(*), TaskUpdate(*), TaskList(*), TaskGet(*), Agent(*), AskUserQuestion(*), Read(*), Write(*), Edit(*), Bash(*), Glob(*), Grep(*), mcp__maestro__team_msg(*)
 session-mode: run

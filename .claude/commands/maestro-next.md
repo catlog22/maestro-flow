@@ -1,6 +1,7 @@
 ---
 name: maestro-next
-description: "Default interactive entry for development intents — score intent + project state, recommend one atomic step, execute after confirmation. Multi-step intents: stepwise, user-confirmed manual-engine chain, or hand off to /maestro. Never auto-orchestrates"
+disable-model-invocation: false
+description: "Primary default entry for development intents — score intent + project state, recommend one atomic step, execute after confirmation. Multi-step intents use a user-confirmed manual-engine chain or hand off to /maestro"
 argument-hint: "<intent>|--list|--suggest [-y] [--dry-run]"
 allowed-tools:
   - Read
@@ -9,7 +10,6 @@ allowed-tools:
   - Bash
   - Glob
   - Grep
-  - Skill
   - AskUserQuestion
 session-mode: run
 contract:
@@ -68,6 +68,8 @@ $ARGUMENTS — intent text + optional flags.
 6. **--suggest never executes** — show recommendation + prepare content only
 7. **--note is append-only** — never overwrite or reorder existing entries
 8. **--promote delegates** — spec/knowhow promotion routes through `maestro-spec add` / `maestro-manage knowledge capture`, never writes directly
+9. **Manual campaigns excluded** — `team-*` and `maestro-odyssey` are never candidates, recommendations, retained utilities, chain steps, or handoff targets
+10. **Retained commands are suggest-only** — route retained commands to an exact slash command. Never execute them in this turn; `-y` applies only to first-tier steps
 </invariants>
 
 <state_machine>
@@ -109,7 +111,7 @@ S_NOTE:
   → END          DO: append entry to {run_dir}/outputs/companion.md
 
 S_PROMOTE:
-  → END          DO: review outputs → [@skill] Skill(spec, "add") / [@skill] Skill(manage, "knowledge capture") for each insight
+  → END          DO: review outputs → suggest `/maestro-spec add ...` / `/maestro-manage knowledge capture ...` after explicit user confirmation
 
 S_CHAIN_CREATE:
   → S_CHAIN_STEP WHEN: user confirms the chain definition    DO: A_CREATE_CHAIN
@@ -134,6 +136,7 @@ S_LIST:
   → END          DO: group steps by cluster, display with descriptions
 
 S_PRESENT:
+  → END          WHEN: target_kind == retained-command    DO: display exact slash command; suggest only, NEVER auto-execute (`-y` does not override)
   → END          WHEN: --dry-run OR --suggest
   → S_EXECUTE    WHEN: -y
   → S_CONFIRM    WHEN: interactive
@@ -201,7 +204,7 @@ init → {brainstorm | blueprint | analyze-macro} → roadmap
 
 **Multi-step detection:** intent matches keywords of ≥2 distinct steps in the routing table → set `multi_step`. Candidate pool unchanged — orchestrators stay excluded (invariant 2); the flag drives the advisory banner + `Channel: multi-step` in S_PRESENT, offering three continuation modes: a user-confirmed manual-engine chain (S_CHAIN_CREATE), stepwise without a chain, or handoff to /maestro.
 
-**Intent → step routing table (candidate pool):**
+**Intent routing table:** first-tier rows enter the executable candidate pool. Retained-command rows are advisory routes: show the exact slash command and stop.
 
 | Intent keywords | Recommended step | What it does |
 |----------------|-----------------|--------------|
@@ -220,17 +223,18 @@ init → {brainstorm | blueprint | analyze-macro} → roadmap
 | retrospective / retro / lessons learned / post-mortem / reflect | retrospective | Post-phase four-lens review (technical/process/quality/decision) → spec/knowhow/issue routing |
 | grill / pressure test / stress test | grill | Socratic pressure-test of a plan/idea against codebase reality — adversarial questioning, terminology collision checks |
 | collab / cross-verify / multi-tool / second opinion | collab | Fan out one requirement to multiple CLI tools, cross-verify findings into a unified conclusion |
-| refactor / tech debt | quality-refactor (retained skill) | — |
-| sync docs | maestro-manage sync codebase (retained skill) | — |
-| issue / defect | maestro-manage issue (retained skill) | — |
-| wiki / knowledge graph | maestro-manage knowledge wiki (retained skill) | — |
-| spec / rule / constraint | maestro-spec load / maestro-spec add (retained skill) | — |
-| init / project setup | maestro-init (retained skill) | — |
-| status / dashboard | maestro-manage status (retained skill) | — |
-| security / OWASP | security-audit (retained skill) | — |
-| learn / explore code / follow | maestro-learn follow / maestro-learn investigate (retained skill) | — |
-| harvest / extract knowledge | maestro-manage knowledge harvest (retained skill) | — |
-| fork / parallel dev | maestro-fork (retained skill) | — |
+| refactor / tech debt | `/quality-refactor "<scope>"` (retained command) | Suggest exact slash command; user invokes it |
+| sync docs | `/maestro-manage sync codebase` (retained command) | Suggest exact slash command; user invokes it |
+| issue / defect | `/maestro-manage issue <subcommand> ...` (retained command) | Suggest exact slash command; user invokes it |
+| wiki / knowledge graph | `/maestro-manage knowledge wiki ...` (retained command) | Suggest exact slash command; user invokes it |
+| spec / rule / constraint | `/maestro-spec load ...` or `/maestro-spec add ...` (retained command) | Suggest exact slash command; user invokes it |
+| init / project setup | `/maestro-init ...` (retained command) | Suggest exact slash command; user invokes it |
+| status / dashboard | `/maestro-manage status` (retained command) | Suggest exact slash command; user invokes it |
+| security / OWASP | `/security-audit ...` (retained command) | Suggest exact slash command; user invokes it |
+| learn / explore code / follow | `/maestro-learn follow|investigate|decompose|consult ...` (retained command) | Suggest exact slash command; user invokes it |
+| UI design / design system / polish / impeccable | `/maestro-impeccable "<intent>" ...` (retained command) | Suggest exact slash command; user invokes it |
+| harvest / extract knowledge | `/maestro-manage knowledge harvest ...` (retained command) | Suggest exact slash command; user invokes it |
+| fork / parallel dev | `/maestro-fork ...` (retained command) | Suggest exact slash command; user invokes it |
 
 **Auxiliary workflow clusters:**
 
@@ -269,7 +273,7 @@ maestro run complete <run_id> --workflow-root .
 
 After `run complete`: re-infer lifecycle and surface the natural next step as a continuation hint — stepwise multi-step work proceeds by re-invoking `/maestro-next`.
 
-For retained skills (not in step registry): execute via `[@skill] Skill({ skill: <name>, args: <args> })` directly.
+For retained commands, output the exact slash command as a suggest-only result. Do not execute it, including under `-y`; the user invokes it explicitly in a subsequent message.
 
 ### A_CREATE_CHAIN
 
@@ -321,14 +325,14 @@ Assess task complexity at S_RANK and surface the verdict in S_PRESENT (`Channel`
 
 ### --list mode
 
-Group all 15 first-tier steps by cluster + show retained skills separately:
+Group all 15 first-tier steps by cluster + show retained commands separately with their slash invocation form. Do not list `team-*` or `maestro-odyssey`:
 
 ```
 Core Chain:  analyze → plan → execute → verify
 Quality:     review, test, auto-test, debug, retrospective
 Discovery:   grill, collab, brainstorm, blueprint, roadmap, quick
 
-Retained Skills: quality-refactor, maestro-manage sync codebase, manage-*, learn-*, spec-*, ...
+Retained Commands (manual): /quality-refactor, /maestro-manage ..., /maestro-learn ..., /maestro-spec ..., /maestro-impeccable ...
 ```
 
 ### Normal mode
@@ -337,13 +341,17 @@ Retained Skills: quality-refactor, maestro-manage sync codebase, manage-*, learn
 [⚠ Multi-step intent — create a manual chain, take just the first step, or hand off to /maestro "<intent>"]   ← only when multi_step
 
 Target: /<step-name>
+Kind: first-tier step | retained command
   <description>
   Reason: <match rule + lifecycle position>
   Channel: companion (zero-run) | single run | multi-step (stepwise / chain)
+  Invocation:
+    first-tier step → Confirm to execute through Maestro Run lifecycle
+    retained command → Run manually: /<command> <subcommand> <args> (suggest only; not executed now)
 
 Alternatives:
-  2. /<alt-1> — <description>
-  3. /<alt-2> — <description>
+  2. /<alt-1> — <description> — <invocation method>
+  3. /<alt-2> — <description> — <invocation method>
 
 Args: <args>
 ```

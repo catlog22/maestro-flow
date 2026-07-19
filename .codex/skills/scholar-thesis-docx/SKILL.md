@@ -1,5 +1,6 @@
 ---
 name: thesis-docx
+disable-model-invocation: true
 description: Create, revise, and format thesis or dissertation Word documents
   with strict academic formatting control. Use when an AI agent needs to
   generate or revise thesis content, normalize Word styles, follow a school

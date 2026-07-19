@@ -1,5 +1,6 @@
 ---
 name: team-adversarial-swarm
+disable-model-invocation: true
 description: "ACO swarm intelligence with modular Workflow composition and adversarial decision gates. Coordinator drives iteration loop; 4 composable Workflow scripts handle exploration, scoring, convergence, and synthesis — each with built-in adversarial patterns."
 allowed-tools: Read(*), Write(*), Edit(*), Bash(*), Glob(*), Grep(*), Workflow(*), AskUserQuestion(*), Agent(*)
 session-mode: run

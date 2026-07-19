@@ -1,5 +1,6 @@
 ---
 name: maestro-impeccable
+disable-model-invocation: true
 description: Use when designing, auditing, polishing, improving, or codifying frontend UI — websites, dashboards, landing pages, components, design systems
 argument-hint: "build|redesign|improve|enhance|launch|harden|foundation|live [target] [--codify <path>]"
 allowed-tools:

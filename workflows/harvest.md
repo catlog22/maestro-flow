@@ -223,7 +223,7 @@ Fragments extracted: 8 (filtered from 12 by confidence ≥ 0.5)
 
 ### 6b. Spec routing
 
-MANDATORY, NOT SUBSTITUTABLE by manual Read/Grep: `Skill({ skill: "spec-add", args: "<spec_type> <content>" })`. Mapping: pattern→pattern, decision→decision, bug→bug, knowhow→rule.
+MANDATORY recommendation: `/maestro-spec add <spec_type> <content>`. Mapping: pattern→pattern, decision→decision, bug→bug, knowhow→rule.
 
 ### 6c. Issue routing
 
@@ -325,9 +325,9 @@ Source: ANL-auth-20260410 (analysis)
 
 Next:
   → Review wiki entries: maestro wiki list --type note
-  → Triage issues: Skill({ skill: "maestro-manage", args: "issue list --source harvest" })
-  → Connect wiki graph: Skill({ skill: "wiki-connect", args: "--fix" })
-  → View specs: Skill({ skill: "spec-load", args: "--role implement" })
+  → Triage issues: recommend `/maestro-manage issue list --source harvest`
+  → Connect wiki graph: recommend `/maestro-manage knowledge wiki --fix`
+  → View specs: recommend `/maestro-spec load --role implement`
 ```
 
 ---

@@ -1,5 +1,6 @@
 ---
 name: team-roadmap-dev
+disable-model-invocation: true
 description: Unified team skill for roadmap-driven development workflow.
   Coordinator discusses roadmap with user, then dispatches phased execution
   pipeline (plan -> execute -> verify). All roles invoke this skill with --role

@@ -54,7 +54,7 @@ function listSkills(dir) {
     .map(name => {
       const skillMd = readFileSync(join(dir, name, 'SKILL.md'), 'utf8');
       const fm = parseFrontmatter(skillMd).frontmatter;
-      return { name, description: fm.description || fm.title || '' };
+      return { name, description: fm.description || fm.title || '', manualOnly: fm['disable-model-invocation'] === 'true' };
     })
     .sort((a, b) => a.name.localeCompare(b.name));
 }
@@ -95,12 +95,14 @@ function generateReference() {
       const desc = cmd.description || fm.description || '';
       const argHint = cmd.argumentHint || fm['argument-hint'] || '';
       const subcommands = cmd.subcommands || [];
+      const invocation = fm['disable-model-invocation'] === 'false' ? 'Automatic entrypoint and explicit slash command' : 'Explicit routing or user slash command';
 
       out += `### \`${cmd.name}\`\n\n`;
       if (argHint) {
         out += `**Usage:** \`${esc(argHint)}\`\n\n`;
       }
       out += `${esc(desc)}\n`;
+      out += `\n**Invocation:** ${invocation}\n`;
       if (subcommands.length > 0) {
         out += `\n**Subcommands:** ${subcommands.map(s => `\`${s}\``).join(', ')}\n`;
       }
@@ -121,14 +123,15 @@ function generateReference() {
     let s = `## ${title}\n\n`;
     if (note) s += `*${note}*\n\n`;
     for (const sk of skills) {
-      s += `- **\`${sk.name}\`** — ${esc(sk.description)}\n`;
+      const invocation = sk.manualOnly ? 'manual or explicit orchestrator recommendation' : 'automatic';
+      s += `- **\`${sk.name}\`** — ${esc(sk.description)} _(${invocation})_\n`;
     }
     s += '\n---\n\n';
     return s;
   }
 
   out += renderSkillSection('Team Skills', teamSkills,
-    'Multi-agent team collaboration skills in `.claude/skills/team-*`.');
+    'Parallel multi-agent campaign ecosystems. Start them explicitly with `/team-*`; Maestro routers do not select them.');
   out += renderSkillSection('Scholar Skills', scholarSkills,
     'Academic writing & research skills in `.claude/skills/scholar-*`.');
   out += renderSkillSection('Meta Skills', metaSkills,

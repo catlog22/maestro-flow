@@ -1,5 +1,6 @@
 ---
 name: maestro-odyssey
+disable-model-invocation: true
 description: Long-running iterative cycle — one entry, five modes
   (debug|improve|planex|review|ui). Shared archaeology/audit → fix → verify →
   generalize → discover → persist skeleton with mode-specific dimensions.

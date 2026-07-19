@@ -1,5 +1,6 @@
 ---
 name: team-ux-improve
+disable-model-invocation: true
 description: Unified team skill for UX improvement. Systematically discovers and
   fixes UI/UX interaction issues including unresponsive buttons, missing
   feedback, and state refresh problems. Uses team-worker agent architecture with

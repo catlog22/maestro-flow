@@ -1,5 +1,6 @@
 ---
 name: team-issue
+disable-model-invocation: true
 description: Unified team skill for issue resolution. Uses team-worker agent
   architecture with role directories for domain logic. Coordinator orchestrates
   pipeline, workers are team-worker agents. Triggers on "team issue".

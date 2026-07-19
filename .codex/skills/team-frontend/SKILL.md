@@ -1,5 +1,6 @@
 ---
 name: team-frontend
+disable-model-invocation: true
 description: Unified team skill for frontend development. Pure router — all
   roles read this file. Beat model is coordinator-only in monitor.md. Built-in
   ui-ux-pro-max design intelligence. Triggers on "team frontend".

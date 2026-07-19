@@ -1,5 +1,6 @@
 ---
 name: scholar-experiment
+disable-model-invocation: true
 description: Systematic experimental results analysis workflow for ML/AI research papers. Connects experimental data to publication-ready Results sections with statistical validation, visualizations, and quality checks. Triggers on "analyze experimental results", "generate results section", "statistical analysis of experiments", "compare model performance", "create results visualization".
 allowed-tools: Read, Write, Edit, Bash, Glob, Grep, AskUserQuestion, TodoWrite
 session-mode: none

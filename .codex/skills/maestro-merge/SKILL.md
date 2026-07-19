@@ -1,5 +1,6 @@
 ---
 name: maestro-merge
+disable-model-invocation: true
 description: Merge session worktree branch back to main
 argument-hint: --session <session_id> [--force] [--dry-run] [--no-cleanup] [--continue]
 allowed-tools:

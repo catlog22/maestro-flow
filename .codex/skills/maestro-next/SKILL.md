@@ -1,5 +1,6 @@
 ---
 name: maestro-next
+disable-model-invocation: false
 description: Single-step recommendation engine — route intent to the best next
   step, with companion utilities
 argument-hint: <intent> [-y] [--dry-run] [--top N] [--list] [--suggest] [--note
@@ -69,6 +70,7 @@ $ARGUMENTS — intent text + optional flags.
 6. **--suggest never executes** — show recommendation + prepare content only
 7. **--note is append-only** — never overwrite or reorder existing entries
 8. **--promote delegates** — spec/knowhow promotion routes through `maestro-spec add` / `maestro-manage knowledge capture`, never writes directly
+9. **Retained commands are suggest-only** — show an exact slash command and stop; `-y` applies only to first-tier steps
 </invariants>
 
 <state_machine>
@@ -117,6 +119,7 @@ S_LIST:
   → END          DO: group steps by cluster, display with descriptions
 
 S_PRESENT:
+  → END          WHEN: target_kind == retained-command    DO: display exact slash command; suggest only, NEVER auto-execute
   → END          WHEN: --dry-run OR --suggest
   → S_EXECUTE    WHEN: -y
   → S_CONFIRM    WHEN: interactive
@@ -200,17 +203,18 @@ init → {brainstorm | blueprint | analyze-macro} → roadmap
 | retrospective / retro / lessons learned / post-mortem / reflect | retrospective | Post-phase four-lens review (technical/process/quality/decision) → spec/knowhow/issue routing |
 | grill / pressure test / stress test | grill | Socratic pressure-test of a plan/idea against codebase reality — adversarial questioning, terminology collision checks |
 | collab / cross-verify / multi-tool / second opinion | collab | Fan out one requirement to multiple CLI tools, cross-verify findings into a unified conclusion |
-| refactor / tech debt | quality-refactor (retained skill) | — |
-| sync docs | maestro-manage sync codebase (retained skill) | — |
-| issue / defect | maestro-manage issue (retained skill) | — |
-| wiki / knowledge graph | maestro-manage knowledge wiki (retained skill) | — |
-| spec / rule / constraint | maestro-spec load / maestro-spec add (retained skill) | — |
-| init / project setup | maestro-init (retained skill) | — |
-| status / dashboard | maestro-manage status (retained skill) | — |
-| security / OWASP | security-audit (retained skill) | — |
-| learn / explore code / follow | maestro-learn follow / maestro-learn investigate (retained skill) | — |
-| harvest / extract knowledge | maestro-manage knowledge harvest (retained skill) | — |
-| fork / parallel dev | maestro-fork (retained skill) | — |
+| refactor / tech debt | `/quality-refactor "<scope>"` (retained command) | Suggest only |
+| sync docs | `/maestro-manage sync codebase` (retained command) | Suggest only |
+| issue / defect | `/maestro-manage issue <subcommand> ...` (retained command) | Suggest only |
+| wiki / knowledge graph | `/maestro-manage knowledge wiki ...` (retained command) | Suggest only |
+| spec / rule / constraint | `/maestro-spec load ...` or `/maestro-spec add ...` (retained command) | Suggest only |
+| init / project setup | `/maestro-init ...` (retained command) | Suggest only |
+| status / dashboard | `/maestro-manage status` (retained command) | Suggest only |
+| security / OWASP | `/security-audit ...` (retained command) | Suggest only |
+| learn / explore code / follow | `/maestro-learn follow|investigate|decompose|consult ...` (retained command) | Suggest only |
+| UI design / design system / polish / impeccable | `/maestro-impeccable "<intent>" ...` (retained command) | Suggest only |
+| harvest / extract knowledge | `/maestro-manage knowledge harvest ...` (retained command) | Suggest only |
+| fork / parallel dev | `/maestro-fork ...` (retained command) | Suggest only |
 
 **Auxiliary workflow clusters:**
 
@@ -245,7 +249,7 @@ maestro run brief --platform codex <run_id> --workflow-root .
 maestro run complete <run_id> --workflow-root .
 ```
 
-For retained skills (not in step registry): execute via `Skill({ skill: <name>, args: <args> })` directly.
+For retained commands, output the exact slash command as a suggest-only result. Do not execute it, including under `-y`.
 
 </actions>
 
@@ -276,22 +280,24 @@ Before executing, assess task complexity to choose the right channel:
 
 ### --list mode
 
-Group all 15 first-tier steps by cluster + show retained skills separately:
+Group all 15 first-tier steps by cluster + show retained commands with their slash invocation form:
 
 ```
 Core Chain:  analyze → plan → execute → verify
 Quality:     review, test, auto-test, debug, retrospective
 Discovery:   grill, collab, brainstorm, blueprint, roadmap, quick
 
-Retained Skills: quality-refactor, maestro-manage sync codebase, manage-*, learn-*, spec-*, ...
+Retained Commands (manual): /quality-refactor, /maestro-manage ..., /maestro-learn ..., /maestro-spec ..., /maestro-impeccable ...
 ```
 
 ### Normal mode
 
 ```
 Target: /<step-name>
+Kind: first-tier step | retained command
   <description>
   Reason: <match rule + lifecycle position>
+  Invocation: confirm Maestro Run execution | run manually: /<command> <args>
 
 Alternatives:
   2. /<alt-1> — <description>
@@ -301,7 +307,7 @@ Args: <args>
 ```
 
 `--dry-run` / `--suggest`: display and stop.
-`-y`: execute immediately.
+`-y`: execute immediately only for a first-tier step; retained commands remain suggest-only.
 Otherwise: request_user_input (single-select, header: "Confirm"):
 - **Execute recommendation** (Recommended)
 - **Choose alternative**

@@ -1,5 +1,6 @@
 ---
 name: maestro-guard
+disable-model-invocation: true
 description: Manage editing boundary restrictions
 argument-hint: "on|off|status|allow|deny [path]"
 allowed-tools:

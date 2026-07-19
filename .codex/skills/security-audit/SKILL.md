@@ -1,5 +1,6 @@
 ---
 name: security-audit
+disable-model-invocation: true
 description: OWASP Top 10 and STRIDE security auditing with supply chain analysis
 argument-hint: "[quick|standard|deep] [--scope <path>]"
 allowed-tools:

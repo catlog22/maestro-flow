@@ -1,5 +1,6 @@
 ---
 name: scholar-ideation
+disable-model-invocation: true
 description: Research ideation workflow from literature search to research planning. Triggers on "brainstorm research ideas", "identify research gaps", "conduct gap analysis", "start research project", "conduct literature review", "define research question", "select research method", "plan research", "research ideation".
 allowed-tools: WebSearch, WebFetch, Read, Write, Edit, Bash, Glob, Grep, TodoWrite, AskUserQuestion
 session-mode: none

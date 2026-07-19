@@ -1,5 +1,6 @@
 ---
 name: team-quality-assurance
+disable-model-invocation: true
 description: Unified team skill for quality assurance. Full closed-loop QA
   combining issue discovery and software testing. Triggers on "team
   quality-assurance", "team qa".

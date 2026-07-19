@@ -1,5 +1,6 @@
 ---
 name: maestro-session-seal
+disable-model-invocation: true
 description: Seal current session with knowledge extraction and DAG progression
 argument-hint: "[--session <session_id>] [-y] [--skip-knowledge]"
 allowed-tools:
@@ -67,8 +68,8 @@ Skip if `--skip-knowledge`. Otherwise:
      - "跳过" (no knowledge extraction)
    ```
 4. **Persist** selected items:
-   - Specs → `[@skill] Skill("maestro-spec", "add ...")`
-   - Knowhow → `[@skill] Skill("maestro-manage", "knowledge capture ...")`
+   - Specs → recommend `/maestro-spec add ...`
+   - Knowhow → recommend `/maestro-manage knowledge capture ...`
    - Record promoted IDs in `session.json.lifecycle.promoted[]`（前缀区分 spec:/knowhow:）
 
 ### Step 3: Seal Session
