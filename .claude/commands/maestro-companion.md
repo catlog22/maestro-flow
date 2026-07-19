@@ -1,7 +1,7 @@
 ---
 name: maestro-companion
 disable-model-invocation: false
-description: "Lightweight execution channel — full task capability with minimal run lifecycle (create + complete only). Continuous evidence recording, no prepare/brief/check/gates. For quick fixes, lookups, explorations, and small tasks that don't need typed artifact handoff"
+description: "Quick execution for small tasks (≤1-2 files, no artifact handoff) — minimal run lifecycle (create + complete only) with evidence recording. Can read/write/run any tool, but scoped to tasks completable in a few actions. Not for multi-step workflows or tasks needing downstream gates"
 argument-hint: "<intent> [--note <text>] [--promote] [-y]"
 allowed-tools:
   - Read

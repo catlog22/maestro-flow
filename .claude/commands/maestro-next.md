@@ -178,7 +178,7 @@ init → {brainstorm | blueprint | analyze-macro} → roadmap
 | Multi-step (manual) | `/maestro` | Intent spans ≥2 distinct steps, user wants stepwise control, no auto-retry needed | `--engine manual` |
 | Multi-step (orchestrated) | `/maestro` | Intent needs closed-loop: decision nodes, drift analysis, auto-retry, decomposition | `--engine ralph` (default) |
 
-**Routing preference: prefer Standard over Lightweight.** When uncertain, create a run. A run with a thin report is better than a missed artifact. Companion is chosen only when there is clearly no handoff value.
+**Routing preference: prefer the lightest channel that satisfies the task.** Default to Companion for anything that looks like a quick fix/lookup/exploration. Only upgrade to Standard when there is concrete evidence the task produces artifacts a downstream step will consume, or needs a gate/verdict for lifecycle tracking. Only route to /maestro when the intent genuinely spans ≥2 distinct lifecycle steps. When in doubt between Companion and Standard, ask the user via the confirmation menu rather than auto-upgrading.
 
 **Lightweight signals (all must hold):**
 - Intent involves ≤1-2 files or is a pure lookup/question
@@ -198,6 +198,8 @@ init → {brainstorm | blueprint | analyze-macro} → roadmap
 - Neither flag: auto-detect from the signals above; verdict shown to user before routing
 
 **Intent routing table:** first-tier rows enter the executable candidate pool. Retained-command rows are advisory routes: show the exact slash command and stop.
+
+> **Scope guard:** keyword match identifies the *candidate step*, but the complexity verdict still applies independently. A keyword hit does NOT override lightweight signals. Example: "rename this variable" matches `execute/implement` keywords → candidate = execute step, but complexity = lightweight (1 file, no handoff) → channel = `/maestro-companion`. The routing table answers "which step?", the complexity assessment answers "which channel?".
 
 | Intent keywords | Recommended step | What it does |
 |----------------|-----------------|--------------|
