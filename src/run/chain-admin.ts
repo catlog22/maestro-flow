@@ -73,6 +73,13 @@ const chainDefPositionSchema = z.object({
   scope_verdict: z.string().nullable().optional(),
 }).strict();
 
+const chainDefBoundaryContractSchema = z.object({
+  in_scope: z.array(z.string()),
+  out_of_scope: z.array(z.string()),
+  constraints: z.array(z.string()),
+  definition_of_done: z.string(),
+}).strict();
+
 const chainDefDecompositionSchema = z.object({
   execution_criteria: z.array(z.string()).optional(),
   goals: z.array(z.unknown()).optional(),
@@ -91,6 +98,7 @@ export const chainDefinitionSchema = z.object({
   auto_mode: z.boolean().optional(),
   steps: z.array(chainDefStepSchema).min(1),
   decision_points: z.array(chainDefDecisionPointSchema).optional(),
+  boundary_contract: chainDefBoundaryContractSchema.optional(),
   position: chainDefPositionSchema.nullable().optional(),
   decomposition: chainDefDecompositionSchema.nullable().optional(),
   executor: chainDefExecutorSchema.nullable().optional(),
@@ -249,8 +257,9 @@ export function createChainSession(
     o.engine = engine;
     o.quality_mode = qualityMode;
     o.auto_mode = autoMode;
-    if (opts.boundaryContract) {
-      draft.session.boundary_contract = opts.boundaryContract;
+    const boundaryContract = opts.boundaryContract ?? def?.boundary_contract;
+    if (boundaryContract) {
+      draft.session.boundary_contract = boundaryContract;
     }
     if (def) {
       o.chain = buildChain(def.steps);

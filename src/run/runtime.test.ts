@@ -150,11 +150,14 @@ describe('Session/Run runtime', () => {
     const globalCommandDir = join(claudeHome, 'commands');
     mkdirSync(globalCommandDir, { recursive: true });
     const globalContract = `<contract>
+contract_version: 2
 consumes: []
 produces:
   - kind: global-plan
-    primary: true
     path: outputs/global-plan.json
+    role: primary
+    required: true
+    schema: global-plan/1.0
 gates:
   entry: []
   exit: []
@@ -170,7 +173,7 @@ gates:
     expect(run.command.content_hash).toBe(createHash('sha256').update(globalContract).digest('hex'));
     expect(run.command.contract_hash).toMatch(/^[a-f0-9]{64}$/);
     expect(run.command.content_hash).not.toBe(emptyHash);
-    expect(checkRun(projectRoot, created.run_id).gates.blocking).toHaveLength(1);
+    expect(checkRun(projectRoot, created.run_id).gates.blocking).toHaveLength(2);
 
     const globalSkillDir = join(claudeHome, 'skills', 'installed-skill');
     mkdirSync(globalSkillDir, { recursive: true });
@@ -503,12 +506,15 @@ gates:
 
   it('checks gates idempotently and derives canonical artifacts, handoff, and evidence', () => {
     const projectRoot = root();
-    commandFile(projectRoot, 'demo-plan', `consumes: []
+    commandFile(projectRoot, 'demo-plan', `contract_version: 2
+consumes: []
 produces:
   - kind: plan
-    primary: true
     path: outputs/plan.json
     alias: current-plan
+    role: primary
+    required: true
+    schema: plan/1.0
 gates:
   entry: []
   exit: []`);
@@ -517,7 +523,7 @@ gates:
     expect(created.next.reason).toContain('maestro run check');
 
     const missing = checkRun(projectRoot, created.run_id);
-    expect(missing.gates.blocking).toHaveLength(1);
+    expect(missing.gates.blocking).toHaveLength(2);
     const blocked = completeRun(projectRoot, created.run_id);
     expect(blocked.sealed).toBe(false);
     expect(blocked.status).toBe('blocked');
@@ -645,12 +651,15 @@ gates:
 
   it('emits the next pointer and injects the finish checklist only when check passes', () => {
     const projectRoot = root();
-    commandFile(projectRoot, 'finish-demo', `consumes: []
+    commandFile(projectRoot, 'finish-demo', `contract_version: 2
+consumes: []
 produces:
   - kind: plan
-    primary: true
     path: outputs/plan.json
     alias: current-plan
+    role: primary
+    required: true
+    schema: plan/1.0
 gates:
   entry: []
   exit: []`);
@@ -668,7 +677,7 @@ finish:
 
     const created = createRun({ projectRoot, command: 'finish-demo', intent: 'finish demo' });
     const blocked = checkRun(projectRoot, created.run_id);
-    expect(blocked.gates.blocking).toHaveLength(1);
+    expect(blocked.gates.blocking).toHaveLength(2);
     expect(blocked.next?.command).toBe(`maestro run check ${created.run_id}`);
     expect(blocked.finish).toBeUndefined();
 

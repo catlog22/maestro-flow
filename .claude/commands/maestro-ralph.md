@@ -83,25 +83,25 @@ Remaining      → intent (amend_mode 时为 change_request)
    - **评估 Agent**（A_AGENT_EVALUATE / A_AGENT_GOAL_AUDIT / A_AGENT_REGROUND）：同样 `[@subagent] Agent()` 不传 name
    - `agent_exec_name` 仅用于 display/日志标识，不作为 Agent name 参数
 5. **主流程调 `run complete --verdict`** — 每个 step 完成后由主流程调 `maestro run complete --session {session} --verdict ...`（免 run-id，自动解析当前 running 步），非 agent 上报
-6. **Decision evaluation inline** — decision 节点不 handoff，通过 Agent 或 CLI delegate 在本循环内评估；裁决落盘经 `maestro run decide`
-7. **CLI delegation for evaluation only** — CLI delegate（`maestro delegate --mode analysis`）仅限评估环节；执行仍通过 executor Agent 完成
+6. **Decision evaluation inline** — decision 节点不 handoff，通过一个只读 generic Agent 在本循环内评估；裁决落盘经 `maestro run decide`
+7. **Decision receipt single-source** — prompt 不直写 `decisions.ndjson`；评估摘要、置信度与 parse fallback 经 `run decide --summary/--evidence` 进入 transition receipt，由 runtime 重建 projection
 8. **Decision delegates read-only** — 评估 Agent 通过 prompt 中的 CONSTRAINTS 约束为只读
 9. **执行 step 通过 `maestro run next` CLI 加载并内联执行**（由 execute Agent 完成）
 10. **session.json orchestration 是唯一编排真相源** — 不生成 markdown 清单或侧文件；一切状态写入经 CLI 动词（`session create --chain-file` / `session chain insert|skip|replace` / `run next` / `run complete --verdict` / `run decide` / `session meta update`），prompt 层不得直写 session.json 或 ralph-meta.json
-11. **每个 step 必须在 chain 中标记 completed** — 由 `maestro run complete --verdict done`（或 `done-with-concerns`）驱动链推进；CLI 是唯一合法写入路径
+11. **每个 step 必须在 chain 中标记 sealed** — 由 `maestro run complete --verdict done`（或 `done-with-concerns`）驱动链推进；CLI 是唯一合法写入路径
 12. **step command 在 A_BUILD_STEPS 解析** — 通过 `maestro ralph skills --platform claude --steps --json --quiet` 预校验（`--steps` 引入 prepare/workflows 步骤注册表，覆盖生命周期 step 名）
 13. **执行 step 内容加载** — 由 `maestro run next` CLI 通过 `resolveStepContent()` 在执行期完成
 14. **Decomposition is outcome-oriented** — sub-goals 为可观测交付，禁止 lifecycle 复刻
 15. **Sessions are topic grouping/indexes** — Run 才是 execution/output 单元；skill args 统一用 `--session {session}` 模式，无 phase/milestone 占位符；后续 Run 仅经 canonical upstream 引用同 Session sealed outputs
 16. **task_decomposition 驱动 steps[] 动态生长** — `post-goal-audit` 按 unmet 子目标插入 scoped mini-loop
 17. **Invariant violation = BLOCK** — 违反上述任一 invariant 即阻断当前操作
-18. **Evaluate fallback 必须标记** — 评估 Agent 解析 verdict 失败时 fallback 为 "fix"，MUST 在 decisions.ndjson 记录 `"parse_failed": true, "confidence_score": 0`
+18. **Evaluate fallback 必须标记** — 评估 Agent 解析 verdict 失败时 fallback 为 "fix"，MUST 在 `run decide --summary` 记录 `parse_failed=true; confidence_score=0`
 19. **auto_confirm 单一来源** — `auto_confirm` 仅由用户 `-y` 标志设定
 20. **分解契约单一所有者** — `boundary_contract` / `task_decomposition` 由 session 创建者拥有
 21. **控制权优先级（范式治理）** — FSM 独占 session 生命周期 + step 排序 + retry/fix/escalate + cross-step decision 节点
 22. **引擎只做并行加速，不做状态决策** — `--engine swarm|universal` 通过 Workflow 引擎并行执行单个 step，MUST NOT 修改 session state、MUST NOT 推进 step、MUST NOT 触碰 decision 节点；引擎产出写入该 step 的 Run output dir（格式兼容对应命令产物），由主流程照常 `run complete --verdict`。生成/固定脚本对引擎只读（`wf-*.js` 从不被编辑；`uwf-*.js` 仅由 universal 生成器按幂等命名覆盖）。
-23. **Goal tracking 与 session 双写** — 主流程在 session 创建、step 派发、step 完成时同步创建/更新 goal，补充 session.json 的 UI 可见进度。
-24. **Compatibility commands are out of band** — 正常 Ralph 路由禁止调用或推荐 `run recall-confirm|fork|import|new|rebind` 与 `session resolve|resume`；historical similarity 只读，deprecated admin-only CLI 不参与 topic resolution、output reuse 或 next routing，且无 force bypass。
+23. **Task/Goal 仅作投影** — session.json/run.json 是权威；Task/Goal UI 由宿主投影或显式 goal-enabled step 管理，Ralph prompt 不手工双写中间进度。
+24. **Compatibility commands are out of band** — 正常 Ralph 路由禁止调用或推荐 `run recall-confirm|fork|import|new|rebind`；historical similarity 只读，deprecated admin-only CLI 不参与 topic resolution、output reuse 或 next routing，且无 force bypass。`session resolve|resume` 仅允许用于 paused Session 的 canonical audited recovery。
 </invariants>
 
 <task_tracking>
@@ -116,6 +116,7 @@ Chain-building states + 执行循环 states：
 S_PARSE_ROUTE   — 解析参数、路由入口
 S_STATUS        — 显示 session 进度
 S_CONTINUE      — 恢复执行
+S_PAUSED_RECOVERY — 解析 paused blocker → audited resolve → resume
 S_RESOLVE_SESSION — 解析 session_id + session_is_new                    PERSIST: session.session_id, session.session_is_new
 S_INFER         — 推断 lifecycle_position                              PERSIST: session.lifecycle_position, session.wants_roadmap
 S_RESOLVE_SCOPE — 读 macro analyze conclusions.scope_verdict            PERSIST: session.scope_verdict, session.analyze_macro_id
@@ -151,12 +152,37 @@ S_PARSE_ROUTE:
   → S_RESOLVE_SESSION WHEN: intent is non-empty
   → S_FALLBACK      WHEN: no intent AND no running session
 
+S_RESOLVE_SESSION:
+  → S_STEP_LOCATE   WHEN: session_is_new == false AND orchestration.chain 非空  DO: A_RESOLVE_SESSION
+  → S_INFER         WHEN: session_is_new == true                           DO: A_RESOLVE_SESSION
+  → S_FALLBACK      WHEN: session_is_new == false AND orchestration.chain 为空
+
+S_INFER:
+  → S_RESOLVE_SCOPE DO: A_INFER_POSITION
+
+S_RESOLVE_SCOPE:
+  → S_QUALITY_MODE  DO: A_RESOLVE_SCOPE_VERDICT
+
+S_QUALITY_MODE:
+  → S_DECOMPOSE     DO: A_DETERMINE_QUALITY_MODE
+
+S_DECOMPOSE:
+  → S_BUILD_CHAIN   DO: A_DECOMPOSE_TASKS
+
+S_BUILD_CHAIN:
+  → S_CREATE_SESSION DO: A_BUILD_STEPS
+
 S_STATUS:
   → END             DO: A_SHOW_STATUS
 
 S_CONTINUE:
-  → S_STEP_LOCATE    WHEN: running or paused session found
+  → S_STEP_LOCATE    WHEN: running session found
+  → S_PAUSED_RECOVERY WHEN: paused session found
   → S_FALLBACK       WHEN: no running/paused session
+
+S_PAUSED_RECOVERY:
+  → S_STEP_LOCATE    WHEN: every blocker resolved + resume applied  DO: A_PAUSED_RECOVERY
+  → END              WHEN: user cancels or recovery evidence unavailable
 
 S_AMEND_GOAL:
   → S_STEP_LOCATE    WHEN: change applied + user confirmed    DO: A_AMEND_GOAL
@@ -173,8 +199,8 @@ S_CONFIRM:
   → END              WHEN: user cancels
 
 S_STEP_LOCATE:
-  → S_STEP_RESOLVE   WHEN: pending execution step found (step.decision == null)
-  → S_DECISION_EVAL  WHEN: pending decision step found (step.decision != null)
+  → S_STEP_RESOLVE   WHEN: pending execution step found (step.decision_ref == null)
+  → S_DECISION_EVAL  WHEN: pending decision step found (step.decision_ref != null)
   → S_SESSION_DONE   WHEN: no pending steps (all completed/skipped)
   → S_HANDLE_FAIL    WHEN: has failed step and no pending
   → S_FALLBACK       WHEN: no running session
@@ -187,8 +213,9 @@ S_STEP_DISPATCH:
   → S_HANDLE_FAIL    WHEN: task-notification status=failed               DO: mark BLOCKED
 
 S_STEP_ANALYZE:
-  → S_STEP_DRIFT     WHEN: STATUS == DONE|DONE_WITH_CONCERNS    DO: A_STEP_EXTRACT
+  → S_STEP_DRIFT     WHEN: STATUS == DONE|DONE_WITH_CONCERNS AND CHECK == CLEAN    DO: A_STEP_EXTRACT
   → S_HANDLE_FAIL    WHEN: STATUS == NEEDS_RETRY|BLOCKED         DO: A_STEP_EXTRACT
+  → S_STEP_DISPATCH  WHEN: CHECK == BLOCKING AND repairable      DO: re-attach same run_id via run brief
 
 S_STEP_DRIFT:
   → S_STEP_COMPLETE  WHEN: ALIGNED|MINOR_DRIFT                   DO: A_STEP_DRIFT_ANALYZE
@@ -196,9 +223,11 @@ S_STEP_DRIFT:
   → S_STEP_COMPLETE  WHEN: MAJOR_DRIFT + retried                 DO: A_STEP_DRIFT_ANALYZE (DONE_WITH_CONCERNS)
 
 S_STEP_COMPLETE:
-  → S_STEP_LOCATE    DO: A_STEP_COMPLETE (loop to next step)
+  → S_STEP_LOCATE    WHEN: run_sealed == true                    DO: A_STEP_COMPLETE
+  → S_STEP_DISPATCH  WHEN: RUN_GATES_BLOCKING AND repairable     DO: re-attach same run_id via run brief
+  → S_HANDLE_FAIL    WHEN: complete failed for non-gate reason   DO: mark BLOCKED
 
-S_DECISION_EVAL: (decision 节点 == `step.decision` 非空)
+S_DECISION_EVAL: (decision 节点 == `step.decision_ref` 非空)
   → S_APPLY_VERDICT WHEN: quality-gate (post-execute, post-business-test, post-review, post-test, post-frontend-verify)
                      DO: A_AGENT_EVALUATE
   → S_APPLY_VERDICT WHEN: goal-gate (post-goal-audit)
@@ -218,9 +247,8 @@ S_APPLY_VERDICT:
   → S_STEP_LOCATE WHEN: post-analyze-scope                DO: A_APPLY_SCOPE_VERDICT
   → S_STEP_LOCATE WHEN: verdict == "fix"                  DO: A_APPLY_FIX
   → S_STEP_LOCATE WHEN: verdict == "escalate"             DO: A_APPLY_ESCALATE
-  → S_STEP_LOCATE WHEN: post-session + next dep-ready session   DO: A_ADVANCE_SESSION
-  → END              WHEN: post-session + no next session
-  → END              WHEN: post-session + seal failed（显示 blockers，session 保持 running）
+  → END              WHEN: post-session + preflight passed      DO: A_APPLY_PROCEED (先 decide，再 seal；DAG 仅给 suggest_only)
+  → S_STEP_LOCATE WHEN: post-session + preflight failed         DO: A_APPLY_FIX
   → END              WHEN: post-debug-escalate                DO: A_PAUSE_ESCALATE
   → END              WHEN: post-reground + drifted + confidence >= 60  DO: A_REGROUND_HALT
   → S_STEP_LOCATE WHEN: post-reground + aligned           DO: A_APPLY_PROCEED
@@ -459,6 +487,10 @@ Generate steps from `session.lifecycle_position` to `session-seal`（`session.se
    {
      "intent": "{session.intent}", "engine": "ralph",
      "quality_mode": "{session.quality_mode}", "auto_mode": {auto_confirm},
+     "boundary_contract": {
+       "in_scope": [...], "out_of_scope": [...], "constraints": [...],
+       "definition_of_done": "{session.boundary_contract.definition_of_done}"
+     },
      "steps": [
        { "command": "analyze", "args": "--session {session}", "stage": "analyze", "goal_ref": "G1", "retry_max": 2 },
        { "command": "post-execute", "stage": "execute", "decision_ref": "post-execute" }
@@ -472,7 +504,7 @@ Generate steps from `session.lifecycle_position` to `session-seal`（`session.se
    ```
    - decision 节点：`step` 携 `decision_ref`（CLI 据此标记为 decision node，不建 Run）；`decision_points[]` 声明重试预算。
    - 执行 step 的 `retry_max` 缺省 2（对齐现行 ralph 行为）。
-4. 调 `Bash("printf '%s' '{chain_json}' | maestro session create {slug} --intent \"{session.intent}\" --engine ralph --chain-file -")`（stdin 传 JSON 免转义）。返回 `session_id` + `next: maestro run next --session {id}`。
+4. 用 Write 将 chain definition 写入 `.workflow/tmp/ralph-chain-{slug}-{timestamp}.json`，再调 `Bash("maestro session create {slug} --intent \"{session.intent}\" --engine ralph --chain-file .workflow/tmp/ralph-chain-{slug}-{timestamp}.json")`，成功后删除临时 definition。禁止把未转义的 intent/JSON 内联进 shell。返回 `session_id` + `next: maestro run next --session {id}`。
 5. Step mode/role/rule 由各 stage 的 skill 自身约束（执行 Agent 始终拥有完整工具集）。
 
 ### A_STEP_RESOLVE_ARGS
@@ -530,7 +562,7 @@ if goal:
 
 ### A_STEP_DISPATCH
 
-派发 executor agent 执行单步。executor 内部调 `maestro run next --session {session}` 建 Run + 拿出生包并内联执行。
+派发 executor agent 执行单步。executor 内部调 `maestro run next --session {session} --json` 建 Run，提取 `run_id` 后 MUST 调 `maestro run brief {run_id}` 加载正文，再内联执行并运行 `run check`；birth packet 本身不是 skill 正文。
 
 > **单源上下文（不再手工拼装）**：`run next` 出生包已单源提供上游产物（Upstream inputs aliases）、前一步 handoff（Previous step summary/concerns）、后续队列（Queue）、handoff.next 推荐（Recommended）、按需参考（refs）与 goal 目标；`run brief {run_id}` 为 skill 正文注入点。故 A_STEP_DISPATCH 不再读前序 completion_*、不再逐路径 Read `session.context`、不再手工组装 `<goal_context>` —— 这些通道由出生包 + brief + anchor 覆盖。仅当出生包的 refs 指向代码位置而缺上下文时，executor 自行 `maestro explore` 补充。
 
@@ -563,7 +595,7 @@ if goal:
 
 3. Display: `[{index}/{total}] ⟶ {step.command} → {resolved_agent_name}`（`agent_exec_name` 仅日志标识，不落 session state）
 4. [@subagent] Agent() 返回 agentId → 等待 task-notification（status=completed 时 `<result>` 含 executor 输出）
-5. task-notification 到达后，`agent_output` = `<result>` 内容 → 进入 S_STEP_ANALYZE
+5. task-notification 到达后，`agent_output` = `<result>` 内容；MUST 含 `run_id`、`status`、`check` → 进入 S_STEP_ANALYZE
 6. task-notification status=failed → STATUS=BLOCKED，转 S_HANDLE_FAIL
 
 ### A_STEP_EXTRACT
@@ -611,7 +643,7 @@ if goal:
 
 | 条件 | STATUS |
 |------|--------|
-| Skill 正常完成 + 有产物 | `DONE` |
+| Skill 正常完成 + required gates clean | `DONE`（contract 无 required produces 时允许零 formal artifacts） |
 | 完成但有 warnings/concerns | `DONE_WITH_CONCERNS` |
 | 执行出错但可重试（临时错误、网络问题） | `NEEDS_RETRY` |
 | 执行出错且无法重试（schema 错误、command_path 不可达） | `BLOCKED` |
@@ -666,11 +698,11 @@ if goal:
 
 ### A_STEP_COMPLETE
 
-调 `run complete --verdict` 上报 + 循环。
+调 `run complete --verdict --json` 上报；仅在响应确认 `run_sealed=true` 后循环。
 
 1. 使用 A_STEP_EXTRACT 组装的参数调用 `run complete`（免 run-id，自动解析当前 running 步的 Run）:
    ```
-   Bash("maestro run complete --session {session} --verdict done --summary \"{SUMMARY}\" [--evidence <path>]... [--decision \"<text>\"]... [--note \"<text>\"]...")
+   Bash("maestro run complete --session {session} --verdict done --summary \"{SUMMARY}\" [--evidence <path>]... [--decision \"<text>\"]... [--note \"<text>\"]... --json")
    ```
    **verdict + 信号参数映射**（旧 ralph → 新面）：
 
@@ -684,18 +716,21 @@ if goal:
    | `--caveats` / `--deferred` | `--note`（可重复） |
    | `--evidence` | `--evidence`（可重复；`--artifact` 用于 outputs 扫描外的产物） |
 
-   verdict 驱动链推进（CLI 管）：done/done-with-concerns → step completed+seal；needs-retry → step 回 pending + retry.count++；blocked → step failed + session paused。CLI 的 next 仅为 `suggest_only`，complete 不执行建议、不创建 Run；主循环回到 S_STEP_LOCATE 后才在 A_STEP_DISPATCH 显式调用 `maestro run next`。
-2. Display: `[{index}/{total}] ✓ {step.command} → {SUMMARY}`（上下文信号已随 handoff 落 run.json，下一步 `run next` 出生包自源透出，无需回写侧文件）
-3. Loop back to S_STEP_LOCATE
+   verdict 驱动链推进（CLI 管）：done/done-with-concerns → step completed+seal；needs-retry → 失败 attempt 可无成功产物地 seal，step 回 pending + retry.count++；blocked → 失败 attempt 可无成功产物地 seal，step failed + session paused。CLI 的 next 仅为 `suggest_only`。
+2. Parse response：
+   - `ok=true` 且 `result.run_sealed=true` → Display success，进入 S_STEP_LOCATE
+   - `error.code=RUN_GATES_BLOCKING` → 禁止显示成功；按 `next.command` re-attach 当前 `run_id` 修复后重试
+   - 其他错误 → S_HANDLE_FAIL
+3. `done*` 仅强制 v2/v2.1 `required:true` outputs 或显式 required+blocking exit gate；legacy v1/optional outputs 缺失不阻塞。`needs-retry|blocked` 不要求成功产物，但保留 scan/gate diagnostics。
 
 ### A_AGENT_EVALUATE
 
-通过 Agent 和/或 CLI delegate 评估质量门。评估模式由 `step.evaluate_via` 决定。
+通过一个只读 generic Agent 评估质量门。evaluation policy 不存入 chain step；避免不可持久化的 agent/cli/dual 分支成为第二套状态机。
 
 **1. Common setup:**
 
 1. Resolve artifact dir: `{run_dir}/outputs/{artifact.path}/` with fallback glob
-2. Parse decision metadata: `{ decision, retry_count, max_retries, evaluate_via }`
+2. Parse decision metadata: `{ decision_ref, retry_count, max_retries }`
 3. Map result files:
 
    | Decision | Files |
@@ -706,11 +741,7 @@ if goal:
    | post-test | uat.md, .tests/test-results.json |
    | post-frontend-verify | e2e-results.json |
 
-4. `evaluate_via` 默认值：`"agent"`（未设置时）
-
-**2. Dispatch by mode:**
-
-**Mode: `agent`（默认）** — 同步 Agent 评估：
+**2. Dispatch evaluator:**
 
 ```
 [@subagent] Agent({  // generic agent — 评估类无专属定义，通过 prompt CONSTRAINTS 约束行为
@@ -732,51 +763,18 @@ CONSTRAINTS: 只评估不修改文件 | 置信度<60%倾向 fix | retry {n}/{max
 })
 ```
 
-**Mode: `cli`** — CLI delegate 评估（异步后台）：
+**3. Verdict parse + adjustment:**
 
-```
-Bash({
-  command: `maestro delegate "PURPOSE: 评估 ${decision} 质量门结果\nTASK: 读取 ${result_file_paths} | 分析状态 | 评估严重性\nEXPECTED: ---VERDICT--- 格式（STATUS/REASON/GAP_SUMMARY/CONFIDENCE_SCORE）\nCONSTRAINTS: 只评估不修改文件" --mode analysis --rule analysis-review-code-quality`,
-  run_in_background: true
-})
-```
-等待 delegate 完成 → `maestro delegate output {exec_id}` 获取结果 → 解析 `---VERDICT---`
-
-**Mode: `dual`** — Agent + CLI 并行评估，交叉验证：
-
-1. 先派发 CLI delegate（`run_in_background: true`）
-2. 同时派发同步 Agent（阻塞等待）
-3. Agent 返回后，检查 CLI delegate 状态（`maestro delegate status {exec_id}`）
-4. 合并裁决：
-
-   | Agent 结果 | CLI 结果 | 合并策略 |
-   |-----------|---------|---------|
-   | 两者一致 | — | 采用共识，confidence_score 取较高值 |
-   | Agent=PASS, CLI=FAIL | — | 降级为 PARTIAL，confidence_score 取平均值 |
-   | Agent=FAIL, CLI=PASS | — | 维持 FAIL（保守策略） |
-   | CLI 未返回 | — | 使用 Agent 结果，标 `"cli_pending": true` |
-
-**3. Verdict parse + adjustment（所有模式通用）:**
-
-5. Parse `---VERDICT---` block — STATUS must match strict enum `PASS|FAIL|PARTIAL|BLOCKED`; parse failure → fallback STATUS="fix", `parse_failed: true`, `confidence_score: 0` (invariant 18)
-6. Confidence adjustment: <60 + proceed → fix; >95 + fix + retry>0 → suggest proceed
-7. **Decision log**: Append to `{session_dir}/decisions.ndjson`（本地评估审计留痕，与 CLI 的 decision_point 状态写入正交）:
-   ```json
-   { "id": "DEC-{timestamp}", "timestamp": "{ISO}", "source": "ralph",
-     "node_id": "{step.decision}", "type": "quality-gate",
-     "evaluate_via": "{mode}", "cli_exec_id": "{exec_id|null}",
-     "verdict": "{adjusted_verdict}", "confidence_score": {N},
-     "parse_failed": false,
-     "close_call": {N>=50 && N<=70}, "summary": "{REASON}" }
-   ```
-8. **裁决落盘（chain-state 写入）**：评估得出的 proceed/fix/escalate 映射到 `run decide` 的 verbs 并落盘（见 A_APPLY_VERDICT）—— 评估由本 action 做，裁决落盘经 CLI，不直写 decision_point 状态。
+5. Parse `---VERDICT---` block — STATUS must match strict enum `PASS|FAIL|PARTIAL|BLOCKED`; parse failure → fallback fix，confidence_score=0，并把 `parse_failed=true` 写入 `run decide --summary` 的审计摘要。
+6. Confidence adjustment: <60 + proceed → fix; >95 + fix + retry>0 → suggest proceed。
+7. **单一落盘路径**：评估得出的 proceed/fix/escalate 仅经 `run decide --summary "reason; confidence=N; parse_failed=..." [--evidence ...]` 写 transition receipt；`decisions.ndjson` 由 runtime 从 receipts 重建，prompt 禁止直接 append。
 
 ### A_AGENT_GOAL_AUDIT
 
-通过 Agent 和/或 CLI delegate 审计子目标完成情况。支持 `evaluate_via` 三种模式（同 A_AGENT_EVALUATE）。
+通过一个只读 generic Agent 审计子目标完成情况。
 
 1. Read `orchestration.decomposition.goals` from session state（旧 session 兜底读 ralph-meta.task_decomposition）
-2. Dispatch audit（按 `evaluate_via` 模式，默认 `agent`）:
+2. Dispatch audit:
    ```
    [@subagent] Agent({  // generic agent — 评估类无专属定义，通过 prompt CONSTRAINTS 约束行为
      description: "审计子目标完成情况（同步评估 Agent，不传 name）",
@@ -803,16 +801,16 @@ Bash({
    })
    ```
 3. On return: parse verdict；子目标 status 翻转经 `maestro session meta update --session {session} --decomposition-file -`（重建整块 decomposition 提交，见 A_APPLY_GOAL_*），不直写
-4. Append `{session_dir}/decisions.ndjson`：`{ "type": "goal-gate", "evaluate_via": "{mode}", "unmet_count": N, "unmet_ids": [...] }`
+4. 审计摘要随 `run decide --summary` 落 transition receipt；禁止直接写 `decisions.ndjson`。
 5. Verdict routing: `all_met` + `INTENT_ALIGNED=true` → A_APPLY_GOAL_DONE；`all_met` + `INTENT_ALIGNED=false` → A_REGROUND_HALT；`has_unmet` → A_APPLY_GOAL_FIX
    GUARD: retry_count >= max_retries AND still unmet → A_APPLY_ESCALATE
 
 ### A_AGENT_REGROUND
 
-通过 Agent 和/或 CLI delegate 执行意图保真检查。支持 `evaluate_via` 三种模式（同 A_AGENT_EVALUATE）。
+通过一个只读 generic Agent 执行意图保真检查。
 
 1. Read session state：intent, boundary_contract, completed steps, done goals
-2. Dispatch reground（按 `evaluate_via` 模式，默认 `agent`）:
+2. Dispatch reground:
    ```
    [@subagent] Agent({  // generic agent — 评估类无专属定义，通过 prompt CONSTRAINTS 约束行为
      description: "意图保真检查（同步评估 Agent，不传 name）",
@@ -840,7 +838,7 @@ Bash({
    })
    ```
 3. On return: parse verdict
-4. Append `{session_dir}/decisions.ndjson`
+4. 评估摘要随 `run decide --summary` 落 transition receipt；禁止直接写 `decisions.ndjson`。
 5. Verdict routing：aligned → A_APPLY_PROCEED；drifted + confidence >= 60 → A_REGROUND_HALT；drifted + confidence < 60 → A_APPLY_PROCEED (LOW CONFIDENCE)
 
 ### A_SCOPE_EVALUATE
@@ -850,16 +848,14 @@ Bash({
 1. 定位刚完成的 macro analyze artifact → `analyze_macro_id`, `conclusions_path`
 2. 读取 `conclusions.scope_verdict`（`large | medium | small`），缺失 → `unknown`
 3. 写入 `session.scope_verdict` + `session.analyze_macro_id`
-4. Append `{session_dir}/decisions.ndjson`：`{ "type": "scope-gate", "source": "ralph", "verdict": "{scope_verdict}", "analyze_macro_id": "{ANL_ID}" }`
+4. scope verdict + analyze ID 随 `run decide --summary` / `--evidence` 落 transition receipt；禁止直接写 `decisions.ndjson`。
 
 ### A_STRUCTURAL_EVALUATE
 
 **post-session:**
-1. Mark session sealed：`Bash("maestro run seal-session {session.session_id}")` — CLI 写 `session.json.lifecycle.sealed_at`、投影 `state.json.sessions[].status = sealed` 并清空 `active_session_id`（知识提取不在此做，完整封印流程属 `maestro-session-seal` 命令）
-2. CLI 报错（unsealed Runs / session gates 未过）→ 显示 blockers + END（session 保持 running），提示人工运行 `/maestro-session-seal` 排查
-3. Read state.json → resolve session dependency graph（step 1 落盘的 sealed 状态使下游 session 变为 dep-ready）
-4. next dep-ready session exists（依赖已满足的 pending session）→ A_ADVANCE_SESSION
-5. no next session（DAG 完结或 adhoc session 无依赖图）→ END
+1. 只读核验：所有 execution Run 已 sealed、无 claimed request、session gates clean、goal audit 已通过。
+2. preflight clean → verdict=`proceed`，交给 A_APPLY_PROCEED；此处不得提前 seal Session。
+3. preflight blocking → verdict=`fix` + 精确 blocker；Session 保持 running。
 
 **post-debug-escalate:** always → A_PAUSE_ESCALATE
 
@@ -874,8 +870,8 @@ Bash({
 
 裁决落盘统一经 `maestro run decide {point_id} --session {session} --verdict proceed|fix|escalate --confidence high|medium|low [--summary "<text>"] [--evidence <path>]`（评估已由 A_AGENT_EVALUATE 做，此处仅落盘 + 按 verdict 推进）：
 
-- **A_APPLY_PROCEED**: `run decide {point_id} --verdict proceed`（CLI 标记 decision_point 完成并推进链）
-- **A_APPLY_FIX**: `run decide {point_id} --verdict fix`（CLI 自带 retry 计数），随后按 Fix-Loop Templates 用 `maestro session chain insert --session {session} --after {step_id} --command <cmd> [--args ...] [--stage ...] [--goal-ref ...] --inserted-by {gate名}` 逐条插步（fix-loop 各步）
+- **A_APPLY_PROCEED**: 普通 gate 调 `run decide {point_id} --verdict proceed`。`post-session` 必须先 `run decide post-session --verdict proceed` 使 decision node terminal，再调 `maestro run seal-session {session}`；seal 成功后仅返回 dep-ready Session 的 `suggest_only`，不在已 sealed Session 上插步。
+- **A_APPLY_FIX**: 先 `run decide {point_id} --verdict fix`（原 decision node 保持 pending，CLI 自带 retry 计数）。找到当前 decision node 的前一 execution step 作为 `cursor`，按 Fix-Loop Templates 顺序插入：每次 `--after {cursor}`，并把 cursor 更新为刚插入的 step_id。repair steps 因而位于原 decision node 之前；**复用原 decision node 复评，禁止插入相同 decision_ref 的新节点**。
 - **A_APPLY_ESCALATE**: `run decide {point_id} --verdict escalate`，随后 `session chain insert --after {step_id} --command debug --args "{gap_summary}" --inserted-by {gate名}` + 插入 `decision:post-debug-escalate` 节点（`session chain insert ... --command post-debug-escalate --decision-ref post-debug-escalate`）
 
 > 插步不再手工 reindex：`session chain insert` 在活动位之后的 pending 尾部插入并自动定 step_id。
@@ -891,7 +887,7 @@ Bash({
 
 ### A_APPLY_GOAL_FIX / A_APPLY_GOAL_DONE
 
-- **A_APPLY_GOAL_FIX**: 对每个 unmet 子目标用 `session chain insert --after {step_id} --command plan --args "--gaps --session {session} \"G{n}: {gap}\"" --goal-ref G{n} --inserted-by post-goal-audit` + execute 插步，末尾插 `decision:post-goal-audit {retry+1}`（`session chain insert ... --command post-goal-audit --decision-ref post-goal-audit`）；`run decide post-goal-audit --verdict fix`
+- **A_APPLY_GOAL_FIX**: `run decide post-goal-audit --verdict fix` 后，从原 decision 前一 step 开始维护移动 cursor；对每个 unmet 子目标依次插入 plan + execute，全部位于原 `post-goal-audit` decision 前。复用原 decision node，禁止追加同名 decision。
 - **A_APPLY_GOAL_DONE**: 重建整块 decomposition（`goals[*].status="done"`, `completion_confirmed=true`）提交 `maestro session meta update --session {session} --decomposition-file -`（stdin 传整块 JSON）；`run decide post-goal-audit --verdict proceed`
 
 ### A_ADVANCE_SESSION
@@ -904,6 +900,16 @@ Bash({
 
 - **A_REGROUND_HALT**: `maestro run decide {point_id} --verdict escalate --confidence {n}`（CLI 将 session 置 paused），display drift warning + 恢复选项。auto_confirm 不跳过
 - **A_PAUSE_ESCALATE**: `run decide post-debug-escalate --verdict escalate`（session paused），display "请人工介入"，suggest continue
+
+### A_PAUSED_RECOVERY
+
+仅由显式 `continue` 进入；不得把 recovery 用作 topic resolution 或 artifact reuse。
+
+1. 读取 exact Session 的 `identity_revision` / `activity_revision`、escalated decision 与 failed step。
+2. [@ask] AskUserQuestion 选择每个 blocker 的 audited disposition：decision=`proceed|retry`；failed step=`retry|skip`。取消则 END。
+3. 对每个 blocker 调 `maestro session resolve --session {session} --request-id {id} --actor ralph --reason "{reason}" --evidence {ref} --expected-identity-revision {n} --expected-activity-revision {n} (--decision {point_id}|--step {step_id}) --disposition {value} --json`，每次按返回 revision 更新下一请求。
+4. blockers 清零后调 `maestro session resume --session {session} --request-id {id} --actor ralph --reason "recovery blockers cleared" --evidence {ref} --expected-identity-revision {n} --expected-activity-revision {n} --json`（租约存在时附 lease guards）。
+5. resume 成功且 session.status=`running` 后进入 S_STEP_LOCATE；Run 分配仍由下一次显式 `run next` 完成。
 
 ### A_AMEND_GOAL
 
@@ -949,9 +955,9 @@ GUARD: 已完成（`status: "done"`）的目标不可 supersede（skip + warn）
 
 ### A_RETRY / A_PAUSE_SESSION / A_COMPLETE_SESSION
 
-- **A_RETRY**: `Bash("maestro run complete --session {session} --verdict needs-retry --reason \"...\"")` — CLI 将 chain step 重设为 pending，retry.count++、run_id=null
-- **A_PAUSE_SESSION**: `maestro run complete --session {session} --verdict blocked --reason "..."` — CLI 写 `session.status = "paused"`
-- **A_COMPLETE_SESSION**: 校验所有 step 已 completed/sealed + `orchestration.decomposition.goals[*].status == "done"`（若存在），通过后 session 由 seal 流程置 `completed`。unnamed executor 执行完自动终止，无需 shutdown 清理
+- **A_RETRY**: `Bash("maestro run complete --session {session} --verdict needs-retry --reason \"...\" --json")` — 失败 attempt 不要求成功产物；CLI seal attempt 后将 chain step 重设为 pending，retry.count++、run_id=null。必须验证 `run_sealed=true` + `step_status=pending`。
+- **A_PAUSE_SESSION**: `maestro run complete --session {session} --verdict blocked --reason "..." --json` — 失败 attempt 不要求成功产物；必须验证 `run_sealed=true` + session paused。
+- **A_COMPLETE_SESSION**: 校验所有 step 已 sealed/skipped + `orchestration.decomposition.goals[*].status == "done"`（若存在），通过后调 `run seal-session` 将 session 置 `sealed`。unnamed executor 执行完自动终止，无需 shutdown 清理
 
 </actions>
 
@@ -1116,11 +1122,11 @@ Build rules 0.5-13 全部适用，包括 spec-setup 预检（rule 0.5）、grill
 
 ### Session Schema
 
-**session.json** (`session/1.2`，engine=ralph；orchestration 为唯一编排真相源，原 ralph-meta 字段已归位)。**由 CLI 建/写，prompt 层不直写**：
+**session.json** (`session/1.3`，engine=ralph；orchestration 为唯一编排真相源，原 ralph-meta 字段已归位)。**由 CLI 建/写，prompt 层不直写**：
 
 ```json
 {
-  "schema_version": "session/1.2",
+  "schema_version": "session/1.3",
   "session_id": "{id}",
   "intent": "", "status": "running|paused|sealed|archived|failed",
   "boundary_contract": {
@@ -1179,18 +1185,17 @@ Build rules 0.5-13 全部适用，包括 spec-setup 预检（rule 0.5）、grill
 
 **步进进度**：不落 session.json；由各步 `runs/{run_id}/run.json` 的 handoff/anchor 承担，下一步 `run next` 出生包自源透出。
 
-**legacy `ralph-meta.json`**：旧 session（`session/1.0` + ralph-meta）未迁移前，评估/审计 prompt 可兜底读其 `task_decomposition`/`context`/`goal_changelog`；新 session 一律走上面 `session/1.2` 形态，`ralph-meta.json` 不再写。迁移经 `maestro session migrate [--session <id>]`（幂等，拒迁有 running step 的 session）。
+**legacy `ralph-meta.json`**：旧 session（`session/1.0` + ralph-meta）未迁移前，评估/审计 prompt 可兜底读其 `task_decomposition`/`context`/`goal_changelog`；新 session 一律走上面 `session/1.3` 形态，`ralph-meta.json` 不再写。迁移经 `maestro session migrate [--session <id>]`（幂等，拒迁有 running step 的 session）。
 
 ### Fix-Loop Templates
 
-下面每行是一条 `maestro session chain insert --session {session} --after {step_id} --command <cmd> [--args ...] [--stage ...] [--goal-ref ...] --inserted-by {gate名}`；`decision:*` 行为 decision 节点（`--command <point> --decision-ref <point>`）。执行 step 按 A_BUILD_STEPS 规则 9 预校验 skill 名，插入的 step 通过 A_STEP_DISPATCH 派发 executor agent 逐步执行，由主流程调 `run complete --verdict` 上报。
+下面每行是一条 ordered repair step。首步插在原 decision 前一 execution step 后；后续每步插在刚创建的 step_id 后（移动 cursor），保证顺序稳定且全部位于原 pending decision 之前。复用原 decision node 复评，禁止追加同名 `decision_ref`。执行 step 按 A_BUILD_STEPS 规则 9 预校验 skill 名，由 A_STEP_DISPATCH 派发。
 
 **post-execute:**
 ```
 debug "{gap_summary}"
 plan --gaps --session {session}
 execute --session {session}
-decision:post-execute {retry+1}
 ```
 
 **post-business-test:**
@@ -1198,9 +1203,7 @@ decision:post-execute {retry+1}
 debug "{gap_summary}"
 plan --gaps --session {session}
 execute --session {session}
-decision:post-execute {retry: 0}
 auto-test --session {session}
-decision:post-business-test {retry+1}
 ```
 
 **post-review:**
@@ -1209,7 +1212,6 @@ debug "{gap_summary}"
 plan --gaps --session {session}
 execute --session {session}
 review --session {session}
-decision:post-review {retry+1}
 ```
 
 **post-test:**
@@ -1217,14 +1219,7 @@ decision:post-review {retry+1}
 debug --from-uat "{gap_summary}"
 plan --gaps --session {session}
 execute --session {session}
-decision:post-execute {retry: 0}
-auto-test --session {session}
-decision:post-business-test {retry: 0}
-review --session {session}
-decision:post-review {retry: 0}
-auto-test --session {session}
 test --session {session}
-decision:post-test {retry+1}
 ```
 
 **post-frontend-verify:** (UI 写端点未接线/不可用时)
@@ -1233,7 +1228,6 @@ debug --from-frontend-verify "{gap_summary}"
 plan --gaps --session {session}
 execute --session {session}
 test --session {session} --frontend-verify
-decision:post-frontend-verify {retry+1}
 ```
 
 **post-goal-audit:** (per unmet sub-goal group)
@@ -1241,8 +1235,7 @@ decision:post-frontend-verify {retry+1}
 # for each unmet sub-goal G{n}, scoped to session:
 plan --gaps --session {session} "G{n}: {gap}"     [goal_ref: G{n}]
 execute --session {session}                       [goal_ref: G{n}]
-# after all unmet groups inserted:
-decision:post-goal-audit {retry+1}
+# after all unmet groups complete, the original post-goal-audit node re-evaluates
 ```
 
 ### Error Codes
@@ -1275,13 +1268,12 @@ Engine 模式新增（`--engine swarm|universal`，见 `<engines>`）：
 - [ ] 主流程调 `maestro run complete --verdict`（免 run-id）上报（非 agent 上报）
 - [ ] 主流程负责 arg resolution、context loading、signal extraction、drift analysis
 - [ ] task-notification status=failed → STATUS=BLOCKED，转 S_HANDLE_FAIL
-- [ ] Unified unnamed dispatch: 执行 Agent 和评估 Agent 均不传 name，结果通过 task-notification 回传。CLI delegate 仅限评估环节
-- [ ] Decision evaluation 支持三种模式：agent（同步）、cli（CLI delegate）、dual（并行交叉验证）
-- [ ] `evaluate_via` 字段控制评估模式，默认 `"agent"`
+- [ ] Unified unnamed dispatch: 执行 Agent 和评估 Agent 均不传 name，结果通过 task-notification 回传
+- [ ] Decision evaluation 使用一个只读 generic Agent；chain schema 不携带不可持久化的 evaluator mode
 - [ ] dual 模式合并策略：一致取共识、分歧保守降级、CLI 未返回用 Agent 结果
 - [ ] Verdict 解析保持 `---VERDICT---` 格式，parse 失败 → fallback fix + parse_failed: true
-- [ ] decisions.ndjson 追加：source 字段为 `"ralph"`
-- [ ] Session schema: `session/1.2`，Run schema: `command-run/1.2`；orchestration 单源，CLI 建/写
+- [ ] decisions.ndjson 仅由 runtime 从 decision transition receipts 重建，prompt 不直写
+- [ ] Session schema: `session/1.3`，Run schema: `command-run/1.3`；orchestration 单源，CLI 建/写
 - [ ] Session 仅作 topic grouping/index；同 Session eligible sealed outputs 仅经 `run next`/`run brief` canonical upstream 复用；historical similarity 只读
 - [ ] 正常流程不调用或推荐 deprecated admin-only `recall-confirm|fork|import|new|rebind|session resolve|session resume`
 - [ ] Chain building（S_RESOLVE_SESSION through S_BUILD_CHAIN）自包含执行，经 `session create --chain-file`（stdin JSON）落盘

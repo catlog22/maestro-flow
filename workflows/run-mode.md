@@ -47,6 +47,7 @@ maestro run create odyssey --session 20260715-odyssey-planex-todo -- --mode plan
 ## Artifact Boundary
 
 - Every formal artifact (including evidence-role artifacts declared in the prepare contract) MUST be written under `{run_dir}/outputs/`.
+- A Run may validly produce no formal artifact. Only contract v2/v2.1 outputs declared with `required: true`, or an explicit required+blocking exit gate, make an artifact mandatory. Legacy v1 `produces` entries and `required: false` outputs are descriptive/optional and MUST NOT block completion when absent.
 - Every new formal JSON artifact MUST contain a complete top-level `_meta` object: `{"_meta":{"kind":"<stable-kind>","schema":"<stable-kind>/1.0"},...}`. `kind` and `schema` are required together; `role` and `alias` are optional.
 - A legacy JSON artifact with no `_meta` remains readable through contract/filename inference. Never write a partial, null, or non-object `_meta`; strict validation rejects the artifact and blocks Run completion.
 - Human-readable synthesis and handoff MUST be written to `{run_dir}/report.md`.
@@ -61,12 +62,16 @@ maestro run create odyssey --session 20260715-odyssey-planex-todo -- --mode plan
 1. Run `maestro run check {run_id}` and repair any blocking artifact or exit gate it reports.
 2. When every gate is clean, `run check` emits a `finish` checklist — handoff frontmatter, knowledge record, conflict marking (supersede / contest stale spec-knowhow entries), verdict choice, plus norms declared by the workflow. Work through it before completing; it is prompt-layer guidance, never a blocking gate.
 3. Run `maestro run complete {run_id}`. The artifact gate is derived from the Run contract and evaluated automatically. Completion may return a structured `suggest_only` next action, but it never executes that action or creates another Run.
+   - `done` / `done-with-concerns` enforce required success artifacts and exit gates.
+   - `needs-retry` / `blocked` close the failed attempt without requiring success artifacts; missing/invalid outputs remain diagnostic evidence, not a blocker to retrying or pausing the chain.
 4. The caller explicitly invokes `maestro run next --session {session_id}` only after accepting the suggestion and its preconditions. `run next` is the sole normal allocator for the next chain-bound Run.
 5. Report success only when the Run is completed. Completed artifacts are immutable; later Runs in the same Session reuse eligible sealed outputs through `upstream` rather than copying them.
 
 ## Legacy/Admin Compatibility
 
-`maestro run recall-confirm`, `run fork`, `run import`, `run new`, `run rebind`, `maestro session resolve`, and `session resume` are deprecated admin-only compatibility commands. They may remain callable while legacy records exist, but normal topic resolution, output reuse, recall recommendations, and next-action routing MUST NOT invoke or recommend them. They provide no force bypass; durability and recovery internals remain runtime-owned.
+`maestro run recall-confirm`, `run fork`, `run import`, `run new`, and `run rebind` are deprecated admin-only compatibility commands. They may remain callable while legacy records exist, but normal topic resolution, output reuse, recall recommendations, and next-action routing MUST NOT invoke or recommend them. They provide no force bypass; durability and recovery internals remain runtime-owned.
+
+`maestro session resolve` and `maestro session resume` are the canonical audited recovery path for a paused Session: resolve each exact escalated decision/failed step, then resume, then explicitly invoke `run next`. They are not normal topic-resolution or artifact-reuse operations.
 
 **Workflow-specific finish norms**: declare a `finish:` list in the workflow file's YAML frontmatter; each entry is one norm line appended to the `run check` finish checklist.
 

@@ -467,7 +467,7 @@ describe('run complete — completion gate integrity', () => {
     const projectRoot = root();
     stepCommand(projectRoot, 'demo');
     const commandPath = join(projectRoot, '.claude', 'commands', 'demo.md');
-    writeFileSync(commandPath, `<contract>\nconsumes: []\nproduces:\n  - kind: plan\n    primary: true\n    path: outputs/plan.json\ngates:\n  entry: []\n  exit: []\n</contract>\n`, 'utf8');
+    writeFileSync(commandPath, `<contract>\ncontract_version: 2\nconsumes: []\nproduces:\n  - kind: plan\n    path: outputs/plan.json\n    role: primary\n    required: true\n    schema: plan/1.0\ngates:\n  entry: []\n  exit: []\n</contract>\n`, 'utf8');
     seedSession(projectRoot, 's', [{ command: 'demo' }]);
     const runId = startStep(projectRoot, 's', 0);
 
@@ -475,6 +475,41 @@ describe('run complete — completion gate integrity', () => {
     expect(result.run_sealed).toBe(false);
     expect(chainOf(projectRoot, 's')[0]).toMatchObject({ status: 'running', run_id: runId });
     expect(result.next.command).toBe(`maestro run check ${runId}`);
+  });
+
+  it('treats legacy v1 outputs as optional when no artifact is produced', () => {
+    const projectRoot = root();
+    stepCommand(projectRoot, 'demo');
+    const commandPath = join(projectRoot, '.claude', 'commands', 'demo.md');
+    writeFileSync(commandPath, `<contract>\nconsumes: []\nproduces:\n  - kind: plan\n    primary: true\n    path: outputs/plan.json\ngates:\n  entry: []\n  exit: []\n</contract>\n`, 'utf8');
+    seedSession(projectRoot, 's', [{ command: 'demo' }]);
+    const runId = startStep(projectRoot, 's', 0);
+
+    const result = completeRunWithVerdict(projectRoot, runId, 's', { verdict: 'done' });
+    expect(result.run_sealed).toBe(true);
+    expect(result.seal.gates.blocking).toEqual([]);
+    expect(chainOf(projectRoot, 's')[0].status).toBe('sealed');
+  });
+
+  it.each([
+    { verdict: 'needs-retry' as const, stepStatus: 'pending', sessionStatus: 'running' },
+    { verdict: 'blocked' as const, stepStatus: 'failed', sessionStatus: 'paused' },
+  ])('allows $verdict without required success artifacts', ({ verdict, stepStatus, sessionStatus }) => {
+    const projectRoot = root();
+    stepCommand(projectRoot, 'demo');
+    const commandPath = join(projectRoot, '.claude', 'commands', 'demo.md');
+    writeFileSync(commandPath, `<contract>\ncontract_version: 2\nconsumes: []\nproduces:\n  - kind: result\n    path: outputs/result.json\n    role: primary\n    required: true\n    schema: result/1.0\ngates:\n  entry: []\n  exit: []\n</contract>\n`, 'utf8');
+    seedSession(projectRoot, 's', [{ command: 'demo' }]);
+    const runId = startStep(projectRoot, 's', 0);
+
+    const result = completeRunWithVerdict(projectRoot, runId, 's', {
+      verdict,
+      reason: verdict === 'blocked' ? 'cannot continue' : undefined,
+    });
+    expect(result.run_sealed).toBe(true);
+    expect(result.seal.gates.blocking).toEqual([]);
+    expect(chainOf(projectRoot, 's')[0].status).toBe(stepStatus);
+    expect(new SessionStore(projectRoot).readBundle('s').session.status).toBe(sessionStatus);
   });
 });
 

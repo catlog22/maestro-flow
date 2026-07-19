@@ -1282,7 +1282,10 @@ function registerRunGates(registry: GateRegistry, contract: CommandContract, run
     ids.push(id);
   }
   for (const produce of contract.produces) {
-    const required = (contract.contract_version === 2 || contract.contract_version === 2.1) ? produce.required === true : true;
+    // Legacy v1 contracts do not have enforceable output requiredness. The
+    // parser deliberately normalizes those outputs to required=false; only an
+    // explicit v2/v2.1 `required: true` declaration may create a blocking gate.
+    const required = produce.required === true;
     add({
       key: `produce-${produce.kind}`,
       title: `Produce ${produce.kind}`,
@@ -1424,6 +1427,28 @@ function evaluateRunGates(bundle: SessionBundle, run: CommandRun, context: Evalu
         changed = true;
       }
     }
+  }
+  if (changed) bundle.gates.revision++;
+  summarizeRegistry(bundle.gates);
+  return gateSummary(bundle.gates, run.gate_ids);
+}
+
+function isFailureVerdict(verdict: CompletionVerdict | undefined): boolean {
+  return verdict === 'needs-retry' || verdict === 'blocked';
+}
+
+/**
+ * A failed attempt is allowed to end without pretending that its successful
+ * output contract was satisfied. Exit gates belong to the success path, so
+ * mark them not-applicable while retaining entry-gate and scan diagnostics.
+ */
+function skipExitGatesForFailedAttempt(bundle: SessionBundle, run: CommandRun): GateSummary {
+  let changed = false;
+  for (const id of run.gate_ids) {
+    const gate = bundle.gates.gates[id];
+    if (!gate || gate.scope !== 'exit' || gate.status === 'passed' || gate.status === 'waived') continue;
+    gate.status = 'skipped';
+    changed = true;
   }
   if (changed) bundle.gates.revision++;
   summarizeRegistry(bundle.gates);
@@ -2480,7 +2505,9 @@ export function prepareCompleteInputs(
   const runDir = store.runDir(located.sessionId, runId);
   const sessionDir = store.sessionDir(located.sessionId);
   const scan = scanOutputs(runDir, sessionDir, resolved.contract);
-  validateStrictArtifactContract(runDir, resolved.contract, scan);
+  if (!isFailureVerdict(options.chainVerdict)) {
+    validateStrictArtifactContract(runDir, resolved.contract, scan);
+  }
   const extraArtifacts = discoverExtraArtifacts(runDir, sessionDir, options.extraArtifacts ?? []);
   const completionPaths = [
     join(runDir, 'report.md'),
@@ -2547,8 +2574,11 @@ export function applyCompleteRunMutation(
     reportDecisions: frontmatter.decisions.map(item => ({ id: item.id, status: item.status })),
     run,
   };
-  const gates = evaluateRunGates(draft, run, context);
-  const blocked = scan.errors.length > 0 || gates.blocking.length > 0;
+  const failureVerdict = isFailureVerdict(options.chainVerdict);
+  const gates = failureVerdict
+    ? skipExitGatesForFailedAttempt(draft, run)
+    : evaluateRunGates(draft, run, context);
+  const blocked = !failureVerdict && (scan.errors.length > 0 || gates.blocking.length > 0);
   draft.session.activity_revision++;
   if (blocked) {
     run.status = 'blocked';

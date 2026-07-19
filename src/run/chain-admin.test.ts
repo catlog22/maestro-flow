@@ -53,6 +53,12 @@ function fullDefinition(): ChainDefinition {
     decision_points: [
       { point_id: 'post-execute', after_step_id: 'step-002-execute', max_retries: 2 },
     ],
+    boundary_contract: {
+      in_scope: ['src/'],
+      out_of_scope: ['docs/'],
+      constraints: ['keep API stable'],
+      definition_of_done: 'tests pass',
+    },
     position: { lifecycle: 'execute', phase: 1, milestone: 'M1', passed_gates: ['g1'] },
     decomposition: {
       execution_criteria: ['builds', 'tests pass'],
@@ -103,6 +109,12 @@ describe('createChainSession — predefined chain', () => {
     expect(o.position).toMatchObject({ lifecycle: 'execute', phase: 1, milestone: 'M1', passed_gates: ['g1'] });
     expect(o.decomposition?.execution_criteria).toEqual(['builds', 'tests pass']);
     expect(o.decomposition?.goals).toHaveLength(1);
+    expect(session.boundary_contract).toEqual({
+      in_scope: ['src/'],
+      out_of_scope: ['docs/'],
+      constraints: ['keep API stable'],
+      definition_of_done: 'tests pass',
+    });
   });
 
   it('persists the session so it round-trips through the store', () => {
