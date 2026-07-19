@@ -20,8 +20,15 @@ allowed-tools:
   - spawn_agents_on_csv
   - update_plan
   - wait_agent
-session-mode: none
-version: 0.5.50
+session-mode: run
+version: 0.5.51
+contract:
+  discovery: self-described
+  consumes: []
+  produces: []
+  gates:
+    entry: []
+    exit: []
 ---
 
 > **Plan tracking**: codex 无 TaskCreate/TaskUpdate/TodoWrite 任务板。进度清单用 `update_plan({ explanation?, plan: [{ step, status }] })` 维护（整体提交步骤数组，status: `pending` | `in_progress` | `completed`），权威状态始终在 session 工件中；依赖/认领（addBlockedBy/owner）是工件字段，不是工具参数。
@@ -335,14 +342,12 @@ When converting from command format to skill format:
 | `examples` | _(removed)_ | Examples moved to inline documentation |
 | `allowed-tools` | `allowed-tools` | Expand wildcards: `Skill(*)` → `Skill`, add commonly needed tools |
 | `group` | _(removed)_ | Embedded in `name` prefix |
-| _(none)_ | `session-mode` | Add: `run` if the skill creates a Run / writes `{run_dir}` artifacts, else `none`. When `run`, also add the run-mode.md `<required_reading>` block. |
-
+| _(none)_ | `session-mode` | Add: `run` if the skill creates a Run / writes `{run_dir}` artifacts, else `none`. When `run`, also add the run-mode.md `<required_reading>
+@~/.maestro/workflows/run-mode.md
+` block. |
 ## Orchestrator Content Mapping
-
 What goes into SKILL.md vs what goes into phase files:
-
 ### SKILL.md (Coordinator)
-
 | Section | Content | Source |
 |---------|---------|--------|
 | Frontmatter | name, description, allowed-tools | Command frontmatter (converted) |
@@ -357,9 +362,7 @@ What goes into SKILL.md vs what goes into phase files:
 | Error Handling | Failure recovery | Command error handling |
 | Coordinator Checklist | Pre/post phase actions | Command coordinator checklist |
 | Related Commands | Prerequisites and follow-ups | Command related commands |
-
 ### Phase Files (Execution Detail)
-
 | Content | Rule |
 |---------|------|
 | Full agent prompts | Preserve verbatim from source command |
@@ -371,11 +374,8 @@ What goes into SKILL.md vs what goes into phase files:
 | Phase header | Add `# Phase N: {Name}` |
 | Objective section | Add `## Objective` with bullet points |
 | Next Phase link | Add `## Next Phase` with link to next |
-
 **Critical Rule**: Phase files must be **content-faithful** to their source. Do NOT summarize, abbreviate, or simplify. The phase file IS the execution instruction - every bash command, every agent prompt, every validation step must be preserved.
-
 ## SKILL.md Template
-
 ```markdown
 ---
 name: {skill-name}
@@ -383,10 +383,9 @@ description: {description}. Triggers on "{trigger1}", "{trigger2}".
 allowed-tools: {tools}
 session-mode: {run|none}
 ---
-
 <!-- Include only when session-mode: run -->
 <required_reading>
-@~/.maestro/workflows/run-mode.md
+@~/.maestro/workflows/codex-run-mode.md
 </required_reading>
 
 # {Title}

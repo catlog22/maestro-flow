@@ -15,7 +15,7 @@ allowed-tools:
   - request_user_input
   - update_plan
 session-mode: none
-version: 0.5.50
+version: 0.5.51
 ---
 
 # Scholar Anti-AI Writing

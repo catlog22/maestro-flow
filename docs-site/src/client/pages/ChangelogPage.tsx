@@ -28,6 +28,7 @@ const changelog: ChangelogEntry[] = [
       { type: 'fix', text_en: 'Make knowledge writes and graph migrations atomic, block SQL injection and nested transactions, expose index corruption, and normalize searchable Session/Run topology', text_zh: '知识写入与图谱迁移原子化，修复 SQL 注入与嵌套事务，显式暴露索引损坏并规范化可搜索的 Session/Run 拓扑' },
       { type: 'refactor', text_en: 'Converge commands and workflows on prepare/workflows/ref entry steps, retire the chains data layer and obsolete commands, and move collab/grill to run-lite entry steps', text_zh: '命令与工作流收敛到 prepare/workflows/ref entry step，退役 chains 数据层与废弃命令，并将 collab/grill 迁移为 run-lite entry step' },
       { type: 'fix', text_en: 'Align 23 team-skill coordinators and all generated Claude/Codex/Agy/Agents mirrors with the canonical Run contract', text_zh: '将 23 个 team skill coordinator 及 Claude/Codex/Agy/Agents 生成镜像对齐标准 Run 契约' },
+      { type: 'fix', text_en: 'Make fresh-checkout dashboard builds independent of pre-existing root dist artifacts', text_zh: '修复 fresh checkout 中 dashboard 构建依赖预先存在 root dist 产物的问题' },
     ],
   },
   {
