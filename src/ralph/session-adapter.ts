@@ -3,7 +3,7 @@
 // SessionStore (`.workflow/sessions/`).
 //
 // Orchestration state (chain, decision_points, position, decomposition, lease,
-// executor) is single-sourced in session.json (session/1.2). `ralph-meta.json`
+// executor) is single-sourced in session.json (session/1.3). `ralph-meta.json`
 // remains only as a legacy read-fallback for unmigrated sessions and as the
 // legacy carrier of verification_ledger (see verification-ledger.ts).
 // ---------------------------------------------------------------------------
@@ -393,7 +393,7 @@ export function updateRalphMeta(
 // ── session.json-first position / decomposition readers (1.1 with meta fallback)
 
 /**
- * Effective lifecycle-position fields for a ralph session: session/1.2 promoted
+ * Effective lifecycle-position fields for a ralph session: session/1.3 promoted
  * them into orchestration.position, so read that first and fall back to
  * ralph-meta.json only when the block is absent (un-migrated 1.0 session). The
  * shape mirrors the ralph-meta fields the display code reads.
@@ -433,7 +433,7 @@ export function effectivePosition(session: SessionState, meta: RalphMeta): Effec
 }
 
 /**
- * Effective sub-goal decomposition for a ralph session: session/1.2 promoted
+ * Effective sub-goal decomposition for a ralph session: session/1.3 promoted
  * task_decomposition + execution_criteria into orchestration.decomposition, so
  * read that first and fall back to the legacy ralph-meta arrays when absent.
  */

@@ -8,6 +8,7 @@ import {
   createRun,
   prepareStep,
   rebindRunCommand,
+  resolveTopicSessionId,
   skillContent,
   sealSession,
   type CompletionVerdict,
@@ -40,6 +41,18 @@ function collect(value: string, previous: string[]): string[] {
 }
 function print(value: unknown): void {
   console.log(JSON.stringify(value, null, 2));
+}
+
+const ADMIN_COMPATIBILITY_PREFIX = '[DEPRECATED, ADMIN-ONLY]';
+
+function addAdminCompatibilityHelp(command: Command, retainedFor: string): Command {
+  return command.addHelpText('after', `
+Compatibility boundary:
+  ${retainedFor}
+  This command is excluded from normal topic resolution, Session selection, sealed-output reuse,
+  recall recommendations, and next-action routing.
+  It is not a force operation or lifecycle bypass.
+`);
 }
 
 function reportError(error: unknown): void {
@@ -79,24 +92,65 @@ function machineSuccess(
   emitRunResponse(createRunResponseSuccess({ operation, result, locator, replay }));
 }
 
+type RunRecallResult = Awaited<ReturnType<typeof recallRuns>>;
+
+function readOnlyRecallProjection(result: RunRecallResult): RunRecallResult {
+  const readOnlyExclusion = 'CLI_READ_ONLY_NO_MUTATION';
+  return {
+    ...result,
+    exact_candidates: result.exact_candidates.map(candidate => ({
+      ...candidate,
+      eligible_actions: [],
+      exclusions: [...new Set([...candidate.exclusions, readOnlyExclusion])],
+      next_if_active: null,
+    })),
+    historical_candidates: result.historical_candidates.map(candidate => ({
+      ...candidate,
+      eligible_actions: [],
+      exclusions: [...new Set([...candidate.exclusions, readOnlyExclusion])],
+    })),
+    recommendation: {
+      action: null,
+      candidate_id: result.recommendation.candidate_id,
+      automatic: false,
+      reason_codes: [...new Set([...result.recommendation.reason_codes, 'READ_ONLY_LOOKUP'])],
+    },
+    confirmation: { required: false, issuance_command: '', allowed_actions: [] },
+    next: {
+      suggest_only: true,
+      command: null,
+      reason: 'Recall is read-only; normal routing resolves a topic Session and reuses eligible same-Session sealed outputs.',
+    },
+  };
+}
+
 export function registerRunCommand(program: Command): void {
   const run = program
     .command('run')
-    .description('Manage canonical Session/Run lifecycle');
+    .description('Manage Runs inside topic-grouped Sessions; compatibility/admin commands are never routed automatically');
 
   run
     .command('prepare <step>')
     .description('Return prepare file + workflow metadata for pre-task thinking (read-only, stateless)')
     .option('--session <id>', 'attach prior-step context from a Session (read-only)')
+    .option('--topic <text>', 'resolve prior-step context from the unique running topic Session (read-only)')
     .option('--workflow-root <path>', 'project root', process.cwd())
     .option('--platform <name>', 'target platform for tool substitution (claude|codex|agy|agents-standard)')
-    .action((step: string, opts: { session?: string; workflowRoot: string; platform?: string }) => {
+    .action((step: string, opts: { session?: string; topic?: string; workflowRoot: string; platform?: string }) => {
       try {
         const platform = opts.platform as TargetPlatform | undefined;
         if (platform && !VALID_PLATFORMS.includes(platform)) {
           throw new Error(`unknown platform "${platform}", valid: ${VALID_PLATFORMS.join(', ')}`);
         }
-        print(prepareStep(resolve(opts.workflowRoot), step, platform, opts.session));
+        const projectRoot = resolve(opts.workflowRoot);
+        const resolvedTopicSession = opts.topic
+          ? resolveTopicSessionId(projectRoot, opts.topic, opts.session)
+          : null;
+        if (opts.session && opts.topic && resolvedTopicSession === null) {
+          throw new Error(`Session not found: ${opts.session}`);
+        }
+        const sessionId = opts.topic ? resolvedTopicSession ?? undefined : opts.session;
+        print(prepareStep(projectRoot, step, platform, sessionId));
       } catch (error) {
         reportError(error);
       }
@@ -151,16 +205,20 @@ export function registerRunCommand(program: Command): void {
     .description('Create a Run in an existing or new Session')
     .option('--session <id>', 'explicit Session ID')
     .option('--intent <text>', 'intent used when creating a Session')
+    .option('--topic <text>', 'command-independent Session topic (Unicode supported)')
     .option('--retry-token <token>', 'opaque single-use token issued by a needs-retry transition')
     .option('--platform <name>', 'target platform persisted for this Run')
     .option('--arg <value>', 'command argument (repeatable)', collect, [])
+    .option('--json', 'emit one run-response/1.0 envelope on stdout')
     .option('--workflow-root <path>', 'project root containing .workflow', process.cwd())
     .action((command: string, positionalArgs: string[], opts: {
       session?: string;
       intent?: string;
+      topic?: string;
       retryToken?: string;
       platform?: string;
       arg: string[];
+      json?: boolean;
       workflowRoot: string;
     }) => {
       try {
@@ -168,17 +226,19 @@ export function registerRunCommand(program: Command): void {
         if (platform && !VALID_PLATFORMS.includes(platform)) {
           throw new Error(`unknown platform "${platform}", valid: ${VALID_PLATFORMS.join(', ')}`);
         }
-        print(createRun({
+        const result = createRun({
           projectRoot: resolve(opts.workflowRoot),
           command,
           sessionId: opts.session,
           intent: opts.intent,
+          topic: opts.topic,
           retryToken: opts.retryToken,
           platform,
           args: [...opts.arg, ...positionalArgs],
-        }));
+        });
+        if (opts.json) machineSuccess('create', result, { session_id: result.session_id, run_id: result.run_id }); else print(result);
       } catch (error) {
-        reportError(error);
+        if (opts.json) machineError('create', error); else reportError(error);
       }
     });
 
@@ -198,12 +258,15 @@ export function registerRunCommand(program: Command): void {
 
   run
     .command('rebind <run-id>')
-    .description('Audit and accept only compatible command definition, contract snapshot, or hash drift for an existing Run')
+    .description(`${ADMIN_COMPATIBILITY_PREFIX} Audit compatible command binding drift for a legacy Run`)
     .option('--session <id>', 'explicit Session ID')
     .requiredOption('--reason <text>', 'required audited reason for accepting compatible drift')
     .option('--workflow-root <path>', 'project root containing .workflow', process.cwd())
     .addHelpText('after', `
-Safety:
+Compatibility boundary:
+  Rebind is retained only for audited recovery of legacy Run metadata.
+  It is excluded from normal topic resolution, Session selection, sealed-output reuse,
+  recall recommendations, and next-action routing.
   Rebind strictly validates gate and produce compatibility before updating the stored command binding.
   --reason is required and recorded in command-rebind.json.
   This is not a force operation or lifecycle bypass; incompatible or unprovable drift is rejected.
@@ -352,30 +415,40 @@ Safety:
     });
 
   run.command('recall <command> [args...]')
-    .description('Read-only exact live and sealed-history recall; never mutates lifecycle authority')
+    .description('Read-only Session/topic lookup; historical similarity is evidence only and never routes or mutates')
     .requiredOption('--intent <text>', 'verbatim intent')
+    .option('--topic <text>', 'command-independent Session topic; defaults to intent')
     .option('--limit <n>', 'maximum candidates', Number.parseInt, 20)
     .option('--as-of <iso>', 'canonical scoring timestamp')
     .option('--json', 'emit one run-response/1.0 envelope on stdout')
     .option('--workflow-root <path>', 'project root containing .workflow', process.cwd())
-    .action(async (command: string, _args: string[], opts: { intent: string; limit: number; asOf?: string; json?: boolean; workflowRoot: string }) => {
+    .action(async (command: string, _args: string[], opts: { intent: string; topic?: string; limit: number; asOf?: string; json?: boolean; workflowRoot: string }) => {
       try {
-        const result = await recallRuns(resolve(opts.workflowRoot), { command, intent: opts.intent, limit: opts.limit, asOf: opts.asOf });
+        const result = readOnlyRecallProjection(await recallRuns(resolve(opts.workflowRoot), {
+          command,
+          intent: opts.intent,
+          topic: opts.topic,
+          limit: opts.limit,
+          asOf: opts.asOf,
+        }));
         if (opts.json) machineSuccess('recall', result); else print(result);
       } catch (error) { if (opts.json) machineError('recall', error); else reportError(error); }
     });
 
-  run.command('recall-confirm <action>')
-    .description('Issue a single-use, request-bound recall confirmation token')
-    .requiredOption('--target-session <id>', 'new target Session ID')
-    .requiredOption('--command <name>', 'target command')
-    .requiredOption('--intent <text>', 'target intent')
-    .option('--source-session <id>', 'immutable source Session')
-    .option('--source-run <id>', 'immutable source Run')
-    .option('--source-workspace <name>', 'linked source workspace (import-only)')
-    .option('--arg <value>', 'target command arg (repeatable)', collect, [])
-    .option('--json', 'emit one run-response/1.0 envelope on stdout')
-    .option('--workflow-root <path>', 'project root containing .workflow', process.cwd())
+  addAdminCompatibilityHelp(
+    run.command('recall-confirm <action>')
+      .description(`${ADMIN_COMPATIBILITY_PREFIX} Issue a legacy recall-mutation confirmation token`)
+      .requiredOption('--target-session <id>', 'new target Session ID')
+      .requiredOption('--command <name>', 'target command')
+      .requiredOption('--intent <text>', 'target intent')
+      .option('--source-session <id>', 'immutable source Session')
+      .option('--source-run <id>', 'immutable source Run')
+      .option('--source-workspace <name>', 'linked source workspace (import-only)')
+      .option('--arg <value>', 'target command arg (repeatable)', collect, [])
+      .option('--json', 'emit one run-response/1.0 envelope on stdout')
+      .option('--workflow-root <path>', 'project root containing .workflow', process.cwd()),
+    'Retained temporarily to reconcile existing recall confirmation records.',
+  )
     .action((action: string, opts: any) => {
       try {
         if (!['fork', 'import', 'new'].includes(action)) throw new Error('action must be fork|import|new');
@@ -387,18 +460,21 @@ Safety:
     });
 
   for (const action of ['fork', 'import', 'new'] as const) {
-    run.command(action)
-      .description(`Execute confirmed ${action} with source/target fence revalidation`)
-      .requiredOption('--confirmation-token <token>', 'single-use confirmation token')
-      .requiredOption('--target-session <id>', 'new target Session ID')
-      .requiredOption('--command <name>', 'target command')
-      .requiredOption('--intent <text>', 'target intent')
-      .option('--source-session <id>', 'immutable source Session')
-      .option('--source-run <id>', 'immutable source Run')
-      .option('--source-workspace <name>', 'linked source workspace (import-only)')
-      .option('--arg <value>', 'target command arg (repeatable)', collect, [])
-      .option('--json', 'emit one run-response/1.0 envelope on stdout')
-      .option('--workflow-root <path>', 'project root containing .workflow', process.cwd())
+    addAdminCompatibilityHelp(
+      run.command(action)
+        .description(`${ADMIN_COMPATIBILITY_PREFIX} Execute legacy confirmed ${action} recovery`)
+        .requiredOption('--confirmation-token <token>', 'single-use confirmation token')
+        .requiredOption('--target-session <id>', 'new target Session ID')
+        .requiredOption('--command <name>', 'target command')
+        .requiredOption('--intent <text>', 'target intent')
+        .option('--source-session <id>', 'immutable source Session')
+        .option('--source-run <id>', 'immutable source Run')
+        .option('--source-workspace <name>', 'linked source workspace (import-only)')
+        .option('--arg <value>', 'target command arg (repeatable)', collect, [])
+        .option('--json', 'emit one run-response/1.0 envelope on stdout')
+        .option('--workflow-root <path>', 'project root containing .workflow', process.cwd()),
+      `Retained temporarily to finish or reconcile an existing ${action} reservation.`,
+    )
       .action((opts: any) => {
         try {
           const result = executeRecallAction(resolve(opts.workflowRoot), { action, confirmation_token: opts.confirmationToken, target_session_id: opts.targetSession, command: opts.command, intent: opts.intent, source_session_id: opts.sourceSession, source_run_id: opts.sourceRun, source_workspace: opts.sourceWorkspace, args: opts.arg });

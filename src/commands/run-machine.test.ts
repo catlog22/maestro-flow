@@ -5,6 +5,7 @@ import { join, resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { runResponseSchema } from '../run/protocol-schemas.js';
 import { SessionStore } from '../run/store.js';
+import { createTopicIdentity } from '../run/topic-identity.js';
 
 const roots: string[] = [];
 afterEach(() => { for (const root of roots.splice(0)) rmSync(root, { recursive: true, force: true }); });
@@ -25,16 +26,31 @@ function fixture(): { root: string; chain: string } {
 }
 
 describe('built-bin run-response/1.0', () => {
-  it('documents rebind as an audited compatibility gate rather than a force or legacy-only backfill', () => {
-    const result = spawnSync(process.execPath, [resolve('bin/maestro.js'), 'run', 'rebind', '--help'], { encoding: 'utf8', cwd: resolve('.') });
-    expect(result.status, result.stderr).toBe(0);
-    const normalizedStdout = result.stdout.replace(/\s+/g, ' ');
-    expect(normalizedStdout).toContain('compatible command definition, contract snapshot, or hash drift');
-    expect(normalizedStdout).toContain('strictly validates gate and produce compatibility');
-    expect(normalizedStdout).toContain('--reason is required and recorded in command-rebind.json');
-    expect(normalizedStdout).toContain('not a force operation or lifecycle bypass');
-    expect(normalizedStdout).not.toContain('Backfill contract_hash for a legacy Run');
-    expect(normalizedStdout).not.toContain('prompt-only drift');
+  it('marks legacy mutation and recovery commands deprecated admin-only in help', () => {
+    const commands = [
+      ['run', 'recall-confirm'],
+      ['run', 'fork'],
+      ['run', 'import'],
+      ['run', 'new'],
+      ['run', 'rebind'],
+      ['session', 'resolve'],
+      ['session', 'resume'],
+    ];
+    for (const command of commands) {
+      const result = spawnSync(process.execPath, [resolve('bin/maestro.js'), ...command, '--help'], { encoding: 'utf8', cwd: resolve('.') });
+      expect(result.status, `${command.join(' ')}: ${result.stderr}`).toBe(0);
+      const help = result.stdout.replace(/\s+/g, ' ');
+      expect(help, command.join(' ')).toContain('[DEPRECATED, ADMIN-ONLY]');
+      expect(help, command.join(' ')).toContain('excluded from normal topic resolution');
+      expect(help, command.join(' ')).toContain('next-action routing');
+      expect(help, command.join(' ')).toMatch(/(?:not a force operation|no force bypass)/);
+    }
+
+    const rebind = spawnSync(process.execPath, [resolve('bin/maestro.js'), 'run', 'rebind', '--help'], { encoding: 'utf8', cwd: resolve('.') });
+    const rebindHelp = rebind.stdout.replace(/\s+/g, ' ');
+    expect(rebindHelp).toContain('strictly validates gate and produce compatibility');
+    expect(rebindHelp).toContain('--reason is required and recorded in command-rebind.json');
+    expect(rebindHelp).not.toContain('prompt-only drift');
   });
 
   it('emits one stdout envelope for next exits 0, 1, 2, and 3 with empty stderr', () => {
@@ -66,25 +82,64 @@ describe('built-bin run-response/1.0', () => {
     const complete = invoke(root, ['run', 'complete', 'missing', '--verdict', 'bogus', '--json']);
     const recall = invoke(root, ['run', 'recall', 'demo', '--intent', 'demo intent', '--as-of', '2026-07-19T00:00:00.000Z', '--json']);
     expect(complete.body).toMatchObject({ operation: 'complete', exit_code: 2, error: { code: 'INVALID_VERDICT' } });
-    expect(recall.body).toMatchObject({ operation: 'recall', ok: true, exit_code: 0, result: { schema_version: 'run-recall/1.0', recommendation: { automatic: false } } });
-    const suggested = (recall.body as any).result.next.command as string;
-    expect(suggested).toBe('maestro run create demo --session live');
-    const executed = invoke(root, suggested.split(' ').slice(1));
-    expect(executed.status).toBe(0);
+    expect(recall.body).toMatchObject({
+      operation: 'recall',
+      ok: true,
+      exit_code: 0,
+      result: {
+        schema_version: 'run-recall/1.1',
+        exact_candidates: [{ session_id: 'live', eligible_actions: [], next_if_active: null }],
+        recommendation: { action: null, automatic: false },
+        confirmation: { required: false, issuance_command: '', allowed_actions: [] },
+        next: { suggest_only: true, command: null },
+      },
+    });
+    expect(JSON.stringify((recall.body as any).result)).not.toMatch(/maestro (?:run|session) (?:recall-confirm|fork|import|new|rebind|resolve|resume|create)/);
     expect(complete.stderr).toBe(''); expect(recall.stderr).toBe('');
   });
 
-  it('emits an executable exact-live paused resume pointer without recall-confirm', () => {
+  it('keeps a paused topic Session outside automatic read-only routing', () => {
     const { root } = fixture();
     const store = new SessionStore(root);
     store.createSession('paused', 'paused intent', { command: 'demo' });
     store.update('paused', draft => { draft.session.status = 'paused'; });
     const recall = invoke(root, ['run', 'recall', 'demo', '--intent', 'paused intent', '--as-of', '2026-07-19T00:00:00.000Z', '--json']);
-    const suggested = (recall.body as any).result.next.command as string;
-    expect(suggested).toContain('maestro session resume --session paused');
-    expect(suggested).not.toContain('recall-confirm');
-    const resumed = spawnSync(process.execPath, [resolve('bin/maestro.js'), ...suggested.split(' ').slice(1), '--workflow-root', root], { encoding: 'utf8', cwd: resolve('.') });
-    expect(resumed.status, resumed.stderr).toBe(0);
-    expect(new SessionStore(root).readBundle('paused').session.status).toBe('running');
+    const serialized = JSON.stringify((recall.body as any).result);
+    expect((recall.body as any).result).toMatchObject({
+      exact_candidates: [],
+      recommendation: { action: null, automatic: false, reason_codes: expect.arrayContaining(['NO_RUNNING_TOPIC_MATCH']) },
+      confirmation: { required: false, allowed_actions: [] },
+      next: { suggest_only: true, command: null },
+    });
+    expect(serialized).not.toContain('maestro session resume');
+    expect(serialized).not.toContain('recall-confirm');
+    expect(serialized).not.toMatch(/maestro run (?:fork|import|new|rebind)/);
+    expect(new SessionStore(root).readBundle('paused').session.status).toBe('paused');
+  });
+
+  it('wraps create success and topic ambiguity errors in run-response/1.0', () => {
+    const { root } = fixture();
+    const first = invoke(root, ['run', 'create', 'demo', '--topic', '共享主题', '--json']);
+    expect(first.body).toMatchObject({ operation: 'create', ok: true, exit_code: 0, result: { topic_identity: { normalized: '共享主题' } } });
+    const prepared = spawnSync(process.execPath, [
+      resolve('bin/maestro.js'), 'run', 'prepare', 'demo', '--topic', '共享主题', '--workflow-root', root,
+    ], { encoding: 'utf8', cwd: resolve('.') });
+    expect(prepared.status, prepared.stderr).toBe(0);
+    expect(JSON.parse(prepared.stdout)).toMatchObject({
+      previous: { upstream: {}, reuse_assessments: [], selected_refs: [] },
+    });
+    const store = new SessionStore(root);
+    store.createSession('different-topic', 'different topic');
+    store.update('different-topic', draft => { draft.session.topic_identity = createTopicIdentity(root, 'different topic'); });
+    const mismatch = spawnSync(process.execPath, [
+      resolve('bin/maestro.js'), 'run', 'prepare', 'demo', '--session', 'different-topic', '--topic', '共享主题', '--workflow-root', root,
+    ], { encoding: 'utf8', cwd: resolve('.') });
+    expect(mismatch.status).toBe(1);
+    expect(mismatch.stderr).toMatch(/incompatible|does not match/i);
+    store.createSession('topic-peer', '共享主题');
+    store.update('topic-peer', draft => { draft.session.topic_identity = createTopicIdentity(root, '共享主题'); });
+    const ambiguous = invoke(root, ['run', 'create', 'demo', '--topic', '共享主题', '--json']);
+    expect(ambiguous.body).toMatchObject({ operation: 'create', ok: false, exit_code: 1 });
+    expect(ambiguous.stderr).toBe('');
   });
 });

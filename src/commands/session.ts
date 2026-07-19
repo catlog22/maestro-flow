@@ -24,6 +24,17 @@ function reportError(error: unknown): void {
   process.exitCode = 1;
 }
 
+const ADMIN_COMPATIBILITY_PREFIX = '[DEPRECATED, ADMIN-ONLY]';
+
+function addAdminCompatibilityHelp(command: Command, retainedFor: string): Command {
+  return command.addHelpText('after', `
+Compatibility boundary:
+  ${retainedFor}
+  This transition is excluded from normal topic resolution, Session selection, sealed-output reuse,
+  recall recommendations, and next-action routing. It does not create a Run and offers no force bypass.
+`);
+}
+
 async function readStdin(): Promise<string> {
   return new Promise((resolveStdin) => {
     if (process.stdin.isTTY) {
@@ -92,7 +103,7 @@ function transitionOptions(opts: any, target?: any): any {
 export function registerSessionCommand(program: Command): void {
   const session = program
     .command('session')
-    .description('Session orchestration: create predefined-chain sessions, edit chains, migrate legacy state');
+    .description('Session topic grouping/index plus chain administration and legacy compatibility');
 
   const addTransitionOptions = (command: Command): Command => command
     .requiredOption('--session <id>', 'exact Session ID')
@@ -107,7 +118,10 @@ export function registerSessionCommand(program: Command): void {
     .option('--lease-id <id>', 'lease ID')
     .option('--workflow-root <path>', 'project root containing .workflow', process.cwd());
 
-  addTransitionOptions(session.command('resolve').description('Resolve one escalated decision or failed step; Session remains paused'))
+  addAdminCompatibilityHelp(
+    addTransitionOptions(session.command('resolve').description(`${ADMIN_COMPATIBILITY_PREFIX} Resolve one legacy escalated decision or failed step`)),
+    'Retained temporarily to repair an explicitly identified paused Session; the Session remains paused.',
+  )
     .option('--decision <id>', 'escalated decision point ID')
     .option('--step <id>', 'failed chain step ID')
     .requiredOption('--disposition <value>', 'decision: proceed|retry; step: retry|skip')
@@ -123,7 +137,10 @@ export function registerSessionCommand(program: Command): void {
       } catch (error) { reportError(error); }
     });
 
-  addTransitionOptions(session.command('resume').description('Resume an exact paused Session after every target is resolved'))
+  addAdminCompatibilityHelp(
+    addTransitionOptions(session.command('resume').description(`${ADMIN_COMPATIBILITY_PREFIX} Resume an explicitly identified legacy paused Session`)),
+    'Retained temporarily after every legacy recovery target has been resolved.',
+  )
     .action((opts: any) => {
       try { print(resumeSession(resolve(opts.workflowRoot), opts.session, transitionOptions(opts))); }
       catch (error) { reportError(error); }
@@ -131,7 +148,7 @@ export function registerSessionCommand(program: Command): void {
 
   session
     .command('migrate')
-    .description('Fold legacy ralph-meta.json into session.json and stamp session/1.2 (idempotent)')
+    .description('Fold legacy ralph-meta.json into session.json and stamp session/1.3 (idempotent)')
     .option('--session <id>', 'migrate one Session; omit to migrate every Session under .workflow/sessions/')
     .option('--workflow-root <path>', 'project root containing .workflow', process.cwd())
     .action((opts: { session?: string; workflowRoot: string }) => {

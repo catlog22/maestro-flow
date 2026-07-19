@@ -35,7 +35,7 @@ export async function runSession(opts: SessionCmdOptions): Promise<number> {
   const total = chain.length;
   const active = activeStepIndex(session);
 
-  // session/1.2 orchestration.position is the source of truth; ralph-meta is the
+  // session/1.3 orchestration.position is the source of truth; ralph-meta is the
   // fallback for un-migrated 1.0 sessions.
   const pos = effectivePosition(session, meta);
 

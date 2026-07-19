@@ -49,9 +49,14 @@ describe('maestro session create', () => {
   it('registers create + chain subcommands', () => {
     const p = program();
     const session = p.commands.find(c => c.name() === 'session');
+    expect(session?.description()).toContain('topic grouping/index');
     expect(session?.commands.map(c => c.name()).sort()).toEqual(['chain', 'create', 'meta', 'migrate', 'resolve', 'resume']);
     const chain = session?.commands.find(c => c.name() === 'chain');
     expect(chain?.commands.map(c => c.name()).sort()).toEqual(['insert', 'replace', 'skip']);
+    for (const name of ['resolve', 'resume']) {
+      const compatibilityCommand = session?.commands.find(c => c.name() === name);
+      expect(compatibilityCommand?.description()).toContain('[DEPRECATED, ADMIN-ONLY]');
+    }
   });
 
   it('creates a chain session from a --chain-file and prints the next pointer', async () => {
