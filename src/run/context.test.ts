@@ -43,7 +43,7 @@ describe('durable Run context', () => {
     const persisted = store.readRun('s', created.run_id);
     const brief = briefRun(projectRoot, created.run_id, 's');
 
-    expect(persisted.schema_version).toBe('command-run/1.2');
+    expect(persisted.schema_version).toBe('command-run/1.3');
     expect(persisted.resolved_platform).toBe('codex');
     expect(created.resolved_platform).toBe('codex');
     expect(brief.resolved_platform).toBe('codex');
@@ -79,6 +79,7 @@ describe('durable Run context', () => {
     ]) {
       delete raw[key];
     }
+    delete (raw.input as Record<string, unknown>).reuse_assessments;
     raw.schema_version = 'command-run/1.0';
     writeFileSync(runPath, `${JSON.stringify(raw, null, 2)}\n`);
 
@@ -107,6 +108,7 @@ describe('durable Run context', () => {
     for (const key of ['contract_snapshot', 'guidance_snapshot', 'creation_decision', 'creation_provenance', 'transition']) {
       delete raw[key];
     }
+    delete (raw.input as Record<string, unknown>).reuse_assessments;
     raw.schema_version = 'command-run/1.1';
     writeFileSync(runPath, `${JSON.stringify(raw, null, 2)}\n`);
 
@@ -115,7 +117,7 @@ describe('durable Run context', () => {
     const context = resolveRunContext(relocated, created.run_id, 'legacy-v11');
     const normalized = new SessionStore(relocated).readRun('legacy-v11', created.run_id);
 
-    expect(normalized.schema_version).toBe('command-run/1.2');
+    expect(normalized.schema_version).toBe('command-run/1.3');
     expect(context.resolved_platform).toBe('codex');
     expect(normalized.creation_provenance.provenance).toBe('verified-v1');
     expect(context.run_dir).toBe(`.workflow/sessions/legacy-v11/runs/${created.run_id}`);

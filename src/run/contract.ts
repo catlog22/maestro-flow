@@ -49,12 +49,24 @@ const commandContractV1Schema = z.object({
 
 export type ContractGateDefinition = z.infer<typeof gateDefinitionSchema>;
 
-const consumeV2Schema = z.object({
+const consumeV20Schema = z.object({
   kind: z.string().min(1),
   alias: z.string().min(1).optional(),
   required: z.boolean(),
   require_status: z.literal('sealed').optional(),
   schema: z.string().min(1).optional(),
+}).strict();
+
+const consumeV21Schema = consumeV20Schema.extend({
+  role: z.enum(['primary', 'attachment', 'evidence', 'checkpoint']).optional(),
+}).strict();
+
+const commandArgumentSchema = z.object({
+  name: z.string().min(1),
+  type: z.enum(['boolean', 'enum', 'string', 'number']),
+  required: z.boolean(),
+  default: z.union([z.string(), z.number(), z.boolean()]).optional(),
+  question: z.string().min(1).optional(),
 }).strict();
 
 const produceV2Schema = z.object({
@@ -78,21 +90,14 @@ const gateDefinitionV2Schema = z.union([
   }).strict(),
 ]);
 
-const commandContractV2Schema = z.object({
-  contract_version: z.literal(2),
-  consumes: z.array(consumeV2Schema).default([]),
-  produces: z.array(produceV2Schema).default([]),
-  gates: z.object({
-    entry: z.array(gateDefinitionV2Schema).default([]),
-    exit: z.array(gateDefinitionV2Schema).default([]),
-  }).strict().default({ entry: [], exit: [] }),
-}).strict().superRefine((contract, context) => {
+function refineStrictContract(
+  contract: { consumes: Array<{ alias?: string }>; produces: Array<{ alias?: string; path: string; role: string; required: boolean }> },
+  context: z.RefinementCtx,
+): void {
   const aliases = new Set<string>();
   for (const item of [...contract.consumes, ...contract.produces]) {
     if (!item.alias) continue;
-    if (aliases.has(item.alias)) {
-      context.addIssue({ code: z.ZodIssueCode.custom, message: `duplicate contract alias: ${item.alias}` });
-    }
+    if (aliases.has(item.alias)) context.addIssue({ code: z.ZodIssueCode.custom, message: `duplicate contract alias: ${item.alias}` });
     aliases.add(item.alias);
   }
   const paths = new Set<string>();
@@ -101,16 +106,34 @@ const commandContractV2Schema = z.object({
     if (!normalized.startsWith('outputs/') || normalized.split('/').includes('..') || normalized.startsWith('/')) {
       context.addIssue({ code: z.ZodIssueCode.custom, message: `output path must remain under outputs/: ${output.path}` });
     }
-    if (paths.has(normalized)) {
-      context.addIssue({ code: z.ZodIssueCode.custom, message: `duplicate output path: ${output.path}` });
-    }
+    if (paths.has(normalized)) context.addIssue({ code: z.ZodIssueCode.custom, message: `duplicate output path: ${output.path}` });
     paths.add(normalized);
   }
-  const requiredPrimary = contract.produces.filter(item => item.role === 'primary' && item.required);
-  if (requiredPrimary.length > 1) {
+  if (contract.produces.filter(item => item.role === 'primary' && item.required).length > 1) {
     context.addIssue({ code: z.ZodIssueCode.custom, message: 'multiple required primary outputs are ambiguous' });
   }
-});
+}
+
+const commandContractV20Schema = z.object({
+  contract_version: z.literal(2),
+  consumes: z.array(consumeV20Schema).default([]),
+  produces: z.array(produceV2Schema).default([]),
+  gates: z.object({
+    entry: z.array(gateDefinitionV2Schema).default([]),
+    exit: z.array(gateDefinitionV2Schema).default([]),
+  }).strict().default({ entry: [], exit: [] }),
+}).strict().superRefine(refineStrictContract);
+
+const commandContractV21Schema = z.object({
+  contract_version: z.literal(2.1),
+  arguments: z.array(commandArgumentSchema).default([]),
+  consumes: z.array(consumeV21Schema).default([]),
+  produces: z.array(produceV2Schema).default([]),
+  gates: z.object({
+    entry: z.array(gateDefinitionV2Schema).default([]),
+    exit: z.array(gateDefinitionV2Schema).default([]),
+  }).strict().default({ entry: [], exit: [] }),
+}).strict().superRefine(refineStrictContract);
 
 export interface CommandContractConsume {
   kind: string;
@@ -118,6 +141,15 @@ export interface CommandContractConsume {
   required: boolean;
   require_status?: 'sealed';
   schema?: string;
+  role?: 'primary' | 'attachment' | 'evidence' | 'checkpoint';
+}
+
+export interface CommandArgumentContract {
+  name: string;
+  type: 'boolean' | 'enum' | 'string' | 'number';
+  required: boolean;
+  default?: string | number | boolean;
+  question?: string;
 }
 
 export interface CommandContractProduce {
@@ -131,9 +163,10 @@ export interface CommandContractProduce {
 }
 
 export interface CommandContract {
-  contract_version?: 1 | 2;
-  schema_version?: 'command-contract/1.0' | 'command-contract/2.0';
+  contract_version?: 1 | 2 | 2.1;
+  schema_version?: 'command-contract/1.0' | 'command-contract/2.0' | 'command-contract/2.1';
   consumes: CommandContractConsume[];
+  arguments: CommandArgumentContract[];
   produces: CommandContractProduce[];
   gates: { entry: ContractGateDefinition[]; exit: ContractGateDefinition[] };
   compatibility_warnings?: string[];
@@ -157,11 +190,12 @@ function semanticWarnings(raw: z.infer<typeof commandContractV1Schema>): string[
 export function parseCommandContract(raw: unknown): CommandContract {
   if (raw && typeof raw === 'object' && 'contract_version' in raw) {
     const version = (raw as { contract_version?: unknown }).contract_version;
-    if (version !== 2) throw new Error(`Unsupported command contract_version: ${String(version)}`);
-    const parsed = commandContractV2Schema.parse(raw);
+    if (version !== 2 && version !== 2.1) throw new Error(`Unsupported command contract_version: ${String(version)}`);
+    const parsed = version === 2 ? commandContractV20Schema.parse(raw) : commandContractV21Schema.parse(raw);
     return {
-      contract_version: 2,
-      schema_version: 'command-contract/2.0',
+      contract_version: version,
+      schema_version: version === 2 ? 'command-contract/2.0' : 'command-contract/2.1',
+      arguments: 'arguments' in parsed ? parsed.arguments : [],
       consumes: parsed.consumes,
       produces: parsed.produces.map(item => ({
         ...item,
@@ -176,6 +210,7 @@ export function parseCommandContract(raw: unknown): CommandContract {
   return {
     contract_version: 1,
     schema_version: 'command-contract/1.0',
+    arguments: [],
     consumes: parsed.consumes.map(item => ({
       kind: item.kind,
       ...(item.alias ? { alias: item.alias } : {}),
@@ -198,15 +233,18 @@ export function parseCommandContract(raw: unknown): CommandContract {
 }
 
 export function normalizedCommandContract(contract: CommandContract): Record<string, unknown> {
-  if ((contract.contract_version ?? 1) === 2) {
+  if ((contract.contract_version ?? 1) === 2 || contract.contract_version === 2.1) {
+    const v21 = contract.contract_version === 2.1;
     return {
-      contract_version: 2,
+      contract_version: contract.contract_version,
+      ...(v21 ? { arguments: contract.arguments.map(item => ({ ...item })) } : {}),
       consumes: contract.consumes.map(item => ({
         kind: item.kind,
         ...(item.alias ? { alias: item.alias } : {}),
         required: item.required,
         ...(item.require_status ? { require_status: item.require_status } : {}),
         ...(item.schema ? { schema: item.schema } : {}),
+        ...(v21 && item.role ? { role: item.role } : {}),
       })),
       produces: contract.produces.map(item => ({
         kind: item.kind,
@@ -241,9 +279,11 @@ export function createContractSnapshot(contract: CommandContract, capturedAt = n
   const normalized = normalizedCommandContract(contract);
   return contractSnapshotSchema.parse({
     schema_version: 'contract-snapshot/1.0',
-    contract_version: (contract.contract_version ?? 1) === 2
-      ? 'command-contract/2.0'
-      : 'command-contract/1.0',
+    contract_version: contract.contract_version === 2.1
+      ? 'command-contract/2.1'
+      : contract.contract_version === 2
+        ? 'command-contract/2.0'
+        : 'command-contract/1.0',
     normalized,
     snapshot_hash: sha256Digest(stableJsonUtf8(normalized)),
     parser_version: 'maestro-command-contract/2',

@@ -110,7 +110,7 @@ describe('createChainSession — predefined chain', () => {
     const { sessionId } = createChainSession(projectRoot, 'feat-y', { definition: fullDefinition() });
     const store = new SessionStore(projectRoot);
     const reloaded = store.readBundle(sessionId).session;
-    expect(reloaded.schema_version).toBe('session/1.2');
+    expect(reloaded.schema_version).toBe('session/1.3');
     expect(reloaded.orchestration.chain).toHaveLength(4);
   });
 

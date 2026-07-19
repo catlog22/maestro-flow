@@ -38,6 +38,31 @@ describe('command-contract/2.0', () => {
     });
   });
 
+  it('keeps 2.0 strict and moves structured arguments and consume roles to 2.1', () => {
+    expect(() => parseCommandContract({
+      ...validV2(),
+      arguments: [{ name: 'target', type: 'string', required: true }],
+    })).toThrow(/arguments/);
+    expect(() => parseCommandContract({
+      ...validV2(),
+      consumes: [{ ...validV2().consumes[0], role: 'primary' }],
+    })).toThrow(/role/);
+
+    const contract = parseCommandContract({
+      ...validV2(),
+      contract_version: 2.1,
+      arguments: [{ name: 'target', type: 'string', required: true }],
+      consumes: [{ ...validV2().consumes[0], role: 'primary' }],
+    });
+    expect(contract).toMatchObject({
+      contract_version: 2.1,
+      schema_version: 'command-contract/2.1',
+      arguments: [{ name: 'target', type: 'string', required: true }],
+      consumes: [{ role: 'primary' }],
+    });
+    expect(createContractSnapshot(contract).contract_version).toBe('command-contract/2.1');
+  });
+
   it('fails closed on synonyms, duplicates, traversal and multiple required primary outputs', () => {
     expect(() => parseCommandContract({ ...validV2(), contract_version: 3 })).toThrow(/Unsupported/);
     expect(() => parseCommandContract({

@@ -10,19 +10,20 @@ const roots: string[] = [];
 afterEach(() => { for (const root of roots.splice(0)) rmSync(root, { recursive: true, force: true }); });
 
 describe('read-only run recall', () => {
-  it('uses exact SessionStore identity, integer scores, automatic=false, and preserves authority mtimes', async () => {
+  it('uses command-independent Unicode topic identity and preserves authority mtimes', async () => {
     const root = mkdtempSync(join(tmpdir(), 'maestro-recall-')); roots.push(root);
     const store = new SessionStore(root);
     store.createSession('live', '修复 Unicode intent', { command: 'demo' });
     const sessionPath = join(store.sessionDir('live'), 'session.json');
     const before = statSync(sessionPath).mtimeMs;
-    const result = await recallRuns(root, { command: 'demo', intent: '修复 Unicode intent', asOf: '2026-07-19T00:00:00.000Z' });
-    expect(runRecallSchema.parse(result).recommendation).toMatchObject({ action: 'resume', automatic: false });
+    const result = await recallRuns(root, { command: 'other-command', intent: '修复 Unicode intent', topic: '  修复 Unicode intent  ', asOf: '2026-07-19T00:00:00.000Z' });
+    expect(runRecallSchema.parse(result).recommendation).toMatchObject({ action: null, automatic: false, reason_codes: ['READ_ONLY_TOPIC_MATCH'] });
     expect(result.exact_candidates.map(item => item.session_id)).toEqual(['live']);
+    expect(result.topic_identity?.normalized).toBe('修复 unicode intent');
     expect(result.confirmation).toEqual({ required: false, issuance_command: '', allowed_actions: [] });
-    expect(result.next.command).toBe('maestro run create demo --session live');
-    expect(JSON.stringify(result)).not.toContain('recall-confirm resume');
-    expect(result.historical_candidates.every(item => Number.isInteger(item.score_bp))).toBe(true);
+    expect(result.next.command).toBeNull();
+    expect(result.historical_candidates).toEqual([]);
+    expect(JSON.stringify(result)).not.toMatch(/recall-confirm|maestro session resume|maestro run (?:fork|import|new)/);
     expect(statSync(sessionPath).mtimeMs).toBe(before);
   });
 
@@ -37,21 +38,20 @@ describe('read-only run recall', () => {
     store.createSession('b', 'same intent', { command: 'demo' });
     const result = await recallRuns(root, { command: 'demo', intent: 'same intent', asOf: '2026-07-19T00:00:00.000Z' });
     expect(result.exact_candidates).toHaveLength(2);
-    expect(result.recommendation).toMatchObject({ action: null, candidate_id: null, automatic: false, reason_codes: ['AMBIGUOUS_EXACT_MATCH'] });
+    expect(result.recommendation).toMatchObject({ action: null, candidate_id: null, automatic: false, reason_codes: ['AMBIGUOUS_TOPIC_MATCH'] });
     expect(result.confirmation).toEqual({ required: false, issuance_command: '', allowed_actions: [] });
     expect(result.next.command).toBeNull();
   });
 
-  it('returns a fully specified exact-ID resume pointer for a paused Session', async () => {
+  it('does not select or emit a mutation pointer for a paused Session', async () => {
     const root = mkdtempSync(join(tmpdir(), 'maestro-recall-')); roots.push(root);
     const store = new SessionStore(root);
     store.createSession('paused', 'paused intent', { command: 'demo' });
     store.update('paused', draft => { draft.session.status = 'paused'; });
-    const fence = store.readBundle('paused').session;
     const result = await recallRuns(root, { command: 'demo', intent: 'paused intent', asOf: '2026-07-19T00:00:00.000Z' });
-    expect(result.next.command).toContain('maestro session resume --session paused');
-    expect(result.next.command).toContain(`--expected-identity-revision ${fence.identity_revision}`);
-    expect(result.next.command).toContain(`--expected-activity-revision ${fence.activity_revision}`);
-    expect(result.next.command).not.toContain('recall-confirm');
+    expect(result.exact_candidates).toEqual([]);
+    expect(result.recommendation.reason_codes).toEqual(['NO_RUNNING_TOPIC_MATCH']);
+    expect(result.next.command).toBeNull();
+    expect(JSON.stringify(result)).not.toContain('maestro session resume');
   });
 });

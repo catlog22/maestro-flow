@@ -7,10 +7,11 @@ export function createSessionState(
   options: { intentIdentity?: IntentIdentity | null; provenance?: SessionProvenance } = {},
 ): SessionState {
   return {
-    schema_version: 'session/1.2',
+    schema_version: 'session/1.3',
     session_id: sessionId,
     intent,
     intent_identity: options.intentIdentity ?? null,
+    topic_identity: null,
     provenance: options.provenance ?? {
       source: 'native',
       forked_from: null,

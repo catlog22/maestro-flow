@@ -96,6 +96,8 @@ describe('Run retry lineage', () => {
     expect(replacement.chain_step_id).toBe('step-000-retry-demo');
     expect(store.readRun('s', first.result!.run_id).retry_fence?.consumed_at).not.toBeNull();
     expect(store.readBundle('s').session.orchestration.chain[0].pending_retry).toBeNull();
+    outputs(projectRoot, 's', second.result!.run_id);
+    expect(completeRunWithVerdict(projectRoot, second.result!.run_id, 's', { verdict: 'done' }).run_sealed).toBe(true);
     expect(() => createRun({
       projectRoot, command: 'retry-demo', sessionId: 's', retryToken: pending!.token,
     })).toThrow(/invalid|consumed/);

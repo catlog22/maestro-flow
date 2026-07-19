@@ -189,7 +189,10 @@ describe('atomic recall confirmation reservations', () => {
     expect(store.readRecallConfirmation(issued.token)?.reservation?.reservation_id)
       .toBe(reserved.reservation_id);
 
-    const cancelled = store.cancelRecallConfirmation(reserved.reservation_id);
+    const cancelled = store.cancelRecallConfirmation(
+      reserved.reservation_id,
+      new Date('2026-07-19T00:01:00.500Z'),
+    );
     expect(cancelled.rollback_target).toEqual(proposed);
     expect(existsSync(join(partialTarget, 'partial.tmp'))).toBe(true);
 

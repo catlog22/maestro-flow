@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------------
 // `maestro session migrate` — fold a legacy ralph-meta.json into session.json
-// and stamp the session at schema_version session/1.2.
+// and stamp the session at schema_version session/1.3.
 //
 // The migration is explicit and idempotent. ralph-meta.json is the pre-1.1
 // side channel for ralph orchestration state; this merges its editorial fields
@@ -132,7 +132,7 @@ function buildExecutor(meta: RalphMetaLoose): OrchestrationExecutor | null {
 }
 
 /**
- * Merge ralph-meta.json into session.json and stamp session/1.2. Idempotent:
+ * Merge ralph-meta.json into session.json and stamp the latest Session schema. Idempotent:
  * a session already carrying position or decomposition is treated as migrated
  * and returned untouched. A session with a running chain step is rejected — the
  * caller must complete it first so migration never races an in-flight step.
@@ -159,9 +159,9 @@ export function migrateSession(projectRoot: string, sessionId: string): MigrateR
   const storedVersion = readStoredSessionVersion(sessionDir);
   const meta = readRalphMeta(sessionDir);
 
-  // No ralph-meta: nothing to fold. The store write-back stamps session/1.2.
+  // No ralph-meta: nothing to fold. The store write-back stamps session/1.3.
   if (!meta) {
-    if (storedVersion === 'session/1.2') {
+    if (storedVersion === 'session/1.3') {
       return { session_id: sessionId, status: 'already-migrated', had_ralph_meta: false, mapped_steps: 0 };
     }
     store.update(sessionId, (draft) => {
@@ -174,7 +174,7 @@ export function migrateSession(projectRoot: string, sessionId: string): MigrateR
   const stepDetails = meta.step_details ?? {};
   const applied = store.update(sessionId, (draft) => {
     const o = draft.session.orchestration;
-    let changed = storedVersion !== 'session/1.2';
+    let changed = storedVersion !== 'session/1.3';
     let mappedSteps = 0;
     if (o.position === null) { o.position = buildPosition(meta); changed = true; }
     const decomposition = buildDecomposition(meta);

@@ -9,7 +9,8 @@ import {
   writeFileSync,
 } from 'node:fs';
 import { basename, extname, join, relative, resolve as resolvePath, sep } from 'node:path';
-import { scanOutputs, type ArtifactScanResult, type DiscoveredArtifact } from './artifacts.js';
+import { hashDirectory, hashFile, scanOutputs, type ArtifactScanResult, type DiscoveredArtifact } from './artifacts.js';
+import { parseArgumentHint, type SkillParamDef } from '../config/argument-hint-parser.js';
 import {
   hashCommandContract,
   resolveCommandSource,
@@ -36,16 +37,19 @@ import {
 } from './schemas.js';
 import {
   commandRebindAuditSchema,
-  executionContractSchema,
+  executionContractV11Schema,
   guidanceSnapshotSchema,
   type CreationProvenance,
   type ExecutionContract,
+  type ArgumentRequirement,
   type GuidanceSnapshot,
   type IntentIdentity,
   type SessionProvenance,
   type TransitionPointer,
 } from './protocol-schemas.js';
-import { createIntentIdentity, sameIntentIdentity } from './intent-identity.js';
+import { createIntentIdentity } from './intent-identity.js';
+import { createTopicIdentity, normalizeTopic, sameTopicIdentity, type TopicIdentity } from './topic-identity.js';
+import { assessArtifactReuse, type ReuseAssessment } from './reuse-assessment.js';
 import {
   buildIntentSection,
   buildBoundaryContractSection,
@@ -108,6 +112,8 @@ export interface CreateRunOptions {
   command: string;
   sessionId?: string;
   intent?: string;
+  /** Command-independent topic used for Session selection. Defaults to intent. */
+  topic?: string;
   args?: string[];
   /** Explicit platform for first creation; persisted and immutable on re-attach. */
   platform?: TargetPlatform;
@@ -143,6 +149,9 @@ export interface CreateRunResult {
   chain_step_id: string | null;
   resolved_platform: TargetPlatform;
   upstream: Record<string, RunUpstream>;
+  topic_identity: TopicIdentity;
+  reuse_assessments: ReuseAssessment[];
+  argument_requirements: ArgumentRequirement[];
   entry_gates: GateSummary;
   entry_blockers: NamedGateBlocker[];
   next: { command: string; reason: string };
@@ -183,6 +192,8 @@ export interface CheckRunResult {
   artifacts: Array<{ path: string; kind: string; role: string; alias?: string }>;
   warnings: string[];
   errors: string[];
+  upstream: Record<string, RunUpstream>;
+  reuse_assessments: ReuseAssessment[];
   /** Populated by `run check`: repair loop while gates block, complete when clean, advance when sealed. */
   next?: { command: string; reason: string };
   /**
@@ -220,6 +231,9 @@ export interface PrepareConsumeStatus {
 export interface PreparePrevious {
   handoff: PrevHandoff | null;
   consumes: PrepareConsumeStatus[];
+  upstream: Record<string, RunUpstream>;
+  reuse_assessments: ReuseAssessment[];
+  selected_refs: Array<{ alias: string; artifact_id: string; path: string; assessment_hash: string }>;
 }
 
 export interface PrepareStepResult {
@@ -254,6 +268,8 @@ export interface BriefRunResult {
   goal: string;
   /** Verbatim invocation arguments persisted on the Run. */
   args: string[];
+  argument_requirements: ArgumentRequirement[];
+  reuse_assessments: ReuseAssessment[];
   gates: GateSummary;
   prepare: { path: string; content: string } | null;
   workflow: { path: string; content: string } | null;
@@ -268,7 +284,7 @@ export interface BriefRunResult {
   prev_handoff: PrevHandoff | null;
   /** Session anchor grounding (Intent / Boundary Contract / Execution Progress). */
   anchor: AnchorSection;
-  /** Additive, independently executable read model; persistence uses command-run/1.2 authority. */
+  /** Additive, independently executable read model; persistence uses command-run/1.3 authority. */
   execution_contract: ExecutionContractView;
   /** Next lifecycle verb pointer, closing next→brief→check→complete. */
   next: { command: string; reason: string };
@@ -438,24 +454,99 @@ function projectSessionEntry(session: SessionState): ProjectSessionEntry {
   };
 }
 
-function resolveSessionId(store: SessionStore, requested: string | undefined, intent: string, command: string): string {
+function compatibleTopic(session: SessionState, identity: TopicIdentity): boolean {
+  return session.topic_identity
+    ? sameTopicIdentity(session.topic_identity, identity)
+    : normalizeTopic(session.intent) === identity.normalized;
+}
+
+function uniqueTopicCandidate(
+  label: string,
+  candidates: Array<{ sessionId: string; session: SessionState }>,
+): string | null {
+  if (candidates.length > 1) {
+    throw new Error(`${label} is ambiguous; pass --session: ${candidates.map(item => item.sessionId).join(', ')}`);
+  }
+  return candidates[0]?.sessionId ?? null;
+}
+
+function runningTopicCandidatesLocked(
+  store: SessionStore,
+  identity: TopicIdentity,
+  currentDraft?: SessionState,
+): Array<{ sessionId: string; session: SessionState }> {
+  if (!existsSync(store.sessionsRoot)) return [];
+  const running = readdirSync(store.sessionsRoot).sort().flatMap(sessionId => {
+    if (!store.sessionExists(sessionId)) return [];
+    try {
+      const session = currentDraft?.session_id === sessionId
+        ? currentDraft
+        : store.readBundle(sessionId).session;
+      return session.status === 'running' ? [{ sessionId, session }] : [];
+    } catch {
+      return [];
+    }
+  });
+  const native = running.filter(item => item.session.topic_identity
+    && sameTopicIdentity(item.session.topic_identity, identity));
+  if (native.length > 0) return native;
+  return running.filter(item => !item.session.topic_identity
+    && normalizeTopic(item.session.intent) === identity.normalized);
+}
+
+/** Read-only command-independent topic lookup used by prepare and recall. */
+export function resolveTopicSessionId(
+  projectRoot: string,
+  topic: string,
+  requested?: string,
+): string | null {
+  const store = new SessionStore(projectRoot);
+  const identity = createTopicIdentity(projectRoot, topic);
   if (requested) {
     validateSessionId(requested);
+    if (!store.sessionExists(requested)) return null;
+    const session = store.readBundle(requested).session;
+    if (!compatibleTopic(session, identity)) {
+      throw new Error(`Explicit Session ${requested} is incompatible with topic ${JSON.stringify(topic)}`);
+    }
     return requested;
   }
-  const identity = createIntentIdentity(store.projectRoot, command, intent);
-  const exact = store.listSessions({ statuses: ['running', 'paused'], intentIdentity: identity }).candidates;
-  if (exact.length > 1) {
-    throw new Error(`Exact intent identity is ambiguous; pass --session: ${exact.map(item => item.sessionId).join(', ')}`);
+  const running = store.listSessions({ statuses: ['running'] }).candidates;
+  const native = running.filter(item => item.session.topic_identity
+    && sameTopicIdentity(item.session.topic_identity, identity));
+  const nativeId = uniqueTopicCandidate('Running topic match', native);
+  if (nativeId) return nativeId;
+  const legacy = running.filter(item => !item.session.topic_identity
+    && normalizeTopic(item.session.intent) === identity.normalized);
+  return uniqueTopicCandidate('Legacy exact intent match', legacy);
+}
+
+function resolveSessionId(
+  store: SessionStore,
+  requested: string | undefined,
+  topic: string,
+  source: 'explicit' | 'workflow' | 'legacy-intent',
+): { sessionId: string; topicIdentity: TopicIdentity } {
+  const topicIdentity = createTopicIdentity(store.projectRoot, topic, { source });
+  if (requested) {
+    validateSessionId(requested);
+    if (store.sessionExists(requested)) {
+      const existing = store.readBundle(requested).session;
+      if (!compatibleTopic(existing, topicIdentity)) {
+        throw new Error(`Explicit Session ${requested} is incompatible with topic ${JSON.stringify(topic)}`);
+      }
+    }
+    return { sessionId: requested, topicIdentity };
   }
-  if (exact.length === 1) return exact[0].sessionId;
-  const base = `${dateId()}-${slug(intent, command)}`;
-  if (!store.sessionExists(base)) return base;
+  const matched = resolveTopicSessionId(store.projectRoot, topic);
+  if (matched) return { sessionId: matched, topicIdentity };
+  const base = `${dateId()}-${slug(topic, 'session')}`;
+  if (!store.sessionExists(base)) return { sessionId: base, topicIdentity };
   for (let index = 2; index < 1000; index++) {
     const candidate = `${base}-${String(index).padStart(2, '0')}`;
-    if (!store.sessionExists(candidate)) return candidate;
+    if (!store.sessionExists(candidate)) return { sessionId: candidate, topicIdentity };
   }
-  throw new Error(`Unable to allocate session ID for: ${intent}`);
+  throw new Error(`Unable to allocate session ID for topic: ${topic}`);
 }
 
 function nextSequence(store: SessionStore, sessionId: string): number {
@@ -481,58 +572,349 @@ function defaultAlias(kind: string, command: string): string | undefined {
   return undefined;
 }
 
-function collectUpstream(
-  sessionId: string,
-  registry: ArtifactRegistry,
-  contract: CommandContract,
-): Record<string, RunUpstream> {
-  const all: Record<string, RunUpstream> = {};
-  for (const [alias, artifactId] of Object.entries(registry.aliases)) {
-    const artifact = registry.artifacts[artifactId];
-    if (!artifact) continue;
-    all[alias] = {
-      artifact_id: artifactId,
-      path: `sessions/${sessionId}/${artifact.relative_path}`,
-      kind: artifact.kind,
-      status: artifact.status === 'sealed' ? 'sealed' : 'draft',
+interface CollectedReuse {
+  upstream: Record<string, RunUpstream>;
+  assessments: ReuseAssessment[];
+}
+
+function observedArtifactHash(path: string): string | null {
+  try {
+    if (!existsSync(path)) return null;
+    const stat = statSync(path);
+    const hash = stat.isDirectory() ? hashDirectory(path).hash : hashFile(path).hash;
+    return `sha256:${hash}`;
+  } catch {
+    return null;
+  }
+}
+
+function producerContractDrift(
+  projectRoot: string,
+  run: CommandRun,
+  artifact: ArtifactRegistry['artifacts'][string],
+): { producerHash: string | null; currentHash: string | null; drift: 'none' | 'prompt_only' | 'compatible_output' | 'breaking' | 'unknown' } {
+  if (!run.contract_snapshot) return { producerHash: null, currentHash: null, drift: 'unknown' };
+  const current = resolveCommandSource(projectRoot, run.command.name);
+  const producerHash = run.contract_snapshot.snapshot_hash;
+  const currentHash = current.contractSnapshot.snapshot_hash;
+  if (producerHash === currentHash) {
+    return {
+      producerHash,
+      currentHash,
+      drift: current.contentHash === run.command.content_hash ? 'none' : 'prompt_only',
     };
   }
-  if (contract.consumes.length === 0) return all;
-  const selected: Record<string, RunUpstream> = {};
-  for (const consume of contract.consumes) {
-    const alias = consume.alias ?? Object.keys(all).find(key => all[key].kind === consume.kind);
-    if (alias && all[alias]) selected[alias] = all[alias];
-  }
-  return selected;
+  const compatible = current.contract.produces.some(output => output.kind === artifact.kind
+    && (!output.schema || output.schema === artifact.schema_version)
+    && (!output.role || output.role === artifact.role));
+  return { producerHash, currentHash, drift: compatible ? 'compatible_output' : 'breaking' };
 }
 
 /**
- * Reverse-lookup the aliases a Run actually consumed (run.input.consumes holds
- * artifact_ids) back into the registry alias map, yielding alias → upstream.
- * Used by `run brief` where the Run already exists and its consume set is fixed.
+ * Enumerate and assess only artifacts already registered in the target Session.
+ * The caller invokes this while holding the SessionStore update lock, so the
+ * observed bytes and registry revision are the fence bound into the new Run.
  */
-function upstreamForConsumedIds(
-  sessionId: string,
+function collectReusableUpstream(
+  projectRoot: string,
+  store: SessionStore,
+  session: SessionState,
   registry: ArtifactRegistry,
-  consumedIds: string[],
-): Record<string, RunUpstream> {
-  const idToAlias = new Map<string, string>();
-  for (const [alias, artifactId] of Object.entries(registry.aliases)) {
-    if (!idToAlias.has(artifactId)) idToAlias.set(artifactId, alias);
-  }
-  const result: Record<string, RunUpstream> = {};
-  for (const artifactId of consumedIds) {
-    const artifact = registry.artifacts[artifactId];
-    if (!artifact) continue;
-    const alias = idToAlias.get(artifactId) ?? artifactId;
-    result[alias] = {
-      artifact_id: artifactId,
-      path: `sessions/${sessionId}/${artifact.relative_path}`,
-      kind: artifact.kind,
-      status: artifact.status === 'sealed' ? 'sealed' : 'draft',
+  gates: GateRegistry,
+  contract: CommandContract,
+): CollectedReuse {
+  if (contract.consumes.length === 0) return { upstream: {}, assessments: [] };
+  const candidates = Object.entries(registry.artifacts)
+    .map(([artifactId, artifact]) => {
+      let producer: CommandRun | null = null;
+      try { producer = store.readRun(session.session_id, artifact.producer_run_id); } catch { /* assessed as unavailable */ }
+      const path = join(store.sessionDir(session.session_id), artifact.relative_path);
+      return { artifactId, artifact, producer, observedHash: observedArtifactHash(path) };
+    })
+    .filter(item => item.producer !== null)
+    .sort((left, right) => (right.producer?.sequence ?? 0) - (left.producer?.sequence ?? 0)
+      || left.artifactId.localeCompare(right.artifactId));
+
+  const assessments: ReuseAssessment[] = [];
+  const upstream: Record<string, RunUpstream> = {};
+  for (const consume of contract.consumes) {
+    const aliasTargetId = consume.alias ? registry.aliases[consume.alias] : undefined;
+    const matchingKind = candidates.filter(item => item.artifact.kind === consume.kind);
+    const scopedCandidates = consume.alias
+      ? matchingKind.filter(item => item.artifactId === aliasTargetId)
+      : matchingKind;
+    const assessed = scopedCandidates.map(item => {
+      const producer = item.producer!;
+      const supersededBy = Object.entries(registry.artifacts)
+        .filter(([, candidate]) => candidate.replaces === item.artifactId)
+        .map(([id]) => id);
+      const acceptedSchemas = consume.schema
+        ? [consume.schema]
+        : (contract.contract_version ?? 1) === 1 ? [item.artifact.schema_version] : [];
+      const acceptedRoles: string[] = consume.role ? [consume.role] : [];
+      const currentSameRoleCandidates = matchingKind
+        .filter(peer => peer.artifact.role === item.artifact.role)
+        .filter(peer => peer.artifact.status === 'sealed')
+        .filter(peer => !Object.values(registry.artifacts).some(candidate => candidate.replaces === peer.artifactId))
+        .filter(peer => consume.alias ? peer.artifactId === aliasTargetId : true);
+      const sameRoleCandidates = currentSameRoleCandidates
+        .map(peer => ({
+        artifactId: peer.artifactId,
+        artifactHash: peer.artifact.content_hash ? `sha256:${peer.artifact.content_hash}` : null,
+        eligible: peer.producer?.status === 'sealed'
+          && peer.artifact.status === 'sealed'
+          && peer.observedHash === `sha256:${peer.artifact.content_hash}`
+          && (acceptedSchemas.length === 0 || acceptedSchemas.includes(peer.artifact.schema_version))
+          && (acceptedRoles.length === 0 || acceptedRoles.includes(peer.artifact.role)),
+        }));
+      const assessmentInput = {
+        candidate: {
+          workspaceId: createTopicIdentity(projectRoot, session.intent, { source: 'legacy-intent' }).workspace_id,
+          sessionId: session.session_id,
+          producerRunId: producer.run_id,
+          producerRunHash: observedArtifactHash(join(store.runDir(session.session_id, producer.run_id), 'run.json')),
+          producerStatus: producer.status,
+          artifactId: item.artifactId,
+          artifactRole: item.artifact.role,
+          artifactStatus: item.artifact.status,
+          artifactHash: `sha256:${item.artifact.content_hash}`,
+          observedArtifactHash: item.observedHash,
+          artifactSchema: item.artifact.schema_version,
+          artifactRegistryRevision: registry.revision,
+        },
+        consumer: {
+          kind: consume.kind,
+          alias: consume.alias ?? null,
+          schema: consume.schema ?? null,
+          role: consume.role ?? null,
+        },
+        acceptedArtifactSchemas: acceptedSchemas,
+        acceptedArtifactRoles: acceptedRoles,
+        contract: producerContractDrift(projectRoot, producer, item.artifact),
+        freshness: item.artifact.status === 'superseded' || supersededBy.length > 0
+          ? 'stale'
+          : consume.alias
+            ? (aliasTargetId === item.artifactId ? 'fresh' : 'unknown')
+            : currentSameRoleCandidates.length > 0 ? 'fresh' : 'unknown',
+        quality: {
+          status: producer.status !== 'sealed'
+            || producer.output.verdict === 'blocked'
+            || producer.output.verdict === 'failed'
+            || producer.handoff?.verdict === 'blocked'
+            || producer.handoff?.verdict === 'failed'
+            || producer.gate_ids.some(id => {
+              const status = gates.gates[id]?.status;
+              return status !== undefined && !['passed', 'waived', 'skipped'].includes(status);
+            })
+            ? 'low'
+            : (producer.handoff?.concerns.length ?? 0) > 0
+              || producer.handoff?.verdict === 'ready_with_concerns'
+              || producer.output.verdict === 'ready_with_concerns'
+              ? 'medium'
+              : producer.handoff?.verdict === 'ready' && producer.output.verdict === 'ready'
+                ? 'high'
+                : 'unknown',
+          concernCodes: producer.handoff?.concerns ?? [],
+        },
+        supersession: {
+          status: item.artifact.status === 'superseded' || supersededBy.length > 0 ? 'superseded' : 'current',
+          supersedesArtifactIds: item.artifact.replaces ? [item.artifact.replaces] : [],
+          supersededByArtifactIds: supersededBy,
+        },
+        conflicts: { sameRoleCandidates },
+      } satisfies Parameters<typeof assessArtifactReuse>[0];
+      let assessment = assessArtifactReuse(assessmentInput);
+      const finalArtifactHash = observedArtifactHash(join(store.sessionDir(session.session_id), item.artifact.relative_path));
+      const finalRunHash = observedArtifactHash(join(store.runDir(session.session_id, producer.run_id), 'run.json'));
+      if (finalArtifactHash !== assessment.source_fence.observed_artifact_hash
+        || finalRunHash !== assessment.source_fence.producer_run_hash) {
+        const producerFenceStable = finalRunHash === assessment.source_fence.producer_run_hash;
+        assessment = assessArtifactReuse({
+          ...assessmentInput,
+          candidate: {
+            ...assessmentInput.candidate,
+            observedArtifactHash: finalArtifactHash,
+            producerRunHash: producerFenceStable ? finalRunHash : null,
+          },
+        });
+      }
+      assessments.push(assessment);
+      return { item, assessment };
+    });
+    const selected = assessed.find(item => item.assessment.decision === 'REUSE');
+    if (!selected) continue;
+    const alias = consume.alias
+      ?? Object.entries(registry.aliases).find(([, id]) => id === selected.item.artifactId)?.[0]
+      ?? selected.item.artifactId;
+    upstream[alias] = {
+      artifact_id: selected.item.artifactId,
+      path: `sessions/${session.session_id}/${selected.item.artifact.relative_path}`,
+      kind: selected.item.artifact.kind,
+      status: 'sealed',
     };
   }
-  return result;
+  return { upstream, assessments };
+}
+
+export function assessSessionReuse(
+  projectRoot: string,
+  sessionId: string,
+  command: string,
+): CollectedReuse {
+  const store = new SessionStore(projectRoot);
+  return store.withLock(() => {
+    const bundle = store.readBundle(sessionId);
+    return collectReusableUpstream(
+      projectRoot,
+      store,
+      bundle.session,
+      bundle.artifacts,
+      bundle.gates,
+      resolveCommandSource(projectRoot, command).contract,
+    );
+  });
+}
+
+interface RevalidatedRunReuse {
+  upstream: Record<string, RunUpstream>;
+  assessments: ReuseAssessment[];
+  blockers: string[];
+}
+
+function revalidateRunReuse(
+  projectRoot: string,
+  store: SessionStore,
+  bundle: SessionBundle,
+  run: CommandRun,
+): RevalidatedRunReuse {
+  const stored = (run.input.reuse_assessments ?? []) as ReuseAssessment[];
+  if (stored.length === 0) {
+    return {
+      upstream: {},
+      assessments: [],
+      blockers: run.input.consumes.length > 0 ? ['consumed artifacts have no reusable source fence'] : [],
+    };
+  }
+  const current = collectReusableUpstream(
+    projectRoot,
+    store,
+    bundle.session,
+    bundle.artifacts,
+    bundle.gates,
+    contractForRun(projectRoot, run).contract,
+  );
+  const upstream: Record<string, RunUpstream> = {};
+  const assessments: ReuseAssessment[] = [];
+  const blockers: string[] = [];
+  for (const original of stored) {
+    const refreshed = current.assessments.find(item =>
+      item.source_fence.artifact_id === original.source_fence.artifact_id
+      && item.consumer.kind === original.consumer.kind
+      && item.consumer.alias === original.consumer.alias);
+    const aliasCurrent = original.consumer.alias === null
+      || bundle.artifacts.aliases[original.consumer.alias] === original.source_fence.artifact_id;
+    const fenceCurrent = refreshed?.decision === 'REUSE'
+      && refreshed.source_fence.artifact_registry_revision === original.source_fence.artifact_registry_revision
+      && refreshed.source_fence.artifact_hash === original.source_fence.artifact_hash
+      && refreshed.source_fence.observed_artifact_hash === original.source_fence.observed_artifact_hash
+      && refreshed.source_fence.producer_run_hash === original.source_fence.producer_run_hash
+      && aliasCurrent;
+    if (!fenceCurrent) {
+      const assessment: ReuseAssessment = refreshed
+        ? {
+            ...refreshed,
+            decision: refreshed.decision === 'REUSE' ? 'REVIEW' : refreshed.decision,
+            reason_codes: refreshed.decision === 'REUSE'
+              ? [...new Set([...refreshed.reason_codes, 'FRESHNESS_UNKNOWN' as const])]
+              : refreshed.reason_codes,
+          }
+        : { ...original, decision: 'REJECT', reason_codes: [...new Set([...original.reason_codes, 'ARTIFACT_INVALID' as const])] };
+      assessments.push(assessment);
+      if (original.decision === 'REUSE') blockers.push(`artifact ${original.source_fence.artifact_id} reuse fence is no longer current`);
+      continue;
+    }
+    assessments.push(refreshed);
+    if (original.decision !== 'REUSE' || !run.input.consumes.includes(original.source_fence.artifact_id)) continue;
+    const alias = original.consumer.alias ?? original.source_fence.artifact_id;
+    const artifact = bundle.artifacts.artifacts[original.source_fence.artifact_id];
+    upstream[alias] = {
+      artifact_id: original.source_fence.artifact_id,
+      path: `sessions/${bundle.session.session_id}/${artifact.relative_path}`,
+      kind: artifact.kind,
+      status: 'sealed',
+    };
+  }
+  return { upstream, assessments, blockers };
+}
+
+function argumentHint(raw: string): string {
+  const match = raw.match(/^---\s*\r?\n[\s\S]*?^argument-hint:\s*(["']?)(.*?)\1\s*$[\s\S]*?^---\s*$/m);
+  return match?.[2]?.trim() ?? '';
+}
+
+function argumentDefinitions(source: ReturnType<typeof resolveCommandSource>): SkillParamDef[] {
+  if (source.contract.contract_version === 2.1 && source.contract.arguments.length > 0) {
+    return source.contract.arguments.map(item => ({ ...item, positional: !item.name.startsWith('-') }));
+  }
+  return parseArgumentHint(argumentHint(source.raw));
+}
+
+export function resolveArgumentRequirements(
+  projectRoot: string,
+  command: string,
+  args: string[],
+): ArgumentRequirement[] {
+  const source = resolveCommandSource(projectRoot, command);
+  const definitions = argumentDefinitions(source);
+  const strictDefaults = new Map(source.contract.arguments.map(item => [item.name, item.default]));
+  const actual = new Map<string, string | boolean>();
+  const positionals: string[] = [];
+  const byName = new Map(definitions.map(item => [item.name, item]));
+  for (let index = 0; index < args.length; index++) {
+    const value = args[index];
+    if (!value.startsWith('-')) {
+      positionals.push(value);
+      continue;
+    }
+    const equals = value.indexOf('=');
+    const name = equals === -1 ? value : value.slice(0, equals);
+    const definition = byName.get(name);
+    if (!definition) {
+      if (equals === -1 && index + 1 < args.length && !args[index + 1].startsWith('-')) index++;
+      continue;
+    }
+    if (definition.type === 'boolean') {
+      actual.set(name, true);
+    } else if (equals !== -1) {
+      actual.set(name, value.slice(equals + 1));
+    } else if (index + 1 < args.length && !args[index + 1].startsWith('-')) {
+      actual.set(name, args[++index]);
+    }
+  }
+  let positionalIndex = 0;
+  return definitions.map(definition => {
+    const value = definition.positional
+      ? positionals[positionalIndex++]
+      : actual.get(definition.name);
+    const fallback = strictDefaults.get(definition.name);
+    const sourceKind: ArgumentRequirement['source'] = value !== undefined
+      ? 'actual-arg'
+      : fallback !== undefined
+        ? 'contract-default'
+        : 'unresolved';
+    const required = definition.required === true;
+    const missing = required && value === undefined && fallback === undefined;
+    const strict = source.contract.arguments.find(item => item.name === definition.name);
+    return {
+      name: definition.name,
+      required,
+      missing,
+      type: definition.type,
+      source: sourceKind,
+      ...(fallback !== undefined ? { default: fallback } : {}),
+      ...(missing ? { question: strict?.question ?? `Provide required argument ${definition.name}` } : {}),
+    };
+  });
 }
 
 /** Compact a full Handoff into the shared PrevHandoff summary shape. */
@@ -706,7 +1088,7 @@ function registerRunGates(registry: GateRegistry, contract: CommandContract, run
     ids.push(id);
   }
   for (const produce of contract.produces) {
-    const required = (contract.contract_version ?? 1) === 2 ? produce.required === true : true;
+    const required = (contract.contract_version === 2 || contract.contract_version === 2.1) ? produce.required === true : true;
     add({
       key: `produce-${produce.kind}`,
       title: `Produce ${produce.kind}`,
@@ -720,7 +1102,7 @@ function registerRunGates(registry: GateRegistry, contract: CommandContract, run
       evidence_refs: [],
       waiver: null,
     });
-    if ((contract.contract_version ?? 1) === 2 && produce.schema) {
+    if ((contract.contract_version === 2 || contract.contract_version === 2.1) && produce.schema) {
       add({
         key: `produce-schema-${produce.alias ?? produce.kind}`,
         title: `Validate ${produce.kind} schema`,
@@ -1006,7 +1388,14 @@ function validateSealedIntegrity(
 export function createRun(options: CreateRunOptions): CreateRunResult {
   const store = new SessionStore(options.projectRoot);
   const state = projectState(options.projectRoot);
-  const intent = options.intent?.trim() || options.command;
+  const explicitSession = options.sessionId && store.sessionExists(options.sessionId)
+    ? store.readBundle(options.sessionId).session
+    : null;
+  const intent = options.intent?.trim() || explicitSession?.intent || options.command;
+  const topic = options.topic?.trim()
+    || explicitSession?.topic_identity?.verbatim
+    || explicitSession?.intent
+    || intent;
   const intentIdentity = options.intentIdentity ?? createIntentIdentity(options.projectRoot, options.command, intent);
   const source = resolveCommandSource(options.projectRoot, options.command);
 
@@ -1022,9 +1411,21 @@ export function createRun(options: CreateRunOptions): CreateRunResult {
       + `Use "maestro run skill ${options.command}" instead of "maestro run create".`,
     );
   }
+  const argumentRequirements = resolveArgumentRequirements(options.projectRoot, options.command, options.args ?? []);
+  const missingArguments = argumentRequirements.filter(item => item.required && item.missing);
+  if (missingArguments.length > 0) {
+    throw new Error(`Missing required arguments: ${missingArguments.map(item => `${item.name} (${item.question})`).join(', ')}`);
+  }
 
-  const sessionId = resolveSessionId(store, options.sessionId, intent, options.command);
-  if (!store.sessionExists(sessionId)) {
+  const resolvedSession = resolveSessionId(
+    store,
+    options.sessionId,
+    topic,
+    options.topic ? 'explicit' : options.chainStepId ? 'workflow' : 'legacy-intent',
+  );
+  const { sessionId, topicIdentity } = resolvedSession;
+  const sessionExisted = store.sessionExists(sessionId);
+  if (!sessionExisted) {
     store.createSession(sessionId, intent, {
       command: options.command,
       intentIdentity,
@@ -1033,13 +1434,18 @@ export function createRun(options: CreateRunOptions): CreateRunResult {
   }
 
   return store.update(sessionId, (bundle, tx) => {
-    if (!options.sessionId) {
-      if (!bundle.session.intent_identity) {
-        bundle.session.intent_identity = intentIdentity;
-        bundle.session.identity_revision++;
-      } else if (!sameIntentIdentity(bundle.session.intent_identity, intentIdentity)) {
-        throw new Error(`Session ${sessionId} intent identity changed after exact-match resolution`);
-      }
+    if (bundle.session.active_run_id) {
+      throw new Error(
+        `Session ${sessionId} already has active Run ${bundle.session.active_run_id}; `
+        + `inspect it with: maestro run brief ${bundle.session.active_run_id} --session ${sessionId}`,
+      );
+    }
+    if ((bundle.session.topic_identity && !sameTopicIdentity(bundle.session.topic_identity, topicIdentity))
+      || (!bundle.session.topic_identity && sessionExisted && normalizeTopic(bundle.session.intent) !== topicIdentity.normalized)) {
+      throw new Error(`Session ${sessionId} topic identity changed after resolution`);
+    }
+    if (!bundle.session.intent_identity) {
+      bundle.session.intent_identity = intentIdentity;
     }
     let boundStep: SessionState['orchestration']['chain'][number] | null = null;
     let chainStepId = options.chainStepId;
@@ -1072,9 +1478,6 @@ export function createRun(options: CreateRunOptions): CreateRunResult {
           + `(expected identity_revision ${options.expectedIdentityRevision}, got ${bundle.session.identity_revision})`,
         );
       }
-      if (bundle.session.active_run_id) {
-        throw new Error(`Session ${sessionId} already has active Run ${bundle.session.active_run_id}`);
-      }
       const conflict = checkLease(bundle.session.orchestration.lease, options.leaseClaim ?? {});
       if (conflict) throw new Error(conflict);
       const running = bundle.session.orchestration.chain.find(step => step.status === 'running');
@@ -1105,6 +1508,21 @@ export function createRun(options: CreateRunOptions): CreateRunResult {
           `earlier decision ${earlierDecision.decision_ref} is ${point?.status ?? 'pending'} `
           + `and gates chain step ${boundStep.step_id}`,
         );
+      }
+    }
+
+    if (!bundle.session.topic_identity) {
+      bundle.session.topic_identity = topicIdentity;
+      bundle.session.identity_revision++;
+    }
+    if (!options.sessionId) {
+      const candidates = runningTopicCandidatesLocked(store, topicIdentity, bundle.session);
+      const resolved = uniqueTopicCandidate(
+        candidates.some(item => item.session.topic_identity) ? 'Running topic match' : 'Legacy exact intent match',
+        candidates,
+      );
+      if (resolved !== sessionId) {
+        throw new Error(`Topic Session selection changed after resolution; expected ${sessionId}, got ${resolved ?? 'none'}`);
       }
     }
 
@@ -1140,12 +1558,20 @@ export function createRun(options: CreateRunOptions): CreateRunResult {
     }
     const runDir = ensureRunShell(store, sessionId, runId);
     const gateIds = registerRunGates(bundle.gates, source.contract, runId, sequence);
-    const upstream = collectUpstream(sessionId, bundle.artifacts, source.contract);
+    const reuse = collectReusableUpstream(
+      options.projectRoot,
+      store,
+      bundle.session,
+      bundle.artifacts,
+      bundle.gates,
+      source.contract,
+    );
+    const upstream = reuse.upstream;
     const guidanceSnapshot = buildGuidanceSnapshot(options.projectRoot, options.command, source);
     const creationMode = options.creation?.mode
       ?? (options.retryToken ? 'retry' : boundStep ? 'chain-next' : 'explicit-create');
     const run: CommandRun = {
-      schema_version: 'command-run/1.2',
+      schema_version: 'command-run/1.3',
       session_id: sessionId,
       run_id: runId,
       sequence,
@@ -1191,6 +1617,7 @@ export function createRun(options: CreateRunOptions): CreateRunResult {
         args: options.args ?? [],
         consumes: Object.values(upstream).map(item => item.artifact_id),
         context_identity_revision: bundle.session.identity_revision,
+        reuse_assessments: reuse.assessments,
       },
       gate_ids: gateIds,
       output: { produces: [], primary_artifact_id: null, verdict: null },
@@ -1246,6 +1673,9 @@ export function createRun(options: CreateRunOptions): CreateRunResult {
       chain_step_id: run.chain_step_id,
       resolved_platform: run.resolved_platform,
       upstream,
+      topic_identity: bundle.session.topic_identity ?? topicIdentity,
+      reuse_assessments: reuse.assessments,
+      argument_requirements: argumentRequirements,
       entry_gates: entrySummary,
       entry_blockers: entryBlockers,
       next: {
@@ -1305,7 +1735,7 @@ function validateStrictArtifactContract(
   contract: CommandContract,
   scan: ArtifactScanResult,
 ): void {
-  if ((contract.contract_version ?? 1) !== 2) return;
+  if (contract.contract_version !== 2 && contract.contract_version !== 2.1) return;
   for (const expected of contract.produces) {
     const expectedPath = expected.path?.replaceAll('\\', '/').replace(/^\.\//, '');
     const actual = expectedPath
@@ -1332,12 +1762,14 @@ export function checkRun(projectRoot: string, runId: string, sessionId?: string)
   const store = new SessionStore(projectRoot);
   const located = store.findRun(runId, sessionId);
   const resolvedContract = contractForRun(projectRoot, located.run);
+  const reuse = revalidateRunReuse(projectRoot, store, store.readBundle(located.sessionId), located.run);
   const scan = scanOutputs(
     store.runDir(located.sessionId, runId),
     store.sessionDir(located.sessionId),
     resolvedContract.contract,
   );
   validateStrictArtifactContract(store.runDir(located.sessionId, runId), resolvedContract.contract, scan);
+  scan.errors.push(...reuse.blockers);
   if (resolvedContract.warning) scan.warnings.unshift(resolvedContract.warning);
   const frontmatter = readReportFrontmatter(store.runDir(located.sessionId, runId));
 
@@ -1352,6 +1784,8 @@ export function checkRun(projectRoot: string, runId: string, sessionId?: string)
       artifacts: scanSummary(scan),
       warnings: scan.warnings,
       errors: scan.errors,
+      upstream: reuse.upstream,
+      reuse_assessments: reuse.assessments,
       next: checkNext(located.sessionId, runId, 'sealed', true),
     };
   }
@@ -1379,6 +1813,8 @@ export function checkRun(projectRoot: string, runId: string, sessionId?: string)
       artifacts: scanSummary(scan),
       warnings: scan.warnings,
       errors: scan.errors,
+      upstream: reuse.upstream,
+      reuse_assessments: reuse.assessments,
       next: checkNext(located.sessionId, runId, run.status, clean),
       ...(clean ? { finish: buildFinishChecklist(projectRoot, run, frontmatter) } : {}),
     };
@@ -1534,6 +1970,12 @@ function registerArtifacts(
     if (previous?.status === 'sealed' && previous.content_hash !== item.contentHash) {
       throw new Error(`Sealed artifact is immutable: ${item.relativePath}`);
     }
+    const alias = item.alias ?? (item.role === 'primary' ? defaultAlias(item.kind, run.command.name) : undefined);
+    const priorAliasId = alias ? registry.aliases[alias] : undefined;
+    if (priorAliasId && priorAliasId !== id) {
+      const prior = registry.artifacts[priorAliasId];
+      if (prior && prior.status === 'sealed') prior.status = 'superseded';
+    }
     registry.artifacts[id] = {
       kind: item.kind,
       role: item.role,
@@ -1545,9 +1987,8 @@ function registerArtifacts(
       size: item.size,
       status: 'sealed',
       derived_from: run.input.consumes,
-      replaces: previous?.replaces ?? null,
+      replaces: priorAliasId && priorAliasId !== id ? priorAliasId : previous?.replaces ?? null,
     };
-    const alias = item.alias ?? (item.role === 'primary' ? defaultAlias(item.kind, run.command.name) : undefined);
     if (alias) registry.aliases[alias] = id;
     ids.push(id);
   }
@@ -1735,9 +2176,11 @@ export function completeRun(
   const located = store.findRun(runId, sessionId);
   if (located.run.status === 'sealed') throw new Error(`Run ${runId} is sealed and immutable`);
   const resolvedContract = contractForRun(projectRoot, located.run);
+  const reuse = revalidateRunReuse(projectRoot, store, store.readBundle(located.sessionId), located.run);
   const runDir = store.runDir(located.sessionId, runId);
   const sessionDir = store.sessionDir(located.sessionId);
   const scan = scanOutputs(runDir, sessionDir, resolvedContract.contract);
+  scan.errors.push(...reuse.blockers);
   if (resolvedContract.warning) scan.warnings.unshift(resolvedContract.warning);
   const extraArtifacts = discoverExtraArtifacts(runDir, sessionDir, options.extraArtifacts ?? []);
   const frontmatter = readReportFrontmatter(runDir);
@@ -1773,6 +2216,8 @@ export function completeRun(
         artifacts: scanSummary(scan),
         warnings: scan.warnings,
         errors: scan.errors,
+        upstream: reuse.upstream,
+        reuse_assessments: reuse.assessments,
         sealed: false,
         primary_artifact_id: null,
         artifact_ids: [],
@@ -1822,6 +2267,8 @@ export function completeRun(
       artifacts: scanSummary(scan),
       warnings: scan.warnings,
       errors: scan.errors,
+      upstream: reuse.upstream,
+      reuse_assessments: reuse.assessments,
       sealed: true,
       primary_artifact_id: primary,
       artifact_ids: artifactIds,
@@ -2066,19 +2513,17 @@ function preparePreviousContext(
 ): PreparePrevious {
   const store = new SessionStore(projectRoot);
   if (!store.sessionExists(sessionId)) {
-    return { handoff: null, consumes: [] };
+    return { handoff: null, consumes: [], upstream: {}, reuse_assessments: [], selected_refs: [] };
   }
   const bundle = store.readBundle(sessionId);
   const handoff = handoffByLatestCompleted(store, bundle.session);
   const contract = resolveCommandSource(projectRoot, stepName).contract;
+  const reuse = assessSessionReuse(projectRoot, sessionId, stepName);
   const consumes: PrepareConsumeStatus[] = contract.consumes.map(consume => {
-    const alias = consume.alias
-      ?? Object.keys(bundle.artifacts.aliases).find(key => {
-        const id = bundle.artifacts.aliases[key];
-        return bundle.artifacts.artifacts[id]?.kind === consume.kind;
-      })
-      ?? null;
-    const artifactId = alias ? bundle.artifacts.aliases[alias] : undefined;
+    const selected = Object.entries(reuse.upstream).find(([alias, item]) =>
+      (consume.alias ? alias === consume.alias : item.kind === consume.kind));
+    const alias = selected?.[0] ?? consume.alias ?? null;
+    const artifactId = selected?.[1].artifact_id;
     const artifact = artifactId ? bundle.artifacts.artifacts[artifactId] : undefined;
     return {
       alias,
@@ -2089,7 +2534,19 @@ function preparePreviousContext(
       path: artifact ? `sessions/${sessionId}/${artifact.relative_path}` : null,
     };
   });
-  return { handoff, consumes };
+  const selectedRefs = Object.entries(reuse.upstream).map(([alias, item]) => ({
+    alias,
+    artifact_id: item.artifact_id,
+    path: item.path,
+    assessment_hash: reuse.assessments.find(assessment => assessment.source_fence.artifact_id === item.artifact_id)?.assessment_hash ?? '',
+  }));
+  return {
+    handoff,
+    consumes,
+    upstream: reuse.upstream,
+    reuse_assessments: reuse.assessments,
+    selected_refs: selectedRefs,
+  };
 }
 
 export function prepareStep(
@@ -2170,11 +2627,14 @@ export function briefRun(
     })
     .filter((item): item is NonNullable<typeof item> => item !== null);
 
-  const upstream = upstreamForConsumedIds(located.sessionId, bundle.artifacts, run.input.consumes);
+  const validatedReuse = revalidateRunReuse(projectRoot, store, bundle, run);
+  const upstream = validatedReuse.upstream;
   const prevHandoff = latestHandoffBefore(store, located.sessionId, run.sequence);
   const anchor = buildAnchorSections(store, bundle.session);
   const resolvedContract = contractForRun(projectRoot, run);
   const contract = resolvedContract.contract;
+  const argumentRequirements = resolveArgumentRequirements(projectRoot, run.command.name, run.input.args);
+  const reuseAssessments = validatedReuse.assessments;
   const inputs: ExecutionContractView['inputs'] = contract.consumes.map(consume => ({
     kind: consume.kind,
     alias: consume.alias ?? null,
@@ -2207,8 +2667,8 @@ export function briefRun(
       } : null;
     })
     .filter((item): item is NonNullable<typeof item> => item !== null);
-  const executionContract: ExecutionContractView = executionContractSchema.parse({
-    schema_version: 'execution-contract/1.0',
+  const executionContract: ExecutionContractView = executionContractV11Schema.parse({
+    schema_version: 'execution-contract/1.1',
     command: run.command.name,
     invocation: { args: [...run.input.args] },
     guidance: {
@@ -2221,7 +2681,9 @@ export function briefRun(
     gates: { registry_revision: bundle.gates.revision, items: gateItems },
     contract: {
       version: run.contract_snapshot?.contract_version
-        ?? ((contract.contract_version ?? 1) === 2 ? 'command-contract/2.0' : 'command-contract/1.0'),
+        ?? (contract.contract_version === 2.1
+          ? 'command-contract/2.1'
+          : contract.contract_version === 2 ? 'command-contract/2.0' : 'command-contract/1.0'),
       snapshot_hash: run.contract_snapshot?.snapshot_hash ?? null,
       warnings: contract.compatibility_warnings ?? [],
       drift: resolvedContract.warning ? 'prompt-only' : 'none',
@@ -2234,6 +2696,8 @@ export function briefRun(
       identity_current: run.input.context_identity_revision === bundle.session.identity_revision,
       command_contract_hash: run.command.contract_hash ?? null,
     },
+    argument_requirements: argumentRequirements,
+    reuse_assessments: reuseAssessments,
   });
 
   return {
@@ -2246,6 +2710,8 @@ export function briefRun(
     command: run.command.name,
     goal: run.handoff?.summary || bundle.session.intent,
     args: [...run.input.args],
+    argument_requirements: argumentRequirements,
+    reuse_assessments: reuseAssessments,
     gates: gateSummary(bundle.gates, run.gate_ids),
     prepare: content.prepare
       ? { path: content.prepare.path, content: tx(content.prepare.raw) }

@@ -53,11 +53,16 @@ function commandFile(projectRoot: string, name: string, contract: string): void 
 }
 
 /** Write a prepare file with refs frontmatter for the given workflow base. */
-function writePrepareWithRefs(projectRoot: string, base: string, refs: Array<{ path: string; when: string }>): void {
+function writePrepareWithRefs(
+  projectRoot: string,
+  base: string,
+  refs: Array<{ path: string; when: string }>,
+  contract?: string,
+): void {
   const dir = join(projectRoot, 'prepare');
   mkdirSync(dir, { recursive: true });
   const refLines = refs.map(r => `  - path: ${r.path}\n    when: ${r.when}`).join('\n');
-  writeFileSync(join(dir, `${base}.md`), `---\nrefs:\n${refLines}\n---\n# prepare ${base}\n`, 'utf8');
+  writeFileSync(join(dir, `${base}.md`), `---\nrefs:\n${refLines}\n---\n${contract ? `<contract>\n${contract}\n</contract>\n` : ''}# prepare ${base}\n`, 'utf8');
 }
 
 function writePlanRun(projectRoot: string, sessionId: string, runId: string): void {
@@ -409,14 +414,14 @@ gates:
     const created = JSON.parse(String(output.mock.calls.at(-1)?.[0]));
     const run = new SessionStore(projectRoot).readRun(created.session_id, created.run_id);
     expect(run.input.args).toEqual(['-y', '--depth', 'deep']);
-    expect(run.schema_version).toBe('command-run/1.2');
+    expect(run.schema_version).toBe('command-run/1.3');
     expect(run.contract_snapshot?.schema_version).toBe('contract-snapshot/1.0');
     output.mockRestore();
   });
 
   it('uses strict protocol schemas', () => {
     const valid = createSessionState('20260713-demo', 'demo');
-    expect(sessionStateSchema.parse(valid).schema_version).toBe('session/1.2');
+    expect(sessionStateSchema.parse(valid).schema_version).toBe('session/1.3');
     expect(() => sessionStateSchema.parse({ ...valid, unexpected: true })).toThrow(/unrecognized/i);
     const ralph = structuredClone(valid);
     ralph.ralph_authority = { schema_version: 'ralph-authority/1.0', engine: 'ralph', canonical_complete: true };
@@ -440,6 +445,7 @@ gates:
   it('allocates stable per-session sequence numbers and creates protected authority files', () => {
     const projectRoot = root();
     const first = createRun({ projectRoot, command: 'empty', intent: 'sequence demo' });
+    expect(completeRun(projectRoot, first.run_id, first.session_id).sealed).toBe(true);
     const second = createRun({ projectRoot, command: 'empty', intent: 'sequence demo' });
 
     expect(first.session_id).toBe(second.session_id);
@@ -550,6 +556,7 @@ gates:
     const projectRoot = root();
     const first = createRun({ projectRoot, command: 'empty', intent: 'Auth Refactor' });
     const unrelated = createRun({ projectRoot, command: 'empty', intent: 'Billing Refactor' });
+    expect(completeRun(projectRoot, first.run_id, first.session_id).sealed).toBe(true);
     const resumed = createRun({ projectRoot, command: 'empty', intent: 'auth refactor' });
 
     expect(unrelated.session_id).not.toBe(first.session_id);
@@ -680,7 +687,14 @@ gates:
     // Prepare refs for demo-exec drive the brief deferred-reading manifest (G3).
     writePrepareWithRefs(projectRoot, 'demo-exec', [
       { path: 'docs/schema.md', when: 'before touching the store' },
-    ]);
+    ], `consumes:
+  - kind: plan
+    alias: current-plan
+    required: false
+produces: []
+gates:
+  entry: []
+  exit: []`);
 
     const planRun = createRun({ projectRoot, command: 'demo-plan', intent: 'brief anchor demo' });
     writePlanRun(projectRoot, planRun.session_id, planRun.run_id);
@@ -740,7 +754,7 @@ gates:
     });
   });
 
-  it('brief additively exposes an independently executable execution-contract/1.0', () => {
+  it('brief additively exposes an independently executable execution-contract/1.1', () => {
     const projectRoot = root();
     commandFile(projectRoot, 'self-contained', `consumes:
   - kind: context
@@ -776,7 +790,7 @@ gates:
     expect(brief.prepare).toBeNull();
     expect(brief.workflow?.content).toContain('Perform the bounded task');
     expect(brief.execution_contract).toMatchObject({
-      schema_version: 'execution-contract/1.0',
+      schema_version: 'execution-contract/1.1',
       command: 'self-contained',
       invocation: { args: ['--target', 'core'] },
       guidance: { workflow_path: expect.stringContaining('self-contained.md') },
@@ -940,7 +954,7 @@ gates:
     expect(extra.role).toBe('evidence');
   });
 
-  it('closes the loop: complete --note surfaces in the next brief upstream and prev handoff', () => {
+  it('surfaces complete --note as a review assessment and in the next prev handoff', () => {
     const projectRoot = root();
     commandFile(projectRoot, 'demo-plan', `consumes: []
 produces:
@@ -968,7 +982,10 @@ gates:
     // A downstream run consuming the plan sees the alias and the note in prev handoff.
     const execRun = createRun({ projectRoot, command: 'demo-exec', sessionId: planRun.session_id, intent: 'closed loop' });
     const brief = briefRun(projectRoot, execRun.run_id, execRun.session_id);
-    expect(brief.upstream['current-plan']).toBeDefined();
+    expect(brief.upstream['current-plan']).toBeUndefined();
+    expect(brief.reuse_assessments).toEqual([
+      expect.objectContaining({ decision: 'REVIEW', reason_codes: expect.arrayContaining(['QUALITY_MEDIUM']) }),
+    ]);
     expect(brief.prev_handoff?.concerns).toContain('watch the migration order');
   });
 });

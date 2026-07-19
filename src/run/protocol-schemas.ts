@@ -20,6 +20,58 @@ export const intentIdentitySchema = z.object({
   empty: z.boolean(),
 }).strict();
 
+export const topicIdentitySchema = z.object({
+  schema_version: z.literal('topic-identity/1.0'),
+  normalization: z.literal('NFKC+unicode-lower+whitespace-collapse/1'),
+  workspace_id: sha256Schema,
+  source: z.enum(['explicit', 'workflow', 'legacy-intent']),
+  verbatim: z.string(),
+  normalized: nonEmptyString,
+  normalized_length: z.number().int().positive(),
+  normalized_hash: sha256Schema,
+  identity_hash: sha256Schema,
+  revision: z.literal(1),
+}).strict();
+
+export const argumentRequirementSchema = z.object({
+  name: nonEmptyString,
+  required: z.boolean(),
+  missing: z.boolean(),
+  type: z.enum(['boolean', 'enum', 'string', 'number']),
+  source: z.enum(['actual-arg', 'contract-default', 'unresolved']),
+  default: z.union([z.string(), z.number(), z.boolean()]).optional(),
+  question: z.string().min(1).optional(),
+}).strict();
+
+export const reuseAssessmentSchema = z.object({
+  schema_version: z.literal('reuse-assessment/1.0'),
+  decision: z.enum(['REUSE', 'REVIEW', 'CONFLICT', 'REJECT']),
+  reason_codes: z.array(nonEmptyString),
+  consumer: z.object({
+    kind: nonEmptyString,
+    alias: z.string().min(1).nullable(),
+    schema: z.string().min(1).nullable(),
+    role: z.enum(['primary', 'attachment', 'evidence', 'checkpoint']).nullable(),
+  }).strict(),
+  source_fence: z.object({
+    schema_version: z.literal('reuse-source-fence/1.0'),
+    workspace_id: sha256Schema,
+    session_id: nonEmptyString,
+    producer_run_id: nonEmptyString,
+    producer_run_hash: nullableSha256Schema,
+    producer_status: z.enum(['created', 'running', 'blocked', 'failed', 'completed', 'sealed']),
+    artifact_id: nonEmptyString,
+    artifact_role: nonEmptyString,
+    artifact_status: z.enum(['draft', 'sealed', 'invalid', 'superseded']),
+    artifact_hash: nullableSha256Schema,
+    observed_artifact_hash: nullableSha256Schema,
+    artifact_schema: z.string().min(1).nullable(),
+    artifact_registry_revision: z.number().int().nonnegative().nullable(),
+    producer_contract_hash: z.string().min(1).nullable(),
+  }).strict(),
+  assessment_hash: sha256Schema,
+}).strict();
+
 export const sessionLocatorSchema = z.object({
   workspace_id: sha256Schema,
   session_id: nonEmptyString,
@@ -35,12 +87,12 @@ export const sourceFenceSchema = z.object({
   workspace_id: sha256Schema,
   workspace_link_name: z.string().min(1).nullable(),
   session_id: nonEmptyString,
-  session_schema_version: z.enum(['session/1.0', 'session/1.1', 'session/1.2']),
+  session_schema_version: z.enum(['session/1.0', 'session/1.1', 'session/1.2', 'session/1.3']),
   session_identity_revision: z.number().int().nonnegative(),
   session_activity_revision: z.number().int().nonnegative(),
   session_hash: sha256Schema,
   run_id: nonEmptyString,
-  run_schema_version: z.enum(['command-run/1.0', 'command-run/1.1', 'command-run/1.2']),
+  run_schema_version: z.enum(['command-run/1.0', 'command-run/1.1', 'command-run/1.2', 'command-run/1.3']),
   run_hash: sha256Schema,
   artifact_registry_revision: z.number().int().nonnegative(),
   selected_artifacts: z.array(artifactFenceSchema),
@@ -87,7 +139,7 @@ export const creationProvenanceSchema = z.object({
 
 export const contractSnapshotSchema = z.object({
   schema_version: z.literal('contract-snapshot/1.0'),
-  contract_version: z.enum(['command-contract/1.0', 'command-contract/2.0']),
+  contract_version: z.enum(['command-contract/1.0', 'command-contract/2.0', 'command-contract/2.1']),
   normalized: z.record(z.string(), z.unknown()),
   snapshot_hash: sha256Schema,
   parser_version: z.literal('maestro-command-contract/2'),
@@ -199,7 +251,7 @@ const runUpstreamSchema = z.object({
 
 const gateStatusSchema = z.enum(['pending', 'running', 'passed', 'failed', 'blocked', 'waived', 'skipped']);
 
-export const executionContractSchema = z.object({
+const executionContractV10Schema = z.object({
   schema_version: z.literal('execution-contract/1.0'),
   command: nonEmptyString,
   invocation: z.object({ args: z.array(z.string()) }).strict(),
@@ -246,7 +298,7 @@ export const executionContractSchema = z.object({
     }).strict()),
   }).strict(),
   contract: z.object({
-    version: z.enum(['command-contract/1.0', 'command-contract/2.0']),
+    version: z.enum(['command-contract/1.0', 'command-contract/2.0', 'command-contract/2.1']),
     snapshot_hash: nullableSha256Schema,
     warnings: z.array(z.string()),
     drift: z.enum(['none', 'prompt-only', 'blocking-contract']),
@@ -260,6 +312,17 @@ export const executionContractSchema = z.object({
     command_contract_hash: z.string().regex(/^[a-f0-9]{64}$/).nullable(),
   }).strict(),
 }).strict();
+
+export const executionContractV11Schema = executionContractV10Schema
+  .omit({ schema_version: true })
+  .extend({
+    schema_version: z.literal('execution-contract/1.1'),
+    argument_requirements: z.array(argumentRequirementSchema),
+    reuse_assessments: z.array(reuseAssessmentSchema),
+  })
+  .strict();
+
+export const executionContractSchema = z.union([executionContractV11Schema, executionContractV10Schema]);
 
 const recallExactCandidateSchema = z.object({
   candidate_id: nonEmptyString,
@@ -289,8 +352,7 @@ const recallHistoricalCandidateSchema = z.object({
   tied: z.boolean(),
 }).strict();
 
-export const runRecallSchema = z.object({
-  schema_version: z.literal('run-recall/1.0'),
+const runRecallBaseSchema = z.object({
   request: z.object({
     request_id: nonEmptyString,
     request_hash: sha256Schema,
@@ -320,6 +382,18 @@ export const runRecallSchema = z.object({
     reason: z.string(),
   }).strict(),
 }).strict();
+
+export const runRecallV10Schema = runRecallBaseSchema.extend({
+  schema_version: z.literal('run-recall/1.0'),
+}).strict();
+
+export const runRecallV11Schema = runRecallBaseSchema.extend({
+  schema_version: z.literal('run-recall/1.1'),
+  topic_identity: topicIdentitySchema,
+  reuse_assessments: z.array(reuseAssessmentSchema),
+}).strict();
+
+export const runRecallSchema = z.union([runRecallV11Schema, runRecallV10Schema]);
 
 export const recallConfirmationTargetIdentitySchema = z.object({
   workspace_id: sha256Schema,
@@ -449,6 +523,7 @@ const runErrorCodeSchema = z.enum([
   'COMMANDER_USAGE', 'SESSION_NOT_FOUND', 'SESSION_AMBIGUOUS', 'SESSION_NOT_RUNNING',
   'RESUME_REQUIRED', 'LEASE_CONFLICT', 'RUNNING_STEP', 'DECISION_REQUIRED', 'CHAIN_COMPLETE',
   'PICK_NOT_FOUND', 'PICK_NOT_PENDING', 'PICK_DECISION_NODE', 'COMMAND_CONTENT_MISSING',
+  'ARGUMENT_REQUIRED',
   'RUN_NOT_FOUND', 'RUN_GATES_BLOCKING', 'RUN_IMMUTABLE', 'INVALID_VERDICT',
   'PLATFORM_INVALID', 'PLATFORM_CONFLICT', 'CONTRACT_DRIFT', 'REQUEST_CONFLICT',
   'REPLAY_STATE_DIVERGED', 'TOKEN_INVALID', 'TOKEN_EXPIRED', 'TOKEN_REPLAYED', 'TOKEN_RESERVED',
@@ -520,6 +595,9 @@ export const importManifestSchema = z.object({
 }).strict();
 
 export type IntentIdentity = z.infer<typeof intentIdentitySchema>;
+export type TopicIdentityProtocol = z.infer<typeof topicIdentitySchema>;
+export type ArgumentRequirement = z.infer<typeof argumentRequirementSchema>;
+export type ReuseAssessmentProtocol = z.infer<typeof reuseAssessmentSchema>;
 export type SessionProvenance = z.infer<typeof sessionProvenanceSchema>;
 export type CreationDecision = z.infer<typeof creationDecisionSchema>;
 export type CreationProvenance = z.infer<typeof creationProvenanceSchema>;
@@ -531,8 +609,8 @@ export type TransitionRequest = z.infer<typeof transitionRequestSchema>;
 export type TransitionOutcome = z.infer<typeof transitionOutcomeSchema>;
 export type PersistedTransitionRecord = z.infer<typeof persistedTransitionRecordSchema>;
 export type TransitionPointer = z.infer<typeof transitionPointerSchema>;
-export type ExecutionContract = z.infer<typeof executionContractSchema>;
-export type RunRecall = z.infer<typeof runRecallSchema>;
+export type ExecutionContract = z.infer<typeof executionContractV11Schema>;
+export type RunRecall = z.infer<typeof runRecallV11Schema>;
 export type RecallConfirmationTargetIdentity = z.infer<typeof recallConfirmationTargetIdentitySchema>;
 export type RecallConfirmationFinalTarget = z.infer<typeof recallConfirmationFinalTargetSchema>;
 export type ValidatedRecallSource = z.infer<typeof validatedRecallSourceSchema>;

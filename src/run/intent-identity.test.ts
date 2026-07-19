@@ -54,7 +54,7 @@ describe('intent-identity/1.0', () => {
     expect(result.candidates.map(item => item.sessionId)).toEqual(['s-a', 's-b']);
     expect(result.candidates.every(item => item.identity?.normalized_hash === identity.normalized_hash)).toBe(true);
     expect(() => createRun({ projectRoot, command: 'plan', intent: '相同 intent' }))
-      .toThrow(/Exact intent identity is ambiguous/);
+      .toThrow(/Legacy exact intent match is ambiguous/);
   });
 
   it('rejects malformed hashes and unknown schema versions', () => {

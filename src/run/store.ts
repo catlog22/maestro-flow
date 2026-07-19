@@ -23,12 +23,12 @@ import { loadWorkspaceConfig, resolveWorkspaceLinks } from '../config/index.js';
 import {
   artifactRegistrySchema,
   commandRunReadSchema,
-  commandRunV12Schema,
+  commandRunV13Schema,
   evidenceStoreSchema,
   gateRegistrySchema,
   normalizeCommandRun,
   sessionStateSchema,
-  sessionStateV12Schema,
+  sessionStateV13Schema,
   targetPlatformSchema,
   type ArtifactRegistry,
   type CommandRun,
@@ -426,7 +426,7 @@ export class SessionStore {
 
   private readRunUnlocked(sessionId: string, runId: string): CommandRun {
     const raw = this.readValidated(join(this.runDir(sessionId, runId), 'run.json'), commandRunReadSchema);
-    if (raw.schema_version === 'command-run/1.2') return raw;
+    if (raw.schema_version === 'command-run/1.3') return raw;
     const session = this.readValidated(join(this.sessionDir(sessionId), 'session.json'), sessionStateSchema);
     const executorPlatform = targetPlatformSchema.safeParse(session.orchestration.executor?.platform);
     return normalizeCommandRun(raw, executorPlatform.success ? executorPlatform.data : 'claude');
@@ -443,8 +443,8 @@ export class SessionStore {
       const result = mutator(draft, tx);
       // Compatible reads normalize legacy sessions in memory; every mutation
       // persists the coordinated canonical generation.
-      draft.session.schema_version = 'session/1.2';
-      sessionStateV12Schema.parse(draft.session);
+      draft.session.schema_version = 'session/1.3';
+      sessionStateV13Schema.parse(draft.session);
       gateRegistrySchema.parse(draft.gates);
       artifactRegistrySchema.parse(draft.artifacts);
       evidenceStoreSchema.parse(draft.evidence);
@@ -892,8 +892,8 @@ export class SessionStore {
         throw new Error(`transition ${evaluated.outcome.transition_id} postcondition fence does not match the draft`);
       }
       draft.session.requests.push(evaluated.record);
-      draft.session.schema_version = 'session/1.2';
-      sessionStateV12Schema.parse(draft.session);
+      draft.session.schema_version = 'session/1.3';
+      sessionStateV13Schema.parse(draft.session);
       tx.addBundle(draft);
       this.writeBatchUnlocked(tx.writes);
       return { outcome: clone(evaluated.outcome), replayed: false };
@@ -1321,7 +1321,7 @@ export class SessionStore {
   private writeBundleUnlocked(sessionId: string, bundle: SessionBundle): void {
     const dir = this.sessionDir(sessionId);
     this.writeBatchUnlocked([
-      { path: join(dir, 'session.json'), value: bundle.session, schema: sessionStateV12Schema },
+      { path: join(dir, 'session.json'), value: bundle.session, schema: sessionStateV13Schema },
       { path: join(dir, 'gates.json'), value: bundle.gates, schema: gateRegistrySchema },
       { path: join(dir, 'artifacts.json'), value: bundle.artifacts, schema: artifactRegistrySchema },
       { path: join(dir, 'evidence.json'), value: bundle.evidence, schema: evidenceStoreSchema },
@@ -1416,11 +1416,11 @@ export class StoreTransaction {
   }
 
   writeRun(run: CommandRun): void {
-    commandRunV12Schema.parse(run);
+    commandRunV13Schema.parse(run);
     this.writes.push({
       path: join(this.store.runDir(this.sessionId, run.run_id), 'run.json'),
       value: run,
-      schema: commandRunV12Schema,
+      schema: commandRunV13Schema,
     });
   }
 
@@ -1431,7 +1431,7 @@ export class StoreTransaction {
   addBundle(bundle: SessionBundle): void {
     const dir = this.store.sessionDir(this.sessionId);
     this.writes.push(
-      { path: join(dir, 'session.json'), value: bundle.session, schema: sessionStateV12Schema },
+      { path: join(dir, 'session.json'), value: bundle.session, schema: sessionStateV13Schema },
       { path: join(dir, 'gates.json'), value: bundle.gates, schema: gateRegistrySchema },
       { path: join(dir, 'artifacts.json'), value: bundle.artifacts, schema: artifactRegistrySchema },
       { path: join(dir, 'evidence.json'), value: bundle.evidence, schema: evidenceStoreSchema },

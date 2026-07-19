@@ -7,7 +7,9 @@ import {
   intentIdentitySchema,
   persistedTransitionRecordSchema,
   ralphAuthoritySchema,
+  reuseAssessmentSchema,
   sessionProvenanceSchema,
+  topicIdentitySchema,
   transitionPointerSchema,
 } from './protocol-schemas.js';
 
@@ -156,7 +158,7 @@ const legacySessionRequestSchema = z.object({
 }).strict();
 
 export const sessionStateV1ReadSchema = z.object({
-  // Accept legacy generations; the store rewrites mutations to session/1.2. session/1.0 files
+  // Accept legacy generations; the store rewrites mutations to session/1.3. session/1.0 files
   // are read losslessly — new orchestration fields carry optional/nullable defaults.
   schema_version: z.enum(['session/1.0', 'session/1.1']),
   session_id: nonEmptyString,
@@ -206,14 +208,28 @@ export const sessionStateV12Schema = sessionStateV1ReadSchema
   })
   .strict();
 
-export type SessionStateInput = z.infer<typeof sessionStateV1ReadSchema> | z.infer<typeof sessionStateV12Schema>;
+export const sessionStateV13Schema = sessionStateV12Schema
+  .omit({ schema_version: true })
+  .extend({
+    schema_version: z.literal('session/1.3'),
+    topic_identity: topicIdentitySchema.nullable(),
+  })
+  .strict();
 
-export function normalizeSessionState(session: SessionStateInput): z.infer<typeof sessionStateV12Schema> {
-  if (session.schema_version === 'session/1.2') return session;
-  return sessionStateV12Schema.parse({
+export type SessionStateInput = z.infer<typeof sessionStateV1ReadSchema>
+  | z.infer<typeof sessionStateV12Schema>
+  | z.infer<typeof sessionStateV13Schema>;
+
+export function normalizeSessionState(session: SessionStateInput): z.infer<typeof sessionStateV13Schema> {
+  if (session.schema_version === 'session/1.3') return session;
+  if (session.schema_version === 'session/1.2') {
+    return sessionStateV13Schema.parse({ ...session, schema_version: 'session/1.3', topic_identity: null });
+  }
+  return sessionStateV13Schema.parse({
     ...session,
-    schema_version: 'session/1.2',
+    schema_version: 'session/1.3',
     intent_identity: null,
+    topic_identity: null,
     provenance: {
       source: 'legacy-inferred',
       forked_from: null,
@@ -224,8 +240,8 @@ export function normalizeSessionState(session: SessionStateInput): z.infer<typeo
   });
 }
 
-export const sessionStateReadSchema = z.union([sessionStateV12Schema, sessionStateV1ReadSchema]);
-/** Backward-compatible read schema. New writes must use sessionStateV12Schema. */
+export const sessionStateReadSchema = z.union([sessionStateV13Schema, sessionStateV12Schema, sessionStateV1ReadSchema]);
+/** Backward-compatible read schema. New writes must use sessionStateV13Schema. */
 export const sessionStateSchema = sessionStateReadSchema.transform(session => normalizeSessionState(session));
 
 const gateCheckSchema = z.discriminatedUnion('type', [
@@ -439,15 +455,32 @@ export const commandRunV12Schema = commandRunBaseSchema.extend({
   transition: transitionPointerSchema.nullable(),
 }).strict();
 
-export const commandRunReadSchema = z.union([commandRunV12Schema, commandRunV11Schema, commandRunV1Schema]);
+export const commandRunV13Schema = commandRunV12Schema
+  .omit({ schema_version: true, input: true })
+  .extend({
+    schema_version: z.literal('command-run/1.3'),
+    input: commandRunBaseSchema.shape.input.extend({
+      reuse_assessments: z.array(reuseAssessmentSchema),
+    }).strict(),
+  })
+  .strict();
+
+export const commandRunReadSchema = z.union([commandRunV13Schema, commandRunV12Schema, commandRunV11Schema, commandRunV1Schema]);
 export type CommandRunInput = z.infer<typeof commandRunReadSchema>;
-export type CommandRun = z.infer<typeof commandRunV12Schema>;
+export type CommandRun = z.infer<typeof commandRunV13Schema>;
 
 export function normalizeCommandRun(
   run: CommandRunInput,
   fallbackPlatform: z.infer<typeof targetPlatformSchema> = 'claude',
 ): CommandRun {
-  if (run.schema_version === 'command-run/1.2') return run;
+  if (run.schema_version === 'command-run/1.3') return run;
+  if (run.schema_version === 'command-run/1.2') {
+    return commandRunV13Schema.parse({
+      ...run,
+      schema_version: 'command-run/1.3',
+      input: { ...run.input, reuse_assessments: [] },
+    });
+  }
   const v11 = run.schema_version === 'command-run/1.1' ? run : commandRunV11Schema.parse({
     ...run,
     schema_version: 'command-run/1.1',
@@ -458,7 +491,7 @@ export function normalizeCommandRun(
     checkpoint: null,
     retry_fence: null,
   });
-  return commandRunV12Schema.parse({
+  const v12 = commandRunV12Schema.parse({
     ...v11,
     schema_version: 'command-run/1.2',
     contract_snapshot: null,
@@ -474,9 +507,14 @@ export function normalizeCommandRun(
     },
     transition: null,
   });
+  return commandRunV13Schema.parse({
+    ...v12,
+    schema_version: 'command-run/1.3',
+    input: { ...v12.input, reuse_assessments: [] },
+  });
 }
 
-/** Backward-compatible read schema. New writes must use commandRunV12Schema. */
+/** Backward-compatible read schema. New writes must use commandRunV13Schema. */
 export const commandRunSchema = commandRunReadSchema.transform(run => normalizeCommandRun(run));
 
 export const artifactMetaSchema = z.object({
@@ -508,7 +546,7 @@ export const reportFrontmatterSchema = z.object({
   details: z.record(z.string(), z.unknown()).default({}),
 }).passthrough();
 
-export type SessionState = z.infer<typeof sessionStateV12Schema>;
+export type SessionState = z.infer<typeof sessionStateV13Schema>;
 export type OrchestrationStep = z.infer<typeof orchestrationStepSchema>;
 export type PendingRetryToken = z.infer<typeof pendingRetryTokenSchema>;
 export type OrchestrationPosition = z.infer<typeof positionSchema>;

@@ -37,7 +37,7 @@
 import { existsSync, readdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { resolveStepContent } from './contract.js';
-import { createRun, type NamedGateBlocker, type PrevHandoff, type RunUpstream } from './runtime.js';
+import { createRun, resolveArgumentRequirements, type CreateRunResult, type NamedGateBlocker, type PrevHandoff, type RunUpstream } from './runtime.js';
 import {
   activeStepIndex,
   nextPendingIndex,
@@ -72,6 +72,8 @@ export interface NextResult {
   resolved_platform: TargetPlatform;
   /** Verbatim argv persisted on the already-created Run. */
   args: string[];
+  argument_requirements: CreateRunResult['argument_requirements'];
+  reuse_assessments: CreateRunResult['reuse_assessments'];
   /** Explicit invariant preventing executors from allocating a duplicate Run. */
   run_already_created: true;
   goal: string;
@@ -130,6 +132,7 @@ export type NextReasonCode =
   | 'PICK_NOT_PENDING'
   | 'PICK_DECISION_NODE'
   | 'COMMAND_CONTENT_MISSING'
+  | 'ARGUMENT_REQUIRED'
   | 'INTERNAL_ERROR';
 
 export interface NextOutcome {
@@ -308,6 +311,13 @@ function renderBirthPacket(r: NextResult): string {
   lines.push('run_already_created: true (do not call maestro run create)');
   lines.push(`goal:    ${r.goal}`);
   lines.push('');
+
+  const missingArguments = r.argument_requirements.filter(item => item.missing);
+  if (missingArguments.length > 0) {
+    lines.push('**Required arguments**:');
+    for (const item of missingArguments) lines.push(`- BLOCKER ${item.name}: ${item.question}`);
+    lines.push('');
+  }
 
   const upstreamKeys = Object.keys(r.upstream);
   if (upstreamKeys.length > 0) {
@@ -547,6 +557,15 @@ export function runNextStep(projectRoot: string, opts: NextCmdOptions = {}): Nex
         + 'Resolve the blocker/escalation and perform an authorized resume transition before retrying run next.',
     };
   }
+  if (session.active_run_id && activeStepIndex(session) === null) {
+    return {
+      exitCode: 3,
+      reasonCode: 'RUNNING_STEP',
+      result: null,
+      message: `[run next] Session ${sessionId} already has active Run ${session.active_run_id}; `
+        + `inspect it with: maestro run brief ${session.active_run_id} --session ${sessionId}`,
+    };
+  }
 
   // Reconcile: a chain step whose Run has already sealed is done — advance it so
   // the driver does not stall on a step the executor completed via `run complete`.
@@ -619,6 +638,17 @@ export function runNextStep(projectRoot: string, opts: NextCmdOptions = {}): Nex
   const recommended = recommendedFrom(handoff);
   const queue = buildQueue(session, nextIdx);
   const args = opts.args ?? (chainStep.args ? [chainStep.args] : []);
+  const argumentRequirements = resolveArgumentRequirements(projectRoot, chainStep.command, args);
+  const missingArguments = argumentRequirements.filter(item => item.required && item.missing);
+  if (missingArguments.length > 0) {
+    return {
+      exitCode: 1,
+      reasonCode: 'ARGUMENT_REQUIRED',
+      result: null,
+      message: `[run next] missing required arguments for ${chainStep.command}: `
+        + missingArguments.map(item => `${item.name}: ${item.question}`).join('; '),
+    };
+  }
 
   let created;
   try {
@@ -627,6 +657,7 @@ export function runNextStep(projectRoot: string, opts: NextCmdOptions = {}): Nex
       command: chainStep.command,
       sessionId,
       intent: session.intent,
+      topic: session.topic_identity?.verbatim ?? session.intent,
       args,
       chainStepId: chainStep.step_id,
       expectedActivityRevision: session.activity_revision,
@@ -658,6 +689,8 @@ export function runNextStep(projectRoot: string, opts: NextCmdOptions = {}): Nex
     run_dir: created.run_dir,
     resolved_platform: created.resolved_platform,
     args,
+    argument_requirements: created.argument_requirements,
+    reuse_assessments: created.reuse_assessments,
     run_already_created: true,
     goal: session.intent,
     step: {

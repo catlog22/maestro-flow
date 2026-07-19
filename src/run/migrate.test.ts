@@ -1,5 +1,5 @@
-// session/1.2 migration + schema compat.
-// Covers: session/1.0 read→write round-trip is lossless (version bumps to 1.2,
+// session/1.3 migration + schema compat.
+// Covers: session/1.0 read→write round-trip is lossless (version bumps to 1.3,
 // original fields survive); migrateSession folds ralph-meta into orchestration;
 // idempotency; running-step rejection; step_details → chain step mapping;
 // completion_*/context are never carried; verification_ledger stays in ralph-meta.
@@ -82,7 +82,7 @@ describe('session/1.0 read compatibility', () => {
     writeSession(sessionId, { version: 'session/1.0' });
     const store = new SessionStore(tmpRoot);
     const session = store.readBundle(sessionId).session;
-    expect(session.schema_version).toBe('session/1.2');
+    expect(session.schema_version).toBe('session/1.3');
     expect(session.intent_identity).toBeNull();
     expect(session.provenance.source).toBe('legacy-inferred');
     expect(session.orchestration.position).toBeNull();
@@ -91,18 +91,18 @@ describe('session/1.0 read compatibility', () => {
     expect(session.orchestration.executor).toBeNull();
   });
 
-  it('round-trips session/1.0 → 1.2 losslessly (original fields survive, version bumps)', () => {
+  it('round-trips session/1.0 → 1.3 losslessly (original fields survive, version bumps)', () => {
     const sessionId = 'compat-roundtrip';
     const chain = [
       { step_id: 'step-000-analyze', command: 'maestro-analyze', status: 'completed', run_id: 'run-1', inserted_by: 'build', decision_ref: null },
     ];
     writeSession(sessionId, { version: 'session/1.0', chain });
     const store = new SessionStore(tmpRoot);
-    // Any mutation triggers write-back at session/1.2.
+    // Any mutation triggers write-back at session/1.3.
     store.update(sessionId, (draft) => { draft.session.activity_revision++; return null; });
 
     const raw = readSessionRaw(sessionId);
-    expect(raw.schema_version).toBe('session/1.2');
+    expect(raw.schema_version).toBe('session/1.3');
     expect((raw.provenance as Record<string, unknown>).source).toBe('legacy-inferred');
     expect(raw.intent).toBe('test intent');
     const orch = raw.orchestration as Record<string, unknown>;
@@ -171,7 +171,7 @@ describe('migrateSession', () => {
     expect(result.mapped_steps).toBe(2);
 
     const session = new SessionStore(tmpRoot).readBundle(sessionId).session;
-    expect(session.schema_version).toBe('session/1.2');
+    expect(session.schema_version).toBe('session/1.3');
 
     expect(session.orchestration.position).toEqual({
       lifecycle: 'plan', phase: 2, phase_is_new: true, milestone: 'M-alpha',
@@ -281,7 +281,7 @@ describe('migrateSession', () => {
     const result = migrateSession(tmpRoot, sessionId);
     expect(result.status).toBe('version-only');
     expect(result.had_ralph_meta).toBe(false);
-    expect(readSessionRaw(sessionId).schema_version).toBe('session/1.2');
+    expect(readSessionRaw(sessionId).schema_version).toBe('session/1.3');
     // Second run recognizes it as already migrated.
     expect(migrateSession(tmpRoot, sessionId).status).toBe('already-migrated');
   });
