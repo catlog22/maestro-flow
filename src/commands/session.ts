@@ -14,6 +14,14 @@ import {
   type ChainDefinition,
 } from '../run/chain-admin.js';
 import { resolveSession, resumeSession } from '../run/session-transition.js';
+import {
+  createRunResponseError,
+  createRunResponseSuccess,
+  emitRunResponse,
+  stableRunResponseErrorCode,
+  type RunResponse,
+} from '../run/response.js';
+import type { TransitionMutationReceipt } from '../run/transition-receipts.js';
 
 function print(value: unknown): void {
   console.log(JSON.stringify(value, null, 2));
@@ -22,6 +30,45 @@ function print(value: unknown): void {
 function reportError(error: unknown): void {
   console.error(`[maestro session] ${(error as Error).message}`);
   process.exitCode = 1;
+}
+
+type SessionMachineOperation = Extract<
+  RunResponse['operation'],
+  'resolve' | 'resume' | 'chain-insert' | 'chain-replace' | 'chain-skip' | 'meta-update'
+>;
+
+function machineSuccess(
+  operation: SessionMachineOperation,
+  result: unknown,
+  sessionId: string,
+  receipt?: TransitionMutationReceipt,
+  next?: RunResponse['next'],
+): void {
+  emitRunResponse(createRunResponseSuccess({
+    operation,
+    result,
+    request_id: receipt?.request_id ?? null,
+    locator: { session_id: sessionId, run_id: null },
+    next,
+    replay: receipt
+      ? { status: receipt.status, transition_id: receipt.transition_id }
+      : null,
+  }));
+}
+
+function machineError(
+  operation: SessionMachineOperation,
+  error: unknown,
+  opts: { session?: string; requestId?: string },
+): void {
+  emitRunResponse(createRunResponseError({
+    operation,
+    exit_code: 1,
+    code: stableRunResponseErrorCode(error),
+    message: error instanceof Error ? error.message : String(error),
+    request_id: opts.requestId ?? null,
+    locator: { session_id: opts.session ?? null, run_id: null },
+  }));
 }
 
 function addCanonicalRecoveryHelp(command: Command, phase: 'resolve' | 'resume'): Command {
@@ -117,7 +164,8 @@ function addMutationOptions(command: Command): Command {
     .option('--expected-activity-revision <n>', 'expected Session activity revision', Number.parseInt)
     .option('--execution-owner <owner>', 'lease owner')
     .option('--owner-epoch <n>', 'lease epoch', Number.parseInt)
-    .option('--lease-id <id>', 'lease ID');
+    .option('--lease-id <id>', 'lease ID')
+    .option('--json', 'emit one run-response/1.0 envelope on stdout');
 }
 
 export function registerSessionCommand(program: Command): void {
@@ -136,6 +184,7 @@ export function registerSessionCommand(program: Command): void {
     .option('--execution-owner <owner>', 'lease owner')
     .option('--owner-epoch <n>', 'lease epoch', Number.parseInt)
     .option('--lease-id <id>', 'lease ID')
+    .option('--json', 'emit one run-response/1.0 envelope on stdout')
     .option('--workflow-root <path>', 'project root containing .workflow', process.cwd());
 
   addCanonicalRecoveryHelp(
@@ -153,8 +202,23 @@ export function registerSessionCommand(program: Command): void {
           : { kind: 'step' as const, id: opts.step, disposition: opts.disposition };
         if (target.kind === 'decision' && !['proceed', 'retry'].includes(target.disposition)) throw new Error('decision disposition must be proceed|retry');
         if (target.kind === 'step' && !['retry', 'skip'].includes(target.disposition)) throw new Error('step disposition must be retry|skip');
-        print(resolveSession(resolve(opts.workflowRoot), opts.session, transitionOptions(opts, target)));
-      } catch (error) { reportError(error); }
+        const result = resolveSession(resolve(opts.workflowRoot), opts.session, transitionOptions(opts, target));
+        if (opts.json) {
+          machineSuccess(
+            'resolve',
+            result,
+            result.session_id,
+            {
+              request_id: result.request_id,
+              transition_id: result.transition_id,
+              status: result.replayed ? 'replayed' : 'applied',
+            },
+            result.next,
+          );
+        } else {
+          print(result);
+        }
+      } catch (error) { if (opts.json) machineError('resolve', error, opts); else reportError(error); }
     });
 
   addCanonicalRecoveryHelp(
@@ -162,8 +226,24 @@ export function registerSessionCommand(program: Command): void {
     'resume',
   )
     .action((opts: any) => {
-      try { print(resumeSession(resolve(opts.workflowRoot), opts.session, transitionOptions(opts))); }
-      catch (error) { reportError(error); }
+      try {
+        const result = resumeSession(resolve(opts.workflowRoot), opts.session, transitionOptions(opts));
+        if (opts.json) {
+          machineSuccess(
+            'resume',
+            result,
+            result.session_id,
+            {
+              request_id: result.request_id,
+              transition_id: result.transition_id,
+              status: result.replayed ? 'replayed' : 'applied',
+            },
+            result.next,
+          );
+        } else {
+          print(result);
+        }
+      } catch (error) { if (opts.json) machineError('resume', error, opts); else reportError(error); }
     });
 
   session
@@ -256,6 +336,7 @@ export function registerSessionCommand(program: Command): void {
       goalRef?: string;
       decisionRef?: string;
       insertedBy: string;
+      json?: boolean;
       workflowRoot: string;
     }) => {
       try {
@@ -269,9 +350,11 @@ export function registerSessionCommand(program: Command): void {
           insertedBy: opts.insertedBy,
           transition: mutationTransitionOptions(opts),
         });
-        print({ session_id: opts.session, inserted: step });
+        const result = { session_id: opts.session, inserted: step };
+        if (opts.json) machineSuccess('chain-insert', result, opts.session, step.transition);
+        else print(result);
       } catch (error) {
-        reportError(error);
+        if (opts.json) machineError('chain-insert', error, opts); else reportError(error);
       }
     });
 
@@ -281,12 +364,14 @@ export function registerSessionCommand(program: Command): void {
     .requiredOption('--session <id>', 'Session ID')
     .requiredOption('--step <step_id>', 'step to skip')
     .option('--workflow-root <path>', 'project root containing .workflow', process.cwd())
-    .action((opts: { session: string; step: string; workflowRoot: string }) => {
+    .action((opts: { session: string; step: string; requestId?: string; json?: boolean; workflowRoot: string }) => {
       try {
         const step = skipChainStep(resolve(opts.workflowRoot), opts.session, opts.step, mutationTransitionOptions(opts));
-        print({ session_id: opts.session, skipped: step });
+        const result = { session_id: opts.session, skipped: step };
+        if (opts.json) machineSuccess('chain-skip', result, opts.session, step.transition);
+        else print(result);
       } catch (error) {
-        reportError(error);
+        if (opts.json) machineError('chain-skip', error, opts); else reportError(error);
       }
     });
 
@@ -307,6 +392,8 @@ export function registerSessionCommand(program: Command): void {
       args?: string;
       stage?: string;
       goalRef?: string;
+      requestId?: string;
+      json?: boolean;
       workflowRoot: string;
     }) => {
       try {
@@ -317,9 +404,11 @@ export function registerSessionCommand(program: Command): void {
           goalRef: opts.goalRef,
           transition: mutationTransitionOptions(opts),
         });
-        print({ session_id: opts.session, replaced: step });
+        const result = { session_id: opts.session, replaced: step };
+        if (opts.json) machineSuccess('chain-replace', result, opts.session, step.transition);
+        else print(result);
       } catch (error) {
-        reportError(error);
+        if (opts.json) machineError('chain-replace', error, opts); else reportError(error);
       }
     });
 
@@ -338,6 +427,8 @@ export function registerSessionCommand(program: Command): void {
       session: string;
       positionFile?: string;
       decompositionFile?: string;
+      requestId?: string;
+      json?: boolean;
       workflowRoot: string;
     }) => {
       try {
@@ -355,12 +446,14 @@ export function registerSessionCommand(program: Command): void {
         if (opts.decompositionFile) {
           update.decomposition = parseDecompositionInput(await readJson(opts.decompositionFile, 'decomposition-file'));
         }
-        print(updateSessionMeta(resolve(opts.workflowRoot), opts.session, {
+        const result = updateSessionMeta(resolve(opts.workflowRoot), opts.session, {
           ...update,
           transition: mutationTransitionOptions(opts),
-        }));
+        });
+        if (opts.json) machineSuccess('meta-update', result, opts.session, result.transition);
+        else print(result);
       } catch (error) {
-        reportError(error);
+        if (opts.json) machineError('meta-update', error, opts); else reportError(error);
       }
     });
 }

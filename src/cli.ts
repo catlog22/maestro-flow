@@ -82,7 +82,34 @@ const commandLoaders: Record<string, () => Promise<(p: Command) => void>> = {
 // Determine which command is being invoked from argv (if any)
 const argv = process.argv.slice(2);
 const requestedCommand = argv.find(a => !a.startsWith('-'));
-const runMachineMode = requestedCommand === 'run' && argv.includes('--json');
+const runMachineMode = (requestedCommand === 'run' || requestedCommand === 'session') && argv.includes('--json');
+
+type MachineOperation =
+  | 'create' | 'next' | 'complete' | 'brief' | 'recall' | 'resolve' | 'resume' | 'fork' | 'import'
+  | 'check' | 'decide' | 'seal-session' | 'chain-insert' | 'chain-replace' | 'chain-skip' | 'meta-update';
+
+function inferMachineOperation(command: 'run' | 'session', args: string[]): MachineOperation {
+  const commandIndex = args.indexOf(command);
+  const tail = args.slice(commandIndex + 1);
+  const primaryIndex = tail.findIndex(token => !token.startsWith('-'));
+  const primary = primaryIndex >= 0 ? tail[primaryIndex] : null;
+  if (command === 'run') {
+    if (primary === 'new') return 'create';
+    if (primary === 'recall-confirm') return 'recall';
+    const operations: MachineOperation[] = [
+      'create', 'next', 'complete', 'brief', 'recall', 'fork', 'import', 'check', 'decide', 'seal-session',
+    ];
+    return operations.includes(primary as MachineOperation) ? primary as MachineOperation : 'next';
+  }
+  if (primary === 'resolve' || primary === 'resume') return primary;
+  if (primary === 'create') return 'create';
+  if (primary === 'chain') {
+    const mutation = tail.slice(primaryIndex + 1).find(token => !token.startsWith('-'));
+    if (mutation === 'insert' || mutation === 'replace' || mutation === 'skip') return `chain-${mutation}`;
+  }
+  if (primary === 'meta') return 'meta-update';
+  return 'resolve';
+}
 
 if (runMachineMode) {
   program.exitOverride();
@@ -126,10 +153,7 @@ try {
   await program.parseAsync();
 } catch (error) {
   if (!runMachineMode || !(error instanceof CommanderError)) throw error;
-  const operationToken = argv[1];
-  const operation = ['create', 'next', 'complete', 'brief', 'recall', 'fork', 'import'].includes(operationToken)
-    ? operationToken as 'create' | 'next' | 'complete' | 'brief' | 'recall' | 'fork' | 'import'
-    : 'next';
+  const operation = inferMachineOperation(requestedCommand as 'run' | 'session', argv);
   const { createRunResponseError, emitRunResponse } = await import('./run/response.js');
   emitRunResponse(createRunResponseError({
     operation,

@@ -13,6 +13,34 @@ afterEach(() => {
 });
 
 describe('run-response/1.0', () => {
+  it('accepts every required run-response operation', () => {
+    const operations = [
+      'create', 'next', 'complete', 'brief', 'recall', 'resolve', 'resume', 'fork', 'import',
+      'check', 'decide', 'seal-session', 'chain-insert', 'chain-replace', 'chain-skip', 'meta-update',
+    ] as const;
+    for (const operation of operations) {
+      const replay = ['decide', 'resolve', 'resume', 'chain-insert', 'chain-replace', 'chain-skip', 'meta-update']
+        .includes(operation)
+        ? { status: 'applied' as const, transition_id: `tr-${operation}` }
+        : null;
+      const success = createRunResponseSuccess({
+        operation,
+        request_id: replay ? `req-${operation}` : null,
+        locator: { session_id: 's', run_id: operation === 'check' ? 'r' : null },
+        replay,
+        result: { operation },
+      });
+      const failure = createRunResponseError({
+        operation,
+        exit_code: 1,
+        code: operation === 'seal-session' ? 'SESSION_SEAL_BLOCKED' : 'INTERNAL_ERROR',
+        message: `${operation} failed`,
+      });
+      expect(runResponseSchema.parse(success)).toMatchObject({ operation, ok: true, exit_code: 0 });
+      expect(runResponseSchema.parse(failure)).toMatchObject({ operation, ok: false, exit_code: 1 });
+    }
+  });
+
   it('parses and emits a success envelope with exit 0', () => {
     const response = createRunResponseSuccess({
       operation: 'next',

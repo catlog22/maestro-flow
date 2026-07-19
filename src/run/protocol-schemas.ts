@@ -522,7 +522,7 @@ export const recallConfirmationRegistrySchema = z.object({
   records: z.record(z.string(), recallConfirmationRecordSchema),
 }).strict();
 
-const runErrorCodeSchema = z.enum([
+export const runErrorCodeSchema = z.enum([
   'COMMANDER_USAGE', 'SESSION_NOT_FOUND', 'SESSION_AMBIGUOUS', 'SESSION_NOT_RUNNING',
   'RESUME_REQUIRED', 'LEASE_CONFLICT', 'RUNNING_STEP', 'DECISION_REQUIRED', 'CHAIN_COMPLETE',
   'PICK_NOT_FOUND', 'PICK_NOT_PENDING', 'PICK_DECISION_NODE', 'COMMAND_CONTENT_MISSING',
@@ -530,10 +530,14 @@ const runErrorCodeSchema = z.enum([
   'RUN_NOT_FOUND', 'RUN_GATES_BLOCKING', 'RUN_IMMUTABLE', 'INVALID_VERDICT',
   'PLATFORM_INVALID', 'PLATFORM_CONFLICT', 'CONTRACT_DRIFT', 'REQUEST_CONFLICT',
   'REPLAY_STATE_DIVERGED', 'TOKEN_INVALID', 'TOKEN_EXPIRED', 'TOKEN_REPLAYED', 'TOKEN_RESERVED',
-  'FENCE_CONFLICT', 'RESERVATION_INVALID', 'INTERNAL_ERROR',
+  'FENCE_CONFLICT', 'RESERVATION_INVALID', 'INVALID_TRANSITION_RECEIPT',
+  'SESSION_SEAL_BLOCKED', 'INVALID_ARGUMENT', 'INTERNAL_ERROR',
 ]);
 
-const runOperationSchema = z.enum(['create', 'next', 'complete', 'brief', 'recall', 'resolve', 'resume', 'fork', 'import']);
+export const runOperationSchema = z.enum([
+  'create', 'next', 'complete', 'brief', 'recall', 'resolve', 'resume', 'fork', 'import',
+  'check', 'decide', 'seal-session', 'chain-insert', 'chain-replace', 'chain-skip', 'meta-update',
+]);
 const responseCommonSchema = z.object({
   schema_version: z.literal('run-response/1.0'),
   operation: runOperationSchema,

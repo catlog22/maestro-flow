@@ -33,8 +33,6 @@ describe('built-bin run-response/1.0', () => {
       ['run', 'import'],
       ['run', 'new'],
       ['run', 'rebind'],
-      ['session', 'resolve'],
-      ['session', 'resume'],
     ];
     for (const command of commands) {
       const result = spawnSync(process.execPath, [resolve('bin/maestro.js'), ...command, '--help'], { encoding: 'utf8', cwd: resolve('.') });
@@ -141,5 +139,83 @@ describe('built-bin run-response/1.0', () => {
     const ambiguous = invoke(root, ['run', 'create', 'demo', '--topic', '共享主题', '--json']);
     expect(ambiguous.body).toMatchObject({ operation: 'create', ok: false, exit_code: 1 });
     expect(ambiguous.stderr).toBe('');
+  });
+
+  it('emits one envelope for check decide and seal-session exits', () => {
+    const { root } = fixture();
+    const created = invoke(root, ['run', 'create', 'demo', '--json']);
+    const createdResult = (created.body as any).result as { session_id: string; run_id: string };
+    const check = invoke(root, ['run', 'check', createdResult.run_id, '--session', createdResult.session_id, '--json']);
+    const checkMissing = invoke(root, ['run', 'check', 'missing', '--json']);
+
+    const store = new SessionStore(root);
+    store.createSession('decision', 'decision');
+    store.update('decision', draft => {
+      draft.session.orchestration.decision_points.push({
+        point_id: 'DP-1', after_step_id: null, status: 'pending', retry_count: 0, max_retries: 2, evidence_ref: null,
+      });
+      draft.session.orchestration.chain.push({
+        step_id: 'step-000-decision', command: 'decision', status: 'pending', run_id: null,
+        inserted_by: 'test', decision_ref: 'DP-1',
+      });
+    });
+    const decision = store.readBundle('decision').session;
+    const decideArgs = [
+      'run', 'decide', 'DP-1', '--session', 'decision', '--verdict', 'proceed', '--confidence', 'high',
+      '--request-id', 'req-decide-machine',
+      '--expected-identity-revision', String(decision.identity_revision),
+      '--expected-activity-revision', String(decision.activity_revision),
+      '--json',
+    ];
+    const decide = invoke(root, decideArgs);
+    const decideReplay = invoke(root, decideArgs);
+    const decideMissing = invoke(root, [
+      'run', 'decide', 'DP-X', '--session', 'missing', '--verdict', 'proceed', '--confidence', 'high', '--json',
+    ]);
+
+    store.createSession('seal-ok', 'seal ok');
+    const seal = invoke(root, ['run', 'seal-session', 'seal-ok', '--json']);
+    store.createSession('seal-blocked', 'seal blocked');
+    const unsealed = invoke(root, ['run', 'create', 'demo', '--session', 'seal-blocked', '--json']);
+    expect(unsealed.status).toBe(0);
+    const sealBlocked = invoke(root, ['run', 'seal-session', 'seal-blocked', '--json']);
+
+    for (const item of [check, checkMissing, decide, decideReplay, decideMissing, seal, sealBlocked]) {
+      expect(item.lines).toHaveLength(1);
+      expect(item.stderr).toBe('');
+      expect(item.body?.schema_version).toBe('run-response/1.0');
+      expect(item.body?.exit_code).toBe(item.status);
+    }
+    expect(check.body).toMatchObject({ operation: 'check', ok: true, exit_code: 0 });
+    expect(checkMissing.body).toMatchObject({ operation: 'check', ok: false, exit_code: 1, error: { code: 'RUN_NOT_FOUND' } });
+    expect(decide.body).toMatchObject({
+      operation: 'decide', ok: true, replay: { status: 'applied' }, request_id: 'req-decide-machine',
+    });
+    expect(decideReplay.body).toMatchObject({ operation: 'decide', ok: true, replay: { status: 'replayed' } });
+    expect(decideMissing.body).toMatchObject({ operation: 'decide', ok: false, error: { code: 'SESSION_NOT_FOUND' } });
+    expect(seal.body).toMatchObject({ operation: 'seal-session', ok: true, result: { status: 'sealed' } });
+    expect(sealBlocked.body).toMatchObject({ operation: 'seal-session', ok: false, error: { code: 'SESSION_SEAL_BLOCKED' } });
+  });
+
+  it('captures every Commander usage exit in machine mode', () => {
+    const { root } = fixture();
+    const cases = [
+      { args: ['run', 'check', '--json'], operation: 'check' },
+      { args: ['run', 'decide', '--json'], operation: 'decide' },
+      { args: ['run', 'seal-session', '--json'], operation: 'seal-session' },
+      { args: ['run', 'check', 'missing', '--unknown-option', '--json'], operation: 'check' },
+    ];
+    for (const item of cases) {
+      const result = invoke(root, item.args);
+      expect(result.lines, item.operation).toHaveLength(1);
+      expect(result.stderr, item.operation).toBe('');
+      expect(result.status, item.operation).toBe(2);
+      expect(result.body, item.operation).toMatchObject({
+        operation: item.operation,
+        ok: false,
+        exit_code: 2,
+        error: { code: 'COMMANDER_USAGE' },
+      });
+    }
   });
 });

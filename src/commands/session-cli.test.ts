@@ -7,9 +7,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { Command } from 'commander';
 import { mkdtempSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { join, resolve as resolvePath } from 'node:path';
+import { spawnSync } from 'node:child_process';
 import { registerSessionCommand } from './session.js';
 import { SessionStore } from '../run/store.js';
+import { runResponseSchema } from '../run/protocol-schemas.js';
 
 let root: string;
 let logs: string[];
@@ -43,6 +45,21 @@ async function run(...argv: string[]): Promise<void> {
 
 function lastJson(): Record<string, unknown> {
   return JSON.parse(logs[logs.length - 1]);
+}
+
+function invokeMachine(args: string[]) {
+  const result = spawnSync(
+    process.execPath,
+    [resolvePath('bin/maestro.js'), ...args, '--workflow-root', root],
+    { encoding: 'utf8', cwd: resolvePath('.') },
+  );
+  const lines = result.stdout.trim().split(/\r?\n/).filter(Boolean);
+  return {
+    status: result.status,
+    stderr: result.stderr,
+    lines,
+    body: lines.length === 1 ? runResponseSchema.parse(JSON.parse(lines[0])) : null,
+  };
 }
 
 describe('maestro session create', () => {
@@ -229,5 +246,157 @@ describe('maestro session chain', () => {
     await run('chain', 'skip', '--session', id, '--step', 'step-000-analyze', '--workflow-root', root);
     expect(process.exitCode).toBe(1);
     expect(errs.join('\n')).toMatch(/only pending steps can be skipped/);
+  });
+});
+
+describe('built-bin session run-response/1.0', () => {
+  const auditArgs = (requestId: string, identityRevision: number, activityRevision: number): string[] => [
+    '--request-id', requestId,
+    '--expected-identity-revision', String(identityRevision),
+    '--expected-activity-revision', String(activityRevision),
+  ];
+
+  it('emits one envelope for recovery chain and meta exits', () => {
+    const store = new SessionStore(root);
+    store.createSession('recovery', 'recovery');
+    store.update('recovery', draft => {
+      draft.session.status = 'paused';
+      draft.session.orchestration.decision_points.push({
+        point_id: 'DP-1', after_step_id: null, status: 'escalated', retry_count: 0, max_retries: 2, evidence_ref: null,
+      });
+    });
+    const recoveryBefore = store.readBundle('recovery').session;
+    const resolveArgs = [
+      'session', 'resolve', '--session', 'recovery',
+      '--actor', 'tester', '--reason', 'verified', '--evidence', 'evidence.md',
+      ...auditArgs('req-resolve-machine', recoveryBefore.identity_revision, recoveryBefore.activity_revision),
+      '--decision', 'DP-1', '--disposition', 'proceed', '--json',
+    ];
+    const resolved = invokeMachine(resolveArgs);
+    const resolvedReplay = invokeMachine(resolveArgs);
+    const recoveryAfter = store.readBundle('recovery').session;
+    const resumeArgs = [
+      'session', 'resume', '--session', 'recovery',
+      '--actor', 'tester', '--reason', 'blockers cleared', '--evidence', 'evidence.md',
+      ...auditArgs('req-resume-machine', recoveryAfter.identity_revision, recoveryAfter.activity_revision),
+      '--json',
+    ];
+    const resumed = invokeMachine(resumeArgs);
+    const resumedReplay = invokeMachine(resumeArgs);
+
+    store.createSession('blocked-recovery', 'blocked recovery');
+    store.update('blocked-recovery', draft => {
+      draft.session.status = 'paused';
+      draft.session.orchestration.decision_points.push({
+        point_id: 'DP-BLOCK', after_step_id: null, status: 'escalated', retry_count: 0, max_retries: 2, evidence_ref: null,
+      });
+    });
+    const blockedBefore = store.readBundle('blocked-recovery').session;
+    const blockedResume = invokeMachine([
+      'session', 'resume', '--session', 'blocked-recovery',
+      '--actor', 'tester', '--reason', 'premature', '--evidence', 'evidence.md',
+      ...auditArgs('req-resume-blocked', blockedBefore.identity_revision, blockedBefore.activity_revision),
+      '--json',
+    ]);
+
+    store.createSession('mutations', 'mutations');
+    store.update('mutations', draft => {
+      draft.session.orchestration.chain.push(
+        { step_id: 'step-000-analyze', command: 'analyze', status: 'pending', run_id: null, inserted_by: 'test', decision_ref: null },
+        { step_id: 'step-001-execute', command: 'execute', status: 'pending', run_id: null, inserted_by: 'test', decision_ref: null },
+      );
+    });
+    const insertBefore = store.readBundle('mutations').session;
+    const insertArgs = [
+      'session', 'chain', 'insert', '--session', 'mutations', '--after', 'step-000-analyze',
+      '--command', 'fix', '--inserted-by', 'test',
+      ...auditArgs('req-insert-machine', insertBefore.identity_revision, insertBefore.activity_revision), '--json',
+    ];
+    const inserted = invokeMachine(insertArgs);
+    const insertedReplay = invokeMachine(insertArgs);
+    const insertConflict = invokeMachine([
+      'session', 'chain', 'insert', '--session', 'mutations', '--after', 'step-000-analyze',
+      '--command', 'different', '--inserted-by', 'test',
+      ...auditArgs('req-insert-machine', insertBefore.identity_revision, insertBefore.activity_revision), '--json',
+    ]);
+
+    const skipBefore = store.readBundle('mutations').session;
+    const skipArgs = [
+      'session', 'chain', 'skip', '--session', 'mutations', '--step', 'step-001-execute',
+      ...auditArgs('req-skip-machine', skipBefore.identity_revision, skipBefore.activity_revision), '--json',
+    ];
+    const skipped = invokeMachine(skipArgs);
+    const skippedReplay = invokeMachine(skipArgs);
+
+    const replaceBefore = store.readBundle('mutations').session;
+    const replaceArgs = [
+      'session', 'chain', 'replace', '--session', 'mutations', '--step', 'step-001-fix', '--command', 'verify',
+      ...auditArgs('req-replace-machine', replaceBefore.identity_revision, replaceBefore.activity_revision), '--json',
+    ];
+    const replaced = invokeMachine(replaceArgs);
+    const replacedReplay = invokeMachine(replaceArgs);
+
+    store.createSession('meta-machine', 'meta machine');
+    const positionFile = join(root, 'position.json');
+    writeFileSync(positionFile, JSON.stringify({
+      lifecycle: 'verify', phase: 2, phase_is_new: false, milestone: 'M-2', planning_mode: 'unified',
+      passed_gates: ['scope'], scope_verdict: 'medium',
+    }));
+    const metaBefore = store.readBundle('meta-machine').session;
+    const metaArgs = [
+      'session', 'meta', 'update', '--session', 'meta-machine', '--position-file', positionFile,
+      ...auditArgs('req-meta-machine', metaBefore.identity_revision, metaBefore.activity_revision), '--json',
+    ];
+    const meta = invokeMachine(metaArgs);
+    const metaReplay = invokeMachine(metaArgs);
+
+    const all = [
+      resolved, resolvedReplay, resumed, resumedReplay, blockedResume,
+      inserted, insertedReplay, insertConflict, skipped, skippedReplay, replaced, replacedReplay, meta, metaReplay,
+    ];
+    for (const item of all) {
+      expect(item.lines).toHaveLength(1);
+      expect(item.stderr).toBe('');
+      expect(item.body?.schema_version).toBe('run-response/1.0');
+      expect(item.body?.exit_code).toBe(item.status);
+    }
+    expect(resolved.body).toMatchObject({ operation: 'resolve', ok: true, replay: { status: 'applied' } });
+    expect(resolvedReplay.body).toMatchObject({ operation: 'resolve', ok: true, replay: { status: 'replayed' } });
+    expect(resumed.body).toMatchObject({ operation: 'resume', ok: true, replay: { status: 'applied' } });
+    expect(resumedReplay.body).toMatchObject({ operation: 'resume', ok: true, replay: { status: 'replayed' } });
+    expect(blockedResume.body).toMatchObject({ operation: 'resume', ok: false, error: { code: 'RESUME_REQUIRED' } });
+    expect(inserted.body).toMatchObject({ operation: 'chain-insert', ok: true, replay: { status: 'applied' } });
+    expect(insertedReplay.body).toMatchObject({ operation: 'chain-insert', ok: true, replay: { status: 'replayed' } });
+    expect(insertConflict.body).toMatchObject({ operation: 'chain-insert', ok: false, error: { code: 'REQUEST_CONFLICT' } });
+    expect(skipped.body).toMatchObject({ operation: 'chain-skip', ok: true, replay: { status: 'applied' } });
+    expect(skippedReplay.body).toMatchObject({ operation: 'chain-skip', ok: true, replay: { status: 'replayed' } });
+    expect(replaced.body).toMatchObject({ operation: 'chain-replace', ok: true, replay: { status: 'applied' } });
+    expect(replacedReplay.body).toMatchObject({ operation: 'chain-replace', ok: true, replay: { status: 'replayed' } });
+    expect(meta.body).toMatchObject({ operation: 'meta-update', ok: true, replay: { status: 'applied' } });
+    expect(metaReplay.body).toMatchObject({ operation: 'meta-update', ok: true, replay: { status: 'replayed' } });
+  });
+
+  it('captures every Commander usage exit in machine mode', () => {
+    const cases = [
+      { args: ['session', 'resolve', '--json'], operation: 'resolve' },
+      { args: ['session', 'resume', '--json'], operation: 'resume' },
+      { args: ['session', 'chain', 'insert', '--json'], operation: 'chain-insert' },
+      { args: ['session', 'chain', 'replace', '--json'], operation: 'chain-replace' },
+      { args: ['session', 'chain', 'skip', '--json'], operation: 'chain-skip' },
+      { args: ['session', 'meta', 'update', '--json'], operation: 'meta-update' },
+      { args: ['session', 'meta', 'update', '--session', 'missing', '--unknown-option', '--json'], operation: 'meta-update' },
+    ];
+    for (const item of cases) {
+      const result = invokeMachine(item.args);
+      expect(result.lines, item.operation).toHaveLength(1);
+      expect(result.stderr, item.operation).toBe('');
+      expect(result.status, item.operation).toBe(2);
+      expect(result.body, item.operation).toMatchObject({
+        operation: item.operation,
+        ok: false,
+        exit_code: 2,
+        error: { code: 'COMMANDER_USAGE' },
+      });
+    }
   });
 });

@@ -21,7 +21,14 @@ import { checkLease } from '../run/lease.js';
 import { SessionStore } from '../run/store.js';
 import { logMutation, readLedger } from '../run/mutation-ledger.js';
 import type { TargetPlatform } from '../core/skill-converter.js';
-import { createRunResponseError, createRunResponseSuccess, emitRunResponse, type RunResponseErrorCode } from '../run/response.js';
+import {
+  createRunResponseError,
+  createRunResponseSuccess,
+  emitRunResponse,
+  stableRunResponseErrorCode,
+  type RunResponse,
+  type RunResponseErrorCode,
+} from '../run/response.js';
 import { recallRuns } from '../run/recall.js';
 import { issueRecallConfirmation } from '../run/recall-confirmation.js';
 import { executeRecallAction } from '../run/recall-actions.js';
@@ -70,36 +77,37 @@ function reportError(error: unknown): void {
   process.exitCode = 1;
 }
 
-type MachineOperation = 'create' | 'next' | 'complete' | 'brief' | 'recall' | 'fork' | 'import';
-function stableErrorCode(error: unknown): RunResponseErrorCode {
-  const typedCode = (error as { code?: unknown })?.code;
-  if (typeof typedCode === 'string' && [
-    'TOKEN_INVALID', 'TOKEN_EXPIRED', 'TOKEN_REPLAYED', 'TOKEN_RESERVED',
-    'FENCE_CONFLICT', 'RESERVATION_INVALID', 'REQUEST_CONFLICT',
-  ].includes(typedCode)) return typedCode as RunResponseErrorCode;
-  const message = error instanceof Error ? error.message : String(error);
-  if (/Run not found/i.test(message)) return 'RUN_NOT_FOUND';
-  if (/ambiguous/i.test(message)) return 'SESSION_AMBIGUOUS';
-  if (/(unknown|invalid).*platform|platform.*(unknown|invalid)/i.test(message)) return 'PLATFORM_INVALID';
-  if (/platform.*(mismatch|conflict)/i.test(message)) return 'PLATFORM_CONFLICT';
-  if (/contract.*drift/i.test(message)) return 'CONTRACT_DRIFT';
-  if (/immutable/i.test(message)) return 'RUN_IMMUTABLE';
-  if (/confirmation token not found|invalid confirmation token/i.test(message)) return 'TOKEN_INVALID';
-  if (/expired/i.test(message)) return 'TOKEN_EXPIRED';
-  if (/already consumed/i.test(message)) return 'TOKEN_REPLAYED';
-  if (/request mismatch|different action or request/i.test(message)) return 'REQUEST_CONFLICT';
-  return 'INTERNAL_ERROR';
-}
-function machineError(operation: MachineOperation, error: unknown, exitCode: 1 | 2 | 3 = 1, details: Record<string, unknown> = {}): void {
-  emitRunResponse(createRunResponseError({ operation, exit_code: exitCode, code: stableErrorCode(error), message: error instanceof Error ? error.message : String(error), details }));
+type MachineOperation = RunResponse['operation'];
+function machineError(
+  operation: MachineOperation,
+  error: unknown,
+  options: {
+    exitCode?: 1 | 2 | 3;
+    code?: RunResponseErrorCode;
+    details?: Record<string, unknown>;
+    requestId?: string | null;
+    locator?: RunResponse['locator'];
+  } = {},
+): void {
+  emitRunResponse(createRunResponseError({
+    operation,
+    exit_code: options.exitCode ?? 1,
+    code: options.code ?? stableRunResponseErrorCode(error),
+    message: error instanceof Error ? error.message : String(error),
+    details: options.details,
+    request_id: options.requestId,
+    locator: options.locator,
+  }));
 }
 function machineSuccess(
   operation: MachineOperation,
   result: unknown,
   locator: { session_id: string | null; run_id: string | null } | null = null,
   replay?: { status: 'applied' | 'replayed'; transition_id: string },
+  requestId?: string | null,
+  next?: RunResponse['next'],
 ): void {
-  emitRunResponse(createRunResponseSuccess({ operation, result, locator, replay }));
+  emitRunResponse(createRunResponseSuccess({ operation, result, locator, replay, request_id: requestId, next }));
 }
 
 type RunRecallResult = Awaited<ReturnType<typeof recallRuns>>;
@@ -257,12 +265,29 @@ export function registerRunCommand(program: Command): void {
     .description('Idempotently scan outputs and evaluate Run gates')
     .option('--session <id>', 'explicit Session ID')
     .option('--stage <stage>', 'compatibility hint: entry or exit', 'exit')
+    .option('--json', 'emit one run-response/1.0 envelope on stdout')
     .option('--workflow-root <path>', 'project root containing .workflow', process.cwd())
-    .action((runId: string, opts: { session?: string; workflowRoot: string }) => {
+    .action((runId: string, opts: { session?: string; json?: boolean; workflowRoot: string }) => {
       try {
-        print(checkRun(resolve(opts.workflowRoot), runId, opts.session));
+        const result = checkRun(resolve(opts.workflowRoot), runId, opts.session);
+        if (opts.json) {
+          machineSuccess(
+            'check',
+            result,
+            { session_id: result.session_id, run_id: result.run_id },
+            undefined,
+            null,
+            result.next ? { suggest_only: true, command: result.next.command, reason: result.next.reason } : null,
+          );
+        } else {
+          print(result);
+        }
       } catch (error) {
-        reportError(error);
+        if (opts.json) {
+          machineError('check', error, { locator: { session_id: opts.session ?? null, run_id: runId } });
+        } else {
+          reportError(error);
+        }
       }
     });
 
@@ -556,6 +581,7 @@ Compatibility boundary:
     .option('--execution-owner <owner>', 'lease execution owner')
     .option('--owner-epoch <epoch>', 'lease owner epoch', Number.parseInt)
     .option('--lease-id <id>', 'lease identifier for concurrency safety')
+    .option('--json', 'emit one run-response/1.0 envelope on stdout')
     .option('--workflow-root <path>', 'project root containing .workflow', process.cwd())
     .action((pointId: string, opts: {
       session: string;
@@ -563,19 +589,39 @@ Compatibility boundary:
       confidence: string;
       summary?: string;
       evidence?: string;
+      requestId?: string;
+      json?: boolean;
       workflowRoot: string;
     }) => {
       try {
         const verdict = opts.verdict.trim().toLowerCase();
         if (!['proceed', 'fix', 'escalate'].includes(verdict)) {
-          console.error(`[maestro run] invalid --verdict "${opts.verdict}"; valid: proceed, fix, escalate`);
-          process.exitCode = 2;
+          if (opts.json) {
+            machineError('decide', new Error(`invalid --verdict "${opts.verdict}"; valid: proceed, fix, escalate`), {
+              exitCode: 2,
+              code: 'INVALID_VERDICT',
+              requestId: opts.requestId,
+              locator: { session_id: opts.session, run_id: null },
+            });
+          } else {
+            console.error(`[maestro run] invalid --verdict "${opts.verdict}"; valid: proceed, fix, escalate`);
+            process.exitCode = 2;
+          }
           return;
         }
         const confidence = opts.confidence.trim().toLowerCase();
         if (!['high', 'medium', 'low'].includes(confidence)) {
-          console.error(`[maestro run] invalid --confidence "${opts.confidence}"; valid: high, medium, low`);
-          process.exitCode = 2;
+          if (opts.json) {
+            machineError('decide', new Error(`invalid --confidence "${opts.confidence}"; valid: high, medium, low`), {
+              exitCode: 2,
+              code: 'INVALID_ARGUMENT',
+              requestId: opts.requestId,
+              locator: { session_id: opts.session, run_id: null },
+            });
+          } else {
+            console.error(`[maestro run] invalid --confidence "${opts.confidence}"; valid: high, medium, low`);
+            process.exitCode = 2;
+          }
           return;
         }
         const result = runDecide(resolve(opts.workflowRoot), opts.session, pointId, {
@@ -585,16 +631,34 @@ Compatibility boundary:
           evidence: opts.evidence,
           transition: mutationTransitionOptions(opts),
         });
-        print(result);
-        process.stderr.write(`next: ${result.next.command}\n      ${result.next.reason}\n`);
-        if (result.retry?.exhausted) {
-          process.stderr.write(
-            `warning: decision point ${pointId} retry ${result.retry.count}/${result.retry.max} exhausted `
-            + `— the orchestrator (FSM) decides whether to force escalate\n`,
+        if (opts.json) {
+          machineSuccess(
+            'decide',
+            result,
+            { session_id: result.session_id, run_id: null },
+            { status: result.transition.status, transition_id: result.transition.transition_id },
+            result.transition.request_id,
+            { suggest_only: true, command: result.next.command, reason: result.next.reason },
           );
+        } else {
+          print(result);
+          process.stderr.write(`next: ${result.next.command}\n      ${result.next.reason}\n`);
+          if (result.retry?.exhausted) {
+            process.stderr.write(
+              `warning: decision point ${pointId} retry ${result.retry.count}/${result.retry.max} exhausted `
+              + `— the orchestrator (FSM) decides whether to force escalate\n`,
+            );
+          }
         }
       } catch (error) {
-        reportError(error);
+        if (opts.json) {
+          machineError('decide', error, {
+            requestId: opts.requestId,
+            locator: { session_id: opts.session, run_id: null },
+          });
+        } else {
+          reportError(error);
+        }
       }
     });
 
@@ -602,12 +666,16 @@ Compatibility boundary:
     .command('seal-session <session-id>')
     .description('Seal a Session after all Runs and Session gates are complete')
     .option('--summary <text>', 'human-readable seal summary', '')
+    .option('--json', 'emit one run-response/1.0 envelope on stdout')
     .option('--workflow-root <path>', 'project root containing .workflow', process.cwd())
-    .action((sessionId: string, opts: { summary: string; workflowRoot: string }) => {
+    .action((sessionId: string, opts: { summary: string; json?: boolean; workflowRoot: string }) => {
       try {
-        print(sealSession(resolve(opts.workflowRoot), sessionId, opts.summary));
+        const result = sealSession(resolve(opts.workflowRoot), sessionId, opts.summary);
+        if (opts.json) machineSuccess('seal-session', result, { session_id: result.session_id, run_id: null });
+        else print(result);
       } catch (error) {
-        reportError(error);
+        if (opts.json) machineError('seal-session', error, { locator: { session_id: sessionId, run_id: null } });
+        else reportError(error);
       }
     });
 
