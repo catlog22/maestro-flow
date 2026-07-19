@@ -1,10 +1,12 @@
 import {
   existsSync,
+  lstatSync,
   mkdirSync,
   mkdtempSync,
   readFileSync,
   readdirSync,
   rmSync,
+  symlinkSync,
   utimesSync,
   writeFileSync,
 } from 'node:fs';
@@ -19,6 +21,10 @@ const fsFault = vi.hoisted(() => ({
   restoreDestination: null as string | null,
   disappearLockOnOpen: false,
   disappearLockOnStat: false,
+  lockReadCode: null as string | null,
+  lockStatCode: null as string | null,
+  lockUnlinkCode: null as string | null,
+  lockFaultCount: 0,
 }));
 
 vi.mock('node:fs', async importOriginal => {
@@ -26,6 +32,12 @@ vi.mock('node:fs', async importOriginal => {
   return {
     ...actual,
     openSync: ((path: Parameters<typeof actual.openSync>[0], ...args: unknown[]) => {
+      if (fsFault.lockReadCode && String(path).endsWith('.session-store.lock')) {
+        fsFault.lockFaultCount += 1;
+        throw Object.assign(new Error(`injected lock read ${fsFault.lockReadCode}: ${String(path)}`), {
+          code: fsFault.lockReadCode,
+        });
+      }
       if (fsFault.disappearLockOnOpen && String(path).endsWith('.session-store.lock')) {
         fsFault.disappearLockOnOpen = false;
         try { actual.unlinkSync(path); } catch { /* another contender removed it */ }
@@ -50,6 +62,12 @@ vi.mock('node:fs', async importOriginal => {
       return (actual.writeFileSync as (...writeArgs: typeof args) => void)(...args);
     },
     statSync: ((path: Parameters<typeof actual.statSync>[0], ...args: unknown[]) => {
+      if (fsFault.lockStatCode && String(path).endsWith('.session-store.lock')) {
+        fsFault.lockFaultCount += 1;
+        throw Object.assign(new Error(`injected lock stat ${fsFault.lockStatCode}: ${String(path)}`), {
+          code: fsFault.lockStatCode,
+        });
+      }
       if (fsFault.disappearLockOnStat && String(path).endsWith('.session-store.lock')) {
         fsFault.disappearLockOnStat = false;
         try { actual.unlinkSync(path); } catch { /* another contender removed it */ }
@@ -57,6 +75,15 @@ vi.mock('node:fs', async importOriginal => {
       }
       return (actual.statSync as (...statArgs: unknown[]) => unknown)(path, ...args);
     }) as typeof actual.statSync,
+    unlinkSync: ((path: Parameters<typeof actual.unlinkSync>[0]) => {
+      if (fsFault.lockUnlinkCode && String(path).endsWith('.session-store.lock')) {
+        fsFault.lockFaultCount += 1;
+        throw Object.assign(new Error(`injected lock unlink ${fsFault.lockUnlinkCode}: ${String(path)}`), {
+          code: fsFault.lockUnlinkCode,
+        });
+      }
+      return actual.unlinkSync(path);
+    }) as typeof actual.unlinkSync,
   };
 });
 
@@ -100,6 +127,10 @@ beforeEach(() => {
   fsFault.restoreDestination = null;
   fsFault.disappearLockOnOpen = false;
   fsFault.disappearLockOnStat = false;
+  fsFault.lockReadCode = null;
+  fsFault.lockStatCode = null;
+  fsFault.lockUnlinkCode = null;
+  fsFault.lockFaultCount = 0;
 });
 
 afterEach(() => {
@@ -251,7 +282,7 @@ describe('SessionStore durability adversarial harness', () => {
     expect(existsSync(lockPath(store))).toBe(false);
   });
 
-  it('INV-01 never reclaims a replacement lock installed during owner probing', () => {
+  it('does not reclaim a replacement lock generation', () => {
     const store = new SessionStore(createRoot());
     mkdirSync(store.sessionsRoot, { recursive: true });
     const replacementToken = 'replacement-live-token-1234567890';
@@ -265,6 +296,7 @@ describe('SessionStore durability adversarial harness', () => {
     vi.spyOn(process, 'kill').mockImplementation(pid => {
       if (!replaced && pid === 424242) {
         replaced = true;
+        rmSync(lockPath(store), { force: true });
         writeFileSync(lockPath(store), JSON.stringify({
           schema_version: 'session-store-lock/1.0',
           pid: process.pid,
@@ -280,7 +312,103 @@ describe('SessionStore durability adversarial harness', () => {
     expect(() => store.withLock(() => { entered = true; })).toThrow(/SessionStore locked by PID/);
 
     expect(entered).toBe(false);
-    expect(JSON.parse(readFileSync(lockPath(store), 'utf8')).token).toBe(replacementToken);
+    expect(existsSync(lockPath(store))).toBe(true);
+    expect(JSON.parse(readFileSync(lockPath(store), 'utf8'))).toMatchObject({
+      pid: process.pid,
+      token: replacementToken,
+    });
+    expect(lstatSync(lockPath(store)).isFile()).toBe(true);
+  });
+
+  it('bounds persistent lock errors with an injected clock', () => {
+    vi.spyOn(process, 'kill').mockImplementation(() => {
+      throw Object.assign(new Error('no such process'), { code: 'ESRCH' });
+    });
+    const operations = ['lockReadCode', 'lockStatCode', 'lockUnlinkCode'] as const;
+    for (const operation of operations) {
+      for (const code of ['EPERM', 'EACCES', 'EBUSY']) {
+        const root = createRoot();
+        let elapsed = 0;
+        let retries = 0;
+        const store = new SessionStore(root, {
+          lockTiming: {
+            now: () => elapsed,
+            wait: milliseconds => {
+              retries += 1;
+              elapsed += milliseconds;
+            },
+          },
+        });
+        mkdirSync(store.sessionsRoot, { recursive: true });
+        writeFileSync(lockPath(store), JSON.stringify({
+          schema_version: 'session-store-lock/1.0',
+          pid: 424242,
+          token: 'persistent-lock-token-1234567890',
+          acquired_at: 0,
+        }));
+        fsFault[operation] = code;
+        fsFault.lockFaultCount = 0;
+
+        expect(() => store.withLock(() => undefined), `${operation}:${code}`).toThrow(
+          /Cannot safely inspect SessionStore lock/,
+        );
+        expect(elapsed, `${operation}:${code} elapsed`).toBeGreaterThanOrEqual(5_000);
+        expect(elapsed, `${operation}:${code} elapsed`).toBeLessThanOrEqual(5_015);
+        expect(retries, `${operation}:${code} retries`).toBeGreaterThanOrEqual(333);
+        expect(retries, `${operation}:${code} retries`).toBeLessThanOrEqual(335);
+        expect(fsFault.lockFaultCount, `${operation}:${code} fault attempts`).toBeGreaterThanOrEqual(334);
+        expect(fsFault.lockFaultCount, `${operation}:${code} fault attempts`).toBeLessThanOrEqual(336);
+        fsFault[operation] = null;
+      }
+    }
+  });
+
+  it('classifies and reconciles partial Session scaffolding', () => {
+    const store = new SessionStore(createRoot());
+    const intent = 'recover partial shell';
+    const allowed = [
+      { name: 'runs', create: (dir: string) => mkdirSync(join(dir, 'runs'), { recursive: true }) },
+      { name: 'specs', create: (dir: string) => mkdirSync(join(dir, 'specs'), { recursive: true }) },
+      { name: 'knowhow', create: (dir: string) => mkdirSync(join(dir, 'knowhow'), { recursive: true }) },
+      { name: 'events', create: (dir: string) => writeFileSync(join(dir, 'events.ndjson'), '') },
+      { name: 'context', create: (dir: string) => writeFileSync(join(dir, 'context.md'), `# ${intent}\n`) },
+    ];
+    for (const item of allowed) {
+      const sessionId = `allowed-${item.name}`;
+      const dir = store.sessionDir(sessionId);
+      mkdirSync(dir, { recursive: true });
+      item.create(dir);
+
+      const bundle = store.createSession(sessionId, intent);
+
+      expect(bundle.session.session_id).toBe(sessionId);
+      expect(authorityFiles.every(file => existsSync(join(dir, file)))).toBe(true);
+      expect(['runs', 'specs', 'knowhow'].every(name => lstatSync(join(dir, name)).isDirectory())).toBe(true);
+      expect(readFileSync(join(dir, 'context.md'), 'utf8')).toBe(`# ${intent}\n`);
+    }
+
+    const assertRejected = (sessionId: string, prepare: (dir: string) => void): void => {
+      const dir = store.sessionDir(sessionId);
+      mkdirSync(dir, { recursive: true });
+      prepare(dir);
+      expect(() => store.createSession(sessionId, intent), sessionId).toThrow(/SessionStore recovery required/);
+      expect(store.sessionExists(sessionId), sessionId).toBe(false);
+    };
+    assertRejected('unknown-file', dir => writeFileSync(join(dir, 'unknown.txt'), 'unknown'));
+    assertRejected('non-empty-directory', dir => {
+      mkdirSync(join(dir, 'runs'), { recursive: true });
+      writeFileSync(join(dir, 'runs', 'orphan.txt'), 'orphan');
+    });
+    assertRejected('symbolic-link', dir => {
+      const target = join(store.projectRoot, 'projection-target');
+      mkdirSync(target, { recursive: true });
+      symlinkSync(target, join(dir, 'runs'), process.platform === 'win32' ? 'junction' : 'dir');
+    });
+    for (const authority of ['gates.json', 'artifacts.json', 'evidence.json']) {
+      assertRejected(`orphan-${authority.replace('.json', '')}`, dir => writeFileSync(join(dir, authority), '{}'));
+    }
+    assertRejected('conflicting-context', dir => writeFileSync(join(dir, 'context.md'), '# different\n'));
+    assertRejected('non-empty-events', dir => writeFileSync(join(dir, 'events.ndjson'), '{}\n'));
   });
 
   it('INV-01 release leaves a same-PID replacement lock with a different token intact', () => {

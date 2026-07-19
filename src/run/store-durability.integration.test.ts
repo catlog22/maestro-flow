@@ -377,6 +377,36 @@ describe.skipIf(!hasBuiltStore)('SessionStore multi-process and crash durability
 });
 
 const windowsIt = process.platform === 'win32' ? it : it.skip;
+const windowsBuiltIt = process.platform === 'win32' && hasBuiltStore ? it : it.skip;
+
+it('reconciles a whitelisted partial shell after a pre-authority child crash', async () => {
+  const root = createRoot();
+  const sessionId = 'partial-shell-crash';
+
+  const crashed = await runChild(['crash-after-partial-shell', root, sessionId]);
+  const store = new SessionStore(root);
+  expect(crashed.timedOut).toBe(false);
+  expect(store.sessionExists(sessionId)).toBe(false);
+
+  const recovered = store.createSession(sessionId, 'partial shell recovery');
+
+  expect(recovered.session.session_id).toBe(sessionId);
+  expect(authorityFiles.every(file => existsSync(join(store.sessionDir(sessionId), file)))).toBe(true);
+  expect(['runs', 'specs', 'knowhow'].every(name => existsSync(join(store.sessionDir(sessionId), name)))).toBe(true);
+  expect(readFileSync(join(store.sessionDir(sessionId), 'events.ndjson'), 'utf8')).toBe('');
+  expect(readFileSync(join(store.sessionDir(sessionId), 'context.md'), 'utf8')).toBe('# partial shell recovery\n');
+});
+
+windowsBuiltIt('bounds persistent Windows lock errors', async () => {
+  const result = await runChild(['persistent-lock-stat-error', createRoot()], 15_000);
+  const line = result.stdout.trim().split(/\r?\n/).at(-1);
+  const observation = line ? JSON.parse(line) as { elapsed_ms: number; error: string | null } : null;
+
+  expect(result).toMatchObject({ code: 0, timedOut: false });
+  expect(observation?.error).toMatch(/Cannot safely inspect SessionStore lock/);
+  expect(observation?.elapsed_ms).toBeGreaterThanOrEqual(4_500);
+  expect(observation?.elapsed_ms).toBeLessThanOrEqual(7_500);
+}, 20_000);
 
 windowsIt('INV-06 Windows capability: injected EPERM unlink window retains every authority file', async () => {
   if (!hasBuiltStore) return;

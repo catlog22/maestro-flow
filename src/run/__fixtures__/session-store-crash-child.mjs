@@ -24,7 +24,39 @@ function deterministicDelay(seed, writer) {
   return (value >>> 0) % 16;
 }
 
-if (mode === 'hold-lock') {
+if (mode === 'crash-after-partial-shell') {
+  const sessionDir = join(projectRoot, '.workflow', 'sessions', sessionId);
+  fs.mkdirSync(join(sessionDir, 'runs'), { recursive: true });
+  fs.writeFileSync(join(sessionDir, 'events.ndjson'), '');
+  emit({ ready: true, sessionDir });
+  process.kill(process.pid, 'SIGKILL');
+} else if (mode === 'persistent-lock-stat-error') {
+  const lock = join(projectRoot, '.workflow', 'sessions', '.session-store.lock');
+  fs.mkdirSync(join(projectRoot, '.workflow', 'sessions'), { recursive: true });
+  fs.writeFileSync(lock, JSON.stringify({
+    schema_version: 'session-store-lock/1.0',
+    pid: process.pid,
+    token: 'persistent-windows-lock-1234567890',
+    acquired_at: Date.now(),
+  }), { flag: 'wx' });
+  const originalStat = fs.statSync;
+  fs.statSync = function patchedStat(path, ...args) {
+    if (String(path).endsWith('.session-store.lock')) {
+      throw Object.assign(new Error(`injected EACCES: ${path}`), { code: 'EACCES' });
+    }
+    return originalStat(path, ...args);
+  };
+  syncBuiltinESMExports();
+  const { SessionStore } = await import(distStoreUrl.href);
+  const started = Date.now();
+  let error = null;
+  try {
+    new SessionStore(projectRoot).withLock(() => undefined);
+  } catch (caught) {
+    error = caught instanceof Error ? caught.message : String(caught);
+  }
+  emit({ elapsed_ms: Date.now() - started, error });
+} else if (mode === 'hold-lock') {
   const lock = join(projectRoot, '.workflow', 'sessions', '.session-store.lock');
   fs.mkdirSync(join(projectRoot, '.workflow', 'sessions'), { recursive: true });
   fs.writeFileSync(lock, JSON.stringify({ pid: process.pid, acquired_at: Date.now() }), { flag: 'wx' });

@@ -226,20 +226,35 @@ interface JsonWrite {
   schema?: z.ZodType;
 }
 
+export interface SessionStoreLockTiming {
+  now: () => number;
+  wait: (milliseconds: number) => void;
+}
+
+export interface SessionStoreOptions {
+  lockTiming?: Partial<SessionStoreLockTiming>;
+}
+
+const RETRYABLE_WINDOWS_LOCK_ERRORS = new Set(['EPERM', 'EACCES', 'EBUSY']);
+
 class SessionStoreLock {
   private readonly path: string;
+  private readonly now: () => number;
+  private readonly wait: (milliseconds: number) => void;
   private held = false;
   private token: string | null = null;
 
-  constructor(path: string) {
+  constructor(path: string, timing: Partial<SessionStoreLockTiming> = {}) {
     this.path = path;
+    this.now = timing.now ?? Date.now;
+    this.wait = timing.wait ?? waitSync;
   }
 
   get isHeld(): boolean { return this.held; }
 
   acquire(): void {
     mkdirSync(dirname(this.path), { recursive: true });
-    const deadline = Date.now() + LOCK_WAIT_MS;
+    const deadline = this.now() + LOCK_WAIT_MS;
     const token = randomBytes(24).toString('base64url');
     while (true) {
       try {
@@ -247,7 +262,7 @@ class SessionStoreLock {
           schema_version: 'session-store-lock/1.0',
           pid: process.pid,
           token,
-          acquired_at: Date.now(),
+          acquired_at: this.now(),
         }), { flag: 'wx' });
         this.token = token;
         this.held = true;
@@ -259,30 +274,39 @@ class SessionStoreLock {
 
       const snapshot = readStableLockSnapshot(this.path);
       if (!snapshot) {
-        if (Date.now() >= deadline) throw new Error(`Cannot safely inspect SessionStore lock: ${this.path}`);
-        waitSync(LOCK_POLL_MS);
+        this.waitForRetry(deadline);
         continue;
       }
       const liveness = processLiveness(snapshot.owner.pid);
       const verified = readStableLockSnapshot(this.path);
       if (!verified || !sameLockSnapshot(snapshot, verified)) {
-        if (Date.now() >= deadline) throw new Error(`Cannot safely inspect SessionStore lock: ${this.path}`);
-        waitSync(LOCK_POLL_MS);
+        this.waitForRetry(deadline);
         continue;
       }
       if (liveness === 'dead') {
         try {
           unlinkSync(this.path);
         } catch (error) {
-          if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
+          const code = (error as NodeJS.ErrnoException).code;
+          if (code === 'ENOENT') continue;
+          if (code && RETRYABLE_WINDOWS_LOCK_ERRORS.has(code)) {
+            this.waitForRetry(deadline);
+            continue;
+          }
+          throw error;
         }
         continue;
       }
-      if (verified.owner.pid === process.pid || liveness === 'unknown' || Date.now() >= deadline) {
+      if (verified.owner.pid === process.pid || liveness === 'unknown' || this.now() >= deadline) {
         throw new Error(`SessionStore locked by PID ${verified.owner.pid}: ${this.path}`);
       }
-      waitSync(LOCK_POLL_MS);
+      this.wait(LOCK_POLL_MS);
     }
+  }
+
+  private waitForRetry(deadline: number): void {
+    if (this.now() >= deadline) throw new Error(`Cannot safely inspect SessionStore lock: ${this.path}`);
+    this.wait(LOCK_POLL_MS);
   }
 
   release(): void {
@@ -338,11 +362,11 @@ export class SessionStore {
   private readonly lock: SessionStoreLock;
   private readonly cache = new Map<string, CacheEntry>();
 
-  constructor(projectRoot: string) {
+  constructor(projectRoot: string, options: SessionStoreOptions = {}) {
     this.projectRoot = projectRoot;
     this.workflowRoot = join(projectRoot, '.workflow');
     this.sessionsRoot = join(this.workflowRoot, 'sessions');
-    this.lock = new SessionStoreLock(join(this.sessionsRoot, '.session-store.lock'));
+    this.lock = new SessionStoreLock(join(this.sessionsRoot, '.session-store.lock'), options.lockTiming);
   }
 
   sessionDir(sessionId: string): string {
@@ -380,8 +404,11 @@ export class SessionStore {
     return this.withLock(() => {
       if (this.sessionExists(sessionId)) {
         if (options.ifExists === 'error') throw new Error(`Session already exists: ${sessionId}`);
-        return this.readBundle(sessionId);
+        const existing = this.readBundleUnlocked(sessionId);
+        this.ensureSessionProjections(sessionId, existing.session.intent);
+        return clone(existing);
       }
+      this.assertRecoverableSessionShell(sessionId, intent);
       const intentIdentity = options.intentIdentity
         ?? createIntentIdentity(this.projectRoot, options.command ?? 'session', intent);
       const bundle: SessionBundle = {
@@ -393,15 +420,81 @@ export class SessionStore {
         artifacts: createArtifactRegistry(),
         evidence: createEvidenceStore(),
       };
-      const dir = this.sessionDir(sessionId);
-      mkdirSync(join(dir, 'runs'), { recursive: true });
-      mkdirSync(join(dir, 'specs'), { recursive: true });
-      mkdirSync(join(dir, 'knowhow'), { recursive: true });
-      writeFileSync(join(dir, 'events.ndjson'), '', { flag: 'a' });
-      writeFileSync(join(dir, 'context.md'), `# ${intent}\n`, { flag: 'wx' });
       this.writeBundleUnlocked(sessionId, bundle);
+      this.ensureSessionProjections(sessionId, intent);
       return clone(bundle);
     });
+  }
+
+  private assertRecoverableSessionShell(sessionId: string, intent: string): void {
+    const dir = this.sessionDir(sessionId);
+    if (!existsSync(dir)) return;
+    const dirStat = lstatSync(dir);
+    if (dirStat.isSymbolicLink() || !dirStat.isDirectory()) {
+      throw new Error(`SessionStore recovery required: invalid Session shell at ${dir}`);
+    }
+    const allowedDirectories = new Set(['runs', 'specs', 'knowhow']);
+    for (const name of readdirSync(dir)) {
+      const path = join(dir, name);
+      const stats = lstatSync(path);
+      if (stats.isSymbolicLink()) {
+        throw new Error(`SessionStore recovery required: symbolic link in Session shell: ${path}`);
+      }
+      if (allowedDirectories.has(name)) {
+        if (!stats.isDirectory() || readdirSync(path).length > 0) {
+          throw new Error(`SessionStore recovery required: non-empty or invalid projection directory: ${path}`);
+        }
+        continue;
+      }
+      if (name === 'events.ndjson') {
+        if (!stats.isFile() || stats.size !== 0) {
+          throw new Error(`SessionStore recovery required: conflicting events projection: ${path}`);
+        }
+        continue;
+      }
+      if (name === 'context.md') {
+        if (!stats.isFile() || readFileSync(path, 'utf8') !== `# ${intent}\n`) {
+          throw new Error(`SessionStore recovery required: conflicting context projection: ${path}`);
+        }
+        continue;
+      }
+      throw new Error(`SessionStore recovery required: unknown Session shell entry: ${path}`);
+    }
+  }
+
+  private ensureSessionProjections(sessionId: string, intent: string): void {
+    const dir = this.sessionDir(sessionId);
+    const dirStat = lstatSync(dir);
+    if (dirStat.isSymbolicLink() || !dirStat.isDirectory()) {
+      throw new Error(`SessionStore recovery required: invalid canonical Session directory: ${dir}`);
+    }
+    for (const name of ['runs', 'specs', 'knowhow']) {
+      const path = join(dir, name);
+      if (!existsSync(path)) {
+        mkdirSync(path);
+        continue;
+      }
+      const stats = lstatSync(path);
+      if (stats.isSymbolicLink() || !stats.isDirectory()) {
+        throw new Error(`SessionStore recovery required: invalid projection directory: ${path}`);
+      }
+    }
+    const eventsPath = join(dir, 'events.ndjson');
+    if (!existsSync(eventsPath)) writeFileSync(eventsPath, '', { flag: 'wx' });
+    else {
+      const stats = lstatSync(eventsPath);
+      if (stats.isSymbolicLink() || !stats.isFile()) {
+        throw new Error(`SessionStore recovery required: invalid events projection: ${eventsPath}`);
+      }
+    }
+    const contextPath = join(dir, 'context.md');
+    if (!existsSync(contextPath)) writeFileSync(contextPath, `# ${intent}\n`, { flag: 'wx' });
+    else {
+      const stats = lstatSync(contextPath);
+      if (stats.isSymbolicLink() || !stats.isFile() || readFileSync(contextPath, 'utf8') !== `# ${intent}\n`) {
+        throw new Error(`SessionStore recovery required: conflicting context projection: ${contextPath}`);
+      }
+    }
   }
 
   readBundle(sessionId: string): SessionBundle {

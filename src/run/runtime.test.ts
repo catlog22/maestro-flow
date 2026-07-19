@@ -16,7 +16,16 @@ import { createSessionState } from './defaults.js';
 import { sessionStateSchema } from './schemas.js';
 import { commandRebindAuditSchema, executionContractSchema } from './protocol-schemas.js';
 import { SessionStore } from './store.js';
-import { briefRun, checkRun, completeRun, createRun, prepareStep, rebindRunCommand, sealSession } from './runtime.js';
+import {
+  briefRun,
+  checkRun,
+  completeRun,
+  createRun,
+  prepareStep,
+  rebindRunCommand,
+  resolveTopicSessionId,
+  sealSession,
+} from './runtime.js';
 import { registerRunCommand } from '../commands/run.js';
 import { resolveCommandSource } from './contract.js';
 import { migrateV1toV2, readStateJson, writeStateJson } from '../utils/state-schema.js';
@@ -460,6 +469,37 @@ gates:
     expect(store.readRun(first.session_id, second.run_id).sequence).toBe(2);
   });
 
+  it('commits authority before idempotent Session projections', () => {
+    const projectRoot = root();
+    const store = new SessionStore(projectRoot);
+    const sessionId = 'projection-repair';
+    const intent = 'projection repair';
+    const projectionStore = store as unknown as {
+      ensureSessionProjections: (targetSessionId: string, targetIntent: string) => void;
+    };
+    const projectionFailure = vi.spyOn(projectionStore, 'ensureSessionProjections')
+      .mockImplementationOnce(() => { throw new Error('injected projection failure'); });
+
+    expect(() => store.createSession(sessionId, intent)).toThrow(/injected projection failure/);
+    expect(store.sessionExists(sessionId)).toBe(true);
+    const sessionDir = store.sessionDir(sessionId);
+    for (const name of ['session.json', 'gates.json', 'artifacts.json', 'evidence.json']) {
+      expect(existsSync(join(sessionDir, name))).toBe(true);
+    }
+    expect(existsSync(join(sessionDir, 'runs'))).toBe(false);
+    expect(existsSync(join(sessionDir, 'context.md'))).toBe(false);
+    const committed = store.readBundle(sessionId);
+    projectionFailure.mockRestore();
+
+    const reused = store.createSession(sessionId, intent, { ifExists: 'reuse' });
+
+    expect(reused).toEqual(committed);
+    expect(reused.session.session_id).toBe(sessionId);
+    expect(['runs', 'specs', 'knowhow'].every(name => existsSync(join(sessionDir, name)))).toBe(true);
+    expect(readFileSync(join(sessionDir, 'events.ndjson'), 'utf8')).toBe('');
+    expect(readFileSync(join(sessionDir, 'context.md'), 'utf8')).toBe(`# ${intent}\n`);
+  });
+
   it('checks gates idempotently and derives canonical artifacts, handoff, and evidence', () => {
     const projectRoot = root();
     commandFile(projectRoot, 'demo-plan', `consumes: []
@@ -561,6 +601,21 @@ gates:
 
     expect(unrelated.session_id).not.toBe(first.session_id);
     expect(resumed.session_id).toBe(first.session_id);
+  });
+
+  it('does not resolve a pre-authority partial Session shell by topic', () => {
+    const projectRoot = root();
+    const store = new SessionStore(projectRoot);
+    const sessionId = 'partial-topic-shell';
+    const sessionDir = store.sessionDir(sessionId);
+    mkdirSync(join(sessionDir, 'runs'), { recursive: true });
+    writeFileSync(join(sessionDir, 'context.md'), '# Partial Topic\n');
+
+    expect(store.sessionExists(sessionId)).toBe(false);
+    expect(resolveTopicSessionId(projectRoot, 'Partial Topic')).toBeNull();
+
+    store.createSession(sessionId, 'Partial Topic');
+    expect(resolveTopicSessionId(projectRoot, 'Partial Topic')).toBe(sessionId);
   });
 
   it('detects mutations to sealed outputs and rejects a second completion', () => {
