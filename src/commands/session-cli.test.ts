@@ -5,7 +5,7 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { Command } from 'commander';
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { registerSessionCommand } from './session.js';
@@ -49,7 +49,7 @@ describe('maestro session create', () => {
   it('registers create + chain subcommands', () => {
     const p = program();
     const session = p.commands.find(c => c.name() === 'session');
-    expect(session?.commands.map(c => c.name()).sort()).toEqual(['chain', 'create', 'meta', 'migrate']);
+    expect(session?.commands.map(c => c.name()).sort()).toEqual(['chain', 'create', 'meta', 'migrate', 'resolve', 'resume']);
     const chain = session?.commands.find(c => c.name() === 'chain');
     expect(chain?.commands.map(c => c.name()).sort()).toEqual(['insert', 'replace', 'skip']);
   });
@@ -92,7 +92,49 @@ describe('maestro session create', () => {
     expect(process.exitCode).toBe(1);
     expect(errs.join('\n')).toMatch(/invalid --engine/);
   });
+
+  it('requires actor, reason and evidence for lifecycle transitions', async () => {
+    await expect(run('resume', '--session', 'missing', '--request-id', 'r1', '--actor', 'a', '--expected-identity-revision', '0', '--expected-activity-revision', '0', '--workflow-root', root)).rejects.toThrow();
+  });
+
+  it('rejects stale revisions and does not create a Run', async () => {
+    await run('create', 'paused', '--intent', 'paused', '--workflow-root', root);
+    const id = String(lastJson().session_id);
+    const store = new SessionStore(root);
+    store.update(id, draft => {
+      draft.session.status = 'paused';
+      draft.session.orchestration.decision_points.push({ point_id: 'd1', after_step_id: null, status: 'escalated', retry_count: 0, max_retries: 2, evidence_ref: null });
+      return null;
+    });
+    const before = runCount(store, id);
+    await run('resolve', '--session', id, '--request-id', 'tr-stale', '--actor', 'tester', '--reason', 'fix', '--evidence', 'evidence.md', '--expected-identity-revision', '999', '--expected-activity-revision', '1', '--decision', 'd1', '--disposition', 'proceed', '--workflow-root', root);
+    expect(process.exitCode).toBe(1);
+    expect(errs.join('\n')).toMatch(/stale identity revision/i);
+    expect(runCount(store, id)).toBe(before);
+  });
+
+  it('replays the same transition and rejects a changed payload', async () => {
+    await run('create', 'replay', '--intent', 'replay', '--workflow-root', root);
+    const id = String(lastJson().session_id);
+    const store = new SessionStore(root);
+    store.update(id, draft => {
+      draft.session.status = 'paused';
+      draft.session.orchestration.decision_points.push({ point_id: 'd1', after_step_id: null, status: 'escalated', retry_count: 0, max_retries: 2, evidence_ref: null });
+      return null;
+    });
+    const rev = store.readBundle(id).session;
+    await run('resolve', '--session', id, '--request-id', 'tr-replay', '--actor', 'tester', '--reason', 'fix', '--evidence', 'evidence.md', '--expected-identity-revision', String(rev.identity_revision), '--expected-activity-revision', String(rev.activity_revision), '--decision', 'd1', '--disposition', 'proceed', '--workflow-root', root);
+    const first = lastJson();
+    const after = store.readBundle(id).session;
+    await run('resolve', '--session', id, '--request-id', 'tr-replay', '--actor', 'tester', '--reason', 'changed', '--evidence', 'evidence.md', '--expected-identity-revision', String(after.identity_revision), '--expected-activity-revision', String(after.activity_revision), '--decision', 'd1', '--disposition', 'proceed', '--workflow-root', root);
+    expect(first.replayed).toBe(false);
+    expect(errs.join('\n')).toMatch(/different normalized request hash|REQUEST_CONFLICT/i);
+  });
 });
+
+function runCount(store: SessionStore, sessionId: string): number {
+  return readdirSync(store.sessionDir(sessionId), { withFileTypes: true }).filter(entry => entry.isDirectory() && entry.name.startsWith('run-')).length;
+}
 
 describe('maestro session chain', () => {
   async function seed(): Promise<string> {

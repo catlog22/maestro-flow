@@ -14,6 +14,7 @@ import { mkdtempSync } from 'node:fs';
 import { Command } from 'commander';
 import { createSessionState } from './defaults.js';
 import { sessionStateSchema } from './schemas.js';
+import { commandRebindAuditSchema, executionContractSchema } from './protocol-schemas.js';
 import { SessionStore } from './store.js';
 import { briefRun, checkRun, completeRun, createRun, prepareStep, rebindRunCommand, sealSession } from './runtime.js';
 import { registerRunCommand } from '../commands/run.js';
@@ -98,7 +99,25 @@ describe('Session/Run runtime', () => {
     const program = new Command();
     registerRunCommand(program);
     const run = program.commands.find(command => command.name() === 'run');
-    expect(run?.commands.map(command => command.name())).toEqual(['prepare', 'next', 'create', 'check', 'rebind', 'complete', 'brief', 'skill', 'decide', 'seal-session', 'log-mutation', 'mutations']);
+    expect(run?.commands.map(command => command.name())).toEqual([
+      'prepare',
+      'next',
+      'create',
+      'check',
+      'rebind',
+      'complete',
+      'brief',
+      'recall',
+      'recall-confirm',
+      'fork',
+      'import',
+      'new',
+      'skill',
+      'decide',
+      'seal-session',
+      'log-mutation',
+      'mutations',
+    ]);
   });
 
   it('parses every migrated core command contract', () => {
@@ -195,7 +214,92 @@ gates:
     expect(() => checkRun(projectRoot, changed.run_id)).toThrow(/lifecycle contract changed/);
   });
 
-  it('audits a compatible legacy rebind and rejects gate-set changes', () => {
+  it('audits prompt-only and equivalent snapshot/hash rebinds', () => {
+    const projectRoot = root();
+    commandFile(projectRoot, 'audited-drift', `consumes: []
+produces: []
+gates:
+  entry: []
+  exit: []`);
+    const promptOnly = createRun({ projectRoot, command: 'audited-drift', intent: 'audited drift' });
+    const promptPath = join(projectRoot, '.claude', 'commands', 'audited-drift.md');
+    writeFileSync(promptPath, '\n# Whitespace-only guidance edit\n', { flag: 'a' });
+
+    const promptRebind = rebindRunCommand(projectRoot, promptOnly.run_id, 'refresh prompt snapshot');
+    expect(promptRebind).toMatchObject({
+      rebind_kind: 'prompt_only_rebind',
+      old_contract_hash: promptRebind.contract_hash,
+      old_snapshot_hash: promptRebind.snapshot_hash,
+    });
+    const promptAudit = commandRebindAuditSchema.parse(JSON.parse(readFileSync(join(
+      projectRoot, '.workflow', 'sessions', promptOnly.session_id, 'runs', promptOnly.run_id, 'command-rebind.json',
+    ), 'utf8')));
+    expect(promptAudit).toMatchObject({
+      schema_version: 'command-rebind/1.1',
+      rebind_kind: 'prompt_only_rebind',
+      reason: 'refresh prompt snapshot',
+      old_contract_snapshot: expect.objectContaining({ schema_version: 'contract-snapshot/1.0' }),
+      contract_snapshot: expect.objectContaining({ schema_version: 'contract-snapshot/1.0' }),
+      old_guidance_snapshot: expect.objectContaining({ schema_version: 'guidance-snapshot/1.0' }),
+      guidance_snapshot: expect.objectContaining({ schema_version: 'guidance-snapshot/1.0' }),
+    });
+    expect(checkRun(projectRoot, promptOnly.run_id).warnings).not.toContainEqual(
+      expect.stringContaining('Command prompt changed'),
+    );
+    expect(() => rebindRunCommand(projectRoot, promptOnly.run_id, 'repeat')).toThrow(/already bound/);
+
+    commandFile(projectRoot, 'representation-drift', `consumes: []
+produces: []
+gates:
+  entry: []
+  exit: []`);
+    const representation = createRun({
+      projectRoot,
+      command: 'representation-drift',
+      intent: 'representation drift',
+    });
+    const representationPath = join(
+      projectRoot, '.workflow', 'sessions', representation.session_id, 'runs', representation.run_id, 'run.json',
+    );
+    const representationRun = JSON.parse(readFileSync(representationPath, 'utf8'));
+    representationRun.command.contract_hash = 'b'.repeat(64);
+    representationRun.contract_snapshot.snapshot_hash = `sha256:${'c'.repeat(64)}`;
+    writeFileSync(representationPath, JSON.stringify(representationRun, null, 2));
+
+    const representationRebind = rebindRunCommand(
+      projectRoot,
+      representation.run_id,
+      'accept equivalent normalized representation',
+    );
+    expect(representationRebind.rebind_kind).toBe('compatible_contract_rebind');
+    expect(representationRebind.old_contract_hash).toBe('b'.repeat(64));
+    expect(representationRebind.old_snapshot_hash).toBe(`sha256:${'c'.repeat(64)}`);
+    expect(checkRun(projectRoot, representation.run_id).errors).toEqual([]);
+
+    commandFile(projectRoot, 'hash-only-drift', `consumes: []
+produces: []
+gates:
+  entry: []
+  exit: []`);
+    const hashOnly = createRun({ projectRoot, command: 'hash-only-drift', intent: 'hash only drift' });
+    const hashOnlyPath = join(
+      projectRoot, '.workflow', 'sessions', hashOnly.session_id, 'runs', hashOnly.run_id, 'run.json',
+    );
+    const hashOnlyRun = JSON.parse(readFileSync(hashOnlyPath, 'utf8'));
+    hashOnlyRun.command.contract_hash = 'd'.repeat(64);
+    hashOnlyRun.contract_snapshot = null;
+    writeFileSync(hashOnlyPath, JSON.stringify(hashOnlyRun, null, 2));
+
+    const hashOnlyRebind = rebindRunCommand(projectRoot, hashOnly.run_id, 'upgrade hash-only authority');
+    expect(hashOnlyRebind).toMatchObject({
+      rebind_kind: 'compatible_contract_rebind',
+      old_contract_hash: 'd'.repeat(64),
+      old_snapshot_hash: null,
+    });
+    expect(checkRun(projectRoot, hashOnly.run_id).errors).toEqual([]);
+  });
+
+  it('keeps legacy no-hash rebind compatible and records a full authority audit', () => {
     const projectRoot = root();
     commandFile(projectRoot, 'legacy-drift', `consumes: []
 produces: []
@@ -208,22 +312,33 @@ gates:
     );
     const legacy = JSON.parse(readFileSync(runPath, 'utf8'));
     delete legacy.command.contract_hash;
+    legacy.contract_snapshot = null;
     writeFileSync(runPath, JSON.stringify(legacy, null, 2));
     writeFileSync(join(projectRoot, '.claude', 'commands', 'legacy-drift.md'), '\n# Prompt edit\n', { flag: 'a' });
 
     expect(() => checkRun(projectRoot, created.run_id)).toThrow(/maestro run rebind/);
     const rebound = rebindRunCommand(projectRoot, created.run_id, 'accept documentation-only edit');
+    expect(rebound.rebind_kind).toBe('legacy_contract_backfill');
     expect(rebound.contract_hash).toMatch(/^[a-f0-9]{64}$/);
     const audit = JSON.parse(readFileSync(join(
       projectRoot, '.workflow', 'sessions', created.session_id, 'runs', created.run_id, 'command-rebind.json',
     ), 'utf8'));
     expect(audit).toMatchObject({
-      schema_version: 'command-rebind/1.0',
+      schema_version: 'command-rebind/1.1',
       run_id: created.run_id,
+      rebind_kind: 'legacy_contract_backfill',
       reason: 'accept documentation-only edit',
+      old_contract_hash: null,
+      old_snapshot_hash: null,
+      contract_snapshot: expect.objectContaining({ schema_version: 'contract-snapshot/1.0' }),
+      old_guidance_snapshot: expect.objectContaining({ schema_version: 'guidance-snapshot/1.0' }),
+      guidance_snapshot: expect.objectContaining({ schema_version: 'guidance-snapshot/1.0' }),
     });
     expect(checkRun(projectRoot, created.run_id).gates.blocking).toEqual([]);
+  });
 
+  it('rejects gate drift, produce semantics drift, sealed Runs and empty reasons', () => {
+    const projectRoot = root();
     commandFile(projectRoot, 'legacy-incompatible', `consumes: []
 produces: []
 gates:
@@ -243,6 +358,35 @@ gates:
   entry: []
   exit: []`);
     expect(() => rebindRunCommand(projectRoot, incompatible.run_id, 'unsafe change')).toThrow(/different Run gate set/);
+
+    commandFile(projectRoot, 'produce-drift', `consumes: []
+produces:
+  - kind: result
+    path: outputs/old.json
+gates:
+  entry: []
+  exit: []`);
+    const produceDrift = createRun({ projectRoot, command: 'produce-drift', intent: 'produce drift' });
+    commandFile(projectRoot, 'produce-drift', `consumes: []
+produces:
+  - kind: result
+    path: outputs/new.json
+gates:
+  entry: []
+  exit: []`);
+    expect(() => rebindRunCommand(projectRoot, produceDrift.run_id, 'unsafe produce change')).toThrow(
+      /contract semantics differ/,
+    );
+
+    commandFile(projectRoot, 'sealed-rebind', `consumes: []
+produces: []
+gates:
+  entry: []
+  exit: []`);
+    const sealed = createRun({ projectRoot, command: 'sealed-rebind', intent: 'sealed rebind' });
+    expect(completeRun(projectRoot, sealed.run_id).sealed).toBe(true);
+    expect(() => rebindRunCommand(projectRoot, sealed.run_id, 'too late')).toThrow(/sealed and immutable/);
+    expect(() => rebindRunCommand(projectRoot, produceDrift.run_id, '   ')).toThrow(/non-empty reason/);
   });
 
   it('resolves every migrated command through workflow YAML associations', () => {
@@ -265,13 +409,22 @@ gates:
     const created = JSON.parse(String(output.mock.calls.at(-1)?.[0]));
     const run = new SessionStore(projectRoot).readRun(created.session_id, created.run_id);
     expect(run.input.args).toEqual(['-y', '--depth', 'deep']);
+    expect(run.schema_version).toBe('command-run/1.2');
+    expect(run.contract_snapshot?.schema_version).toBe('contract-snapshot/1.0');
     output.mockRestore();
   });
 
   it('uses strict protocol schemas', () => {
     const valid = createSessionState('20260713-demo', 'demo');
-    expect(sessionStateSchema.parse(valid).schema_version).toBe('session/1.1');
+    expect(sessionStateSchema.parse(valid).schema_version).toBe('session/1.2');
     expect(() => sessionStateSchema.parse({ ...valid, unexpected: true })).toThrow(/unrecognized/i);
+    const ralph = structuredClone(valid);
+    ralph.ralph_authority = { schema_version: 'ralph-authority/1.0', engine: 'ralph', canonical_complete: true };
+    expect(sessionStateSchema.parse(ralph).ralph_authority?.canonical_complete).toBe(true);
+    expect(() => sessionStateSchema.parse({
+      ...ralph,
+      ralph_authority: { ...ralph.ralph_authority, engine: 'manual' },
+    })).toThrow();
     const invalidDecision = structuredClone(valid);
     invalidDecision.orchestration.decision_points = [{
       point_id: 'D1',
@@ -397,7 +550,7 @@ gates:
     const projectRoot = root();
     const first = createRun({ projectRoot, command: 'empty', intent: 'Auth Refactor' });
     const unrelated = createRun({ projectRoot, command: 'empty', intent: 'Billing Refactor' });
-    const resumed = createRun({ projectRoot, command: 'empty', intent: 'auth-refactor' });
+    const resumed = createRun({ projectRoot, command: 'empty', intent: 'auth refactor' });
 
     expect(unrelated.session_id).not.toBe(first.session_id);
     expect(resumed.session_id).toBe(first.session_id);
@@ -533,7 +686,7 @@ gates:
     writePlanRun(projectRoot, planRun.session_id, planRun.run_id);
     expect(completeRun(projectRoot, planRun.run_id).sealed).toBe(true);
 
-    const execRun = createRun({ projectRoot, command: 'demo-exec', session: planRun.session_id, intent: 'brief anchor demo' });
+    const execRun = createRun({ projectRoot, command: 'demo-exec', sessionId: planRun.session_id, intent: 'brief anchor demo' });
     expect(execRun.upstream['current-plan']).toBeDefined();
 
     const brief = briefRun(projectRoot, execRun.run_id, execRun.session_id);
@@ -552,6 +705,39 @@ gates:
     expect(brief.next.command).toBe(`maestro run check ${execRun.run_id}`);
     expect(brief.next.reason).toContain('does not seal');
     expect(brief.next.reason).toContain(`maestro run complete ${execRun.run_id}`);
+  });
+
+  it('persists caller-supplied creation authority for confirmation-driven consumers', () => {
+    const projectRoot = root();
+    const sourceHash = `sha256:${'a'.repeat(64)}`;
+    const created = createRun({
+      projectRoot,
+      command: 'empty',
+      sessionId: 'import-target',
+      intent: 'import target',
+      creation: {
+        requestId: 'req-import-1',
+        mode: 'import',
+        authority: 'confirmation-token',
+        confirmationTokenHash: sourceHash,
+        provenance: {
+          schema_version: 'creation-provenance/1.0',
+          provenance: 'import',
+          source_workspace_id: sourceHash,
+          source_session_id: 'source-session',
+          source_run_id: 'source-run',
+          imported_artifact_hashes: [sourceHash],
+        },
+        transition: null,
+      },
+    });
+    const run = new SessionStore(projectRoot).readRun(created.session_id, created.run_id);
+    expect(run.creation_decision).toMatchObject({
+      request_id: 'req-import-1', mode: 'import', authority: 'confirmation-token',
+    });
+    expect(run.creation_provenance).toMatchObject({
+      provenance: 'import', source_session_id: 'source-session', source_run_id: 'source-run',
+    });
   });
 
   it('brief additively exposes an independently executable execution-contract/1.0', () => {
@@ -604,9 +790,49 @@ gates:
     expect(brief.execution_contract.outputs.declared).toEqual([
       expect.objectContaining({ kind: 'result', alias: 'latest-result', primary: true, schema: 'result/1.0' }),
     ]);
+    expect(brief.execution_contract.contract.warnings).toEqual(expect.arrayContaining([
+      expect.stringContaining('v1 produces[0].schema is metadata-only'),
+    ]));
     expect(brief.execution_contract.gates.items).toEqual(expect.arrayContaining([
       expect.objectContaining({ title: 'Approval required', scope: 'entry', blocking: true }),
     ]));
+    expect(() => executionContractSchema.parse({
+      ...brief.execution_contract,
+      schema_version: 'execution-contract/2.0',
+    })).toThrow();
+  });
+
+  it('enforces command-contract/2.0 role, required output and schema metadata', () => {
+    const projectRoot = root();
+    commandFile(projectRoot, 'strict-output', `contract_version: 2
+consumes: []
+produces:
+  - kind: result
+    path: outputs/result.json
+    alias: strict-result
+    role: primary
+    required: true
+    schema: result/2.0
+gates:
+  entry: []
+  exit: []`);
+    const created = createRun({ projectRoot, command: 'strict-output', intent: 'strict output' });
+    const runDir = join(projectRoot, '.workflow', 'sessions', created.session_id, 'runs', created.run_id);
+    writeFileSync(join(runDir, 'outputs', 'result.json'), JSON.stringify({
+      _meta: { kind: 'result', schema: 'result/1.0', role: 'attachment', alias: 'strict-result' },
+      ok: true,
+    }, null, 2));
+    const rejected = checkRun(projectRoot, created.run_id, created.session_id);
+    expect(rejected.errors).toEqual(expect.arrayContaining([
+      expect.stringContaining('_meta.schema result/1.0 does not match contract result/2.0'),
+      expect.stringContaining('_meta.role attachment does not match contract primary'),
+    ]));
+
+    writeFileSync(join(runDir, 'outputs', 'result.json'), JSON.stringify({
+      _meta: { kind: 'result', schema: 'result/2.0', role: 'primary', alias: 'strict-result' },
+      ok: true,
+    }, null, 2));
+    expect(checkRun(projectRoot, created.run_id, created.session_id).errors).toEqual([]);
   });
 
   it('brief of a sealed Run points next at run next to advance the chain (G4)', () => {
@@ -740,7 +966,7 @@ gates:
     expect(done.sealed).toBe(true);
 
     // A downstream run consuming the plan sees the alias and the note in prev handoff.
-    const execRun = createRun({ projectRoot, command: 'demo-exec', session: planRun.session_id, intent: 'closed loop' });
+    const execRun = createRun({ projectRoot, command: 'demo-exec', sessionId: planRun.session_id, intent: 'closed loop' });
     const brief = briefRun(projectRoot, execRun.run_id, execRun.session_id);
     expect(brief.upstream['current-plan']).toBeDefined();
     expect(brief.prev_handoff?.concerns).toContain('watch the migration order');

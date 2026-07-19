@@ -1,10 +1,22 @@
 import type { ArtifactRegistry, EvidenceStore, GateRegistry, SessionState } from './schemas.js';
+import type { IntentIdentity, SessionProvenance } from './protocol-schemas.js';
 
-export function createSessionState(sessionId: string, intent: string): SessionState {
+export function createSessionState(
+  sessionId: string,
+  intent: string,
+  options: { intentIdentity?: IntentIdentity | null; provenance?: SessionProvenance } = {},
+): SessionState {
   return {
-    schema_version: 'session/1.1',
+    schema_version: 'session/1.2',
     session_id: sessionId,
     intent,
+    intent_identity: options.intentIdentity ?? null,
+    provenance: options.provenance ?? {
+      source: 'native',
+      forked_from: null,
+      imported_from: [],
+      created_by: 'session-store',
+    },
     status: 'running',
     identity_revision: 1,
     activity_revision: 0,
@@ -28,6 +40,7 @@ export function createSessionState(sessionId: string, intent: string): SessionSt
       executor: null,
     },
     requests: [],
+    ralph_authority: null,
     lifecycle: {
       sealed_at: null,
       seal_summary: null,
@@ -55,4 +68,3 @@ export function createArtifactRegistry(): ArtifactRegistry {
 export function createEvidenceStore(): EvidenceStore {
   return { schema_version: 'evidence/1.0', revision: 0, records: {} };
 }
-

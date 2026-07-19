@@ -18,7 +18,6 @@ import {
   resolveRalphSession,
   effectiveLease,
   readMeta,
-  updateRalphMeta,
   workflowRoot,
 } from './session-adapter.js';
 
@@ -201,26 +200,6 @@ export async function runComplete(opts: CompleteCmdOptions): Promise<number> {
     }
     if (fallbackResult === 'already-terminal') return 0;
   }
-
-  // Record completion details in ralph-meta
-  updateRalphMeta(projectRoot, sessionId, (m) => {
-    if (!m.step_details) m.step_details = {};
-    const stepId = chainStep.step_id;
-    const existing = m.step_details[stepId] ?? { args: '', stage: '', skill: chainStep.command };
-    existing.completion_status = opts.status;
-    existing.completion_summary = opts.summary ?? null;
-    existing.completion_evidence = opts.evidence.length === 0 ? null
-      : opts.evidence.length === 1 ? opts.evidence[0] : opts.evidence;
-    existing.completion_decisions = opts.decisions?.length ? opts.decisions : null;
-    existing.completion_caveats = opts.caveats ?? null;
-    existing.completion_deferred = opts.deferred?.length ? opts.deferred : null;
-    existing.concerns = opts.status === 'DONE_WITH_CONCERNS' ? (opts.concerns ?? null)
-      : opts.status === 'BLOCKED' ? (opts.reason ?? null) : null;
-    if (opts.status === 'NEEDS_RETRY') {
-      existing.retry_count = (existing.retry_count ?? 0) + 1;
-    }
-    m.step_details[stepId] = existing;
-  });
 
   console.error(`[ralph complete] session=${sessionId} step=${opts.index} status=${opts.status}`);
   return 0;

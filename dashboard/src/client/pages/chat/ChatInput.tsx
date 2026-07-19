@@ -26,7 +26,9 @@ const AGENT_SHORT: Record<AgentType, string> = {
   'gemini-a2a': 'Ga',
   qwen: 'Q',
   opencode: 'O',
+  agy: 'A',
   'agent-sdk': 'S',
+  'api-explore': 'Ax',
 };
 
 const SLASH_COMMANDS: SlashCommand[] = [

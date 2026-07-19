@@ -57,11 +57,9 @@ describe('createRalphSession (delegates to createChainSession)', () => {
     expect(session.intent).toBe('do the ralph thing');
 
     // ralph-meta.json still written alongside session.json
-    expect(existsSync(join(result.sessionDir, 'ralph-meta.json'))).toBe(true);
-    const meta = readMeta(result.sessionDir);
-    expect(meta.lifecycle_position).toBe('execute');
-    expect(meta.milestone).toBe('M1');
-    expect(JSON.parse(readFileSync(join(result.sessionDir, 'ralph-meta.json'), 'utf-8')).lifecycle_position).toBe('execute');
+    expect(existsSync(join(result.sessionDir, 'ralph-meta.json'))).toBe(false);
+    expect(session.ralph_authority?.canonical_complete).toBe(true);
+    expect(session.orchestration.position?.lifecycle).toBe('execute');
   });
 
   it('defaults quality_mode/auto_mode and writes an empty chain when none given', () => {
@@ -81,7 +79,7 @@ describe('createRalphSession (delegates to createChainSession)', () => {
     writeFileSync(join(result.sessionDir, 'ralph-meta.json'), '{broken', 'utf-8');
 
     expect(() => readMeta(result.sessionDir)).toThrow(/invalid legacy ralph-meta\.json/);
-    expect(() => resolveRalphSession(root, id)).toThrow(/invalid legacy ralph-meta\.json/);
+    expect(resolveRalphSession(root, id)?.sessionId).toBe(id);
   });
 
   it('rejects known legacy metadata fields with invalid runtime types', () => {

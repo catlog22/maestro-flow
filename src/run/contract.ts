@@ -6,15 +6,20 @@ import YAML from 'yaml';
 import { z } from 'zod';
 
 import { paths } from '../config/paths.js';
+import {
+  contractSnapshotSchema,
+  type ContractSnapshot,
+} from './protocol-schemas.js';
+import { sha256Digest, stableJsonUtf8 } from './transition-receipts.js';
 
-const consumeSchema = z.object({
+const consumeV1Schema = z.object({
   kind: z.string().min(1),
   alias: z.string().min(1).optional(),
   required: z.boolean().default(false),
   require_status: z.literal('sealed').optional(),
 }).passthrough();
 
-const produceSchema = z.object({
+const produceV1Schema = z.object({
   kind: z.string().min(1),
   primary: z.boolean().default(false),
   path: z.string().min(1).optional(),
@@ -33,17 +38,223 @@ const gateDefinitionSchema = z.union([
   }).passthrough(),
 ]);
 
-const commandContractSchema = z.object({
-  consumes: z.array(consumeSchema).default([]),
-  produces: z.array(produceSchema).default([]),
+const commandContractV1Schema = z.object({
+  consumes: z.array(consumeV1Schema).default([]),
+  produces: z.array(produceV1Schema).default([]),
   gates: z.object({
     entry: z.array(gateDefinitionSchema).default([]),
     exit: z.array(gateDefinitionSchema).default([]),
   }).default({ entry: [], exit: [] }),
 }).passthrough();
 
-export type CommandContract = z.infer<typeof commandContractSchema>;
 export type ContractGateDefinition = z.infer<typeof gateDefinitionSchema>;
+
+const consumeV2Schema = z.object({
+  kind: z.string().min(1),
+  alias: z.string().min(1).optional(),
+  required: z.boolean(),
+  require_status: z.literal('sealed').optional(),
+  schema: z.string().min(1).optional(),
+}).strict();
+
+const produceV2Schema = z.object({
+  kind: z.string().min(1),
+  path: z.string().min(1),
+  alias: z.string().min(1).optional(),
+  role: z.enum(['primary', 'attachment', 'evidence', 'checkpoint']),
+  required: z.boolean(),
+  schema: z.string().min(1),
+}).strict();
+
+const gateDefinitionV2Schema = z.union([
+  z.string().min(1),
+  z.object({
+    key: z.string().min(1),
+    title: z.string().optional(),
+    required: z.boolean(),
+    blocking: z.boolean(),
+    applicable_modes: z.array(z.enum(['quick', 'standard', 'full'])),
+    check: z.record(z.string(), z.unknown()),
+  }).strict(),
+]);
+
+const commandContractV2Schema = z.object({
+  contract_version: z.literal(2),
+  consumes: z.array(consumeV2Schema).default([]),
+  produces: z.array(produceV2Schema).default([]),
+  gates: z.object({
+    entry: z.array(gateDefinitionV2Schema).default([]),
+    exit: z.array(gateDefinitionV2Schema).default([]),
+  }).strict().default({ entry: [], exit: [] }),
+}).strict().superRefine((contract, context) => {
+  const aliases = new Set<string>();
+  for (const item of [...contract.consumes, ...contract.produces]) {
+    if (!item.alias) continue;
+    if (aliases.has(item.alias)) {
+      context.addIssue({ code: z.ZodIssueCode.custom, message: `duplicate contract alias: ${item.alias}` });
+    }
+    aliases.add(item.alias);
+  }
+  const paths = new Set<string>();
+  for (const output of contract.produces) {
+    const normalized = output.path.replaceAll('\\', '/');
+    if (!normalized.startsWith('outputs/') || normalized.split('/').includes('..') || normalized.startsWith('/')) {
+      context.addIssue({ code: z.ZodIssueCode.custom, message: `output path must remain under outputs/: ${output.path}` });
+    }
+    if (paths.has(normalized)) {
+      context.addIssue({ code: z.ZodIssueCode.custom, message: `duplicate output path: ${output.path}` });
+    }
+    paths.add(normalized);
+  }
+  const requiredPrimary = contract.produces.filter(item => item.role === 'primary' && item.required);
+  if (requiredPrimary.length > 1) {
+    context.addIssue({ code: z.ZodIssueCode.custom, message: 'multiple required primary outputs are ambiguous' });
+  }
+});
+
+export interface CommandContractConsume {
+  kind: string;
+  alias?: string;
+  required: boolean;
+  require_status?: 'sealed';
+  schema?: string;
+}
+
+export interface CommandContractProduce {
+  kind: string;
+  primary: boolean;
+  path?: string;
+  alias?: string;
+  role?: 'primary' | 'attachment' | 'evidence' | 'checkpoint';
+  required?: boolean;
+  schema?: string;
+}
+
+export interface CommandContract {
+  contract_version?: 1 | 2;
+  schema_version?: 'command-contract/1.0' | 'command-contract/2.0';
+  consumes: CommandContractConsume[];
+  produces: CommandContractProduce[];
+  gates: { entry: ContractGateDefinition[]; exit: ContractGateDefinition[] };
+  compatibility_warnings?: string[];
+}
+
+function semanticWarnings(raw: z.infer<typeof commandContractV1Schema>): string[] {
+  const warnings: string[] = [];
+  raw.consumes.forEach((item, index) => {
+    for (const key of ['schema', 'optional', 'role']) {
+      if (key in item) warnings.push(`v1 consumes[${index}].${key} is metadata-only; set contract_version: 2 to enforce it`);
+    }
+  });
+  raw.produces.forEach((item, index) => {
+    for (const key of ['schema', 'required', 'optional', 'role']) {
+      if (key in item) warnings.push(`v1 produces[${index}].${key} is metadata-only; set contract_version: 2 to enforce it`);
+    }
+  });
+  return warnings;
+}
+
+export function parseCommandContract(raw: unknown): CommandContract {
+  if (raw && typeof raw === 'object' && 'contract_version' in raw) {
+    const version = (raw as { contract_version?: unknown }).contract_version;
+    if (version !== 2) throw new Error(`Unsupported command contract_version: ${String(version)}`);
+    const parsed = commandContractV2Schema.parse(raw);
+    return {
+      contract_version: 2,
+      schema_version: 'command-contract/2.0',
+      consumes: parsed.consumes,
+      produces: parsed.produces.map(item => ({
+        ...item,
+        primary: item.role === 'primary',
+      })),
+      gates: parsed.gates,
+      compatibility_warnings: [],
+    };
+  }
+  const parsed = commandContractV1Schema.parse(raw ?? {});
+  const warnings = semanticWarnings(parsed);
+  return {
+    contract_version: 1,
+    schema_version: 'command-contract/1.0',
+    consumes: parsed.consumes.map(item => ({
+      kind: item.kind,
+      ...(item.alias ? { alias: item.alias } : {}),
+      required: item.required,
+      ...(item.require_status ? { require_status: item.require_status } : {}),
+      ...(typeof item.schema === 'string' ? { schema: item.schema } : {}),
+    })),
+    produces: parsed.produces.map(item => ({
+      kind: item.kind,
+      primary: item.primary,
+      ...(item.path ? { path: item.path } : {}),
+      ...(item.alias ? { alias: item.alias } : {}),
+      role: item.primary ? 'primary' : 'attachment',
+      required: false,
+      ...(typeof item.schema === 'string' ? { schema: item.schema } : {}),
+    })),
+    gates: parsed.gates,
+    compatibility_warnings: warnings,
+  };
+}
+
+export function normalizedCommandContract(contract: CommandContract): Record<string, unknown> {
+  if ((contract.contract_version ?? 1) === 2) {
+    return {
+      contract_version: 2,
+      consumes: contract.consumes.map(item => ({
+        kind: item.kind,
+        ...(item.alias ? { alias: item.alias } : {}),
+        required: item.required,
+        ...(item.require_status ? { require_status: item.require_status } : {}),
+        ...(item.schema ? { schema: item.schema } : {}),
+      })),
+      produces: contract.produces.map(item => ({
+        kind: item.kind,
+        path: item.path,
+        ...(item.alias ? { alias: item.alias } : {}),
+        role: item.role,
+        required: item.required,
+        schema: item.schema,
+      })),
+      gates: contract.gates,
+    };
+  }
+  return {
+    contract_version: 1,
+    consumes: contract.consumes.map(item => ({
+      kind: item.kind,
+      ...(item.alias ? { alias: item.alias } : {}),
+      required: item.required,
+      ...(item.require_status ? { require_status: item.require_status } : {}),
+    })),
+    produces: contract.produces.map(item => ({
+      kind: item.kind,
+      primary: item.primary,
+      ...(item.path ? { path: item.path } : {}),
+      ...(item.alias ? { alias: item.alias } : {}),
+    })),
+    gates: contract.gates,
+  };
+}
+
+export function createContractSnapshot(contract: CommandContract, capturedAt = new Date().toISOString()): ContractSnapshot {
+  const normalized = normalizedCommandContract(contract);
+  return contractSnapshotSchema.parse({
+    schema_version: 'contract-snapshot/1.0',
+    contract_version: (contract.contract_version ?? 1) === 2
+      ? 'command-contract/2.0'
+      : 'command-contract/1.0',
+    normalized,
+    snapshot_hash: sha256Digest(stableJsonUtf8(normalized)),
+    parser_version: 'maestro-command-contract/2',
+    captured_at: capturedAt,
+    warnings: contract.compatibility_warnings ?? [],
+  });
+}
+
+export function hashCommandContract(contract: CommandContract): string {
+  return createHash('sha256').update(stableJsonUtf8(normalizedCommandContract(contract)), 'utf8').digest('hex');
+}
 
 const SESSION_MODES = ['run', 'brief', 'none', 'bootstrap'] as const;
 export type SessionMode = typeof SESSION_MODES[number];
@@ -54,6 +265,8 @@ export interface ResolvedCommandSource {
   raw: string;
   contentHash: string;
   contract: CommandContract;
+  contractSnapshot: ContractSnapshot;
+  contractWarnings: string[];
   sessionMode: SessionMode;
 }
 
@@ -122,12 +335,15 @@ export function resolveCommandSource(projectRoot: string, commandName: string): 
     ?? globalClaudeCandidates.find(candidate => existsSync(candidate));
   if (!path) {
     const empty = '';
+    const contract = parseCommandContract({});
     return {
       path: '',
       relativePath: '',
       raw: empty,
       contentHash: sha256(empty),
-      contract: commandContractSchema.parse({}),
+      contract,
+      contractSnapshot: createContractSnapshot(contract),
+      contractWarnings: contract.compatibility_warnings ?? [],
       sessionMode: 'run',
     };
   }
@@ -137,12 +353,15 @@ export function resolveCommandSource(projectRoot: string, commandName: string): 
   const sessionMode: SessionMode = typeof rawMode === 'string' && (SESSION_MODES as readonly string[]).includes(rawMode)
     ? rawMode as SessionMode
     : 'run';
+  const contract = parseCommandContract(extractContract(raw));
   return {
     path,
     relativePath: relative(projectRoot, path).replaceAll('\\', '/'),
     raw,
     contentHash: sha256(raw),
-    contract: commandContractSchema.parse(extractContract(raw)),
+    contract,
+    contractSnapshot: createContractSnapshot(contract),
+    contractWarnings: contract.compatibility_warnings ?? [],
     sessionMode,
   };
 }

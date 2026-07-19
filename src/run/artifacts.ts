@@ -24,12 +24,12 @@ export interface ArtifactScanResult {
   errors: string[];
 }
 
-function hashFile(path: string): { hash: string; size: number } {
+export function hashFile(path: string): { hash: string; size: number } {
   const data = readFileSync(path);
   return { hash: createHash('sha256').update(data).digest('hex'), size: data.byteLength };
 }
 
-function hashDirectory(path: string): { hash: string; size: number } {
+export function hashDirectory(path: string): { hash: string; size: number } {
   const hash = createHash('sha256');
   let size = 0;
   const walk = (dir: string, prefix: string): void => {

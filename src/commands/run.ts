@@ -19,6 +19,10 @@ import { checkLease } from '../run/lease.js';
 import { SessionStore } from '../run/store.js';
 import { logMutation, readLedger } from '../run/mutation-ledger.js';
 import type { TargetPlatform } from '../core/skill-converter.js';
+import { createRunResponseError, createRunResponseSuccess, emitRunResponse, type RunResponseErrorCode } from '../run/response.js';
+import { recallRuns } from '../run/recall.js';
+import { issueRecallConfirmation } from '../run/recall-confirmation.js';
+import { executeRecallAction } from '../run/recall-actions.js';
 
 const VALID_VERDICTS: CompletionVerdict[] = ['done', 'done-with-concerns', 'needs-retry', 'blocked'];
 
@@ -41,6 +45,38 @@ function print(value: unknown): void {
 function reportError(error: unknown): void {
   console.error(`[maestro run] ${(error as Error).message}`);
   process.exitCode = 1;
+}
+
+type MachineOperation = 'create' | 'next' | 'complete' | 'brief' | 'recall' | 'fork' | 'import';
+function stableErrorCode(error: unknown): RunResponseErrorCode {
+  const typedCode = (error as { code?: unknown })?.code;
+  if (typeof typedCode === 'string' && [
+    'TOKEN_INVALID', 'TOKEN_EXPIRED', 'TOKEN_REPLAYED', 'TOKEN_RESERVED',
+    'FENCE_CONFLICT', 'RESERVATION_INVALID', 'REQUEST_CONFLICT',
+  ].includes(typedCode)) return typedCode as RunResponseErrorCode;
+  const message = error instanceof Error ? error.message : String(error);
+  if (/Run not found/i.test(message)) return 'RUN_NOT_FOUND';
+  if (/ambiguous/i.test(message)) return 'SESSION_AMBIGUOUS';
+  if (/(unknown|invalid).*platform|platform.*(unknown|invalid)/i.test(message)) return 'PLATFORM_INVALID';
+  if (/platform.*(mismatch|conflict)/i.test(message)) return 'PLATFORM_CONFLICT';
+  if (/contract.*drift/i.test(message)) return 'CONTRACT_DRIFT';
+  if (/immutable/i.test(message)) return 'RUN_IMMUTABLE';
+  if (/confirmation token not found|invalid confirmation token/i.test(message)) return 'TOKEN_INVALID';
+  if (/expired/i.test(message)) return 'TOKEN_EXPIRED';
+  if (/already consumed/i.test(message)) return 'TOKEN_REPLAYED';
+  if (/request mismatch|different action or request/i.test(message)) return 'REQUEST_CONFLICT';
+  return 'INTERNAL_ERROR';
+}
+function machineError(operation: MachineOperation, error: unknown, exitCode: 1 | 2 | 3 = 1, details: Record<string, unknown> = {}): void {
+  emitRunResponse(createRunResponseError({ operation, exit_code: exitCode, code: stableErrorCode(error), message: error instanceof Error ? error.message : String(error), details }));
+}
+function machineSuccess(
+  operation: MachineOperation,
+  result: unknown,
+  locator: { session_id: string | null; run_id: string | null } | null = null,
+  replay?: { status: 'applied' | 'replayed'; transition_id: string },
+): void {
+  emitRunResponse(createRunResponseSuccess({ operation, result, locator, replay }));
 }
 
 export function registerRunCommand(program: Command): void {
@@ -94,11 +130,19 @@ export function registerRunCommand(program: Command): void {
           ownerEpoch: opts.ownerEpoch,
           leaseId: opts.leaseId,
         });
-        const stream = outcome.exitCode === 0 ? process.stdout : process.stderr;
-        stream.write(outcome.message + '\n');
-        if (outcome.exitCode !== 0) process.exitCode = outcome.exitCode;
+        if (opts.json) {
+          if (outcome.exitCode === 0 && outcome.result) {
+            machineSuccess('next', outcome.result, { session_id: outcome.result.session_id, run_id: outcome.result.run_id });
+          } else {
+            emitRunResponse(createRunResponseError({ operation: 'next', exit_code: outcome.exitCode as 1 | 2 | 3, code: outcome.reasonCode as RunResponseErrorCode, message: outcome.message, details: { reason_code: outcome.reasonCode } }));
+          }
+        } else {
+          const stream = outcome.exitCode === 0 ? process.stdout : process.stderr;
+          stream.write(outcome.message + '\n');
+          if (outcome.exitCode !== 0) process.exitCode = outcome.exitCode;
+        }
       } catch (error) {
-        reportError(error);
+        if (opts.json) machineError('next', error); else reportError(error);
       }
     });
 
@@ -154,10 +198,16 @@ export function registerRunCommand(program: Command): void {
 
   run
     .command('rebind <run-id>')
-    .description('Backfill contract_hash for a legacy Run after verified prompt-only definition drift')
+    .description('Audit and accept only compatible command definition, contract snapshot, or hash drift for an existing Run')
     .option('--session <id>', 'explicit Session ID')
-    .requiredOption('--reason <text>', 'audited reason for accepting prompt-only drift')
+    .requiredOption('--reason <text>', 'required audited reason for accepting compatible drift')
     .option('--workflow-root <path>', 'project root containing .workflow', process.cwd())
+    .addHelpText('after', `
+Safety:
+  Rebind strictly validates gate and produce compatibility before updating the stored command binding.
+  --reason is required and recorded in command-rebind.json.
+  This is not a force operation or lifecycle bypass; incompatible or unprovable drift is rejected.
+`)
     .action((runId: string, opts: { session?: string; reason: string; workflowRoot: string }) => {
       try {
         print(rebindRunCommand(resolve(opts.workflowRoot), runId, opts.reason, opts.session));
@@ -180,6 +230,7 @@ export function registerRunCommand(program: Command): void {
     .option('--execution-owner <owner>', 'lease execution owner (checked against session.orchestration.lease)')
     .option('--owner-epoch <epoch>', 'lease owner epoch', Number.parseInt)
     .option('--lease-id <id>', 'lease identifier for concurrency safety')
+    .option('--json', 'emit one run-response/1.0 envelope on stdout')
     .option('--workflow-root <path>', 'project root containing .workflow', process.cwd())
     .action((runIdArg: string | undefined, opts: {
       session?: string;
@@ -193,6 +244,7 @@ export function registerRunCommand(program: Command): void {
       executionOwner?: string;
       ownerEpoch?: number;
       leaseId?: string;
+      json?: boolean;
       workflowRoot: string;
     }) => {
       try {
@@ -210,15 +262,17 @@ export function registerRunCommand(program: Command): void {
             extraArtifacts: opts.artifact,
             summaryFallback: opts.summary,
           });
-          print(result);
-          if (!result.sealed) process.exitCode = 1;
+          if (opts.json) {
+            if (result.sealed) machineSuccess('complete', result, { session_id: result.session_id, run_id: result.run_id });
+            else emitRunResponse(createRunResponseError({ operation: 'complete', exit_code: 1, code: 'RUN_GATES_BLOCKING', message: 'Run gates are blocking completion', details: { result } }));
+          } else { print(result); if (!result.sealed) process.exitCode = 1; }
           return;
         }
 
         const verdict = parseVerdict(opts.verdict);
         if (!verdict) {
-          console.error(`[maestro run] invalid --verdict "${opts.verdict}"; valid: ${VALID_VERDICTS.join(', ')}`);
-          process.exitCode = 2;
+          if (opts.json) emitRunResponse(createRunResponseError({ operation: 'complete', exit_code: 2, code: 'INVALID_VERDICT', message: `invalid --verdict "${opts.verdict}"`, details: { valid: VALID_VERDICTS } }));
+          else { console.error(`[maestro run] invalid --verdict "${opts.verdict}"; valid: ${VALID_VERDICTS.join(', ')}`); process.exitCode = 2; }
           return;
         }
 
@@ -234,8 +288,8 @@ export function registerRunCommand(program: Command): void {
         } else {
           const resolved = resolveRunningRun(projectRoot, store, opts.session);
           if (resolved.kind === 'error') {
-            console.error(resolved.message);
-            process.exitCode = 1;
+            if (opts.json) machineError('complete', new Error(resolved.message));
+            else { console.error(resolved.message); process.exitCode = 1; }
             return;
           }
           sessionId = resolved.sessionId;
@@ -250,8 +304,8 @@ export function registerRunCommand(program: Command): void {
           leaseId: opts.leaseId,
         });
         if (conflict) {
-          console.error(`[maestro run] ${conflict}`);
-          process.exitCode = 1;
+          if (opts.json) emitRunResponse(createRunResponseError({ operation: 'complete', exit_code: 1, code: 'LEASE_CONFLICT', message: conflict, details: {} }));
+          else { console.error(`[maestro run] ${conflict}`); process.exitCode = 1; }
           return;
         }
 
@@ -268,11 +322,12 @@ export function registerRunCommand(program: Command): void {
             leaseId: opts.leaseId,
           },
         });
-        print(result);
-        process.stderr.write(`next: ${result.next.command}\n      ${result.next.reason}\n`);
-        if (!result.run_sealed) process.exitCode = 1;
+        if (opts.json) {
+          if (result.run_sealed) machineSuccess('complete', result, { session_id: result.session_id, run_id: result.run_id });
+          else emitRunResponse(createRunResponseError({ operation: 'complete', exit_code: 1, code: 'RUN_GATES_BLOCKING', message: 'Run gates are blocking completion', details: { result }, next: { suggest_only: true, command: result.next.command, reason: result.next.reason } }));
+        } else { print(result); process.stderr.write(`next: ${result.next.command}\n      ${result.next.reason}\n`); if (!result.run_sealed) process.exitCode = 1; }
       } catch (error) {
-        reportError(error);
+        if (opts.json) machineError('complete', error); else reportError(error);
       }
     });
 
@@ -281,18 +336,77 @@ export function registerRunCommand(program: Command): void {
     .description('Return Resume Packet for a running Run (re-attach workflow + goals + gate status)')
     .option('--session <id>', 'explicit Session ID')
     .option('--platform <name>', 'target platform for tool substitution (claude|codex|agy|agents-standard)')
+    .option('--json', 'emit one run-response/1.0 envelope on stdout')
     .option('--workflow-root <path>', 'project root', process.cwd())
-    .action((runId: string, opts: { session?: string; platform?: string; workflowRoot: string }) => {
+    .action((runId: string, opts: { session?: string; platform?: string; workflowRoot: string; json?: boolean }) => {
       try {
         const platform = opts.platform as TargetPlatform | undefined;
         if (platform && !VALID_PLATFORMS.includes(platform)) {
           throw new Error(`unknown platform "${platform}", valid: ${VALID_PLATFORMS.join(', ')}`);
         }
-        print(briefRun(resolve(opts.workflowRoot), runId, opts.session, platform));
+        const result = briefRun(resolve(opts.workflowRoot), runId, opts.session, platform);
+        if (opts.json) machineSuccess('brief', result, { session_id: result.session_id, run_id: result.run_id }); else print(result);
       } catch (error) {
-        reportError(error);
+        if (opts.json) machineError('brief', error); else reportError(error);
       }
     });
+
+  run.command('recall <command> [args...]')
+    .description('Read-only exact live and sealed-history recall; never mutates lifecycle authority')
+    .requiredOption('--intent <text>', 'verbatim intent')
+    .option('--limit <n>', 'maximum candidates', Number.parseInt, 20)
+    .option('--as-of <iso>', 'canonical scoring timestamp')
+    .option('--json', 'emit one run-response/1.0 envelope on stdout')
+    .option('--workflow-root <path>', 'project root containing .workflow', process.cwd())
+    .action(async (command: string, _args: string[], opts: { intent: string; limit: number; asOf?: string; json?: boolean; workflowRoot: string }) => {
+      try {
+        const result = await recallRuns(resolve(opts.workflowRoot), { command, intent: opts.intent, limit: opts.limit, asOf: opts.asOf });
+        if (opts.json) machineSuccess('recall', result); else print(result);
+      } catch (error) { if (opts.json) machineError('recall', error); else reportError(error); }
+    });
+
+  run.command('recall-confirm <action>')
+    .description('Issue a single-use, request-bound recall confirmation token')
+    .requiredOption('--target-session <id>', 'new target Session ID')
+    .requiredOption('--command <name>', 'target command')
+    .requiredOption('--intent <text>', 'target intent')
+    .option('--source-session <id>', 'immutable source Session')
+    .option('--source-run <id>', 'immutable source Run')
+    .option('--source-workspace <name>', 'linked source workspace (import-only)')
+    .option('--arg <value>', 'target command arg (repeatable)', collect, [])
+    .option('--json', 'emit one run-response/1.0 envelope on stdout')
+    .option('--workflow-root <path>', 'project root containing .workflow', process.cwd())
+    .action((action: string, opts: any) => {
+      try {
+        if (!['fork', 'import', 'new'].includes(action)) throw new Error('action must be fork|import|new');
+        const typedAction = action as 'fork' | 'import' | 'new';
+        const result = issueRecallConfirmation(resolve(opts.workflowRoot), { action: typedAction, target_session_id: opts.targetSession, command: opts.command, intent: opts.intent, source_session_id: opts.sourceSession, source_run_id: opts.sourceRun, source_workspace: opts.sourceWorkspace, args: opts.arg });
+        const op = action === 'new' ? 'create' : action as MachineOperation;
+        if (opts.json) machineSuccess(op, result); else print(result);
+      } catch (error) { if (opts.json) machineError(action === 'new' ? 'create' : ['fork', 'import'].includes(action) ? action as MachineOperation : 'recall', error); else reportError(error); }
+    });
+
+  for (const action of ['fork', 'import', 'new'] as const) {
+    run.command(action)
+      .description(`Execute confirmed ${action} with source/target fence revalidation`)
+      .requiredOption('--confirmation-token <token>', 'single-use confirmation token')
+      .requiredOption('--target-session <id>', 'new target Session ID')
+      .requiredOption('--command <name>', 'target command')
+      .requiredOption('--intent <text>', 'target intent')
+      .option('--source-session <id>', 'immutable source Session')
+      .option('--source-run <id>', 'immutable source Run')
+      .option('--source-workspace <name>', 'linked source workspace (import-only)')
+      .option('--arg <value>', 'target command arg (repeatable)', collect, [])
+      .option('--json', 'emit one run-response/1.0 envelope on stdout')
+      .option('--workflow-root <path>', 'project root containing .workflow', process.cwd())
+      .action((opts: any) => {
+        try {
+          const result = executeRecallAction(resolve(opts.workflowRoot), { action, confirmation_token: opts.confirmationToken, target_session_id: opts.targetSession, command: opts.command, intent: opts.intent, source_session_id: opts.sourceSession, source_run_id: opts.sourceRun, source_workspace: opts.sourceWorkspace, args: opts.arg });
+          const op = action === 'new' ? 'create' : action;
+          if (opts.json) machineSuccess(op, result, { session_id: result.session_id, run_id: result.run_id }, { status: result.replayed ? 'replayed' : 'applied', transition_id: result.reservation_id }); else print(result);
+        } catch (error) { if (opts.json) machineError(action === 'new' ? 'create' : action, error); else reportError(error); }
+      });
+  }
 
   run
     .command('skill <step>')

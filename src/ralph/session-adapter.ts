@@ -246,9 +246,11 @@ export function resolveRalphSession(
   if (sessionId) {
     if (!store.sessionExists(sessionId)) return null;
     const bundle = store.readBundle(sessionId);
+    if (bundle.session.orchestration.engine !== 'ralph') return null;
     if (opts.requireRunning && bundle.session.status !== 'running') return null;
     const sessionDir = store.sessionDir(sessionId);
-    return { sessionId, sessionDir, bundle, meta: readMeta(sessionDir) };
+    const meta = bundle.session.ralph_authority?.canonical_complete ? defaultMeta() : readMeta(sessionDir);
+    return { sessionId, sessionDir, bundle, meta };
   }
 
   // Find latest ralph-engine session (sorted by mtime DESC)
@@ -356,8 +358,15 @@ export function createRalphSession(
 
   const sessionDir = store.sessionDir(id);
   const meta: RalphMeta = { ...defaultMeta(), ...opts.meta };
-  writeMeta(sessionDir, meta);
-
+  // New Ralph sessions are canonical-only. The in-memory compatibility view is
+  // retained for prompt consumers, but no ralph-meta.json sidecar is created.
+  store.update(id, (draft) => {
+    draft.session.ralph_authority = { schema_version: 'ralph-authority/1.0', engine: 'ralph', canonical_complete: true };
+    if (!draft.session.orchestration.position) {
+      draft.session.orchestration.position = { lifecycle: meta.lifecycle_position, phase: meta.phase, phase_is_new: meta.phase_is_new ?? false, milestone: meta.milestone, planning_mode: meta.planning_mode ?? 'unified', scope_verdict: meta.scope_verdict ?? 'unknown', passed_gates: meta.passed_gates ?? [] };
+    }
+    return null;
+  });
   const updatedBundle = store.readBundle(id);
   return { sessionId: id, sessionDir, bundle: updatedBundle, meta };
 }
@@ -371,6 +380,9 @@ export function updateRalphMeta(
 ): void {
   const store = new SessionStore(projectRoot);
   const sessionDir = store.sessionDir(sessionId);
+  try {
+    if (store.readBundle(sessionId).session.ralph_authority?.canonical_complete) return;
+  } catch { /* legacy fallback below */ }
   store.withLock(() => {
     const meta = readMeta(sessionDir);
     updater(meta);

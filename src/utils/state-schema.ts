@@ -5,12 +5,13 @@
  * All hooks, tools, and workflows should import from here.
  */
 
-import { readFileSync, writeFileSync, renameSync, unlinkSync, existsSync, readdirSync } from 'node:fs';
+import { readFileSync, writeFileSync, renameSync, existsSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 
 /**
- * Cross-platform atomic rename with retry for Windows EPERM/EBUSY.
- * Attempts unlinkSync on target before retry to handle Windows semantics.
+ * Cross-platform atomic rename with bounded retry for Windows transient errors.
+ * The committed destination is never unlinked before a successful promotion;
+ * callers that need crash recovery must retain a durable transaction intent.
  */
 export function safeRename(src: string, dest: string): void {
   for (let i = 0; i < 3; i++) {
@@ -18,10 +19,7 @@ export function safeRename(src: string, dest: string): void {
       renameSync(src, dest);
       return;
     } catch (e: any) {
-      if (i < 2 && ['EPERM', 'EACCES', 'EBUSY'].includes(e.code)) {
-        try { unlinkSync(dest); } catch {}
-        continue;
-      }
+      if (i < 2 && ['EPERM', 'EACCES', 'EBUSY'].includes(e.code)) continue;
       throw e;
     }
   }

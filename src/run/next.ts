@@ -116,8 +116,25 @@ export interface NextCmdOptions {
   leaseId?: string;
 }
 
+export type NextReasonCode =
+  | 'DISPATCHED'
+  | 'SESSION_NOT_FOUND'
+  | 'SESSION_AMBIGUOUS'
+  | 'SESSION_NOT_RUNNING'
+  | 'RESUME_REQUIRED'
+  | 'LEASE_CONFLICT'
+  | 'RUNNING_STEP'
+  | 'DECISION_REQUIRED'
+  | 'CHAIN_COMPLETE'
+  | 'PICK_NOT_FOUND'
+  | 'PICK_NOT_PENDING'
+  | 'PICK_DECISION_NODE'
+  | 'COMMAND_CONTENT_MISSING'
+  | 'INTERNAL_ERROR';
+
 export interface NextOutcome {
   exitCode: number;
+  reasonCode: NextReasonCode;
   /** Structured result on success (exit 0); null otherwise. */
   result: NextResult | null;
   /** Rendered stdout/stderr text (birth packet on success, message otherwise). */
@@ -160,7 +177,7 @@ function hasPendingStep(session: SessionState): boolean {
 
 type ResolveResult =
   | { kind: 'ok'; sessionId: string; session: SessionState }
-  | { kind: 'error'; message: string };
+  | { kind: 'error'; code: Extract<NextReasonCode, 'SESSION_NOT_FOUND' | 'SESSION_AMBIGUOUS' | 'SESSION_NOT_RUNNING'>; message: string };
 
 /**
  * Session resolution: explicit --session > state.active_session_id > the unique
@@ -170,7 +187,7 @@ type ResolveResult =
 function resolveSession(projectRoot: string, store: SessionStore, sessionId?: string): ResolveResult {
   if (sessionId) {
     if (!store.sessionExists(sessionId)) {
-      return { kind: 'error', message: `[run next] session not found: ${sessionId}` };
+      return { kind: 'error', code: 'SESSION_NOT_FOUND', message: `[run next] session not found: ${sessionId}` };
     }
     return { kind: 'ok', sessionId, session: store.readBundle(sessionId).session };
   }
@@ -192,11 +209,12 @@ function resolveSession(projectRoot: string, store: SessionStore, sessionId?: st
     return { kind: 'ok', sessionId: withPending[0].sessionId, session: withPending[0].session };
   }
   if (withPending.length === 0) {
-    return { kind: 'error', message: '[run next] no running session with a pending chain step; pass --session <id>' };
+    return { kind: 'error', code: 'SESSION_NOT_RUNNING', message: '[run next] no running session with a pending chain step; pass --session <id>' };
   }
   const list = withPending.map(c => `  - ${c.sessionId} (${c.session.intent})`).join('\n');
   return {
     kind: 'error',
+    code: 'SESSION_AMBIGUOUS',
     message: `[run next] ambiguous: ${withPending.length} running sessions have pending steps. Pass --session <id>:\n${list}`,
   };
 }
@@ -498,7 +516,7 @@ export function runNextStep(projectRoot: string, opts: NextCmdOptions = {}): Nex
   const store = new SessionStore(projectRoot);
   const resolved = resolveSession(projectRoot, store, opts.sessionId);
   if (resolved.kind === 'error') {
-    return { exitCode: 1, result: null, message: resolved.message };
+    return { exitCode: 1, reasonCode: resolved.code, result: null, message: resolved.message };
   }
 
   const { sessionId } = resolved;
@@ -513,7 +531,7 @@ export function runNextStep(projectRoot: string, opts: NextCmdOptions = {}): Nex
     leaseId: opts.leaseId,
   });
   if (conflict) {
-    return { exitCode: 1, result: null, message: `[run next] ${conflict}` };
+    return { exitCode: 1, reasonCode: 'LEASE_CONFLICT', result: null, message: `[run next] ${conflict}` };
   }
 
   if (session.status !== 'running') {
@@ -523,6 +541,7 @@ export function runNextStep(projectRoot: string, opts: NextCmdOptions = {}): Nex
     const detail = escalated.length > 0 ? `; escalated decisions: ${escalated.join(', ')}` : '';
     return {
       exitCode: 1,
+      reasonCode: 'RESUME_REQUIRED',
       result: null,
       message: `[run next] session is "${session.status}"; dispatch refused${detail}. `
         + 'Resolve the blocker/escalation and perform an authorized resume transition before retrying run next.',
@@ -541,6 +560,7 @@ export function runNextStep(projectRoot: string, opts: NextCmdOptions = {}): Nex
   if (runningIdx !== null) {
     return {
       exitCode: 3,
+      reasonCode: 'RUNNING_STEP',
       result: null,
       message: renderRunningCard(store, session, sessionId, runningIdx),
     };
@@ -552,7 +572,12 @@ export function runNextStep(projectRoot: string, opts: NextCmdOptions = {}): Nex
   if (opts.pick) {
     const picked = resolvePick(session, opts.pick);
     if (picked.kind === 'error') {
-      return { exitCode: 1, result: null, message: picked.message };
+      const reasonCode = picked.message.includes('not found')
+        ? 'PICK_NOT_FOUND'
+        : picked.message.includes('decision node')
+          ? 'PICK_DECISION_NODE'
+          : 'PICK_NOT_PENDING';
+      return { exitCode: 1, reasonCode, result: null, message: picked.message };
     }
     nextIdx = picked.index;
   } else {
@@ -560,11 +585,11 @@ export function runNextStep(projectRoot: string, opts: NextCmdOptions = {}): Nex
     if (head === null) {
       const decisionIdx = nextPendingDecisionIndex(session);
       if (decisionIdx !== null) {
-        return { exitCode: 2, result: null, message: renderDecisionCard(session, decisionIdx) };
+        return { exitCode: 2, reasonCode: 'DECISION_REQUIRED', result: null, message: renderDecisionCard(session, decisionIdx) };
       }
       // Chain complete: surface the prior handoff's next[] as `run create`
       // suggestions when present (covers empty-chain sessions too).
-      return { exitCode: 2, result: null, message: renderAllCompleteMessage(store, session, sessionId) };
+      return { exitCode: 2, reasonCode: 'CHAIN_COMPLETE', result: null, message: renderAllCompleteMessage(store, session, sessionId) };
     }
     nextIdx = head;
   }
@@ -574,7 +599,7 @@ export function runNextStep(projectRoot: string, opts: NextCmdOptions = {}): Nex
   // `run decide` before any later step may start.
   const gateIdx = nextPendingDecisionIndex(session);
   if (gateIdx !== null && gateIdx < nextIdx) {
-    return { exitCode: 2, result: null, message: renderDecisionCard(session, gateIdx) };
+    return { exitCode: 2, reasonCode: 'DECISION_REQUIRED', result: null, message: renderDecisionCard(session, gateIdx) };
   }
 
   const chainStep = session.orchestration.chain[nextIdx];
@@ -582,6 +607,7 @@ export function runNextStep(projectRoot: string, opts: NextCmdOptions = {}): Nex
   if (!content.prepare && !content.workflow) {
     return {
       exitCode: 1,
+      reasonCode: 'COMMAND_CONTENT_MISSING',
       result: null,
       message: `[run next] step ${nextIdx} command "${chainStep.command}" has no prepare or workflow content`,
     };
@@ -616,10 +642,11 @@ export function runNextStep(projectRoot: string, opts: NextCmdOptions = {}): Nex
     const current = store.readBundle(sessionId).session;
     const concurrentRunning = activeStepIndex(current);
     if (concurrentRunning !== null) {
-      return { exitCode: 3, result: null, message: renderRunningCard(store, current, sessionId, concurrentRunning) };
+      return { exitCode: 3, reasonCode: 'RUNNING_STEP', result: null, message: renderRunningCard(store, current, sessionId, concurrentRunning) };
     }
     return {
       exitCode: 1,
+      reasonCode: 'INTERNAL_ERROR',
       result: null,
       message: `[run next] failed to create run: ${err instanceof Error ? err.message : String(err)}`,
     };
@@ -657,6 +684,7 @@ export function runNextStep(projectRoot: string, opts: NextCmdOptions = {}): Nex
 
   return {
     exitCode: 0,
+    reasonCode: 'DISPATCHED',
     result,
     message: opts.json ? JSON.stringify(result, null, 2) : renderBirthPacket(result),
   };

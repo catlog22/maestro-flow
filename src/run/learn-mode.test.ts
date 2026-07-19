@@ -24,8 +24,8 @@ function fixtureProject(): string {
   const projectWorkflowDir = join(paths.project(root).workflow, 'workflows');
   mkdirSync(projectWorkflowDir, { recursive: true });
   writeFileSync(
-    join(root, '.claude', 'commands', 'learn.md'),
-    readFileSync(join(repoRoot, '.claude', 'commands', 'learn.md')),
+    join(root, '.claude', 'commands', 'maestro-learn.md'),
+    readFileSync(join(repoRoot, '.claude', 'commands', 'maestro-learn.md')),
   );
   writeFileSync(
     join(projectWorkflowDir, 'learn.md'),
@@ -38,22 +38,24 @@ afterEach(() => {
   while (fixtures.length > 0) rmSync(fixtures.pop()!, { recursive: true, force: true });
 });
 
-describe('learn non-Run compatibility contract', () => {
+describe('maestro-learn non-Run compatibility contract', () => {
   it('keeps the four direct subcommands while declaring no Run contract', () => {
-    const text = readFileSync(join(repoRoot, '.claude', 'commands', 'learn.md'), 'utf8');
+    const text = readFileSync(join(repoRoot, '.claude', 'commands', 'maestro-learn.md'), 'utf8');
     const data = frontmatter(text);
+    expect(data.name).toBe('maestro-learn');
     expect(data['session-mode']).toBe('none');
     expect(data).not.toHaveProperty('contract');
     for (const subcommand of ['follow', 'investigate', 'decompose', 'consult']) {
       expect(text).toContain(`\`${subcommand}\``);
     }
+    expect(existsSync(join(repoRoot, '.claude', 'commands', 'learn.md'))).toBe(false);
   });
 
   it('rejects Run creation before writing any Session state', () => {
     const projectRoot = fixtureProject();
-    const source = resolveCommandSource(projectRoot, 'learn');
+    const source = resolveCommandSource(projectRoot, 'maestro-learn');
     expect(source.sessionMode).toBe('none');
-    expect(() => createRun({ projectRoot, command: 'learn', intent: 'read code' }))
+    expect(() => createRun({ projectRoot, command: 'maestro-learn', intent: 'read code' }))
       .toThrow(/session-mode: none and cannot create a Run/);
     expect(existsSync(join(projectRoot, '.workflow', 'sessions'))).toBe(false);
   });
@@ -71,7 +73,7 @@ describe('learn non-Run compatibility contract', () => {
     expect(resolved.workflow?.raw).not.toMatch(/\/manage-learn|## Stage \d|^contract:/m);
   });
 
-  it('keeps generated learn surfaces non-Run and free of managed lifecycle metadata', () => {
+  it('keeps generated maestro-learn surfaces non-Run and free of managed lifecycle metadata', () => {
     const generatedRoot = mkdtempSync(join(tmpdir(), 'learn-standard-'));
     fixtures.push(generatedRoot);
     const standardSkills = join(generatedRoot, 'skills');
@@ -79,17 +81,21 @@ describe('learn non-Run compatibility contract', () => {
     buildAgentsStandardSkills(join(repoRoot, '.claude'), standardSkills);
     buildAgySkills(join(repoRoot, '.claude'), agySkills);
     for (const path of [
-      join(agySkills, 'learn', 'SKILL.md'),
-      join(standardSkills, 'learn', 'SKILL.md'),
-      join(repoRoot, '.codex', 'skills', 'learn', 'SKILL.md'),
+      join(agySkills, 'maestro-learn', 'SKILL.md'),
+      join(standardSkills, 'maestro-learn', 'SKILL.md'),
+      join(repoRoot, '.codex', 'skills', 'maestro-learn', 'SKILL.md'),
     ]) {
       const text = readFileSync(path, 'utf8');
       const data = frontmatter(text);
+      expect(data.name).toBe('maestro-learn');
       expect(data['session-mode']).toBe('none');
       expect(data).not.toHaveProperty('contract');
       expect(text).not.toContain('@~/.maestro/workflows/run-mode.md');
       expect(text).not.toContain('@~/.maestro/workflows/run-mode-lite.md');
       expect(text).not.toContain('@~/.maestro/workflows/codex-run-mode.md');
     }
+    expect(existsSync(join(agySkills, 'learn'))).toBe(false);
+    expect(existsSync(join(standardSkills, 'learn'))).toBe(false);
+    expect(existsSync(join(repoRoot, '.codex', 'skills', 'learn'))).toBe(false);
   });
 });

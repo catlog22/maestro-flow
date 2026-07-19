@@ -43,7 +43,7 @@ describe('durable Run context', () => {
     const persisted = store.readRun('s', created.run_id);
     const brief = briefRun(projectRoot, created.run_id, 's');
 
-    expect(persisted.schema_version).toBe('command-run/1.1');
+    expect(persisted.schema_version).toBe('command-run/1.2');
     expect(persisted.resolved_platform).toBe('codex');
     expect(created.resolved_platform).toBe('codex');
     expect(brief.resolved_platform).toBe('codex');
@@ -64,7 +64,19 @@ describe('durable Run context', () => {
     const created = createRun({ projectRoot: original, command: 'context-demo', sessionId: 'legacy', platform: 'codex' });
     const runPath = join(store.runDir('legacy', created.run_id), 'run.json');
     const raw = JSON.parse(readFileSync(runPath, 'utf8')) as Record<string, unknown>;
-    for (const key of ['chain_step_id', 'resolved_platform', 'goal_binding', 'checkpoint_expectation', 'checkpoint', 'retry_fence']) {
+    for (const key of [
+      'chain_step_id',
+      'resolved_platform',
+      'goal_binding',
+      'checkpoint_expectation',
+      'checkpoint',
+      'retry_fence',
+      'contract_snapshot',
+      'guidance_snapshot',
+      'creation_decision',
+      'creation_provenance',
+      'transition',
+    ]) {
       delete raw[key];
     }
     raw.schema_version = 'command-run/1.0';
@@ -78,5 +90,34 @@ describe('durable Run context', () => {
     expect(context.chain_step_id).toBeNull();
     expect(context.run_dir).toBe(`.workflow/sessions/legacy/runs/${created.run_id}`);
     expect(context.run_dir).not.toContain(original);
+  });
+
+  it('normalizes command-run/1.1 while preserving its persisted platform after relocation', () => {
+    const original = root();
+    command(original);
+    const store = new SessionStore(original);
+    store.createSession('legacy-v11', 'legacy v1.1 context');
+    store.update('legacy-v11', (draft) => {
+      draft.session.orchestration.executor = { platform: 'agy', cli_tool: 'agy' };
+      return null;
+    });
+    const created = createRun({ projectRoot: original, command: 'context-demo', sessionId: 'legacy-v11', platform: 'codex' });
+    const runPath = join(store.runDir('legacy-v11', created.run_id), 'run.json');
+    const raw = JSON.parse(readFileSync(runPath, 'utf8')) as Record<string, unknown>;
+    for (const key of ['contract_snapshot', 'guidance_snapshot', 'creation_decision', 'creation_provenance', 'transition']) {
+      delete raw[key];
+    }
+    raw.schema_version = 'command-run/1.1';
+    writeFileSync(runPath, `${JSON.stringify(raw, null, 2)}\n`);
+
+    const relocated = root();
+    cpSync(original, relocated, { recursive: true });
+    const context = resolveRunContext(relocated, created.run_id, 'legacy-v11');
+    const normalized = new SessionStore(relocated).readRun('legacy-v11', created.run_id);
+
+    expect(normalized.schema_version).toBe('command-run/1.2');
+    expect(context.resolved_platform).toBe('codex');
+    expect(normalized.creation_provenance.provenance).toBe('verified-v1');
+    expect(context.run_dir).toBe(`.workflow/sessions/legacy-v11/runs/${created.run_id}`);
   });
 });

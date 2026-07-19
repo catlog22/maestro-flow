@@ -33,6 +33,7 @@ import type {
   PersistedWikiIndex,
   PersistedEntry,
 } from './wiki-types.js';
+import { recallSnapshotSchema, type RecallSnapshot } from './wiki-types.js';
 
 const SEARCH_CACHE_VERSION = 2;
 
@@ -66,7 +67,7 @@ function promotedRefToWikiId(ref: string): string | null {
 export interface LinkedWorkspaceConfig {
   name: string;
   workflowRoot: string;
-  shareTypes: Array<'spec' | 'knowhow' | 'domain' | 'codebase'>;
+  shareTypes: Array<'spec' | 'knowhow' | 'domain' | 'codebase' | 'session'>;
 }
 
 export interface WikiIndexerConfig {
@@ -563,6 +564,41 @@ export class WikiIndexer {
 
   async searchWithScores(query: string, limit = 50): Promise<Array<{ entry: WikiEntry; score: number }>> {
     return (await this.searchWithMeta(query, limit)).results;
+  }
+
+  async recallSnapshot(query: string, asOf: string, limit = 50): Promise<RecallSnapshot> {
+    const normalizedQuery = query.trim();
+    if (!normalizedQuery) throw new Error('Recall snapshot query must not be empty.');
+    const parsedAsOf = new Date(asOf);
+    if (!Number.isFinite(parsedAsOf.getTime()) || parsedAsOf.toISOString() !== asOf) {
+      throw new Error('Recall snapshot as_of must be a canonical ISO timestamp.');
+    }
+    const index = await this.get();
+    const bm25 = await this.getSearchIndex();
+    const ranked = searchBM25Planned(bm25, normalizedQuery, Math.max(0, limit));
+    const candidates = ranked
+      .map(result => ({ result, entry: index.byId[result.docId] }))
+      .filter((item): item is { result: { docId: string; score: number }; entry: WikiEntry } => Boolean(item.entry))
+      .map(({ result, entry }) => ({
+        entry_id: entry.id,
+        score_bp: Math.max(0, Math.round(result.score * 10_000)),
+        raw_bm25: result.score,
+        source_workspace: entry.source.workspace ?? null,
+        workspace_fence: entry.source.workspace ? `linked:${entry.source.workspace}` : 'local',
+        fork_authorized: false as const,
+        resume_authorized: false as const,
+      }))
+      .sort((left, right) => right.score_bp - left.score_bp || left.entry_id.localeCompare(right.entry_id))
+      .slice(0, Math.max(0, limit));
+    return recallSnapshotSchema.parse({
+      schema_version: 'wiki-recall-snapshot/1.0',
+      query: normalizedQuery,
+      as_of: asOf,
+      automatic: false,
+      mutation_authorized: false,
+      scoring: { provider: 'bm25', embedding_weight_bp: 0, tie_break: 'entry_id_asc' },
+      candidates,
+    });
   }
 
   async searchWithMeta(query: string, limit = 50, options?: { skipEmbedding?: boolean }): Promise<{
@@ -1276,6 +1312,27 @@ export class WikiIndexer {
       if (kgEntries.length > 0) {
         prefixLinkedEntries(kgEntries, idPrefix, lw.name);
         out.push(...kgEntries);
+      }
+    }
+
+    if (lw.shareTypes.has('session')) {
+      const sessionsRoot = join(lw.workflowRoot, 'sessions');
+      for (const sessionName of await safeReaddir(sessionsRoot)) {
+        const sessionPath = join(sessionsRoot, sessionName, 'session.json');
+        if (!existsSync(sessionPath)) continue;
+        const entries = await loadRunModeSessionEntries(sessionPath, `sessions/${sessionName}/session.json`);
+        prefixLinkedEntries(entries, idPrefix, lw.name);
+        for (const entry of entries) {
+          entry.ext = {
+            ...entry.ext,
+            workspaceFence: `linked:${lw.name}`,
+            sharedVia: 'explicit-session-share',
+            forkAuthorized: false,
+            resumeAuthorized: false,
+          };
+          entry.scope = 'linked';
+        }
+        out.push(...entries);
       }
     }
 

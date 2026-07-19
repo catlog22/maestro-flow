@@ -1,7 +1,18 @@
 import { z } from 'zod';
+import {
+  contractSnapshotSchema,
+  creationDecisionSchema,
+  creationProvenanceSchema,
+  guidanceSnapshotSchema,
+  intentIdentitySchema,
+  persistedTransitionRecordSchema,
+  ralphAuthoritySchema,
+  sessionProvenanceSchema,
+  transitionPointerSchema,
+} from './protocol-schemas.js';
 
 const nonEmptyString = z.string().min(1);
-const artifactRoleSchema = z.enum(['primary', 'evidence', 'report', 'attachment']);
+const artifactRoleSchema = z.enum(['primary', 'evidence', 'report', 'attachment', 'checkpoint']);
 
 export const boundaryContractSchema = z.object({
   in_scope: z.array(z.string()),
@@ -136,8 +147,16 @@ const decisionPointSchema = z.object({
   evidence_ref: z.string().nullable(),
 }).strict();
 
-export const sessionStateSchema = z.object({
-  // Accept both generations; the store rewrites to session/1.1. session/1.0 files
+const legacySessionRequestSchema = z.object({
+  request_id: nonEmptyString,
+  type: nonEmptyString,
+  status: nonEmptyString,
+  payload: z.unknown(),
+  claimed_by_run_id: z.string().nullable(),
+}).strict();
+
+export const sessionStateV1ReadSchema = z.object({
+  // Accept legacy generations; the store rewrites mutations to session/1.2. session/1.0 files
   // are read losslessly — new orchestration fields carry optional/nullable defaults.
   schema_version: z.enum(['session/1.0', 'session/1.1']),
   session_id: nonEmptyString,
@@ -161,13 +180,7 @@ export const sessionStateSchema = z.object({
     lease: leaseSchema.nullable().optional().default(null),
     executor: executorSchema.nullable().optional().default(null),
   }).strict(),
-  requests: z.array(z.object({
-    request_id: nonEmptyString,
-    type: nonEmptyString,
-    status: nonEmptyString,
-    payload: z.unknown(),
-    claimed_by_run_id: z.string().nullable(),
-  }).strict()),
+  requests: z.array(legacySessionRequestSchema),
   lifecycle: z.object({
     sealed_at: z.string().nullable(),
     seal_summary: z.string().nullable(),
@@ -181,6 +194,39 @@ export const sessionStateSchema = z.object({
     evidence: z.literal('evidence.json'),
   }).strict(),
 }).strict();
+
+export const sessionStateV12Schema = sessionStateV1ReadSchema
+  .omit({ schema_version: true, requests: true })
+  .extend({
+    schema_version: z.literal('session/1.2'),
+    intent_identity: intentIdentitySchema.nullable(),
+    provenance: sessionProvenanceSchema,
+    requests: z.array(z.union([persistedTransitionRecordSchema, legacySessionRequestSchema])),
+    ralph_authority: ralphAuthoritySchema.nullable(),
+  })
+  .strict();
+
+export type SessionStateInput = z.infer<typeof sessionStateV1ReadSchema> | z.infer<typeof sessionStateV12Schema>;
+
+export function normalizeSessionState(session: SessionStateInput): z.infer<typeof sessionStateV12Schema> {
+  if (session.schema_version === 'session/1.2') return session;
+  return sessionStateV12Schema.parse({
+    ...session,
+    schema_version: 'session/1.2',
+    intent_identity: null,
+    provenance: {
+      source: 'legacy-inferred',
+      forked_from: null,
+      imported_from: [],
+      created_by: 'legacy',
+    },
+    ralph_authority: null,
+  });
+}
+
+export const sessionStateReadSchema = z.union([sessionStateV12Schema, sessionStateV1ReadSchema]);
+/** Backward-compatible read schema. New writes must use sessionStateV12Schema. */
+export const sessionStateSchema = sessionStateReadSchema.transform(session => normalizeSessionState(session));
 
 const gateCheckSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('session'), field: nonEmptyString, equals: z.unknown() }).strict(),
@@ -378,16 +424,31 @@ export const commandRunV11Schema = commandRunBaseSchema.extend({
   retry_fence: retryFenceSchema.nullable(),
 }).strict();
 
-export const commandRunReadSchema = z.union([commandRunV11Schema, commandRunV1Schema]);
+export const commandRunV12Schema = commandRunBaseSchema.extend({
+  schema_version: z.literal('command-run/1.2'),
+  chain_step_id: z.string().nullable(),
+  resolved_platform: targetPlatformSchema,
+  goal_binding: goalBindingSchema.nullable(),
+  checkpoint_expectation: dispatchExpectationSchema.nullable(),
+  checkpoint: runCheckpointSchema.nullable(),
+  retry_fence: retryFenceSchema.nullable(),
+  contract_snapshot: contractSnapshotSchema.nullable(),
+  guidance_snapshot: guidanceSnapshotSchema.nullable(),
+  creation_decision: creationDecisionSchema.nullable(),
+  creation_provenance: creationProvenanceSchema,
+  transition: transitionPointerSchema.nullable(),
+}).strict();
+
+export const commandRunReadSchema = z.union([commandRunV12Schema, commandRunV11Schema, commandRunV1Schema]);
 export type CommandRunInput = z.infer<typeof commandRunReadSchema>;
-export type CommandRun = z.infer<typeof commandRunV11Schema>;
+export type CommandRun = z.infer<typeof commandRunV12Schema>;
 
 export function normalizeCommandRun(
   run: CommandRunInput,
   fallbackPlatform: z.infer<typeof targetPlatformSchema> = 'claude',
 ): CommandRun {
-  if (run.schema_version === 'command-run/1.1') return run;
-  return commandRunV11Schema.parse({
+  if (run.schema_version === 'command-run/1.2') return run;
+  const v11 = run.schema_version === 'command-run/1.1' ? run : commandRunV11Schema.parse({
     ...run,
     schema_version: 'command-run/1.1',
     chain_step_id: null,
@@ -397,9 +458,25 @@ export function normalizeCommandRun(
     checkpoint: null,
     retry_fence: null,
   });
+  return commandRunV12Schema.parse({
+    ...v11,
+    schema_version: 'command-run/1.2',
+    contract_snapshot: null,
+    guidance_snapshot: null,
+    creation_decision: null,
+    creation_provenance: {
+      schema_version: 'creation-provenance/1.0',
+      provenance: run.schema_version === 'command-run/1.1' ? 'verified-v1' : 'legacy-inferred',
+      source_workspace_id: null,
+      source_session_id: null,
+      source_run_id: null,
+      imported_artifact_hashes: [],
+    },
+    transition: null,
+  });
 }
 
-/** Backward-compatible read schema. New writes must use commandRunV11Schema. */
+/** Backward-compatible read schema. New writes must use commandRunV12Schema. */
 export const commandRunSchema = commandRunReadSchema.transform(run => normalizeCommandRun(run));
 
 export const artifactMetaSchema = z.object({
@@ -431,7 +508,7 @@ export const reportFrontmatterSchema = z.object({
   details: z.record(z.string(), z.unknown()).default({}),
 }).passthrough();
 
-export type SessionState = z.infer<typeof sessionStateSchema>;
+export type SessionState = z.infer<typeof sessionStateV12Schema>;
 export type OrchestrationStep = z.infer<typeof orchestrationStepSchema>;
 export type PendingRetryToken = z.infer<typeof pendingRetryTokenSchema>;
 export type OrchestrationPosition = z.infer<typeof positionSchema>;

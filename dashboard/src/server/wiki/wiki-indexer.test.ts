@@ -959,6 +959,84 @@ describe('virtual adapters: run-mode sessions', () => {
     expect(index.entries.filter(e => e.source.path.startsWith('sessions/'))).toEqual([]);
   });
 
+  it('fails closed for unknown and Wave 2 placeholder persistence versions', async () => {
+    for (const schemaVersion of ['session/9.9', 'session/1.2']) {
+      await write(`sessions/${schemaVersion.replace('/', '-')}/session.json`, JSON.stringify({
+        schema_version: schemaVersion,
+        session_id: schemaVersion,
+        intent: 'Unsupported placeholder',
+        status: 'sealed',
+      }));
+    }
+    const index = await new WikiIndexer({ workflowRoot: tmpRoot }).get();
+    expect(index.entries.filter(entry => entry.source.path.includes('session-1.2'))).toEqual([]);
+    expect(index.entries.filter(entry => entry.source.path.includes('session-9.9'))).toEqual([]);
+  });
+
+  it('keeps command-run/1.2 as a fail-closed converter placeholder until Wave 2 supplies its shape', async () => {
+    const sessionId = '20260718-run-placeholder';
+    const runId = '20260718-001-placeholder';
+    await write(`sessions/${sessionId}/session.json`, JSON.stringify({
+      schema_version: 'session/1.1', session_id: sessionId, intent: 'Run placeholder', status: 'sealed',
+      lifecycle: { sealed_at: '2026-07-18T10:00:00.000Z', seal_summary: 'No speculative conversion', promoted: [] },
+    }));
+    await write(`sessions/${sessionId}/artifacts.json`, JSON.stringify({
+      schema_version: 'artifacts/1.1', artifacts: {}, aliases: {},
+    }));
+    await write(`sessions/${sessionId}/runs/${runId}/run.json`, JSON.stringify({
+      schema_version: 'command-run/1.2', run_id: runId, command: { name: 'review' }, status: 'sealed',
+    }));
+
+    const index = await new WikiIndexer({ workflowRoot: tmpRoot }).get();
+    expect(index.byId[`session-${sessionId}`]?.ext.runCount).toBe(0);
+    expect(index.entries.some(entry => entry.sourceRef === runId)).toBe(false);
+  });
+
+  it('exposes linked Session history only through explicit session sharing and fences fork/resume', async () => {
+    const linkedRoot = await mkdtemp(join(tmpdir(), 'wiki-linked-session-'));
+    try {
+      const linkedSessionId = '20260718-linked';
+      const linkedRunId = '20260718-001-review';
+      const linkedWrite = async (rel: string, body: string): Promise<void> => {
+        const abs = join(linkedRoot, rel);
+        await mkdir(join(abs, '..'), { recursive: true });
+        await writeFile(abs, body, 'utf-8');
+      };
+      await linkedWrite(`sessions/${linkedSessionId}/session.json`, JSON.stringify({
+        schema_version: 'session/1.1', session_id: linkedSessionId, intent: 'Linked session', status: 'sealed',
+        lifecycle: { sealed_at: '2026-07-18T10:00:00.000Z', seal_summary: 'Linked summary', promoted: [] },
+      }));
+      await linkedWrite(`sessions/${linkedSessionId}/artifacts.json`, JSON.stringify({
+        schema_version: 'artifacts/1.1', artifacts: {}, aliases: {},
+      }));
+      await linkedWrite(`sessions/${linkedSessionId}/runs/${linkedRunId}/run.json`, JSON.stringify({
+        schema_version: 'run/1.1', run_id: linkedRunId, command: 'review', status: 'sealed',
+        gates: [], handoff: { summary: 'Linked run' }, started_at: '2026-07-18T09:00:00.000Z',
+        ended_at: '2026-07-18T10:00:00.000Z',
+      }));
+
+      const hidden = await new WikiIndexer({
+        workflowRoot: tmpRoot,
+        linkedWorkspaces: [{ name: 'peer', workflowRoot: linkedRoot, shareTypes: ['knowhow'] }],
+      }).get();
+      expect(hidden.entries.some(entry => entry.source.workspace === 'peer' && entry.ext.virtualKind === 'session')).toBe(false);
+
+      const shared = await new WikiIndexer({
+        workflowRoot: tmpRoot,
+        linkedWorkspaces: [{ name: 'peer', workflowRoot: linkedRoot, shareTypes: ['session'] }],
+      }).get();
+      const linkedSession = shared.entries.find(entry => entry.ext.virtualKind === 'session');
+      expect(linkedSession?.source.workspace).toBe('peer');
+      expect(linkedSession?.scope).toBe('linked');
+      expect(linkedSession?.ext).toMatchObject({
+        workspaceFence: 'linked:peer', sharedVia: 'explicit-session-share',
+        forkAuthorized: false, resumeAuthorized: false,
+      });
+    } finally {
+      await rm(linkedRoot, { recursive: true, force: true });
+    }
+  });
+
   it('preserves archived lifecycle status', async () => {
     await writeRunModeFixture('archived');
     const index = await new WikiIndexer({ workflowRoot: tmpRoot }).get();

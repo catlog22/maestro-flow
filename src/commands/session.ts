@@ -13,6 +13,7 @@ import {
   updateSessionMeta,
   type ChainDefinition,
 } from '../run/chain-admin.js';
+import { resolveSession, resumeSession } from '../run/session-transition.js';
 
 function print(value: unknown): void {
   console.log(JSON.stringify(value, null, 2));
@@ -76,10 +77,57 @@ function chainSummary(steps: ChainDefinition['steps']): { total: number; steps: 
   };
 }
 
+function collect(value: string, prior: string[]): string[] { return prior.concat(value); }
+
+function transitionOptions(opts: any, target?: any): any {
+  return {
+    requestId: opts.requestId, actor: opts.actor, reason: opts.reason, evidence: opts.evidence,
+    expectedIdentityRevision: opts.expectedIdentityRevision,
+    expectedActivityRevision: opts.expectedActivityRevision,
+    leaseClaim: { executionOwner: opts.executionOwner, ownerEpoch: opts.ownerEpoch, leaseId: opts.leaseId },
+    ...(target ? { target } : {}),
+  };
+}
+
 export function registerSessionCommand(program: Command): void {
   const session = program
     .command('session')
     .description('Session orchestration: create predefined-chain sessions, edit chains, migrate legacy state');
+
+  const addTransitionOptions = (command: Command): Command => command
+    .requiredOption('--session <id>', 'exact Session ID')
+    .requiredOption('--request-id <id>', 'idempotent request/transition ID')
+    .requiredOption('--actor <name>', 'authorized actor')
+    .requiredOption('--reason <text>', 'audit reason')
+    .requiredOption('--evidence <ref>', 'evidence reference (repeatable)', collect, [] as string[])
+    .requiredOption('--expected-identity-revision <n>', 'expected identity revision', Number.parseInt)
+    .requiredOption('--expected-activity-revision <n>', 'expected activity revision', Number.parseInt)
+    .option('--execution-owner <owner>', 'lease owner')
+    .option('--owner-epoch <n>', 'lease epoch', Number.parseInt)
+    .option('--lease-id <id>', 'lease ID')
+    .option('--workflow-root <path>', 'project root containing .workflow', process.cwd());
+
+  addTransitionOptions(session.command('resolve').description('Resolve one escalated decision or failed step; Session remains paused'))
+    .option('--decision <id>', 'escalated decision point ID')
+    .option('--step <id>', 'failed chain step ID')
+    .requiredOption('--disposition <value>', 'decision: proceed|retry; step: retry|skip')
+    .action((opts: any) => {
+      try {
+        if (Boolean(opts.decision) === Boolean(opts.step)) throw new Error('exactly one of --decision or --step is required');
+        const target = opts.decision
+          ? { kind: 'decision' as const, id: opts.decision, disposition: opts.disposition }
+          : { kind: 'step' as const, id: opts.step, disposition: opts.disposition };
+        if (target.kind === 'decision' && !['proceed', 'retry'].includes(target.disposition)) throw new Error('decision disposition must be proceed|retry');
+        if (target.kind === 'step' && !['retry', 'skip'].includes(target.disposition)) throw new Error('step disposition must be retry|skip');
+        print(resolveSession(resolve(opts.workflowRoot), opts.session, transitionOptions(opts, target)));
+      } catch (error) { reportError(error); }
+    });
+
+  addTransitionOptions(session.command('resume').description('Resume an exact paused Session after every target is resolved'))
+    .action((opts: any) => {
+      try { print(resumeSession(resolve(opts.workflowRoot), opts.session, transitionOptions(opts))); }
+      catch (error) { reportError(error); }
+    });
 
   session
     .command('migrate')

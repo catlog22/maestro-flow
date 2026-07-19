@@ -9,7 +9,7 @@ process.emit = function (event: string, ...args: unknown[]) {
   return _origEmit.call(process, event, ...args);
 };
 
-import { Command } from 'commander';
+import { Command, CommanderError } from 'commander';
 import { getPackageVersion } from './utils/get-version.js';
 
 const program = new Command();
@@ -82,6 +82,12 @@ const commandLoaders: Record<string, () => Promise<(p: Command) => void>> = {
 // Determine which command is being invoked from argv (if any)
 const argv = process.argv.slice(2);
 const requestedCommand = argv.find(a => !a.startsWith('-'));
+const runMachineMode = requestedCommand === 'run' && argv.includes('--json');
+
+if (runMachineMode) {
+  program.exitOverride();
+  program.configureOutput({ writeOut: () => undefined, writeErr: () => undefined });
+}
 
 if (requestedCommand && requestedCommand in commandLoaders) {
   // Load only the requested command module
@@ -116,4 +122,20 @@ if (requestedCommand && requestedCommand in commandLoaders) {
   }
 }
 
-await program.parseAsync();
+try {
+  await program.parseAsync();
+} catch (error) {
+  if (!runMachineMode || !(error instanceof CommanderError)) throw error;
+  const operationToken = argv[1];
+  const operation = ['create', 'next', 'complete', 'brief', 'recall', 'fork', 'import'].includes(operationToken)
+    ? operationToken as 'create' | 'next' | 'complete' | 'brief' | 'recall' | 'fork' | 'import'
+    : 'next';
+  const { createRunResponseError, emitRunResponse } = await import('./run/response.js');
+  emitRunResponse(createRunResponseError({
+    operation,
+    exit_code: 2,
+    code: 'COMMANDER_USAGE',
+    message: error.message,
+    details: { commander_code: error.code, argv },
+  }));
+}

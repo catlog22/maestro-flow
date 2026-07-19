@@ -166,6 +166,7 @@ describe('run next — session resolution', () => {
     const projectRoot = root();
     const outcome = runNextStep(projectRoot);
     expect(outcome.exitCode).toBe(1);
+    expect(outcome.reasonCode).toBe('SESSION_NOT_RUNNING');
     expect(outcome.message).toContain('no running session with a pending chain step');
   });
 
@@ -224,6 +225,7 @@ describe('run next — step navigation', () => {
     ], { active: true });
     const outcome = runNextStep(projectRoot);
     expect(outcome.exitCode).toBe(2);
+    expect(outcome.reasonCode).toBe('DECISION_REQUIRED');
     expect(outcome.message).toContain('Decision node');
   });
 
@@ -274,6 +276,7 @@ describe('run next — step navigation', () => {
     seedSession(projectRoot, 's', 'advance', [{ command: 'demo-plan' }], { active: true });
     const outcome = runNextStep(projectRoot);
     expect(outcome.exitCode).toBe(0);
+    expect(outcome.reasonCode).toBe('DISPATCHED');
     expect(outcome.result?.run_id).toMatch(/-001-demo-plan$/);
     expect(outcome.result?.step).toMatchObject({ index: 0, total: 1, command: 'demo-plan' });
     const chain = readChain(projectRoot, 's');

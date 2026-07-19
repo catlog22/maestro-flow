@@ -11,6 +11,7 @@ import {
 import { basename, extname, join, relative, resolve as resolvePath, sep } from 'node:path';
 import { scanOutputs, type ArtifactScanResult, type DiscoveredArtifact } from './artifacts.js';
 import {
+  hashCommandContract,
   resolveCommandSource,
   resolveStepContent,
   type CommandContract,
@@ -33,6 +34,18 @@ import {
   type ReportFrontmatter,
   type SessionState,
 } from './schemas.js';
+import {
+  commandRebindAuditSchema,
+  executionContractSchema,
+  guidanceSnapshotSchema,
+  type CreationProvenance,
+  type ExecutionContract,
+  type GuidanceSnapshot,
+  type IntentIdentity,
+  type SessionProvenance,
+  type TransitionPointer,
+} from './protocol-schemas.js';
+import { createIntentIdentity, sameIntentIdentity } from './intent-identity.js';
 import {
   buildIntentSection,
   buildBoundaryContractSection,
@@ -108,6 +121,19 @@ export interface CreateRunOptions {
   expectedIdentityRevision?: number;
   /** Lease claim validated and persisted with the chain binding. */
   leaseClaim?: LeaseClaim;
+  /** Explicit exact identity supplied by recall/fork/import consumers. */
+  intentIdentity?: IntentIdentity;
+  /** Session lineage for a newly allocated Session. */
+  sessionProvenance?: SessionProvenance;
+  /** Audited creation authority supplied by confirmation/transition consumers. */
+  creation?: {
+    requestId: string | null;
+    mode: 'explicit-create' | 'chain-next' | 'retry' | 'resume' | 'fork' | 'import';
+    authority: 'explicit-command' | 'chain-transition' | 'confirmation-token' | 'legacy-inferred';
+    confirmationTokenHash: string | null;
+    provenance: CreationProvenance;
+    transition?: TransitionPointer | null;
+  };
 }
 
 export interface CreateRunResult {
@@ -125,9 +151,13 @@ export interface CreateRunResult {
 export interface RebindRunResult {
   session_id: string;
   run_id: string;
+  rebind_kind: 'legacy_contract_backfill' | 'compatible_contract_rebind' | 'prompt_only_rebind';
   old_content_hash: string;
   content_hash: string;
+  old_contract_hash: string | null;
   contract_hash: string;
+  old_snapshot_hash: string | null;
+  snapshot_hash: string;
   audit_path: string;
 }
 
@@ -238,58 +268,13 @@ export interface BriefRunResult {
   prev_handoff: PrevHandoff | null;
   /** Session anchor grounding (Intent / Boundary Contract / Execution Progress). */
   anchor: AnchorSection;
-  /** Additive, independently executable read model; persistence stays command-run/1.1. */
+  /** Additive, independently executable read model; persistence uses command-run/1.2 authority. */
   execution_contract: ExecutionContractView;
   /** Next lifecycle verb pointer, closing next→brief→check→complete. */
   next: { command: string; reason: string };
 }
 
-export interface ExecutionContractView {
-  schema_version: 'execution-contract/1.0';
-  command: string;
-  invocation: { args: string[] };
-  guidance: {
-    prepare_path: string | null;
-    workflow_path: string | null;
-    run_mode_path: string | null;
-  };
-  inputs: Array<{
-    kind: string;
-    alias: string | null;
-    required: boolean;
-    require_status: 'sealed' | null;
-    resolved: RunUpstream | null;
-  }>;
-  outputs: {
-    declared: Array<{
-      kind: string;
-      alias: string | null;
-      primary: boolean;
-      path: string | null;
-      schema: string | null;
-    }>;
-    actual: BriefRunResult['outputs'];
-  };
-  gates: {
-    registry_revision: number;
-    items: Array<{
-      gate_id: string;
-      title: string;
-      scope: Gate['scope'];
-      status: Gate['status'];
-      required: boolean;
-      blocking: boolean;
-    }>;
-  };
-  freshness: {
-    captured_at: string;
-    run_context_identity_revision: number;
-    session_identity_revision: number;
-    session_activity_revision: number;
-    identity_current: boolean;
-    command_contract_hash: string | null;
-  };
-}
+export type ExecutionContractView = ExecutionContract;
 
 export interface CompleteNextSuggestion {
   suggest_only: true;
@@ -365,6 +350,27 @@ function sha256(value: string): string {
   return createHash('sha256').update(value).digest('hex');
 }
 
+function protocolSha256(value: string): string {
+  return `sha256:${sha256(value)}`;
+}
+
+function buildGuidanceSnapshot(
+  projectRoot: string,
+  command: string,
+  source: ReturnType<typeof resolveCommandSource>,
+): GuidanceSnapshot {
+  const guidance = resolveStepContent(projectRoot, command);
+  return guidanceSnapshotSchema.parse({
+    schema_version: 'guidance-snapshot/1.0',
+    source_path: source.relativePath,
+    content_hash: protocolSha256(source.raw),
+    resolved_prompt_hash: protocolSha256(source.raw),
+    prepare_hash: guidance.prepare ? protocolSha256(guidance.prepare.raw) : null,
+    workflow_hash: guidance.workflow ? protocolSha256(guidance.workflow.raw) : null,
+    run_mode_hash: guidance.runMode ? protocolSha256(guidance.runMode.raw) : null,
+  });
+}
+
 function stableJson(value: unknown): string {
   const normalize = (item: unknown): unknown => {
     if (Array.isArray(item)) return item.map(normalize);
@@ -382,7 +388,7 @@ function stableJson(value: unknown): string {
 }
 
 function contractHash(contract: CommandContract): string {
-  return sha256(stableJson(contract));
+  return hashCommandContract(contract);
 }
 
 function dateId(): string {
@@ -432,22 +438,17 @@ function projectSessionEntry(session: SessionState): ProjectSessionEntry {
   };
 }
 
-function resolveSessionId(store: SessionStore, state: StateJsonV2, requested: string | undefined, intent: string, command: string): string {
+function resolveSessionId(store: SessionStore, requested: string | undefined, intent: string, command: string): string {
   if (requested) {
     validateSessionId(requested);
     return requested;
   }
-  const intentKey = slug(intent, command);
-  const candidates = (state.sessions ?? []).filter(entry =>
-    (entry.status === 'running' || entry.status === 'paused')
-    && slug(entry.intent, command) === intentKey
-    && store.sessionExists(entry.session_id),
-  );
-  if (state.active_session_id) {
-    const active = candidates.find(entry => entry.session_id === state.active_session_id);
-    if (active) return active.session_id;
+  const identity = createIntentIdentity(store.projectRoot, command, intent);
+  const exact = store.listSessions({ statuses: ['running', 'paused'], intentIdentity: identity }).candidates;
+  if (exact.length > 1) {
+    throw new Error(`Exact intent identity is ambiguous; pass --session: ${exact.map(item => item.sessionId).join(', ')}`);
   }
-  if (candidates.length > 0) return candidates.at(-1)!.session_id;
+  if (exact.length === 1) return exact[0].sessionId;
   const base = `${dateId()}-${slug(intent, command)}`;
   if (!store.sessionExists(base)) return base;
   for (let index = 2; index < 1000; index++) {
@@ -705,19 +706,35 @@ function registerRunGates(registry: GateRegistry, contract: CommandContract, run
     ids.push(id);
   }
   for (const produce of contract.produces) {
+    const required = (contract.contract_version ?? 1) === 2 ? produce.required === true : true;
     add({
       key: `produce-${produce.kind}`,
       title: `Produce ${produce.kind}`,
       scope: 'exit',
       run_id: runId,
-      required: true,
-      blocking: true,
+      required,
+      blocking: required,
       applicable_modes: [],
       status: 'pending',
       check: { type: 'artifact', kind: produce.kind, ...(produce.alias ? { alias: produce.alias } : {}) },
       evidence_refs: [],
       waiver: null,
     });
+    if ((contract.contract_version ?? 1) === 2 && produce.schema) {
+      add({
+        key: `produce-schema-${produce.alias ?? produce.kind}`,
+        title: `Validate ${produce.kind} schema`,
+        scope: 'exit',
+        run_id: runId,
+        required,
+        blocking: required,
+        applicable_modes: [],
+        status: 'pending',
+        check: { type: 'schema', artifact_ref: produce.alias ?? produce.kind, schema_id: produce.schema },
+        evidence_refs: [],
+        waiver: null,
+      });
+    }
   }
   for (const definition of contract.gates.exit) {
     ordinal++;
@@ -749,6 +766,12 @@ function artifactForGate(gate: Gate, context: EvaluationContext): { status: stri
     const artifact = Object.values(context.registry.artifacts).find(item => item.kind === check.kind);
     if (artifact) return { status: artifact.status, schema: artifact.schema_version };
     return null;
+  }
+  if (gate.scope === 'exit') {
+    const found = context.scan.artifacts.find(item =>
+      item.alias === check.artifact_ref || item.kind === check.artifact_ref,
+    );
+    if (found) return { status: 'draft', schema: found.schemaVersion };
   }
   const byAlias = context.registry.aliases[check.artifact_ref];
   const artifact = context.registry.artifacts[byAlias ?? check.artifact_ref];
@@ -860,6 +883,20 @@ function contractForRun(
 ): { contract: CommandContract; warning: string | null } {
   const source = resolveCommandSource(projectRoot, run.command.name);
   const currentContractHash = contractHash(source.contract);
+  if (run.contract_snapshot) {
+    if (source.contractSnapshot.snapshot_hash !== run.contract_snapshot.snapshot_hash) {
+      throw new Error(
+        `Command lifecycle contract changed after run creation: ${run.command.name} `
+        + `(expected ${run.contract_snapshot.snapshot_hash}, got ${source.contractSnapshot.snapshot_hash})`,
+      );
+    }
+    return {
+      contract: source.contract,
+      warning: source.contentHash === run.command.content_hash
+        ? null
+        : `Command prompt changed after run creation: ${run.command.name}; lifecycle contract is unchanged`,
+    };
+  }
   if (run.command.contract_hash) {
     if (currentContractHash !== run.command.contract_hash) {
       throw new Error(
@@ -900,17 +937,10 @@ function gateContractShape(gate: Gate): string {
 function assertRebindCompatible(
   registry: GateRegistry,
   run: CommandRun,
-  contract: CommandContract,
+  source: ReturnType<typeof resolveCommandSource>,
 ): void {
-  const unrecoverableProduce = contract.produces.find(produce => produce.path || produce.primary);
-  if (unrecoverableProduce) {
-    throw new Error(
-      `Cannot rebind: legacy Run cannot prove path/primary compatibility for produce ${unrecoverableProduce.kind}; `
-      + 'create a retry Run instead',
-    );
-  }
   const expectedRegistry = createGateRegistry();
-  const expectedIds = registerRunGates(expectedRegistry, contract, run.run_id, run.sequence);
+  const expectedIds = registerRunGates(expectedRegistry, source.contract, run.run_id, run.sequence);
   if (stableJson(expectedIds) !== stableJson(run.gate_ids)) {
     throw new Error('Cannot rebind: current lifecycle contract produces a different Run gate set');
   }
@@ -920,6 +950,19 @@ function assertRebindCompatible(
     if (!actual || gateContractShape(actual) !== gateContractShape(expected)) {
       throw new Error(`Cannot rebind: registered gate ${id} differs from the current lifecycle contract`);
     }
+  }
+  if (run.contract_snapshot) {
+    if (stableJson(run.contract_snapshot.normalized) !== stableJson(source.contractSnapshot.normalized)) {
+      throw new Error('Cannot rebind: stored and current lifecycle contract semantics differ');
+    }
+    return;
+  }
+  const unrecoverableProduce = source.contract.produces.find(produce => produce.path || produce.primary);
+  if (unrecoverableProduce) {
+    throw new Error(
+      `Cannot rebind: legacy Run cannot prove path/primary compatibility for produce ${unrecoverableProduce.kind}; `
+      + 'create a retry Run instead',
+    );
   }
 }
 
@@ -964,6 +1007,7 @@ export function createRun(options: CreateRunOptions): CreateRunResult {
   const store = new SessionStore(options.projectRoot);
   const state = projectState(options.projectRoot);
   const intent = options.intent?.trim() || options.command;
+  const intentIdentity = options.intentIdentity ?? createIntentIdentity(options.projectRoot, options.command, intent);
   const source = resolveCommandSource(options.projectRoot, options.command);
 
   if (source.sessionMode === 'none') {
@@ -979,10 +1023,24 @@ export function createRun(options: CreateRunOptions): CreateRunResult {
     );
   }
 
-  const sessionId = resolveSessionId(store, state, options.sessionId, intent, options.command);
-  if (!store.sessionExists(sessionId)) store.createSession(sessionId, intent);
+  const sessionId = resolveSessionId(store, options.sessionId, intent, options.command);
+  if (!store.sessionExists(sessionId)) {
+    store.createSession(sessionId, intent, {
+      command: options.command,
+      intentIdentity,
+      ...(options.sessionProvenance ? { provenance: options.sessionProvenance } : {}),
+    });
+  }
 
   return store.update(sessionId, (bundle, tx) => {
+    if (!options.sessionId) {
+      if (!bundle.session.intent_identity) {
+        bundle.session.intent_identity = intentIdentity;
+        bundle.session.identity_revision++;
+      } else if (!sameIntentIdentity(bundle.session.intent_identity, intentIdentity)) {
+        throw new Error(`Session ${sessionId} intent identity changed after exact-match resolution`);
+      }
+    }
     let boundStep: SessionState['orchestration']['chain'][number] | null = null;
     let chainStepId = options.chainStepId;
     if (options.retryToken && !chainStepId) {
@@ -1083,8 +1141,11 @@ export function createRun(options: CreateRunOptions): CreateRunResult {
     const runDir = ensureRunShell(store, sessionId, runId);
     const gateIds = registerRunGates(bundle.gates, source.contract, runId, sequence);
     const upstream = collectUpstream(sessionId, bundle.artifacts, source.contract);
+    const guidanceSnapshot = buildGuidanceSnapshot(options.projectRoot, options.command, source);
+    const creationMode = options.creation?.mode
+      ?? (options.retryToken ? 'retry' : boundStep ? 'chain-next' : 'explicit-create');
     const run: CommandRun = {
-      schema_version: 'command-run/1.1',
+      schema_version: 'command-run/1.2',
       session_id: sessionId,
       run_id: runId,
       sequence,
@@ -1095,6 +1156,28 @@ export function createRun(options: CreateRunOptions): CreateRunResult {
       checkpoint_expectation: null,
       checkpoint: null,
       retry_fence: null,
+      contract_snapshot: source.contractSnapshot,
+      guidance_snapshot: guidanceSnapshot,
+      creation_decision: {
+        schema_version: 'creation-decision/1.0',
+        decision_id: `dec_${sha256(`${sessionId}\u0000${runId}\u0000${now}`).slice(0, 24)}`,
+        request_id: options.creation?.requestId ?? null,
+        mode: creationMode,
+        authority: options.creation?.authority ?? (boundStep ? 'chain-transition' : 'explicit-command'),
+        decided_at: now,
+        session_identity_revision: bundle.session.identity_revision,
+        session_activity_revision: bundle.session.activity_revision,
+        confirmation_token_hash: options.creation?.confirmationTokenHash ?? null,
+      },
+      creation_provenance: options.creation?.provenance ?? {
+        schema_version: 'creation-provenance/1.0',
+        provenance: 'native-v2',
+        source_workspace_id: null,
+        source_session_id: null,
+        source_run_id: parentRunId,
+        imported_artifact_hashes: [],
+      },
+      transition: options.creation?.transition ?? null,
       command: {
         name: options.command,
         version: '1.0',
@@ -1217,6 +1300,34 @@ function checkNext(
   };
 }
 
+function validateStrictArtifactContract(
+  runDir: string,
+  contract: CommandContract,
+  scan: ArtifactScanResult,
+): void {
+  if ((contract.contract_version ?? 1) !== 2) return;
+  for (const expected of contract.produces) {
+    const expectedPath = expected.path?.replaceAll('\\', '/').replace(/^\.\//, '');
+    const actual = expectedPath
+      ? scan.artifacts.find(item => relative(runDir, item.absolutePath).replaceAll('\\', '/') === expectedPath)
+      : undefined;
+    if (!actual) {
+      if (expected.required) scan.errors.push(`Missing required contract v2 output: ${expectedPath ?? expected.kind}`);
+      continue;
+    }
+    if (actual.kind !== expected.kind) {
+      scan.errors.push(`${expectedPath}: _meta.kind ${actual.kind} does not match contract ${expected.kind}`);
+    }
+    if (expected.schema && actual.schemaVersion !== expected.schema) {
+      scan.errors.push(`${expectedPath}: _meta.schema ${actual.schemaVersion} does not match contract ${expected.schema}`);
+    }
+    const expectedRole = expected.role ?? (expected.primary ? 'primary' : 'attachment');
+    if (actual.role !== expectedRole) {
+      scan.errors.push(`${expectedPath}: _meta.role ${actual.role} does not match contract ${expectedRole}`);
+    }
+  }
+}
+
 export function checkRun(projectRoot: string, runId: string, sessionId?: string): CheckRunResult {
   const store = new SessionStore(projectRoot);
   const located = store.findRun(runId, sessionId);
@@ -1226,6 +1337,7 @@ export function checkRun(projectRoot: string, runId: string, sessionId?: string)
     store.sessionDir(located.sessionId),
     resolvedContract.contract,
   );
+  validateStrictArtifactContract(store.runDir(located.sessionId, runId), resolvedContract.contract, scan);
   if (resolvedContract.warning) scan.warnings.unshift(resolvedContract.warning);
   const frontmatter = readReportFrontmatter(store.runDir(located.sessionId, runId));
 
@@ -1289,35 +1401,76 @@ export function rebindRunCommand(
   return store.update(located.sessionId, (bundle, tx) => {
     const run = tx.readRun(runId);
     if (run.status === 'sealed') throw new Error(`Run ${runId} is sealed and immutable`);
-    if (run.command.contract_hash) {
-      throw new Error(`Run ${runId} already has contract_hash and does not require legacy rebind`);
-    }
-    assertRebindCompatible(bundle.gates, run, source.contract);
+    assertRebindCompatible(bundle.gates, run, source);
 
+    const oldSourcePath = run.command.source_path;
     const oldContentHash = run.command.content_hash;
+    const oldResolvedPromptHash = run.command.resolved_prompt_hash;
+    const oldContractHash = run.command.contract_hash ?? null;
+    const oldContractSnapshot = run.contract_snapshot;
+    const oldSnapshotHash = oldContractSnapshot?.snapshot_hash ?? null;
+    const oldGuidanceSnapshot = run.guidance_snapshot;
+    const nextResolvedPromptHash = sha256(source.raw);
+    const nextGuidanceSnapshot = oldGuidanceSnapshot
+      ? buildGuidanceSnapshot(projectRoot, run.command.name, source)
+      : null;
+    const alreadyCurrent = oldSourcePath === source.relativePath
+      && oldContentHash === source.contentHash
+      && oldResolvedPromptHash === nextResolvedPromptHash
+      && oldContractHash === nextContractHash
+      && oldSnapshotHash === source.contractSnapshot.snapshot_hash
+      && (!oldGuidanceSnapshot || stableJson(oldGuidanceSnapshot) === stableJson(nextGuidanceSnapshot));
+    if (alreadyCurrent) throw new Error(`Run ${runId} is already bound to the current command definition`);
+
+    const rebindKind: RebindRunResult['rebind_kind'] = oldContractHash === null
+      ? 'legacy_contract_backfill'
+      : oldContractHash !== nextContractHash || oldSnapshotHash !== source.contractSnapshot.snapshot_hash
+        ? 'compatible_contract_rebind'
+        : 'prompt_only_rebind';
     run.command.source_path = source.relativePath;
     run.command.content_hash = source.contentHash;
-    run.command.resolved_prompt_hash = sha256(source.raw);
+    run.command.resolved_prompt_hash = nextResolvedPromptHash;
     run.command.contract_hash = nextContractHash;
+    run.contract_snapshot = source.contractSnapshot;
+    if (oldGuidanceSnapshot) run.guidance_snapshot = nextGuidanceSnapshot;
     tx.writeRun(run);
 
     const auditPath = join(store.runDir(located.sessionId, runId), 'command-rebind.json');
-    tx.writeJson(auditPath, {
-      schema_version: 'command-rebind/1.0',
+    const audit = commandRebindAuditSchema.parse({
+      schema_version: 'command-rebind/1.1',
       run_id: runId,
       command: run.command.name,
+      rebind_kind: rebindKind,
       reason: normalizedReason,
+      old_source_path: oldSourcePath,
+      source_path: source.relativePath,
       old_content_hash: oldContentHash,
       content_hash: source.contentHash,
+      old_resolved_prompt_hash: oldResolvedPromptHash,
+      resolved_prompt_hash: nextResolvedPromptHash,
+      old_contract_hash: oldContractHash,
       contract_hash: nextContractHash,
+      old_snapshot_hash: oldSnapshotHash,
+      snapshot_hash: source.contractSnapshot.snapshot_hash,
+      old_contract_snapshot: oldContractSnapshot,
+      contract_snapshot: source.contractSnapshot,
+      old_guidance_snapshot: oldGuidanceSnapshot,
+      guidance_snapshot: nextGuidanceSnapshot,
+      creation_decision_id: run.creation_decision?.decision_id ?? null,
+      transition: run.transition,
       rebound_at: localISO(),
     });
+    tx.writeJson(auditPath, audit);
     return {
       session_id: located.sessionId,
       run_id: runId,
+      rebind_kind: rebindKind,
       old_content_hash: oldContentHash,
       content_hash: source.contentHash,
+      old_contract_hash: oldContractHash,
       contract_hash: nextContractHash,
+      old_snapshot_hash: oldSnapshotHash,
+      snapshot_hash: source.contractSnapshot.snapshot_hash,
       audit_path: relative(projectRoot, auditPath).replaceAll('\\', '/'),
     };
   });
@@ -2020,12 +2173,14 @@ export function briefRun(
   const upstream = upstreamForConsumedIds(located.sessionId, bundle.artifacts, run.input.consumes);
   const prevHandoff = latestHandoffBefore(store, located.sessionId, run.sequence);
   const anchor = buildAnchorSections(store, bundle.session);
-  const contract = contractForRun(projectRoot, run).contract;
+  const resolvedContract = contractForRun(projectRoot, run);
+  const contract = resolvedContract.contract;
   const inputs: ExecutionContractView['inputs'] = contract.consumes.map(consume => ({
     kind: consume.kind,
     alias: consume.alias ?? null,
     required: consume.required,
     require_status: consume.require_status ?? null,
+    schema: consume.schema ?? null,
     resolved: consume.alias
       ? upstream[consume.alias] ?? null
       : Object.values(upstream).find(item => item.kind === consume.kind) ?? null,
@@ -2033,6 +2188,8 @@ export function briefRun(
   const declaredOutputs: ExecutionContractView['outputs']['declared'] = contract.produces.map(produce => ({
     kind: produce.kind,
     alias: produce.alias ?? null,
+    role: produce.role ?? (produce.primary ? 'primary' : 'attachment'),
+    required: produce.required ?? false,
     primary: produce.primary,
     path: produce.path ?? null,
     schema: typeof produce.schema === 'string' ? produce.schema : null,
@@ -2050,7 +2207,7 @@ export function briefRun(
       } : null;
     })
     .filter((item): item is NonNullable<typeof item> => item !== null);
-  const executionContract: ExecutionContractView = {
+  const executionContract: ExecutionContractView = executionContractSchema.parse({
     schema_version: 'execution-contract/1.0',
     command: run.command.name,
     invocation: { args: [...run.input.args] },
@@ -2062,6 +2219,13 @@ export function briefRun(
     inputs,
     outputs: { declared: declaredOutputs, actual: outputs },
     gates: { registry_revision: bundle.gates.revision, items: gateItems },
+    contract: {
+      version: run.contract_snapshot?.contract_version
+        ?? ((contract.contract_version ?? 1) === 2 ? 'command-contract/2.0' : 'command-contract/1.0'),
+      snapshot_hash: run.contract_snapshot?.snapshot_hash ?? null,
+      warnings: contract.compatibility_warnings ?? [],
+      drift: resolvedContract.warning ? 'prompt-only' : 'none',
+    },
     freshness: {
       captured_at: localISO(),
       run_context_identity_revision: run.input.context_identity_revision,
@@ -2070,7 +2234,7 @@ export function briefRun(
       identity_current: run.input.context_identity_revision === bundle.session.identity_revision,
       command_contract_hash: run.command.contract_hash ?? null,
     },
-  };
+  });
 
   return {
     session_id: located.sessionId,

@@ -17,7 +17,9 @@ export const AVATAR_CONFIG: Record<AgentType, { label: string; color: string; ti
   'gemini-a2a':  { label: 'Ga', color: 'var(--color-accent-blue)', tint: 'var(--color-tint-exploring)', className: 'gemini' },
   qwen:          { label: 'Q', color: 'var(--color-accent-orange)', tint: 'var(--color-tint-verifying)', className: 'qwen' },
   opencode:      { label: 'O', color: 'var(--color-text-tertiary)', tint: 'var(--color-bg-secondary)', className: 'opencode' },
+  agy:           { label: 'A', color: 'var(--color-accent-blue)', tint: 'var(--color-tint-exploring)', className: 'gemini' },
   'agent-sdk':   { label: 'S', color: 'var(--color-accent-purple)', tint: 'var(--color-tint-planning)', className: 'claude' },
+  'api-explore': { label: 'Ax', color: 'var(--color-accent-orange)', tint: 'var(--color-tint-verifying)', className: 'qwen' },
 };
 
 function formatMsgTime(iso: string): string {

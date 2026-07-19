@@ -40,7 +40,6 @@ import {
   effectiveDecomposition,
   effectiveLease,
   effectivePosition,
-  updateRalphMeta,
   workflowRoot,
   type RalphMeta,
   type RalphStepDetail,
@@ -101,15 +100,6 @@ export async function runNext(opts: NextCmdOptions): Promise<number> {
   if (outcome.exitCode !== 0 || !outcome.result) {
     console.error(rebrand(outcome.message));
     return outcome.exitCode;
-  }
-
-  // Persist the lease into meta now that the step is live.
-  if (opts.executionOwner || opts.leaseId) {
-    updateRalphMeta(projectRoot, sessionId, (m) => {
-      if (opts.executionOwner) m.execution_owner = opts.executionOwner;
-      if (opts.leaseId) m.lease_id = opts.leaseId;
-      if (opts.ownerEpoch !== undefined) m.owner_epoch = opts.ownerEpoch;
-    });
   }
 
   // Build the prompt from the pre-advance session snapshot: the legacy emitter
