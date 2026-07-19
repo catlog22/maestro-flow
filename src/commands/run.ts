@@ -365,7 +365,13 @@ Compatibility boundary:
             transition: mutationTransitionOptions(opts),
           });
           if (opts.json) {
-            if (result.sealed) machineSuccess('complete', result, { session_id: result.session_id, run_id: result.run_id });
+            if (result.sealed) machineSuccess(
+              'complete',
+              result,
+              { session_id: result.session_id, run_id: result.run_id },
+              { status: result.transition.status, transition_id: result.transition.transition_id },
+              result.transition.request_id,
+            );
             else emitRunResponse(createRunResponseError({ operation: 'complete', exit_code: 1, code: 'RUN_GATES_BLOCKING', message: 'Run gates are blocking completion', details: { result } }));
           } else { print(result); if (!result.sealed) process.exitCode = 1; }
           return;
@@ -426,7 +432,13 @@ Compatibility boundary:
           transition: mutationTransitionOptions(opts),
         });
         if (opts.json) {
-          if (result.run_sealed) machineSuccess('complete', result, { session_id: result.session_id, run_id: result.run_id });
+          if (result.run_sealed) machineSuccess(
+            'complete',
+            result,
+            { session_id: result.session_id, run_id: result.run_id },
+            { status: result.seal.transition.status, transition_id: result.seal.transition.transition_id },
+            result.seal.transition.request_id,
+          );
           else emitRunResponse(createRunResponseError({ operation: 'complete', exit_code: 1, code: 'RUN_GATES_BLOCKING', message: 'Run gates are blocking completion', details: { result }, next: { suggest_only: true, command: result.next.command, reason: result.next.reason } }));
         } else { print(result); process.stderr.write(`next: ${result.next.command}\n      ${result.next.reason}\n`); if (!result.run_sealed) process.exitCode = 1; }
       } catch (error) {

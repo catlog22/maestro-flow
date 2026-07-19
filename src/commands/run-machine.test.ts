@@ -118,6 +118,35 @@ describe('built-bin run-response/1.0', () => {
     expect(complete.stderr).toBe(''); expect(recall.stderr).toBe('');
   });
 
+  it('projects complete transition request and replay metadata at the envelope top level', () => {
+    const { root } = fixture();
+    const created = invoke(root, ['run', 'create', 'demo', '--json']);
+    const locator = (created.body as any).result as { session_id: string; run_id: string };
+    const session = new SessionStore(root).readBundle(locator.session_id).session;
+    const args = [
+      'run', 'complete', locator.run_id,
+      '--session', locator.session_id,
+      '--verdict', 'done',
+      '--request-id', 'req-complete-machine',
+      '--expected-identity-revision', String(session.identity_revision),
+      '--expected-activity-revision', String(session.activity_revision),
+      '--json',
+    ];
+
+    const applied = invoke(root, args);
+    const replayed = invoke(root, args);
+
+    expect(applied.body).toMatchObject({
+      operation: 'complete', ok: true, request_id: 'req-complete-machine', replay: { status: 'applied' },
+    });
+    expect(replayed.body).toMatchObject({
+      operation: 'complete', ok: true, request_id: 'req-complete-machine', replay: { status: 'replayed' },
+    });
+    expect(replayed.body?.replay?.transition_id).toBe(applied.body?.replay?.transition_id);
+    expect(applied.stderr).toBe('');
+    expect(replayed.stderr).toBe('');
+  });
+
   it('keeps a paused topic Session outside automatic read-only routing', () => {
     const { root } = fixture();
     const store = new SessionStore(root);
