@@ -54,8 +54,17 @@ describe('maestro session create', () => {
     const chain = session?.commands.find(c => c.name() === 'chain');
     expect(chain?.commands.map(c => c.name()).sort()).toEqual(['insert', 'replace', 'skip']);
     for (const name of ['resolve', 'resume']) {
-      const compatibilityCommand = session?.commands.find(c => c.name() === name);
-      expect(compatibilityCommand?.description()).toContain('[DEPRECATED, ADMIN-ONLY]');
+      const recoveryCommand = session?.commands.find(c => c.name() === name);
+      expect(recoveryCommand?.description()).toContain('canonical paused');
+      expect(recoveryCommand?.description()).not.toContain('[DEPRECATED, ADMIN-ONLY]');
+      const help = recoveryCommand?.helpInformation() ?? '';
+      for (const flag of [
+        '--request-id', '--actor', '--reason', '--evidence',
+        '--expected-identity-revision', '--expected-activity-revision',
+        '--execution-owner', '--owner-epoch', '--lease-id',
+      ]) {
+        expect(help, `${name} help should include ${flag}`).toContain(flag);
+      }
     }
   });
 
@@ -98,8 +107,28 @@ describe('maestro session create', () => {
     expect(errs.join('\n')).toMatch(/invalid --engine/);
   });
 
-  it('requires actor, reason and evidence for lifecycle transitions', async () => {
-    await expect(run('resume', '--session', 'missing', '--request-id', 'r1', '--actor', 'a', '--expected-identity-revision', '0', '--expected-activity-revision', '0', '--workflow-root', root)).rejects.toThrow();
+  it('requires every canonical recovery audit guard', async () => {
+    const complete = [
+      'resume', '--session', 'missing',
+      '--request-id', 'req-recovery',
+      '--actor', 'operator',
+      '--reason', 'verified recovery',
+      '--evidence', 'outputs/recovery.json',
+      '--expected-identity-revision', '1',
+      '--expected-activity-revision', '2',
+      '--workflow-root', root,
+    ];
+    for (const flag of [
+      '--request-id', '--actor', '--reason', '--evidence',
+      '--expected-identity-revision', '--expected-activity-revision',
+    ]) {
+      const missing = [...complete];
+      const index = missing.indexOf(flag);
+      missing.splice(index, 2);
+      await expect(run(...missing), flag).rejects.toMatchObject({
+        code: 'commander.missingMandatoryOptionValue',
+      });
+    }
   });
 
   it('rejects stale revisions and does not create a Run', async () => {

@@ -187,8 +187,19 @@ describe('run decide — escalate', () => {
     expect(bundle.session.status).toBe('paused');
     expect(bundle.session.orchestration.decision_points[0].status).toBe('escalated');
     expect(bundle.session.orchestration.chain[0].status).toBe('pending'); // stays pending
-    expect(result.next).toMatchObject({ suggest_only: true, action: 'resolve_session', command: null });
-    expect(result.next.preconditions).toContain('perform an authorized Session resume transition');
+    expect(result.next).toMatchObject({
+      suggest_only: true,
+      action: 'resolve_session',
+      command: expect.stringContaining('maestro session resolve --session s'),
+    });
+    expect(result.next.reason).toContain('canonical recovery is explicit resolve, then resume, then run next');
+    expect(result.next.preconditions).toEqual([
+      'resolve the escalated decision; the Session remains paused',
+      'resume only after every blocker and concurrency guard is clear',
+      'run maestro run next explicitly to allocate the next Run',
+    ]);
+    expect(bundle.session.active_run_id).toBeNull();
+    expect(bundle.session.orchestration.chain[0].run_id).toBeNull();
   });
 });
 

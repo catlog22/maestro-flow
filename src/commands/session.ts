@@ -24,14 +24,15 @@ function reportError(error: unknown): void {
   process.exitCode = 1;
 }
 
-const ADMIN_COMPATIBILITY_PREFIX = '[DEPRECATED, ADMIN-ONLY]';
-
-function addAdminCompatibilityHelp(command: Command, retainedFor: string): Command {
+function addCanonicalRecoveryHelp(command: Command, phase: 'resolve' | 'resume'): Command {
+  const phaseDetail = phase === 'resolve'
+    ? 'Resolve exactly one escalated decision or failed chain step. The Session remains paused.'
+    : 'Resume only after every recovery blocker is cleared. Success changes paused to running only.';
   return command.addHelpText('after', `
-Compatibility boundary:
-  ${retainedFor}
-  This transition is excluded from normal topic resolution, Session selection, sealed-output reuse,
-  recall recommendations, and next-action routing. It does not create a Run and offers no force bypass.
+Canonical paused recovery:
+  ${phaseDetail}
+  Recovery requires an exact Session ID plus audit, revision, and optional lease-triple guards.
+  Neither phase creates a Run or binds a chain step. Run allocation remains an explicit maestro run next.
 `);
 }
 
@@ -88,7 +89,7 @@ function chainSummary(steps: ChainDefinition['steps']): { total: number; steps: 
   };
 }
 
-function collect(value: string, prior: string[]): string[] { return prior.concat(value); }
+function collect(value: string, prior: string[] = []): string[] { return prior.concat(value); }
 
 function transitionOptions(opts: any, target?: any): any {
   return {
@@ -122,14 +123,14 @@ function addMutationOptions(command: Command): Command {
 export function registerSessionCommand(program: Command): void {
   const session = program
     .command('session')
-    .description('Session topic grouping/index plus chain administration and legacy compatibility');
+    .description('Session topic grouping/index, canonical paused recovery, and chain administration');
 
   const addTransitionOptions = (command: Command): Command => command
     .requiredOption('--session <id>', 'exact Session ID')
     .requiredOption('--request-id <id>', 'idempotent request/transition ID')
     .requiredOption('--actor <name>', 'authorized actor')
     .requiredOption('--reason <text>', 'audit reason')
-    .requiredOption('--evidence <ref>', 'evidence reference (repeatable)', collect, [] as string[])
+    .requiredOption('--evidence <ref>', 'evidence reference (repeatable)', collect)
     .requiredOption('--expected-identity-revision <n>', 'expected identity revision', Number.parseInt)
     .requiredOption('--expected-activity-revision <n>', 'expected activity revision', Number.parseInt)
     .option('--execution-owner <owner>', 'lease owner')
@@ -137,9 +138,9 @@ export function registerSessionCommand(program: Command): void {
     .option('--lease-id <id>', 'lease ID')
     .option('--workflow-root <path>', 'project root containing .workflow', process.cwd());
 
-  addAdminCompatibilityHelp(
-    addTransitionOptions(session.command('resolve').description(`${ADMIN_COMPATIBILITY_PREFIX} Resolve one legacy escalated decision or failed step`)),
-    'Retained temporarily to repair an explicitly identified paused Session; the Session remains paused.',
+  addCanonicalRecoveryHelp(
+    addTransitionOptions(session.command('resolve').description('Resolve one canonical paused recovery target; Session remains paused')),
+    'resolve',
   )
     .option('--decision <id>', 'escalated decision point ID')
     .option('--step <id>', 'failed chain step ID')
@@ -156,9 +157,9 @@ export function registerSessionCommand(program: Command): void {
       } catch (error) { reportError(error); }
     });
 
-  addAdminCompatibilityHelp(
-    addTransitionOptions(session.command('resume').description(`${ADMIN_COMPATIBILITY_PREFIX} Resume an explicitly identified legacy paused Session`)),
-    'Retained temporarily after every legacy recovery target has been resolved.',
+  addCanonicalRecoveryHelp(
+    addTransitionOptions(session.command('resume').description('Resume a canonical paused Session after every recovery blocker is cleared')),
+    'resume',
   )
     .action((opts: any) => {
       try { print(resumeSession(resolve(opts.workflowRoot), opts.session, transitionOptions(opts))); }

@@ -27,6 +27,11 @@ import {
   type TransitionFence,
 } from './protocol-schemas.js';
 import { createIntentIdentity } from './intent-identity.js';
+import {
+  resolveSession,
+  resumeSession,
+  type SessionTransitionOptions,
+} from './session-transition.js';
 import { SessionStore } from './store.js';
 
 const hash = `sha256:${'a'.repeat(64)}`;
@@ -56,6 +61,36 @@ function request() {
     preconditions: fence(0),
     payload: { actor: 'user' },
   });
+}
+
+function seedPausedRecovery(projectRoot: string, sessionId: string): SessionStore {
+  const store = new SessionStore(projectRoot);
+  store.createSession(sessionId, `recover ${sessionId}`);
+  store.update(sessionId, draft => {
+    draft.session.status = 'paused';
+    draft.session.orchestration.chain = [{
+      step_id: 'step-000-work', command: 'work', status: 'pending', run_id: null,
+      inserted_by: 'test', decision_ref: null,
+    }];
+    return null;
+  });
+  return store;
+}
+
+function recoveryOptions(
+  store: SessionStore,
+  sessionId: string,
+  requestId: string,
+): SessionTransitionOptions {
+  const session = store.readBundle(sessionId).session;
+  return {
+    requestId,
+    actor: 'recovery-operator',
+    reason: 'verified recovery evidence',
+    evidence: ['outputs/recovery-evidence.json'],
+    expectedIdentityRevision: session.identity_revision,
+    expectedActivityRevision: session.activity_revision,
+  };
 }
 
 describe('transition request/outcome receipts', () => {
@@ -152,6 +187,129 @@ describe('transition request/outcome receipts', () => {
       .toThrow(/no longer matches current authority revisions/);
     expect(() => transitionRequestSchema.parse({ ...req, schema_version: 'transition-request/2.0' })).toThrow();
     expect(() => transitionOutcomeSchema.parse({ ...first.outcome, request_hash: 'bad' })).toThrow();
+  });
+});
+
+describe('canonical paused recovery transitions', () => {
+  it('keeps the Session paused after resolving one recovery target', () => {
+    const projectRoot = mkdtempSync(join(tmpdir(), 'maestro-resolve-paused-'));
+    roots.push(projectRoot);
+    const store = seedPausedRecovery(projectRoot, 's');
+    store.update('s', draft => {
+      draft.session.orchestration.chain = [
+        {
+          step_id: 'step-000-gate', command: 'gate', status: 'pending', run_id: null,
+          inserted_by: 'test', decision_ref: 'DP-target',
+        },
+        {
+          step_id: 'step-001-failed', command: 'work', status: 'failed', run_id: 'run-failed',
+          inserted_by: 'test', decision_ref: null,
+        },
+      ];
+      draft.session.orchestration.decision_points = [
+        {
+          point_id: 'DP-target', after_step_id: null, status: 'escalated', retry_count: 0,
+          max_retries: 2, evidence_ref: null,
+        },
+        {
+          point_id: 'DP-unrelated', after_step_id: null, status: 'pending', retry_count: 1,
+          max_retries: 3, evidence_ref: 'unchanged.json',
+        },
+      ];
+      return null;
+    });
+    const before = structuredClone(store.readBundle('s').session);
+    const options = {
+      ...recoveryOptions(store, 's', 'req-resolve-one-target'),
+      target: { kind: 'decision' as const, id: 'DP-target', disposition: 'proceed' as const },
+    };
+
+    const transition = resolveSession(projectRoot, 's', options);
+    const after = store.readBundle('s').session;
+    expect(transition.replayed).toBe(false);
+    expect(transition.next).toMatchObject({
+      suggest_only: true,
+      command: 'maestro session resume --session s',
+    });
+    expect(after.status).toBe('paused');
+    expect(after.active_run_id).toBeNull();
+    expect(after.orchestration.decision_points[0]).toMatchObject({
+      point_id: 'DP-target', status: 'passed', evidence_ref: 'outputs/recovery-evidence.json',
+    });
+    expect(after.orchestration.chain[0].status).toBe('sealed');
+    expect(after.orchestration.decision_points[1]).toEqual(before.orchestration.decision_points[1]);
+    expect(after.orchestration.chain[1]).toEqual(before.orchestration.chain[1]);
+
+    const replay = resolveSession(projectRoot, 's', options);
+    expect(replay.replayed).toBe(true);
+    expect(store.readBundle('s').session).toEqual(after);
+  });
+
+  it('rejects resume while blockers or concurrency guards remain', () => {
+    const cases: Array<{
+      name: string;
+      error: RegExp;
+      mutate: (store: SessionStore) => void;
+      adjust?: (options: SessionTransitionOptions) => SessionTransitionOptions;
+    }> = [
+      {
+        name: 'escalated decision', error: /unresolved escalated decision: DP-escalated/,
+        mutate: store => store.update('s', draft => {
+          draft.session.orchestration.decision_points = [{
+            point_id: 'DP-escalated', after_step_id: null, status: 'escalated', retry_count: 0,
+            max_retries: 2, evidence_ref: null,
+          }];
+        }),
+      },
+      {
+        name: 'failed step', error: /unresolved failed chain step: step-000-work/,
+        mutate: store => store.update('s', draft => { draft.session.orchestration.chain[0].status = 'failed'; }),
+      },
+      {
+        name: 'stale identity revision', error: /stale identity revision/,
+        mutate: () => undefined,
+        adjust: options => ({ ...options, expectedIdentityRevision: options.expectedIdentityRevision + 1 }),
+      },
+      {
+        name: 'stale activity revision', error: /stale activity revision/,
+        mutate: () => undefined,
+        adjust: options => ({ ...options, expectedActivityRevision: options.expectedActivityRevision + 1 }),
+      },
+      {
+        name: 'lease conflict', error: /lease conflict/,
+        mutate: store => store.update('s', draft => {
+          draft.session.orchestration.lease = { owner: 'worker-a', epoch: 2, id: 'lease-a' };
+        }),
+        adjust: options => ({
+          ...options,
+          leaseClaim: { executionOwner: 'worker-b', ownerEpoch: 2, leaseId: 'lease-a' },
+        }),
+      },
+      {
+        name: 'active Run', error: /session has active Run run-active/,
+        mutate: store => store.update('s', draft => { draft.session.active_run_id = 'run-active'; }),
+      },
+      {
+        name: 'running chain step', error: /session has a running chain step/,
+        mutate: store => store.update('s', draft => {
+          draft.session.orchestration.chain[0].status = 'running';
+          draft.session.orchestration.chain[0].run_id = 'run-running';
+        }),
+      },
+    ];
+
+    for (const item of cases) {
+      const projectRoot = mkdtempSync(join(tmpdir(), `maestro-resume-${item.name.replaceAll(' ', '-')}-`));
+      roots.push(projectRoot);
+      const store = seedPausedRecovery(projectRoot, 's');
+      item.mutate(store);
+      const before = structuredClone(store.readBundle('s').session);
+      const base = recoveryOptions(store, 's', `req-resume-${item.name.replaceAll(' ', '-')}`);
+      const options = item.adjust?.(base) ?? base;
+
+      expect(() => resumeSession(projectRoot, 's', options), item.name).toThrow(item.error);
+      expect(store.readBundle('s').session, item.name).toEqual(before);
+    }
   });
 });
 

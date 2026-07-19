@@ -102,8 +102,8 @@ function chainDecisionNodeIndex(session: SessionState, pointId: string): number 
 }
 
 /**
- * The next-step pointer after a decision is recorded. A paused session (escalate)
- * points at resuming; otherwise `run next` continues the chain.
+ * The next-step pointer after a decision is recorded. An escalation points at
+ * the first phase of canonical recovery; otherwise `run next` continues the chain.
  */
 function decideNextPointer(
   session: SessionState,
@@ -114,9 +114,13 @@ function decideNextPointer(
     return {
       suggest_only: true,
       action: 'resolve_session',
-      command: null,
-      reason: 'session paused by escalation — run next is forbidden until an authorized resume transition',
-      preconditions: ['resolve the escalated decision', 'perform an authorized Session resume transition'],
+      command: `maestro session resolve --session ${sessionId} --request-id <request-id> --actor <actor> --reason <reason> --evidence <ref> --expected-identity-revision <n> --expected-activity-revision <n> --decision <point-id> --disposition <proceed|retry>`,
+      reason: 'session paused by escalation — canonical recovery is explicit resolve, then resume, then run next',
+      preconditions: [
+        'resolve the escalated decision; the Session remains paused',
+        'resume only after every blocker and concurrency guard is clear',
+        'run maestro run next explicitly to allocate the next Run',
+      ],
     };
   }
   if (verdict === 'fix') {

@@ -14,6 +14,7 @@ export interface SessionTransitionOptions {
   evidence: string[];
   expectedIdentityRevision: number;
   expectedActivityRevision: number;
+  /** Optional concurrency fence; when present the complete lease triple is required. */
   leaseClaim?: LeaseClaim;
 }
 
@@ -25,6 +26,21 @@ function required(value: string, label: string): string {
   const normalized = value.trim();
   if (!normalized) throw new Error(`${label} is required`);
   return normalized;
+}
+
+function expectedRevision(value: number, label: string): number {
+  if (!Number.isInteger(value) || value < 0) throw new Error(`${label} must be a non-negative integer`);
+  return value;
+}
+
+function normalizedLeaseClaim(options: SessionTransitionOptions): LeaseClaim {
+  const claim = options.leaseClaim ?? {};
+  const supplied = [claim.executionOwner, claim.ownerEpoch, claim.leaseId]
+    .filter(value => value !== undefined).length;
+  if (supplied !== 0 && supplied !== 3) {
+    throw new Error('lease claim requires --execution-owner, --owner-epoch, and --lease-id together');
+  }
+  return supplied === 0 ? {} : claim;
 }
 
 function requestFor(
@@ -48,16 +64,20 @@ function requestFor(
   });
 }
 
-function commonPayload(options: SessionTransitionOptions): Record<string, unknown> {
-  const evidence = options.evidence.map(item => item.trim()).filter(Boolean);
+function normalizedEvidence(options: SessionTransitionOptions): string[] {
+  const evidence = (options.evidence ?? []).map(item => item.trim()).filter(Boolean);
   if (evidence.length === 0) throw new Error('at least one evidence reference is required');
+  return evidence;
+}
+
+function commonPayload(options: SessionTransitionOptions): Record<string, unknown> {
   return {
     actor: required(options.actor, 'actor'),
     reason: required(options.reason, 'reason'),
-    evidence,
-    expected_identity_revision: options.expectedIdentityRevision,
-    expected_activity_revision: options.expectedActivityRevision,
-    lease: options.leaseClaim ?? {},
+    evidence: normalizedEvidence(options),
+    expected_identity_revision: expectedRevision(options.expectedIdentityRevision, 'expected identity revision'),
+    expected_activity_revision: expectedRevision(options.expectedActivityRevision, 'expected activity revision'),
+    lease: normalizedLeaseClaim(options),
   };
 }
 
@@ -74,8 +94,17 @@ function assertCommonGuards(
   }
   if (session.active_run_id) throw new Error(`session has active Run ${session.active_run_id}`);
   if (session.orchestration.chain.some(step => step.status === 'running')) throw new Error('session has a running chain step');
-  const leaseConflict = checkLease(session.orchestration.lease, options.leaseClaim ?? {});
+  const leaseConflict = checkLease(session.orchestration.lease, normalizedLeaseClaim(options));
   if (leaseConflict) throw new Error(leaseConflict);
+}
+
+function assertNoResumeBlockers(
+  session: ReturnType<SessionStore['readBundle']>['session'],
+): void {
+  const escalated = session.orchestration.decision_points.find(point => point.status === 'escalated');
+  if (escalated) throw new Error(`unresolved escalated decision: ${escalated.point_id}`);
+  const failed = session.orchestration.chain.find(step => step.status === 'failed');
+  if (failed) throw new Error(`unresolved failed chain step: ${failed.step_id}`);
 }
 
 export function resolveSession(
@@ -101,7 +130,7 @@ export function resolveSession(
         point.status = 'pending';
         if (node) node.status = 'pending';
       }
-      point.evidence_ref = options.evidence.join('; ');
+      point.evidence_ref = normalizedEvidence(options).join('; ');
     } else {
       const step = draft.session.orchestration.chain.find(item => item.step_id === target.id);
       if (!step || step.status !== 'failed') throw new Error(`chain step ${target.id} is not failed`);
@@ -145,10 +174,7 @@ export function resumeSession(
   const request = requestFor(store, sessionId, 'resume', options, payload);
   const evaluated = store.replayOrApplyTransition(sessionId, request, (draft) => {
     assertCommonGuards(draft.session, options);
-    const escalated = draft.session.orchestration.decision_points.find(point => point.status === 'escalated');
-    if (escalated) throw new Error(`unresolved escalated decision: ${escalated.point_id}`);
-    const failed = draft.session.orchestration.chain.find(step => step.status === 'failed');
-    if (failed) throw new Error(`unresolved failed chain step: ${failed.step_id}`);
+    assertNoResumeBlockers(draft.session);
     draft.session.status = 'running';
     draft.session.activity_revision++;
     const after = { ...request.preconditions, session_activity_revision: draft.session.activity_revision };

@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { runNextStep } from './next.js';
 import { completeRun, createRun } from './runtime.js';
+import { resolveSession, resumeSession } from './session-transition.js';
 import { SessionStore } from './store.js';
 import { writeStateJson, migrateV1toV2 } from '../utils/state-schema.js';
 import type { SessionState } from './schemas.js';
@@ -206,6 +207,20 @@ describe('run next — session resolution', () => {
     expect(outcome.exitCode).toBe(1);
     expect(outcome.message).toContain('session not found');
   });
+
+  it('does not automatically select a paused Session', () => {
+    const projectRoot = root();
+    stepCommand(projectRoot, 'demo-plan', PLAN_CONTRACT);
+    seedSession(projectRoot, 'paused-active', 'paused automatic candidate', [{ command: 'demo-plan' }], { active: true });
+    const store = new SessionStore(projectRoot);
+    store.update('paused-active', draft => { draft.session.status = 'paused'; });
+
+    const outcome = runNextStep(projectRoot);
+    expect(outcome.exitCode).toBe(1);
+    expect(outcome.reasonCode).toBe('SESSION_NOT_RUNNING');
+    expect(store.readBundle('paused-active').session.active_run_id).toBeNull();
+    expect(readChain(projectRoot, 'paused-active')[0]).toMatchObject({ status: 'pending', run_id: null });
+  });
 });
 
 describe('run next — step navigation', () => {
@@ -384,6 +399,56 @@ describe('run next — atomic chain binding', () => {
     expect(outcome.message).toContain('authorized resume transition');
     expect(store.readBundle('s').session.active_run_id).toBeNull();
     expect(readChain(projectRoot, 's')[0].status).toBe('pending');
+  });
+
+  it('allocates only after an explicit run next following resume', () => {
+    const projectRoot = root();
+    stepCommand(projectRoot, 'demo-plan', PLAN_CONTRACT);
+    seedSession(projectRoot, 's', 'two-phase recovery', [{ command: 'demo-plan' }], { active: true });
+    const store = new SessionStore(projectRoot);
+    store.update('s', draft => {
+      draft.session.status = 'paused';
+      draft.session.orchestration.decision_points = [{
+        point_id: 'DP-recovery', after_step_id: null, status: 'escalated', retry_count: 0,
+        max_retries: 2, evidence_ref: null,
+      }];
+    });
+
+    const paused = store.readBundle('s').session;
+    const resolved = resolveSession(projectRoot, 's', {
+      requestId: 'req-next-resolve', actor: 'operator', reason: 'clear escalation',
+      evidence: ['outputs/recovery.json'],
+      expectedIdentityRevision: paused.identity_revision,
+      expectedActivityRevision: paused.activity_revision,
+      target: { kind: 'decision', id: 'DP-recovery', disposition: 'proceed' },
+    });
+    expect(resolved.next.command).toBe('maestro session resume --session s');
+    expect(store.readBundle('s').session).toMatchObject({ status: 'paused', active_run_id: null });
+
+    const afterResolve = store.readBundle('s').session;
+    const resumed = resumeSession(projectRoot, 's', {
+      requestId: 'req-next-resume', actor: 'operator', reason: 'all blockers cleared',
+      evidence: ['outputs/recovery.json'],
+      expectedIdentityRevision: afterResolve.identity_revision,
+      expectedActivityRevision: afterResolve.activity_revision,
+    });
+    expect(resumed.next).toMatchObject({
+      suggest_only: true,
+      command: 'maestro run next --session s',
+    });
+    const beforeNext = store.readBundle('s').session;
+    expect(beforeNext).toMatchObject({ status: 'running', active_run_id: null });
+    expect(beforeNext.orchestration.chain[0]).toMatchObject({ status: 'pending', run_id: null });
+
+    const dispatched = runNextStep(projectRoot, { sessionId: 's' });
+    expect(dispatched.exitCode, dispatched.message).toBe(0);
+    expect(dispatched.result?.run_already_created).toBe(true);
+    const afterNext = store.readBundle('s').session;
+    expect(afterNext.active_run_id).toBe(dispatched.result?.run_id);
+    expect(afterNext.orchestration.chain[0]).toMatchObject({
+      status: 'running', run_id: dispatched.result?.run_id,
+    });
+    expect(store.readRun('s', dispatched.result!.run_id).status).toBe('running');
   });
 });
 
