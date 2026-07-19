@@ -3,7 +3,7 @@ import { join, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const root = join(fileURLToPath(new URL('.', import.meta.url)), '..');
-const automatic = new Set(['maestro-next', 'maestro', 'maestro-ralph']);
+const automatic = new Set(['maestro-next', 'maestro', 'maestro-ralph', 'maestro-companion']);
 
 function metadata(path) {
   const match = readFileSync(path, 'utf8').match(/^---\r?\n([\s\S]*?)\r?\n---/);
@@ -37,4 +37,4 @@ if (errors.length) {
   console.error(`invocation policy lint failed: ${errors.length} issue(s)`);
   for (const error of errors) console.error(`- ${error}`);
   process.exitCode = 1;
-} else console.log('invocation policy lint passed: maestro-next, maestro, maestro-ralph are the only automatic entrypoints');
+} else console.log('invocation policy lint passed: maestro-next, maestro, maestro-ralph, maestro-companion are the only automatic entrypoints');
