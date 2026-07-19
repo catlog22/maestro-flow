@@ -2,7 +2,7 @@
  * Context Format — unified <maestro-context> container
  *
  * Single source of truth for the shape of injected context across all hook
- * injectors (spec-injector, keyword-spec-injector, kg-context-injector).
+ * injectors (spec-injector and the composed keyword/spec/wiki/KG prompt hook).
  *
  * Before this module each injector emitted its own wrapper tag
  * (<spec-keyword-match>, <kg-symbol-context>, <kg-context>, or none).
@@ -78,4 +78,12 @@ export function wrapMaestroContext(
   const max = Number.isFinite(budget.max) ? budget.max : 0;
 
   return `<maestro-context budget="${used}/${max}">\n${body.join('\n')}\n</maestro-context>`;
+}
+
+/** Truncate a wrapped context without exceeding maxChars or losing its close tag. */
+export function truncateMaestroContext(content: string, maxChars: number): string {
+  if (content.length <= maxChars) return content;
+  const suffix = '...\n</maestro-context>';
+  const bodyLength = Math.max(0, maxChars - suffix.length);
+  return content.slice(0, bodyLength) + suffix;
 }

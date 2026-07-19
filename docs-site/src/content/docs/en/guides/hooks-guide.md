@@ -57,7 +57,7 @@ Hooks marked `requiresWorkspace` only activate when a valid Maestro workspace is
 | `skill-context` | UserPromptSubmit | — | standard | Required | Inject workflow state for Skill calls |
 | `coordinator-tracker` | Stop | — | standard | Required | Coordinator chain progress tracking |
 | `kg-sync` | UserPromptSubmit | — | standard | Required | Silently sync Knowledge Graph on user input |
-| `kg-context-injector` | PreToolUse | Agent | standard | Required | Inject code structure context into agents |
+| `keyword-spec-injector` | UserPromptSubmit | — | standard | Required | Compose keyword/spec/wiki/domain/KG context once per prompt |
 | `workflow-guard` | PreToolUse | Bash\|Write\|Edit | full | Required | Protect critical files and operations |
 
 > **Performance**: Stop event Hooks trigger once per turn; `delegate-monitor` filters via Bash\|Agent matcher. Subprocess spawns reduced ~72% per turn vs matcher-less PostToolUse.
@@ -69,9 +69,8 @@ Hooks marked `requiresWorkspace` only activate when a valid Maestro workspace is
 | `session-context` | SessionStart | startup\|resume | minimal | Required | Inject workflow state on start |
 | `spec-injector` | SessionStart | startup | standard | Required | Inject specs on start |
 | `skill-context` | UserPromptSubmit | — | standard | Required | Inject context for Skill calls |
-| `keyword-spec-injector` | UserPromptSubmit | — | standard | Required | Keyword-matched spec injection |
+| `keyword-spec-injector` | UserPromptSubmit | — | standard | Required | Compose keyword/spec/wiki/domain/KG context once per prompt |
 | `kg-sync` | UserPromptSubmit | — | standard | Required | Silently sync Knowledge Graph |
-| `kg-context-injector` | PreToolUse | Agent | standard | Required | Inject code structure context |
 | `delegate-monitor` | PostToolUse | Bash | standard | — | Monitor async delegate |
 | `coordinator-tracker` | Stop | — | standard | Required | Coordinator progress |
 | `team-monitor` | Stop | — | standard | — | Team heartbeat |
@@ -90,7 +89,7 @@ Hooks are installed at **cumulative levels**, higher levels include all lower:
 |-------|----------|----------|
 | `none` | No Hooks | Full manual control |
 | `minimal` | Statusline + context-monitor + spec-injector | Daily development |
-| `standard` | + delegate-monitor + team/telemetry/coordinator(Stop) + session-context + skill-context + kg-sync + kg-context-injector | Team collaboration |
+| `standard` | + delegate-monitor + team/telemetry/coordinator(Stop) + session-context + skill-context + kg-sync + composed prompt context | Team collaboration |
 | `full` | + workflow-guard | Strict workflow |
 
 ### Installation Commands
@@ -202,11 +201,11 @@ Updates bridge file at end of each turn for Statusline and skill-context consump
 
 Silently detects source file changes on each user input and triggers incremental CodeGraph sync. 30-second cooldown prevents excessive syncs. Only processes source file extensions (`.ts`/`.tsx`/`.js`/`.jsx`/`.py`/`.go`/`.rs`/`.java`). Gracefully degrades when CodeGraph is unavailable.
 
-### kg-context-injector — Code Structure Context Injection
+### keyword-spec-injector — Composed Prompt Context
 
-**Event**: `PreToolUse` (Agent) | **Level**: `standard` | **Workspace**: Required
+**Event**: `UserPromptSubmit` | **Level**: `standard` | **Workspace**: Required
 
-Extracts code structure context (callers, callees, exported symbols) from CodeGraph when agents start, injecting via `additionalContext`. Extracts camelCase/snake_case symbol names from the prompt and queries KG for function-level call relationships and file locations. Requires `@colbymchenry/codegraph` — silently skips when unavailable.
+Composes keyword-matched specs, wiki hits, domain terms, and KG code structure into one budgeted `<maestro-context>` block. KG lookup includes camelCase, snake_case, backticked symbols, referenced files, call relationships, and exports; unavailable sources degrade independently.
 
 ### workflow-guard — Workflow Guard
 

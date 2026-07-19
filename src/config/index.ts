@@ -131,6 +131,29 @@ const DEFAULT_HOOKS: HooksConfig = {
   plugins: [],
 };
 
+/** Convert user-facing hook names to the canonical config key used by runners. */
+export function normalizeHookToggleKey(name: string): string {
+  return name.trim().replace(/-([a-z])/g, (_, char: string) => char.toUpperCase());
+}
+
+/**
+ * Normalize persisted aliases while giving an explicitly canonical key
+ * precedence when both forms are present.
+ */
+export function normalizeHookToggles(
+  toggles: Record<string, boolean> | undefined,
+): Record<string, boolean> {
+  const normalized: Record<string, boolean> = {};
+  const entries = Object.entries(toggles ?? {});
+  for (const [name, enabled] of entries) {
+    normalized[normalizeHookToggleKey(name)] = enabled;
+  }
+  for (const [name, enabled] of entries) {
+    if (name === normalizeHookToggleKey(name)) normalized[name] = enabled;
+  }
+  return normalized;
+}
+
 function readHooksFromFile(filePath: string): Partial<HooksConfig> | undefined {
   if (!existsSync(filePath)) return undefined;
   try {
@@ -151,8 +174,8 @@ export function loadHooksConfig(): HooksConfig {
 
   // 3. Merge: project overrides global; arrays concatenated
   const toggles = {
-    ...(globalHooks?.toggles ?? {}),
-    ...(projectHooks?.toggles ?? {}),
+    ...normalizeHookToggles(globalHooks?.toggles),
+    ...normalizeHookToggles(projectHooks?.toggles),
   };
   const external = [
     ...(globalHooks?.external ?? []),
@@ -169,14 +192,14 @@ export function loadHooksConfig(): HooksConfig {
   const disable = process.env.MAESTRO_HOOKS_DISABLE;
   if (disable) {
     for (const name of disable.split(',').map((s) => s.trim()).filter(Boolean)) {
-      merged.toggles[name] = false;
+      merged.toggles[normalizeHookToggleKey(name)] = false;
     }
   }
 
   const enable = process.env.MAESTRO_HOOKS_ENABLE;
   if (enable) {
     for (const name of enable.split(',').map((s) => s.trim()).filter(Boolean)) {
-      merged.toggles[name] = true;
+      merged.toggles[normalizeHookToggleKey(name)] = true;
     }
   }
 

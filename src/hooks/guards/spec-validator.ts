@@ -1,5 +1,5 @@
 /**
- * Spec Validator Guard — PreToolUse: Write|Edit
+ * Spec Validator Guard — PreToolUse: Write
  *
  * Validates that spec file entries use the <spec-entry> closed-tag format.
  * Pure evaluation function — no I/O, follows workflow-guard.ts pattern.

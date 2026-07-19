@@ -16,7 +16,7 @@ import { evaluateKeywordInjection } from './keyword-spec-injector.js';
 import { loadWikiIndex, selectWikiByCategory } from './wiki-role-loader.js';
 import type { SpecInjectionConfig } from '../types/index.js';
 import { logInjectionEvent } from './spec-analytics.js';
-import { wrapMaestroContext, type ContextSection } from './context-format.js';
+import { truncateMaestroContext, wrapMaestroContext, type ContextSection } from './context-format.js';
 import { loadGlossary, type DomainTerm } from '../tools/domain-loader.js';
 import { loadWorkspaceConfig, resolveWorkspaceLinks } from '../config/index.js';
 import { join, resolve } from 'node:path';
@@ -289,7 +289,7 @@ export function evaluateSpecInjection(
 
   // Apply maxContentLength before context budget
   if (config?.maxContentLength && rawContent.length > config.maxContentLength) {
-    rawContent = rawContent.slice(0, config.maxContentLength - 20) + '...\n</maestro-context>';
+    rawContent = truncateMaestroContext(rawContent, config.maxContentLength);
   }
 
   const budget = evaluateContextBudget(rawContent, sessionId);

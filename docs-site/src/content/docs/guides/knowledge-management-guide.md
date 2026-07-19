@@ -178,9 +178,8 @@ maestro search "auth" --category coding            # 按分类过滤
 | Hook | 触发时机 | 行为 |
 |------|---------|------|
 | `spec-injector` | PreToolUse:Agent | agent 类型 → category → 加载 spec + keyword 条目 + knowhow 工具 |
-| `keyword-spec-injector` | UserPromptSubmit | prompt 关键词 → 匹配 spec-entry keywords → 注入（最多 5 条/次）+ KG 符号查找 |
+| `keyword-spec-injector` | UserPromptSubmit | 单次组合 spec/wiki/domain/KG 上下文（规范最多 5 条/次，总计 4096 字符） |
 | `kg-sync` | UserPromptSubmit | 源文件变更 → CodeGraph 增量同步（30 秒冷却） |
-| `kg-context-injector` | PreToolUse:Agent | prompt 中的符号名 → CodeGraph 查询 → 注入调用关系和文件位置 |
 
 | Agent 类型 | 映射 Category |
 |---|---|
@@ -209,7 +208,7 @@ npm install -g @colbymchenry/codegraph
 maestro kg index --sqlite
 ```
 
-KG 通过 Hook 自动保持新鲜：`kg-sync`（UserPromptSubmit 增量同步）+ `kg-context-injector`（Agent 启动注入）。仅在首次使用时需手动 `maestro kg index --sqlite`。
+KG 通过 Hook 自动保持新鲜并提供上下文：`kg-sync` 负责 UserPromptSubmit 增量同步，`keyword-spec-injector` 在同一 prompt 阶段组合代码关系、文件导出和知识内容。仅在首次使用时需手动 `maestro kg index --sqlite`。
 
 ### kg CLI 子命令
 

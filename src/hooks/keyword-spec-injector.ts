@@ -10,10 +10,11 @@ import { join } from 'node:path';
 import { buildKeywordIndex, lookupKeywords, type IndexedEntry } from '../tools/spec-keyword-index.js';
 import { readSpecBridge, markInjected, filterUnjected } from './spec-bridge.js';
 import { logInjectionEvent } from './spec-analytics.js';
-import { wrapMaestroContext, type ContextSection } from './context-format.js';
+import { truncateMaestroContext, wrapMaestroContext, type ContextSection } from './context-format.js';
 import { loadGlossary, type DomainTerm } from '../tools/domain-loader.js';
 import { matchDomainTerms, collectRewriteHints } from '../tools/domain-matcher.js';
 import { searchWiki, prewarmWikiIndexer, type WikiSearchHit } from './wiki-search-bridge.js';
+import { buildKgContextSections } from './kg-context-injector.js';
 
 // ============================================================================
 // Types
@@ -62,6 +63,7 @@ const CJK_STOP_WORDS = new Set([
 
 /** Max entries to inject per prompt to avoid context bloat */
 const MAX_ENTRIES_PER_INJECTION = 5;
+const MAX_PROMPT_CONTEXT_CHARS = 4096;
 
 // ============================================================================
 // Public API
@@ -133,10 +135,9 @@ export async function evaluateKeywordInjection(
     }
   } catch { /* best-effort */ }
 
-  // ── KG symbol lookup (best-effort) ─────────────────────────────────
+  // ── KG code context (best-effort, composed into the shared budget) ──
   try {
-    const symbolSection = await evaluateKgSymbolLookup(prompt, projectPath);
-    if (symbolSection) sections.push(symbolSection);
+    sections.push(...await buildKgContextSections(prompt, projectPath));
   } catch { /* best-effort */ }
 
   // ── Assemble result ────────────────────────────────────────────────
@@ -159,7 +160,11 @@ export async function evaluateKeywordInjection(
     (sum, s) => sum + s.lines.reduce((acc, l) => acc + l.length, 0),
     0,
   );
-  const content = wrapMaestroContext(liveSections, { used: usedChars, max: usedChars });
+  let content = wrapMaestroContext(liveSections, {
+    used: Math.min(usedChars, MAX_PROMPT_CONTEXT_CHARS),
+    max: MAX_PROMPT_CONTEXT_CHARS,
+  });
+  content = truncateMaestroContext(content, MAX_PROMPT_CONTEXT_CHARS);
 
   let allInjectedEntries = [...toInject, ...overflowEntries];
   if (allInjectedEntries.length > 0) {
@@ -297,56 +302,6 @@ function buildWikiSection(hits: WikiSearchHit[]): ContextSection {
 // ============================================================================
 // KG Symbol Lookup
 // ============================================================================
-
-const KG_SYMBOL_PATTERN = /\b[a-z]+[A-Z][a-zA-Z0-9]*\b|\b[a-z]+_[a-z0-9_]+\b/g;
-const KG_MAX_SYMBOLS = 3;
-const KG_MAX_RESULTS_PER_SYMBOL = 2;
-const KG_MAX_CONTENT_LENGTH = 512;
-
-/**
- * Extract camelCase/snake_case symbols from prompt and look up in KG.
- * Returns a `kg-symbols` ContextSection or null if nothing found.
- * Entire function is best-effort — returns null on any failure.
- */
-async function evaluateKgSymbolLookup(prompt: string, projectPath: string): Promise<ContextSection | null> {
-  const matches = prompt.match(KG_SYMBOL_PATTERN);
-  if (!matches || matches.length === 0) return null;
-
-  const symbols = [...new Set(matches)].slice(0, KG_MAX_SYMBOLS);
-
-  try {
-    const { MaestroGraph } = await import('../graph/kg/engine.js');
-    if (!MaestroGraph.isInitialized(projectPath)) return null;
-
-    const mg = await MaestroGraph.open(projectPath);
-    try {
-      const lines: string[] = [];
-      let totalLen = 0;
-
-      for (const sym of symbols) {
-        if (totalLen >= KG_MAX_CONTENT_LENGTH) break;
-
-        const results = mg.searchCode(sym, { limit: KG_MAX_RESULTS_PER_SYMBOL });
-        for (const node of results) {
-          const line = `[${node.kind}] ${node.name}` +
-            (node.filePath ? ` (${node.filePath}:${node.startLine})` : '') +
-            (node.signature ? ` — ${node.signature}` : '');
-
-          if (totalLen + line.length > KG_MAX_CONTENT_LENGTH) break;
-          lines.push(line);
-          totalLen += line.length;
-        }
-      }
-
-      if (lines.length === 0) return null;
-      return { label: 'kg-symbols', lines };
-    } finally {
-      try { mg.close(); } catch { /* best-effort */ }
-    }
-  } catch {
-    return null;
-  }
-}
 
 // ============================================================================
 // Domain Context Builder

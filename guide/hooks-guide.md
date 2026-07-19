@@ -57,13 +57,10 @@ Maestro Hook 系统为 Claude Code、Codex 和 Agy (Antigravity) 提供自动化
 | `skill-context` | UserPromptSubmit | — | standard | 必需 | Skill 调用时注入工作流状态和产物树 |
 | `coordinator-tracker` | Stop | — | standard | 必需 | 协调器链执行进度追踪 |
 | `preflight-guard` | PreToolUse | Bash\|Write\|Edit\|Agent | standard | — | 命令执行前预检守卫 |
-| `spec-validator` | PreToolUse | Write\|Edit | standard | — | 规范写入验证 |
-| `keyword-spec-injector` | UserPromptSubmit | — | standard | — | 关键词匹配注入规范 |
+| `spec-validator` | PreToolUse | Write | standard | — | 完整规范写入验证 |
+| `keyword-spec-injector` | UserPromptSubmit | — | standard | — | 单次注入 keyword/spec/wiki/domain/KG 上下文 |
 | `kg-sync` | UserPromptSubmit | — | standard | 必需 | 知识图谱增量同步（CooldownGuard 30s 去抖） |
 | `kg-auto-init` | UserPromptSubmit | — | standard | 必需 | 知识图谱自动初始化（CooldownGuard 5min 去抖） |
-| `kg-context-injector` | PreToolUse | Agent | standard | 必需 | 子代理执行前注入知识图谱上下文 |
-| `kg-unified-injector` | UserPromptSubmit | — | standard | 必需 | 统一知识注入（规范+知识图谱，opt-in） |
-| `kg-unified-injector-agent` | PreToolUse | Agent | standard | 必需 | 子代理统一知识注入（opt-in） |
 | `workflow-guard` | PreToolUse | Bash\|Write\|Edit | full | 必需 | 保护关键文件和操作 |
 | `prompt-guard` | UserPromptSubmit | — | full | — | 用户 prompt 安全检查 |
 
@@ -76,12 +73,9 @@ Maestro Hook 系统为 Claude Code、Codex 和 Agy (Antigravity) 提供自动化
 | `session-context` | SessionStart | startup\|resume | minimal | 必需 | 会话启动注入工作流状态 |
 | `spec-injector` | SessionStart | startup | standard | 必需 | 会话启动注入规范 |
 | `skill-context` | UserPromptSubmit | — | standard | 必需 | Skill 调用注入上下文 |
-| `keyword-spec-injector` | UserPromptSubmit | — | standard | 必需 | 关键词匹配注入规范 |
+| `keyword-spec-injector` | UserPromptSubmit | — | standard | 必需 | 单次注入 keyword/spec/wiki/domain/KG 上下文 |
 | `kg-sync` | UserPromptSubmit | — | standard | 必需 | 知识图谱增量同步 |
 | `kg-auto-init` | SessionStart | startup | standard | 必需 | 知识图谱自动初始化 |
-| `kg-context-injector` | PreToolUse | Agent | standard | 必需 | 子代理知识图谱上下文注入 |
-| `kg-unified-injector` | UserPromptSubmit | — | standard | 必需 | 统一知识注入（opt-in） |
-| `kg-unified-injector-agent` | PreToolUse | Agent | standard | 必需 | 子代理统一知识注入（opt-in） |
 | `delegate-monitor` | PostToolUse | Bash | standard | — | 监控异步委托 |
 | `coordinator-tracker` | Stop | — | standard | 必需 | 协调器进度追踪 |
 | `team-monitor` | Stop | — | standard | — | 团队心跳记录 |
@@ -100,18 +94,15 @@ Agy 通过 `hooks.json` 注册 Hook（前缀 `maestro-`），使用 `PreInvocati
 | `spec-injector` | PreToolUse | invoke_subagent | minimal | 必需 | 按 agent 类型自动注入项目规范 |
 | `session-context` | PreInvocation | — | standard | 必需 | 会话启动注入工作流状态 |
 | `skill-context` | PreInvocation | — | standard | 必需 | Skill 调用注入上下文 |
-| `keyword-spec-injector` | PreInvocation | — | standard | 必需 | 关键词匹配注入规范 |
+| `keyword-spec-injector` | PreInvocation | — | standard | 必需 | 单次注入 keyword/spec/wiki/domain/KG 上下文 |
 | `kg-sync` | PreInvocation | — | standard | 必需 | 知识图谱增量同步 |
 | `kg-auto-init` | PreInvocation | — | standard | 必需 | 知识图谱自动初始化 |
-| `kg-context-injector` | PreToolUse | invoke_subagent | standard | 必需 | 子代理知识图谱上下文注入 |
-| `kg-unified-injector` | PreInvocation | — | standard | 必需 | 统一知识注入（opt-in） |
-| `kg-unified-injector-agent` | PreToolUse | invoke_subagent | standard | 必需 | 子代理统一知识注入（opt-in） |
 | `delegate-monitor` | PostToolUse | run_command\|invoke_subagent | standard | — | 监控异步委托 |
 | `team-monitor` | Stop | — | standard | — | 团队心跳记录 |
 | `telemetry` | Stop | — | standard | — | 遥测采集 |
 | `coordinator-tracker` | Stop | — | standard | 必需 | 协调器进度追踪 |
 | `preflight-guard` | PreToolUse | run_command\|write_to_file\|replace_file_content\|multi_replace_file_content\|invoke_subagent | standard | 必需 | 命令执行前预检守卫 |
-| `spec-validator` | PreToolUse | write_to_file\|replace_file_content\|multi_replace_file_content | standard | 必需 | 规范写入验证 |
+| `spec-validator` | PreToolUse | write_to_file | standard | 必需 | 完整规范写入验证 |
 | `workflow-guard` | PreToolUse | run_command\|write_to_file\|replace_file_content\|multi_replace_file_content | full | 必需 | 保护文件和操作 |
 | `prompt-guard` | PreInvocation | — | full | — | 用户 prompt 安全检查 |
 
@@ -131,7 +122,7 @@ Hook 按**累积级别**安装，高级别包含所有低级别：
 |------|---------|---------|
 | `none` | 无 Hook | 完全手动控制 |
 | `minimal` | Statusline + spec-injector | 日常开发 |
-| `standard` | + delegate-monitor + kg-sync + kg-auto-init + kg-context-injector + kg-unified-injector(opt-in) + team/telemetry/coordinator(Stop) + session-context + skill-context + preflight/spec guards | 团队协作 |
+| `standard` | + delegate-monitor + kg-sync + kg-auto-init + keyword/spec/wiki/domain/KG prompt context + team/telemetry/coordinator(Stop) + session-context + skill-context + preflight/spec guards | 团队协作 |
 | `full` | + workflow-guard | 严格工作流 |
 
 ### 安装命令

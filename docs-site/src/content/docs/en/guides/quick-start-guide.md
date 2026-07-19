@@ -342,7 +342,7 @@ maestro kg search "validateToken"                   # Symbol search
 maestro kg context "validateToken"                  # Callers/callees
 ```
 
-Once installed, hooks keep the graph fresh automatically (`kg-sync` incremental sync + `kg-context-injector` agent injection).
+Once installed, hooks keep the graph fresh and provide context automatically (`kg-sync` incremental sync + composed `keyword-spec-injector` prompt context).
 
 ---
 

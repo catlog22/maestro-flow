@@ -39,12 +39,12 @@ v2→v3 迁移后的环境配置。验证并引导用户完成知识系统、Cod
 
 ```
 1. 运行：maestro hooks status 2>&1
-2. IF standard 级别已安装 BUT 缺少 kg-sync 或 kg-context-injector：
+2. IF standard 级别已安装 BUT 缺少 kg-sync 或 keyword-spec-injector：
      AskUserQuestion: "Hooks 需升级以包含 KG hooks，是否重新安装？"
      Options: [重新安装 / 跳过]
      IF 重新安装：
        Bash: maestro hooks install --level standard
-       显示 "Hooks 已升级，包含 kg-sync + kg-context-injector"
+       显示 "Hooks 已升级，包含 kg-sync + keyword-spec-injector"
 
 3. IF 未安装任何 hooks：
      AskUserQuestion: "是否安装 standard 级别 Hooks？（推荐）"
@@ -58,9 +58,9 @@ v2→v3 迁移后的环境配置。验证并引导用户完成知识系统、Cod
 | Hook | 事件 | 作用 |
 |------|------|------|
 | `kg-sync` | UserPromptSubmit | 用户输入时静默同步知识图谱（30 秒冷却） |
-| `kg-context-injector` | PreToolUse:Agent | Agent 启动时注入代码结构上下文 |
+| `keyword-spec-injector` | UserPromptSubmit | 单次组合规范、Wiki、领域与 KG 代码上下文 |
 
-`keyword-spec-injector` 也已升级——现在包含 KG 符号查找，从 prompt 中提取 camelCase/snake_case 符号名，查询 CodeGraph 获取调用关系。
+`keyword-spec-injector` 现在统一提取 camelCase、snake_case、反引号符号和文件路径，并在同一个 budget 中组合规范、Wiki、领域与 CodeGraph 调用关系。
 
 ## Step 4: 验证
 

@@ -466,8 +466,7 @@ maestro hooks uninstall
 | `session-context` | Notification | 会话启动注入工作流状态 |
 | `skill-context` | UserPromptSubmit | Skill 调用注入工作流状态 |
 | `kg-sync` | UserPromptSubmit | 静默同步知识图谱 |
-| `kg-context-injector` | PreToolUse | Agent 启动注入代码结构上下文 |
-| `keyword-spec-injector` | UserPromptSubmit | 关键词匹配注入规范 |
+| `keyword-spec-injector` | UserPromptSubmit | 单次组合 keyword/spec/wiki/domain/KG 上下文 |
 | `workflow-guard` | PreToolUse | 保护关键文件和操作（仅 full） |
 
 ### Hook 环境变量

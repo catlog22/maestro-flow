@@ -49,4 +49,3 @@ export { isWSL2, isOnDrvFs, decideWatchStrategy, areGitHooksInstalled } from './
 // Surface
 export { registerKgCommands } from './surface/cli.js';
 export { KG_MCP_TOOLS, handleMcpTool, precheckKg } from './surface/mcp-tools.js';
-export { evaluateUnifiedInjection, isUnifiedInjectorActive } from './surface/hook-injector.js';

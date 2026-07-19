@@ -166,7 +166,7 @@ export const en: LocaleStrings = {
     codexHooksLevelDescriptions: {
       none: 'No hooks',
       minimal: 'Session context (SessionStart)',
-      standard: '+ spec/keyword-injector + skill-context + delegate-monitor + coordinator/team/telemetry(Stop) + preflight/spec guards',
+      standard: '+ UserPromptSubmit spec/keyword/KG context + skill-context + delegate-monitor + coordinator/team/telemetry(Stop) + preflight/spec guards',
       full: '+ workflow-guard (PreToolUse, Bash only) + prompt-guard (UserPromptSubmit)',
     },
     codexHooksWinWarning: 'Warning: Codex hooks are not yet supported on Windows.',

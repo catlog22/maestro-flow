@@ -1,15 +1,12 @@
 /**
- * KG Context Injector — PreToolUse:Agent Hook
+ * KG Context Builder — code structure sections for prompt context
  *
  * Injects Knowledge Graph code structure context (callers, callees, exported
- * symbols) into subagent prompts using MaestroGraph as the data source.
+ * symbols) using MaestroGraph as the data source. The keyword prompt injector
+ * owns composition and budgeting; this module only builds KG sections.
  */
 
-import { createRequire } from 'node:module';
-import type { EnhancedNode, EnhancedEdge } from '../graph/types.js';
-import { wrapMaestroContext, type ContextSection } from './context-format.js';
-
-const require = createRequire(import.meta.url);
+import { truncateMaestroContext, wrapMaestroContext, type ContextSection } from './context-format.js';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -21,12 +18,26 @@ export interface KgInjectionResult {
   reason?: string;
 }
 
+interface CodeContextNode {
+  id: string;
+  name: string;
+  kind: string;
+  filePath?: string;
+  startLine?: number;
+  signature?: string;
+}
+
+interface CodeContextEdge {
+  kind: string;
+}
+
 // ---------------------------------------------------------------------------
 // Extraction helpers
 // ---------------------------------------------------------------------------
 
 const FILE_RE = /([\w\/\\.-]+\.(ts|tsx|js|jsx|py|go|rs|java))/g;
-const SYMBOL_RE = /`(\w+)`/g;
+const BACKTICK_SYMBOL_RE = /`(\w+)`/g;
+const CODE_SYMBOL_RE = /\b[a-z]+[A-Z][a-zA-Z0-9]*\b|\b[a-z]+_[a-z0-9_]+\b/g;
 
 function extractFilePaths(text: string): string[] {
   const seen = new Set<string>();
@@ -39,11 +50,14 @@ function extractFilePaths(text: string): string[] {
 
 function extractSymbols(text: string): string[] {
   const seen = new Set<string>();
-  for (const m of text.matchAll(SYMBOL_RE)) {
+  for (const m of text.matchAll(BACKTICK_SYMBOL_RE)) {
     const s = m[1];
     if (s.length >= 3 && !/^(the|and|for|not|but|has|get|set|new|var|let|use)$/i.test(s)) {
       if (!seen.has(s)) seen.add(s);
     }
+  }
+  for (const symbol of text.match(CODE_SYMBOL_RE) ?? []) {
+    if (!seen.has(symbol)) seen.add(symbol);
   }
   return [...seen];
 }
@@ -52,22 +66,22 @@ function extractSymbols(text: string): string[] {
 // Formatting helpers
 // ---------------------------------------------------------------------------
 
-function formatCaller(c: { node: EnhancedNode; edge: EnhancedEdge }): string {
+function formatCaller(c: { node: CodeContextNode; edge: CodeContextEdge }): string {
   const loc = c.node.filePath ? `${c.node.filePath}:${c.node.startLine}` : '';
   const name = c.node.name;
   return loc ? `${name} (${loc}) --${c.edge.kind}-->` : `${name} --${c.edge.kind}-->`;
 }
 
-function formatCallee(c: { node: EnhancedNode; edge: EnhancedEdge }): string {
+function formatCallee(c: { node: CodeContextNode; edge: CodeContextEdge }): string {
   const loc = c.node.filePath ? `${c.node.filePath}:${c.node.startLine}` : '';
   const name = c.node.name;
   return loc ? `--> ${name} (${loc})` : `--> ${name}`;
 }
 
 function buildRichSymbolSection(
-  node: EnhancedNode,
-  callers: Array<{ node: EnhancedNode; edge: EnhancedEdge }>,
-  callees: Array<{ node: EnhancedNode; edge: EnhancedEdge }>,
+  node: CodeContextNode,
+  callers: Array<{ node: CodeContextNode; edge: CodeContextEdge }>,
+  callees: Array<{ node: CodeContextNode; edge: CodeContextEdge }>,
 ): ContextSection {
   const lines: string[] = [];
   const loc = node.filePath ? ` ${node.filePath}:${node.startLine}` : '';
@@ -97,26 +111,18 @@ const MAX_CONTENT = 3072;
 const MAX_SYMBOLS = 3;
 const MAX_FILES = 2;
 
-/**
- * Evaluate whether to inject KG code structure context for a given prompt.
- * Uses CodeGraph as the sole data source.
- */
-export async function evaluateKgContextInjection(
-  _agentType: string,
+/** Build KG sections for the shared UserPromptSubmit context pipeline. */
+export async function buildKgContextSections(
   prompt: string,
   projectPath: string,
-): Promise<KgInjectionResult> {
+): Promise<ContextSection[]> {
   const symbols = extractSymbols(prompt).slice(0, MAX_SYMBOLS);
   const files = extractFilePaths(prompt).slice(0, MAX_FILES);
-  if (symbols.length === 0 && files.length === 0) {
-    return { inject: false, reason: 'no-references' };
-  }
+  if (symbols.length === 0 && files.length === 0) return [];
 
   try {
     const { MaestroGraph } = await import('../graph/kg/engine.js');
-    if (!MaestroGraph.isInitialized(projectPath)) {
-      return { inject: false, reason: 'maestrograph-not-initialized' };
-    }
+    if (!MaestroGraph.isInitialized(projectPath)) return [];
 
     const mg = await MaestroGraph.open(projectPath);
     try {
@@ -126,19 +132,17 @@ export async function evaluateKgContextInjection(
         const results = mg.searchCode(sym, { limit: 1 });
         if (results.length === 0) continue;
         const node = results[0];
-
         const callers = mg.getCallers(node.id, 1);
         const callees = mg.getCallees(node.id, 1);
-        sections.push(buildRichSymbolSection(node as any, callers as any, callees as any));
+        sections.push(buildRichSymbolSection(node, callers, callees));
       }
 
       for (const fp of files) {
         const fileNodes = mg.getQueryBuilder().getNodesByFile(fp);
-        if (fileNodes.length === 0) continue;
         const exported = fileNodes
-          .filter((n: any) => n.isExported)
+          .filter(node => node.isExported)
           .slice(0, 8)
-          .map((n: any) => `${n.kind}:${n.name}`);
+          .map(node => `${node.kind}:${node.name}`);
         if (exported.length > 0) {
           sections.push({
             label: `kg-file[${fp}]`,
@@ -147,24 +151,32 @@ export async function evaluateKgContextInjection(
         }
       }
 
-      if (sections.length === 0) {
-        return { inject: false, reason: 'no-matches' };
-      }
-
-      const usedChars = sections.reduce(
-        (sum, s) => sum + s.lines.reduce((acc, l) => acc + l.length, 0),
-        0,
-      );
-      let content = wrapMaestroContext(sections, { used: usedChars, max: MAX_CONTENT });
-      if (content.length > MAX_CONTENT) {
-        content = content.slice(0, MAX_CONTENT - 20) + '...\n</maestro-context>';
-      }
-
-      return { inject: true, content };
+      return sections;
     } finally {
       try { mg.close(); } catch { /* best-effort */ }
     }
   } catch {
-    return { inject: false, reason: 'maestrograph-unavailable' };
+    return [];
   }
+}
+
+/**
+ * Compatibility wrapper for direct consumers. New hook paths should compose
+ * buildKgContextSections() with the other prompt context sections instead.
+ */
+export async function evaluateKgContextInjection(
+  _agentType: string,
+  prompt: string,
+  projectPath: string,
+): Promise<KgInjectionResult> {
+  const sections = await buildKgContextSections(prompt, projectPath);
+  if (sections.length === 0) return { inject: false, reason: 'no-matches' };
+
+  const usedChars = sections.reduce(
+    (sum, section) => sum + section.lines.reduce((acc, line) => acc + line.length, 0),
+    0,
+  );
+  let content = wrapMaestroContext(sections, { used: usedChars, max: MAX_CONTENT });
+  content = truncateMaestroContext(content, MAX_CONTENT);
+  return { inject: true, content };
 }

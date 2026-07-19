@@ -3,25 +3,16 @@ import { readFileSync, writeFileSync, existsSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { homedir } from 'node:os';
 import { paths } from '../config/paths.js';
-import { loadConfig, saveConfig, loadHooksConfig, loadSpecInjectionConfig } from '../config/index.js';
-import { evaluateWorkflowGuard, evaluatePathGuard, loadPathGuardConfig } from '../hooks/guards/workflow-guard.js';
-import { evaluatePreflightGuard, loadPreflightConfig } from '../hooks/guards/preflight-guard.js';
-import { evaluatePromptGuard } from '../hooks/guards/prompt-guard.js';
-import { evaluateSpecValidator } from '../hooks/guards/spec-validator.js';
-import { evaluateKeywordInjection } from '../hooks/keyword-spec-injector.js';
-import { evaluateDelegateNotifications } from '../hooks/delegate-monitor.js';
-import { runTeamMonitor } from '../hooks/team-monitor.js';
-import { evaluateSpecInjection } from '../hooks/spec-injector.js';
-import { evaluateSessionContext } from '../hooks/session-context.js';
-import { evaluateSkillContext } from '../hooks/skill-context.js';
-import { resolveWorkspace } from '../hooks/workspace.js';
 import {
-  readMaestroSession,
-  readLatestSession,
-  readCoordBridge,
-  writeCoordBridge,
-  type CoordBridgeData,
-} from '../hooks/coordinator-tracker.js';
+  loadConfig,
+  saveConfig,
+  loadHooksConfig,
+  loadSpecInjectionConfig,
+  normalizeHookToggleKey,
+  normalizeHookToggles,
+} from '../config/index.js';
+import { resolveWorkspace } from '../hooks/workspace.js';
+import type { CoordBridgeData } from '../hooks/coordinator-tracker.js';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -72,7 +63,7 @@ export const HOOK_LEVELS: readonly HookLevel[] = ['none', 'minimal', 'standard',
 export const HOOK_LEVEL_DESCRIPTIONS: Record<HookLevel, string> = {
   none: 'No hooks',
   minimal: 'Statusline + spec-injector',
-  standard: '+ session-context + search-daemon + kg-auto-init (SessionStart) + delegate-monitor + team/telemetry/coordinator(Stop) + skill-context + kg-sync + kg-context-injector + kg-unified-injector (opt-in) + search-cache-invalidator',
+  standard: '+ session-context + search-daemon + kg-auto-init (SessionStart) + delegate-monitor + team/telemetry/coordinator(Stop) + skill-context + kg-sync + keyword/spec/wiki/KG prompt context + search-cache-invalidator',
   full: '+ workflow-guard (PreToolUse) + prompt-guard (UserPromptSubmit)',
 };
 
@@ -85,13 +76,10 @@ export const HOOK_DEFS: Record<string, HookDef> = {
   'skill-context': { event: 'UserPromptSubmit', level: 'standard', requiresWorkspace: true },
   'coordinator-tracker': { event: 'Stop', level: 'standard', requiresWorkspace: true },
   'preflight-guard': { event: 'PreToolUse', matcher: 'Bash|Write|Edit|Agent', level: 'standard', requiresWorkspace: true },
-  'spec-validator': { event: 'PreToolUse', matcher: 'Write|Edit', level: 'standard', requiresWorkspace: true },
+  'spec-validator': { event: 'PreToolUse', matcher: 'Write', level: 'standard', requiresWorkspace: true },
   'keyword-spec-injector': { event: 'UserPromptSubmit', level: 'standard', requiresWorkspace: true },
   'kg-sync': { event: 'UserPromptSubmit', level: 'standard', requiresWorkspace: true },
   'kg-auto-init': { event: 'SessionStart', matcher: 'startup', level: 'standard', requiresWorkspace: true },
-  'kg-context-injector': { event: 'PreToolUse', matcher: 'Agent', level: 'standard', requiresWorkspace: true },
-  'kg-unified-injector': { event: 'UserPromptSubmit', level: 'standard', requiresWorkspace: true },
-  'kg-unified-injector-agent': { event: 'PreToolUse', matcher: 'Agent', level: 'standard', requiresWorkspace: true },
   'search-cache-invalidator': { event: 'PostToolUse', matcher: 'Write|Edit', level: 'standard', requiresWorkspace: true },
   'search-daemon-start': { event: 'SessionStart', matcher: 'startup', level: 'standard', requiresWorkspace: true },
   'workflow-guard': { event: 'PreToolUse', matcher: 'Bash|Write|Edit', level: 'full', requiresWorkspace: true },
@@ -118,15 +106,12 @@ export const CODEX_HOOK_DEFS: Record<string, CodexHookDef> = {
   'keyword-spec-injector': { event: 'UserPromptSubmit', level: 'standard', requiresWorkspace: true },
   'kg-sync':               { event: 'UserPromptSubmit', level: 'standard', requiresWorkspace: true },
   'kg-auto-init':          { event: 'SessionStart', matcher: 'startup', level: 'standard', requiresWorkspace: true, statusMessage: 'Initializing knowledge graph' },
-  'kg-context-injector':   { event: 'PreToolUse', matcher: 'Agent', level: 'standard', requiresWorkspace: true },
   'delegate-monitor':      { event: 'PostToolUse', matcher: 'Bash', level: 'standard' },
   'coordinator-tracker':   { event: 'Stop', level: 'standard', requiresWorkspace: true },
   'team-monitor':          { event: 'Stop', level: 'standard' },
   'telemetry':             { event: 'Stop', level: 'standard' },
   'preflight-guard':       { event: 'PreToolUse', matcher: 'Bash', level: 'standard', requiresWorkspace: true, statusMessage: 'Running preflight checks' },
-  'spec-validator':        { event: 'PreToolUse', matcher: 'Write|Edit', level: 'standard', requiresWorkspace: true, statusMessage: 'Validating against specs' },
-  'kg-unified-injector':   { event: 'UserPromptSubmit', level: 'standard', requiresWorkspace: true },
-  'kg-unified-injector-agent': { event: 'PreToolUse', matcher: 'Agent', level: 'standard', requiresWorkspace: true },
+  'spec-validator':        { event: 'PreToolUse', matcher: 'Write', level: 'standard', requiresWorkspace: true, statusMessage: 'Validating against specs' },
   'search-daemon-start':   { event: 'SessionStart', matcher: 'startup', level: 'standard', requiresWorkspace: true, statusMessage: 'Starting search daemon' },
   'search-cache-invalidator': { event: 'PostToolUse', matcher: 'Write|Edit', level: 'standard', requiresWorkspace: true },
   'workflow-guard':        { event: 'PreToolUse', matcher: 'Bash', level: 'full', requiresWorkspace: true, statusMessage: 'Checking command safety' },
@@ -136,7 +121,7 @@ export const CODEX_HOOK_DEFS: Record<string, CodexHookDef> = {
 export const CODEX_HOOK_LEVEL_DESCRIPTIONS: Record<HookLevel, string> = {
   none: 'No hooks',
   minimal: 'Session context (SessionStart)',
-  standard: '+ spec/keyword-injector + skill-context + kg-sync + kg-auto-init(SessionStart) + kg-context-injector + delegate-monitor + coordinator/team/telemetry(Stop) + preflight/spec guards + kg-unified-injector (opt-in) + search-daemon-start(SessionStart) + search-cache-invalidator',
+  standard: '+ keyword/spec/wiki/KG context (UserPromptSubmit) + skill-context + kg-sync + kg-auto-init(SessionStart) + delegate-monitor + coordinator/team/telemetry(Stop) + preflight/spec guards + search-daemon-start(SessionStart) + search-cache-invalidator',
   full: '+ workflow-guard (PreToolUse, Bash only) + prompt-guard (UserPromptSubmit)',
 };
 
@@ -707,20 +692,17 @@ export const AGY_HOOK_DEFS: Record<string, AgyHookDef> = {
   'keyword-spec-injector': { event: 'PreInvocation', level: 'standard', requiresWorkspace: true },
   'kg-sync':               { event: 'PreInvocation', level: 'standard', requiresWorkspace: true },
   'kg-auto-init':          { event: 'PreInvocation', level: 'standard', requiresWorkspace: true },
-  'kg-context-injector':   { event: 'PreToolUse', matcher: 'invoke_subagent', level: 'standard', requiresWorkspace: true },
   'delegate-monitor':      { event: 'PostToolUse', matcher: 'run_command|invoke_subagent', level: 'standard' },
   'team-monitor':          { event: 'Stop', level: 'standard' },
   'telemetry':             { event: 'Stop', level: 'standard' },
   'coordinator-tracker':   { event: 'Stop', level: 'standard', requiresWorkspace: true },
 
-  'kg-unified-injector':   { event: 'PreInvocation', level: 'standard', requiresWorkspace: true },
-  'kg-unified-injector-agent': { event: 'PreToolUse', matcher: 'invoke_subagent', level: 'standard', requiresWorkspace: true },
   'search-daemon-start':   { event: 'PreInvocation', level: 'standard', requiresWorkspace: true },
   'search-cache-invalidator': { event: 'PostToolUse', matcher: 'write_to_file|replace_file_content|multi_replace_file_content', level: 'standard', requiresWorkspace: true },
 
   // Full — guards
   'preflight-guard':       { event: 'PreToolUse', matcher: 'run_command|write_to_file|replace_file_content|multi_replace_file_content|invoke_subagent', level: 'standard', requiresWorkspace: true },
-  'spec-validator':        { event: 'PreToolUse', matcher: 'write_to_file|replace_file_content|multi_replace_file_content', level: 'standard', requiresWorkspace: true },
+  'spec-validator':        { event: 'PreToolUse', matcher: 'write_to_file', level: 'standard', requiresWorkspace: true },
   'workflow-guard':        { event: 'PreToolUse', matcher: 'run_command|write_to_file|replace_file_content|multi_replace_file_content', level: 'full', requiresWorkspace: true },
   'prompt-guard':          { event: 'PreInvocation', level: 'full', requiresWorkspace: false },
 };
@@ -728,7 +710,7 @@ export const AGY_HOOK_DEFS: Record<string, AgyHookDef> = {
 export const AGY_HOOK_LEVEL_DESCRIPTIONS: Record<HookLevel, string> = {
   none: 'No hooks',
   minimal: 'spec-injector (PreToolUse on invoke_subagent)',
-  standard: '+ session/skill/keyword context (PreInvocation) + delegate-monitor (PostToolUse) + team/telemetry/coordinator (Stop) + preflight/spec guards + kg-unified-injector (opt-in) + search-daemon-start(PreInvocation) + search-cache-invalidator',
+  standard: '+ session/skill/keyword/spec/wiki/KG context (PreInvocation) + delegate-monitor (PostToolUse) + team/telemetry/coordinator (Stop) + preflight/spec guards + search-daemon-start(PreInvocation) + search-cache-invalidator',
   full: '+ workflow-guard (PreToolUse on shell/file writes) + prompt-guard (PreInvocation)',
 };
 
@@ -925,6 +907,7 @@ const HOOK_RUNNERS: Record<string, HookRunner> = {
     if (config.toggles['preflightGuard'] === false) return;
 
     const cwd = process.env.MAESTRO_PROJECT_ROOT || process.cwd();
+    const { evaluatePreflightGuard, loadPreflightConfig } = await import('../hooks/guards/preflight-guard.js');
     const pfConfig = loadPreflightConfig(cwd);
     const result = evaluatePreflightGuard(cwd, pfConfig);
 
@@ -957,10 +940,10 @@ const HOOK_RUNNERS: Record<string, HookRunner> = {
     // Only validate .workflow/specs/ files
     if (!filePath.replace(/\\/g, '/').includes('.workflow/specs/')) return;
 
-    // For Write: full content. For Edit: we can only validate the file_path presence.
     const content: string = toolInput.content ?? '';
-    if (!content) return; // Edit tool — skip (can't validate partial edits)
+    if (!content) return;
 
+    const { evaluateSpecValidator } = await import('../hooks/guards/spec-validator.js');
     const result = evaluateSpecValidator(filePath, content);
     if (!result.valid) {
       const errorSummary = result.errors.map(e => `L${e.line}: ${e.message}`).join('\n');
@@ -996,6 +979,7 @@ const HOOK_RUNNERS: Record<string, HookRunner> = {
     const workspace = resolveWorkspace({ cwd });
     if (!workspace) return;
 
+    const { evaluateKeywordInjection } = await import('../hooks/keyword-spec-injector.js');
     const result = await evaluateKeywordInjection(prompt, workspace, sessionId);
     if (result.inject && result.content) {
       process.stdout.write(JSON.stringify({
@@ -1037,89 +1021,6 @@ const HOOK_RUNNERS: Record<string, HookRunner> = {
     await evaluateKgAutoInit(cwd, sessionId);
   },
 
-  'kg-context-injector': async () => {
-    const config = loadHooksConfig();
-    if (config.toggles['kgContextInjector'] === false) return;
-
-    const raw = await readStdin();
-    const data = JSON.parse(raw);
-    const toolInput = data.tool_input ?? {};
-    const agentType: string = toolInput.subagent_type ?? '';
-    if (!agentType) return;
-
-    const cwd = resolveWorkspace(data) ?? data.cwd ?? process.cwd();
-    const originalPrompt: string = toolInput.prompt ?? '';
-
-    const { evaluateKgContextInjection } = await import('../hooks/kg-context-injector.js');
-    const result = await evaluateKgContextInjection(agentType, originalPrompt, cwd);
-    if (result.inject && result.content) {
-      const augmentedPrompt = `${result.content}\n\n${originalPrompt}`;
-
-      process.stdout.write(JSON.stringify({
-        hookSpecificOutput: {
-          hookEventName: 'PreToolUse',
-          updatedInput: {
-            ...toolInput,
-            prompt: augmentedPrompt,
-          },
-        },
-      }));
-    }
-  },
-
-  'kg-unified-injector': async () => {
-    const config = loadHooksConfig();
-    if (config.toggles['kgUnifiedInjector'] !== true) return;
-
-    const raw = await readStdin();
-    const data = JSON.parse(raw);
-    const prompt: string = data.user_prompt ?? data.prompt ?? '';
-    const sessionId: string = data.session_id ?? '';
-    if (!prompt || !sessionId) return;
-
-    const cwd = resolveWorkspace(data) ?? data.cwd ?? process.cwd();
-
-    const { evaluateUnifiedInjection } = await import('../graph/kg/surface/hook-injector.js');
-    const result = await evaluateUnifiedInjection(prompt, null, cwd, sessionId);
-    if (result.inject && result.content) {
-      process.stdout.write(JSON.stringify({
-        hookSpecificOutput: {
-          hookEventName: data.hook_event_name || 'UserPromptSubmit',
-          additionalContext: result.content,
-        },
-      }));
-    }
-  },
-
-  'kg-unified-injector-agent': async () => {
-    const config = loadHooksConfig();
-    if (config.toggles['kgUnifiedInjector'] !== true) return;
-
-    const raw = await readStdin();
-    const data = JSON.parse(raw);
-    const toolInput = data.tool_input ?? {};
-    const agentType: string = toolInput.subagent_type ?? '';
-    if (!agentType) return;
-
-    const cwd = resolveWorkspace(data) ?? data.cwd ?? process.cwd();
-    const sessionId: string = data.session_id ?? '';
-    const originalPrompt: string = toolInput.prompt ?? '';
-
-    const { evaluateUnifiedInjection } = await import('../graph/kg/surface/hook-injector.js');
-    const result = await evaluateUnifiedInjection(originalPrompt, agentType, cwd, sessionId);
-    if (result.inject && result.content) {
-      process.stdout.write(JSON.stringify({
-        hookSpecificOutput: {
-          hookEventName: 'PreToolUse',
-          updatedInput: {
-            ...toolInput,
-            prompt: `${result.content}\n\n${originalPrompt}`,
-          },
-        },
-      }));
-    }
-  },
-
   'workflow-guard': async () => {
     const config = loadHooksConfig();
     if (config.toggles['workflowGuard'] === false) return;
@@ -1133,6 +1034,7 @@ const HOOK_RUNNERS: Record<string, HookRunner> = {
         ? data.tool_input.command
         : JSON.stringify(data.tool_input ?? '');
 
+    const { evaluateWorkflowGuard, evaluatePathGuard, loadPathGuardConfig } = await import('../hooks/guards/workflow-guard.js');
     const result = evaluateWorkflowGuard(toolName, toolInput);
     if (result.blocked) {
       process.stdout.write(JSON.stringify({
@@ -1171,6 +1073,7 @@ const HOOK_RUNNERS: Record<string, HookRunner> = {
     const prompt: string = data.user_prompt ?? data.prompt ?? '';
     if (!prompt) return;
 
+    const { evaluatePromptGuard } = await import('../hooks/guards/prompt-guard.js');
     const result = evaluatePromptGuard(prompt);
     if (result.flagged) {
       process.stdout.write(JSON.stringify({
@@ -1185,6 +1088,7 @@ const HOOK_RUNNERS: Record<string, HookRunner> = {
   'delegate-monitor': async () => {
     const raw = await readStdin();
     const data = JSON.parse(raw);
+    const { evaluateDelegateNotifications } = await import('../hooks/delegate-monitor.js');
     const result = evaluateDelegateNotifications(data);
     if (result) {
       process.stdout.write(JSON.stringify(result));
@@ -1197,6 +1101,7 @@ const HOOK_RUNNERS: Record<string, HookRunner> = {
 
     const raw = await readStdin();
     const data = JSON.parse(raw);
+    const { evaluateSpecInjection } = await import('../hooks/spec-injector.js');
     const hookEventName: string = data.hook_event_name ?? '';
     const isSessionStart = hookEventName === 'SessionStart';
 
@@ -1251,6 +1156,7 @@ const HOOK_RUNNERS: Record<string, HookRunner> = {
 
     const raw = await readStdin();
     const data = raw ? JSON.parse(raw) : {};
+    const { evaluateSessionContext } = await import('../hooks/session-context.js');
     const result = evaluateSessionContext(data);
     if (result) {
       process.stdout.write(JSON.stringify(result));
@@ -1268,6 +1174,7 @@ const HOOK_RUNNERS: Record<string, HookRunner> = {
 
     const cwd = data.cwd ?? process.cwd();
     const sessionId: string = data.session_id ?? '';
+    const { evaluateSkillContext } = await import('../hooks/skill-context.js');
     const result = evaluateSkillContext({ user_prompt: prompt, cwd, session_id: sessionId });
     if (result) {
       process.stdout.write(JSON.stringify(result));
@@ -1279,6 +1186,7 @@ const HOOK_RUNNERS: Record<string, HookRunner> = {
     const data = raw ? JSON.parse(raw) : {};
     // Stop event has no tool_name; use 'turn_complete' as the action
     if (!data.tool_name) data.tool_name = 'turn_complete';
+    const { runTeamMonitor } = await import('../hooks/team-monitor.js');
     runTeamMonitor(data);
   },
 
@@ -1313,6 +1221,12 @@ const HOOK_RUNNERS: Record<string, HookRunner> = {
     const workspace = resolveWorkspace(data);
     if (!workspace) return;
 
+    const {
+      readMaestroSession,
+      readLatestSession,
+      readCoordBridge,
+      writeCoordBridge,
+    } = await import('../hooks/coordinator-tracker.js');
     // Read status.json (/maestro & /maestro-coordinate)
     let bridgeData: CoordBridgeData | null = readMaestroSession(workspace);
 
@@ -1432,7 +1346,7 @@ export function registerHooksCommand(program: Command): void {
       const durationMs = Date.now() - startMs;
 
       // Log hook call — only for spec-analytics-relevant hooks (whitelist)
-      const SPEC_ANALYTICS_HOOKS = new Set(['spec-injector', 'keyword-spec-injector', 'kg-context-injector']);
+      const SPEC_ANALYTICS_HOOKS = new Set(['spec-injector', 'keyword-spec-injector']);
       if (SPEC_ANALYTICS_HOOKS.has(name)) {
         try {
           const workspace = resolveWorkspace({ cwd });
@@ -1605,9 +1519,11 @@ export function registerHooksCommand(program: Command): void {
       if (!config.hooks) {
         config.hooks = { toggles: {}, external: [], plugins: [] };
       }
-      config.hooks.toggles[name] = state === 'on';
+      config.hooks.toggles = normalizeHookToggles(config.hooks.toggles);
+      const toggleKey = normalizeHookToggleKey(name);
+      config.hooks.toggles[toggleKey] = state === 'on';
       saveConfig(config);
-      console.log(`Hook "${name}" toggled ${state}.`);
+      console.log(`Hook "${name}" (${toggleKey}) toggled ${state}.`);
     });
 
   // --- maestro hooks analytics ---
@@ -1759,23 +1675,7 @@ export function registerHooksCommand(program: Command): void {
 
       console.log('Claude Code hooks (subprocess):');
       for (const [name, def] of Object.entries(HOOK_DEFS)) {
-        const toggleKey = name === 'workflow-guard' ? 'workflowGuard'
-          : name === 'preflight-guard' ? 'preflightGuard'
-          : name === 'prompt-guard' ? 'promptGuard'
-          : name === 'delegate-monitor' ? 'delegateMonitor'
-          : name === 'team-monitor' ? 'teamMonitor'
-          : name === 'spec-injector' ? 'specInjector'
-          : name === 'session-context' ? 'sessionContext'
-          : name === 'skill-context' ? 'skillContext'
-          : name === 'coordinator-tracker' ? 'coordinatorTracker'
-          : name === 'spec-validator' ? 'specValidator'
-          : name === 'keyword-spec-injector' ? 'keywordSpecInjector'
-          : name === 'kg-sync' ? 'kgSync'
-          : name === 'kg-auto-init' ? 'kgAutoInit'
-          : name === 'kg-context-injector' ? 'kgContextInjector'
-          : name === 'kg-unified-injector' ? 'kgUnifiedInjector'
-          : name === 'kg-unified-injector-agent' ? 'kgUnifiedInjector'
-          : name;
+        const toggleKey = normalizeHookToggleKey(name);
         const enabled = config.toggles[toggleKey] !== false;
         const matcher = def.matcher ? ` [${def.matcher}]` : '';
         const wf = def.requiresWorkspace ? ' (workspace)' : '';
@@ -1784,9 +1684,10 @@ export function registerHooksCommand(program: Command): void {
 
       console.log('\nCodex hooks (subprocess):');
       for (const [name, def] of Object.entries(CODEX_HOOK_DEFS)) {
+        const enabled = config.toggles[normalizeHookToggleKey(name)] !== false;
         const matcher = def.matcher ? ` [${def.matcher}]` : '';
         const wf = def.requiresWorkspace ? ' (workspace)' : '';
-        console.log(`  ${name}: ${def.event}${matcher} (level: ${def.level})${wf}`);
+        console.log(`  ${name}: ${def.event}${matcher} — ${enabled ? 'enabled' : 'disabled'} (level: ${def.level})${wf}`);
       }
 
       console.log('\nCoordinator hooks (in-process):');

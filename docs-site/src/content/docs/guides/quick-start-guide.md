@@ -345,7 +345,7 @@ maestro kg search "validateToken"                   # 符号搜索
 maestro kg context "validateToken"                  # 调用者/被调用者
 ```
 
-安装后 Hook 自动保持图谱新鲜（`kg-sync` 增量同步 + `kg-context-injector` Agent 注入）。
+安装后 Hook 自动保持图谱新鲜并提供上下文（`kg-sync` 增量同步 + `keyword-spec-injector` 单次 prompt 上下文组合）。
 
 ---
 

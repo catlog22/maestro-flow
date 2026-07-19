@@ -440,10 +440,9 @@ maestro worktree delete <name>
 | `skill-context` | UserPromptSubmit | — | standard | 必需 | Skill 调用时注入工作流状态和产物树 |
 | `coordinator-tracker` | Stop | — | standard | 必需 | 协调器链执行进度追踪 |
 | `kg-sync` | UserPromptSubmit | — | standard | 必需 | 用户输入时静默同步知识图谱 |
-| `kg-context-injector` | PreToolUse | Agent | standard | 必需 | Agent 启动时注入代码结构上下文 |
 | `preflight-guard` | PreToolUse | Bash\|Write\|Edit\|Agent | standard | — | 命令执行前预检守卫 |
-| `spec-validator` | PreToolUse | Write\|Edit | standard | — | 规范写入验证 |
-| `keyword-spec-injector` | UserPromptSubmit | — | standard | — | 关键词匹配注入规范 |
+| `spec-validator` | PreToolUse | Write | standard | — | 完整规范写入验证 |
+| `keyword-spec-injector` | UserPromptSubmit | — | standard | — | 单次注入 keyword/spec/wiki/domain/KG 上下文 |
 | `workflow-guard` | PreToolUse | Bash\|Write\|Edit | full | 必需 | 保护关键文件和操作 |
 
 ### Codex Hooks
@@ -453,9 +452,8 @@ maestro worktree delete <name>
 | `session-context` | SessionStart | startup\|resume | minimal | 必需 | 会话启动注入工作流状态 |
 | `spec-injector` | SessionStart | startup | standard | 必需 | 会话启动注入规范 |
 | `skill-context` | UserPromptSubmit | — | standard | 必需 | Skill 调用注入上下文 |
-| `keyword-spec-injector` | UserPromptSubmit | — | standard | 必需 | 关键词匹配注入规范 |
+| `keyword-spec-injector` | UserPromptSubmit | — | standard | 必需 | 单次注入 keyword/spec/wiki/domain/KG 上下文 |
 | `kg-sync` | UserPromptSubmit | — | standard | 必需 | 静默同步知识图谱 |
-| `kg-context-injector` | PreToolUse | Agent | standard | 必需 | Agent 注入代码结构上下文 |
 | `delegate-monitor` | PostToolUse | Bash | standard | — | 监控异步委托 |
 
 ---

@@ -35,7 +35,7 @@ export function HooksPanel({ workDir, onBack }: HooksPanelProps) {
       getClaudeSettingsPath,
       loadClaudeSettings,
     } = await import('../../commands/hooks.js') as any;
-    const { loadHooksConfig } = await import('../../config/index.js');
+    const { loadHooksConfig, normalizeHookToggleKey } = await import('../../config/index.js');
 
     const settingsPath = getClaudeSettingsPath();
     const settings = loadClaudeSettings(settingsPath);
@@ -50,7 +50,7 @@ export function HooksPanel({ workDir, onBack }: HooksPanelProps) {
       // Check if installed in settings
       const installed = findHook(settings, name);
       // Check toggle
-      const toggleKey = name.replace(/-([a-z])/g, (_, c: string) => c.toUpperCase());
+      const toggleKey = normalizeHookToggleKey(name);
       const enabled = config.toggles[toggleKey] !== false;
 
       items.push({

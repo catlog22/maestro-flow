@@ -111,6 +111,29 @@ Content.
     const result = await evaluateKeywordInjection('implement auth', testDir, sid);
     expect(result.inject).toBe(false);
   });
+
+  it('caps the composed prompt context and preserves the closing tag', async () => {
+    const entries = Array.from({ length: 5 }, (_, index) => `
+<spec-entry category="coding" keywords="bulk" date="2026-04-21">
+
+### Bulk Entry ${index}
+
+${'x'.repeat(1500)}
+
+</spec-entry>`).join('\n');
+    writeSpecFile('coding-conventions.md', entries);
+
+    const sid = newSessionId();
+    try {
+      const result = await evaluateKeywordInjection('apply bulk rules', testDir, sid);
+      expect(result.inject).toBe(true);
+      expect(result.content?.length).toBeLessThanOrEqual(4096);
+      expect(result.content).toMatch(/<\/maestro-context>$/);
+    } finally {
+      const path = bridgePath(sid);
+      if (existsSync(path)) rmSync(path);
+    }
+  });
 });
 
 // ---------------------------------------------------------------------------
