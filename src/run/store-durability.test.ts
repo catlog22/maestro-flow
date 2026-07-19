@@ -24,6 +24,8 @@ const fsFault = vi.hoisted(() => ({
   lockReadCode: null as string | null,
   lockStatCode: null as string | null,
   lockUnlinkCode: null as string | null,
+  lockWriteCode: null as string | null,
+  lockWriteFailuresRemaining: null as number | null,
   lockFaultCount: 0,
 }));
 
@@ -56,6 +58,17 @@ vi.mock('node:fs', async importOriginal => {
     },
     writeFileSync: (...args: Parameters<typeof actual.writeFileSync>) => {
       const [path, data] = args;
+      if (
+        fsFault.lockWriteCode
+        && String(path).endsWith('.session-store.lock')
+        && (fsFault.lockWriteFailuresRemaining === null || fsFault.lockWriteFailuresRemaining > 0)
+      ) {
+        fsFault.lockFaultCount += 1;
+        if (fsFault.lockWriteFailuresRemaining !== null) fsFault.lockWriteFailuresRemaining -= 1;
+        throw Object.assign(new Error(`injected lock write ${fsFault.lockWriteCode}: ${String(path)}`), {
+          code: fsFault.lockWriteCode,
+        });
+      }
       if (fsFault.restoreDestination && String(path).endsWith(fsFault.restoreDestination) && Buffer.isBuffer(data)) {
         throw Object.assign(new Error(`injected rollback EPERM: ${String(path)}`), { code: 'EPERM' });
       }
@@ -130,6 +143,8 @@ beforeEach(() => {
   fsFault.lockReadCode = null;
   fsFault.lockStatCode = null;
   fsFault.lockUnlinkCode = null;
+  fsFault.lockWriteCode = null;
+  fsFault.lockWriteFailuresRemaining = null;
   fsFault.lockFaultCount = 0;
 });
 
@@ -361,6 +376,73 @@ describe('SessionStore durability adversarial harness', () => {
         fsFault[operation] = null;
       }
     }
+  });
+
+  it.each(['EPERM', 'EACCES', 'EBUSY'])('retries transient %s lock creation errors before succeeding', code => {
+    let elapsed = 0;
+    let retries = 0;
+    const store = new SessionStore(createRoot(), {
+      lockTiming: {
+        now: () => elapsed,
+        wait: milliseconds => {
+          retries += 1;
+          elapsed += milliseconds;
+        },
+      },
+    });
+    fsFault.lockWriteCode = code;
+    fsFault.lockWriteFailuresRemaining = 2;
+    let entered = false;
+
+    store.withLock(() => { entered = true; });
+
+    expect({ entered, elapsed, retries, faultAttempts: fsFault.lockFaultCount }, code).toEqual({
+      entered: true,
+      elapsed: 30,
+      retries: 2,
+      faultAttempts: 2,
+    });
+    expect(existsSync(lockPath(store))).toBe(false);
+  });
+
+  it.each(['EPERM', 'EACCES', 'EBUSY'])('bounds persistent %s lock creation errors with an injected clock', code => {
+    let elapsed = 0;
+    let retries = 0;
+    const store = new SessionStore(createRoot(), {
+      lockTiming: {
+        now: () => elapsed,
+        wait: milliseconds => {
+          retries += 1;
+          elapsed += milliseconds;
+        },
+      },
+    });
+    fsFault.lockWriteCode = code;
+
+    expect(() => store.withLock(() => undefined)).toThrow(
+      `Cannot create SessionStore lock after retrying ${code}`,
+    );
+    expect(elapsed).toBeGreaterThanOrEqual(5_000);
+    expect(elapsed).toBeLessThanOrEqual(5_015);
+    expect(retries).toBeGreaterThanOrEqual(333);
+    expect(retries).toBeLessThanOrEqual(335);
+    expect(fsFault.lockFaultCount).toBeGreaterThanOrEqual(334);
+    expect(fsFault.lockFaultCount).toBeLessThanOrEqual(336);
+    expect(existsSync(lockPath(store))).toBe(false);
+  });
+
+  it('does not retry or swallow non-transient lock creation errors', () => {
+    let elapsed = 0;
+    const store = new SessionStore(createRoot(), {
+      lockTiming: {
+        now: () => elapsed,
+        wait: milliseconds => { elapsed += milliseconds; },
+      },
+    });
+    fsFault.lockWriteCode = 'EIO';
+
+    expect(() => store.withLock(() => undefined)).toThrow(/injected lock write EIO/);
+    expect({ elapsed, faultAttempts: fsFault.lockFaultCount }).toEqual({ elapsed: 0, faultAttempts: 1 });
   });
 
   it('classifies and reconciles partial Session scaffolding', () => {

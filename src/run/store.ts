@@ -270,7 +270,16 @@ class SessionStoreLock {
         return;
       } catch (error) {
         const code = (error as NodeJS.ErrnoException).code;
-        if (code && code !== 'EEXIST') throw error;
+        if (code !== 'EEXIST') {
+          if (code && RETRYABLE_WINDOWS_LOCK_ERRORS.has(code)) {
+            this.waitForRetry(
+              deadline,
+              `Cannot create SessionStore lock after retrying ${code}: ${this.path}`,
+            );
+            continue;
+          }
+          throw error;
+        }
       }
 
       const snapshot = readStableLockSnapshot(this.path);
@@ -305,8 +314,11 @@ class SessionStoreLock {
     }
   }
 
-  private waitForRetry(deadline: number): void {
-    if (this.now() >= deadline) throw new Error(`Cannot safely inspect SessionStore lock: ${this.path}`);
+  private waitForRetry(
+    deadline: number,
+    exhaustedMessage = `Cannot safely inspect SessionStore lock: ${this.path}`,
+  ): void {
+    if (this.now() >= deadline) throw new Error(exhaustedMessage);
     this.wait(LOCK_POLL_MS);
   }
 
