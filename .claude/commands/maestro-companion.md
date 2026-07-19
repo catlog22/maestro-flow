@@ -27,10 +27,10 @@ contract:
 Minimal-run execution channel. Full LLM capability (read/write files, run commands, search code, edit code) with minimal protocol overhead: one `run create` + one `run complete`, continuous recording to `{run_dir}/evidence/companion-log.md`.
 
 Use when:
-- Task involves ≤1-2 files or is a pure lookup/question
+- Intent is mechanically clear — user knows exactly what to change, no design decisions or multi-angle analysis needed (file count is irrelevant; a 20-file rename is still lightweight)
 - No typed artifact needs to be consumed by a downstream step
 - No gate/verdict needs to be recorded for lifecycle tracking
-- Task can complete in a single conversational turn or a few tool calls
+- Task does not require pre-task thinking (prepare) or structured brief to execute correctly
 
 Also provides companion utilities: structured note recording (--note) and insight promotion (--promote).
 
@@ -231,12 +231,12 @@ Review companion/run outputs and promote insights to spec/knowhow.
 `/maestro-next` assesses complexity at its S_RANK state. When all lightweight signals hold, it routes to this command:
 
 **Lightweight signals (all must hold):**
-- Intent involves ≤1-2 files or is a pure lookup/question
+- Intent is mechanically clear — user knows exactly what to change, no design decisions needed (file count irrelevant)
 - No typed artifact needs to be consumed by a downstream step
 - No gate/verdict needs to be recorded for lifecycle tracking
-- Task can complete in a single conversational turn or a few tool calls
+- Task does not require pre-task thinking (prepare) or structured brief to execute correctly
 
-**Routing preference:** when uncertain, prefer Standard (single run) over Companion. A run with a thin report is better than a missed artifact. Companion is chosen only when there is clearly no handoff value.
+**Routing preference:** prefer the lightest channel that satisfies the task. When in doubt, ask the user rather than auto-upgrading to Standard.
 
 ### Invocation forms
 

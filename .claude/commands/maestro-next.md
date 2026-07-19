@@ -173,7 +173,7 @@ init → {brainstorm | blueprint | analyze-macro} → roadmap
 
 | Complexity | Channel | Criteria | Engine hint |
 |-----------|---------|----------|-------------|
-| Lightweight | `/maestro-companion` | ≤1-2 files, no typed artifact handoff, no gate value, quick lookup/fix/exploration | — |
+| Lightweight | `/maestro-companion` | Mechanically clear intent, no design decisions, no artifact handoff, no gate value | — |
 | Standard | Single step (one run) | Produces typed artifacts, needs downstream handoff or gate checks | — |
 | Multi-step (manual) | `/maestro` | Intent spans ≥2 distinct steps, user wants stepwise control, no auto-retry needed | `--engine manual` |
 | Multi-step (orchestrated) | `/maestro` | Intent needs closed-loop: decision nodes, drift analysis, auto-retry, decomposition | `--engine ralph` (default) |
@@ -181,10 +181,10 @@ init → {brainstorm | blueprint | analyze-macro} → roadmap
 **Routing preference: prefer the lightest channel that satisfies the task.** Default to Companion for anything that looks like a quick fix/lookup/exploration. Only upgrade to Standard when there is concrete evidence the task produces artifacts a downstream step will consume, or needs a gate/verdict for lifecycle tracking. Only route to /maestro when the intent genuinely spans ≥2 distinct lifecycle steps. When in doubt between Companion and Standard, ask the user via the confirmation menu rather than auto-upgrading.
 
 **Lightweight signals (all must hold):**
-- Intent involves ≤1-2 files or is a pure lookup/question
+- Intent is mechanically clear — user knows exactly what to change, no design decisions or multi-angle analysis needed (file count is irrelevant; a 20-file rename is still lightweight)
 - No typed artifact needs to be consumed by a downstream step
 - No gate/verdict needs to be recorded for lifecycle tracking
-- Task can complete in a single conversational turn or a few tool calls
+- Task does not require pre-task thinking (prepare) or structured brief to execute correctly
 
 **Multi-step detection:** intent matches keywords of ≥2 distinct steps in the routing table → set `multi_step`.
 
