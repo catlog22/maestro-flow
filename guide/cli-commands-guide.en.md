@@ -22,7 +22,8 @@ Maestro provides 21 terminal commands invoked via `maestro <command>`. Covers in
 | `delegate` | -- | Delegate task to AI agent |
 | `coordinate` | `coord` | Graph workflow coordinator |
 | `cli` | -- | Run CLI agent tools |
-| `run` | -- | Execute a named workflow |
+| `run` | -- | Session/Run lifecycle, chain allocator, and machine protocol |
+| `session` | -- | Session recovery, chain, and orchestration meta administration |
 | `serve` | -- | Start workflow server |
 | `launcher` | -- | Claude Code launcher |
 | `spec` | -- | Project spec management |
@@ -183,7 +184,7 @@ maestro coordinate report --session <id> --node <id> --status SUCCESS
 </details>
 
 <details>
-<summary>maestro cli / run / serve</summary>
+<summary>maestro cli / serve</summary>
 
 **cli** -- Unified CLI agent tool interface:
 
@@ -194,19 +195,68 @@ maestro cli -p "fix bug" --tool gemini --mode write
 
 Options same as `delegate` (`-p` required). Additional subcommands: `show`, `output <id>`, `watch <id>`.
 
-**run** -- Execute a named workflow:
-
-```bash
-maestro run <workflow>           # Execute
-maestro run <workflow> --dry-run # Preview
-maestro run <workflow> -c config.json
-```
-
 **serve** -- Start the workflow server:
 
 ```bash
 maestro serve --port 3600 --host localhost
 ```
+
+</details>
+
+<details>
+<summary>maestro run / maestro session</summary>
+
+`run` manages the lifecycle of one command invocation; `session` manages canonical paused recovery, the chain, and orchestration meta. The runtime writer currently emits `session/1.3` + `command-run/1.3`.
+
+```bash
+maestro run prepare <step> --platform codex
+maestro run create <command> --session <id> --intent "<intent>" --json
+maestro run brief <run-id> --session <id> --json
+maestro run check <run-id> --session <id> --json
+maestro run complete <run-id> --session <id> --json
+maestro run seal-session <session-id> --json
+```
+
+Canonical paused recovery must run as `resolve` → `resume`:
+
+```bash
+maestro session resolve --session <id> --decision <point-id> --disposition proceed \
+  --request-id <id> --actor <name> --reason "<reason>" --evidence <ref> \
+  --expected-identity-revision <n> --expected-activity-revision <n> --json
+
+maestro session resume --session <id> \
+  --request-id <id> --actor <name> --reason "<reason>" --evidence <ref> \
+  --expected-identity-revision <n> --expected-activity-revision <n> --json
+
+maestro run next --session <id> --json
+```
+
+Each `resolve` handles exactly one escalated decision (`--decision` + `proceed|retry`) or failed step (`--step` + `retry|skip`) and leaves the Session `paused`. `resume` changes the Session to `running` only after every blocker is clear. Neither command creates a Run; `run next` is the sole chain allocator after recovery. When the Session has a lease, both commands require `--execution-owner`, `--owner-epoch`, and `--lease-id` together.
+
+#### `run-response/1.0` operation matrix
+
+| `operation` | CLI surface | Required inputs / behavior |
+|-------------|-------------|----------------------------|
+| `create` | `run create`; legacy confirmed `run new` | `create` requires a command; pass an explicit `--session` for stable identity |
+| `next` | `run next` | Optional `--session`/`--pick`; selects a pending step and allocates its chain Run |
+| `complete` | `run complete` | Optional Run ID; verdict path supports request/revision/lease guards |
+| `brief` | `run brief <run-id>` | Returns the Resume Packet |
+| `recall` | `run recall <command> --intent <text>` | Read-only advisory projection; never mutation authority |
+| `fork` | legacy `run recall-confirm fork` / `run fork` | Confirmation-token administration compatibility surface |
+| `import` | legacy `run recall-confirm import` / `run import` | Confirmation-token administration compatibility surface |
+| `check` | `run check <run-id>` | Idempotently scans outputs and evaluates gates |
+| `decide` | `run decide <point-id>` | Requires `--session --verdict --confidence`; receipt-backed |
+| `seal-session` | `run seal-session <session-id>` | Seals the Session; not receipt-backed, so success has `replay: null` |
+| `resolve` | `session resolve` | Requires audit/revision flags and exactly one recovery target; stays paused |
+| `resume` | `session resume` | Requires audit/revision flags; performs only paused → running |
+| `chain-insert` | `session chain insert` | Requires `--session --after --command`; receipt-backed |
+| `chain-replace` | `session chain replace` | Requires `--session --step`; pending steps only |
+| `chain-skip` | `session chain skip` | Requires `--session --step`; pending steps only |
+| `meta-update` | `session meta update` | Requires `--session` and at least one of `--position-file`/`--decomposition-file` |
+
+For `decide`, recovery, chain, and meta mutations, `--request-id` supplies the idempotent transition receipt; `--expected-identity-revision`, `--expected-activity-revision`, and the complete lease triple supply the fence. `resolve`/`resume` make the audit/revision fields required; chain/meta mutations accept the same guard options.
+
+With explicit `--json`, success, business error, replay, and Commander usage for every surface in the table write exactly **one** `run-response/1.0` line to stdout, keep stderr empty, and make the process status equal the envelope `exit_code`. Common fields are `operation`, `request_id`, `locator`, suggest-only `next`, `replay`, and `result`/`error`; usage failures are `COMMANDER_USAGE` with exit 2.
 
 </details>
 

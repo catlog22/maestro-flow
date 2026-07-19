@@ -6,7 +6,7 @@ title: ".workflow/ 文件体系变更方案 — Session/Run 模型"
 > 基线（当前态）：`workflow-structure-guide.md`（`scratch/` + `milestone/phase` 模型）。
 > 目标态：Session → Run → Artifact 三级数据模型。
 > 目的：同一 Session 连续跑 analyze/plan/execute/review/test/debug，每次调用独立 Run 目录不互污，下游经 typed artifact 消费，恢复不依赖 `mtime latest`。
-> **修订版（schema `*/1.1`）**：已并入 `session-run-simplification-plan.md` 的收敛决策——删 `gates.json`/`evidence.json`/`context.md`/`diagnostics.ndjson`，run 生命周期扩展为 prepare→create→brief→complete；入口层重组（next+ralph）与 CLI/命令修改见该规划 §六–§八，不在本文件展开。
+> **当前 runtime addendum（schema `session/1.3` + `command-run/1.3`）**：本文件保留早期 `*/1.1` 文件体系设计背景，但 §6.1、§7.1 与 §7.1c 以当前 writer、transition receipt、paused recovery 和 machine response 为准；兼容 reader 接受 1.0–1.3，未知版本 fail closed。
 
 ---
 
@@ -142,48 +142,56 @@ interface ProjectState {
 | `events.ndjson` | 非权威 | 各执行者 append | 高频审计事件流（含 run 诊断，带 `run_id`）；seal 可归档 |
 | （`maestro session render`） | 投影 | CLI 按需输出 | 人类展示，stdout/`tmp/`，**不落盘持久文件** |
 
-### 6.1 `session.json`（schema `session/1.1`）
+### 6.1 `session.json`（当前 writer schema `session/1.3`）
 
 ```ts
 interface SessionState {
-  schema_version: 'session/1.1';
+  schema_version: 'session/1.3';
   session_id: string;                     // {YYYYMMDD}-{intent-slug}
   intent: string;
   status: 'running' | 'paused' | 'sealed' | 'archived' | 'failed';
-  revision: number;                       // 单一计数器（CAS 基准）；Hook 的 identity 缓存键 = hash(intent+boundary_contract+status)，由 CLI 计算返回、不落盘
+  identity_revision: number;              // identity/boundary CAS fence
+  activity_revision: number;              // lifecycle/orchestration CAS fence
 
-  active_run_id: string | null;           // latest_completed_run_id 已删：runs/ 目录 NNN 有序，扫描可得
+  active_run_id: string | null;
+  latest_completed_run_id: string | null;
 
   boundary_contract: {
     in_scope: string[]; out_of_scope: string[];
     constraints: string[]; definition_of_done: string;
   };
 
-  gates: GateRecord[];                    // 仅 session/transition 级少数门（GATE-S-{NN}）；run 级门在 run.json.gates[]
-
-  // Ralph/Coordinator 编排直属 Session，取代 status.json
   orchestration: {
     engine: 'ralph' | 'coordinator' | 'manual';
     quality_mode: 'quick' | 'standard' | 'full';
     auto_mode: boolean;
-    chain: Array<{ step: string; command: string; status: string; run_id: string | null }>;
-    decision_points: Array<{ point: string; after_step: string; status: string; retries: number }>;
-    // inserted_by/decision_ref/evidence_ref/max_retries 已删：审计走 events，max_retries 归 config.json
+    chain: Array<{ step_id: string; command: string; status: string; run_id: string | null }>;
+    decision_points: Array<{ point_id: string; status: string; retry_count: number }>;
+    position: object | null;
+    decomposition: object | null;
+    lease: { owner: string | null; epoch: number; id: string | null } | null;
+    executor: object | null;
   };
 
-  // 深入规划/review/test/resume 等“请求下次调用”（append-only）
-  requests: Array<{ id: string; type: string; status: string; payload: unknown; claimed_by: string | null }>;
+  // Mutation authority：transition request + outcome receipt；legacy request 仅兼容读
+  requests: Array<PersistedTransitionRecord | LegacySessionRequest>;
+
+  intent_identity: object | null;
+  topic_identity: object | null;
+  provenance: object;
+  ralph_authority: object | null;
 
   lifecycle: {
     sealed_at: string | null; seal_summary: string | null;
-    promoted: string[];                   // 合并 spec/knowhow，条目带前缀 "spec:…" / "knowhow:…"
-    forked_from: string | null;           // "{session_id}/{run_id}" 单字符串
+    promoted_spec_ids: string[];
+    promoted_knowhow_ids: string[];
+    forked_from: { session_id: string; run_id: string } | null;
   };
-  // refs 对象已删：文件名全局固定，零信息量
+  refs: { gates: 'gates.json'; artifacts: 'artifacts.json'; evidence: 'evidence.json' };
 }
 ```
 
-> 命令的判断/决策不进此文件——decisions 经 report.md frontmatter 派生进 `run.json.handoff`；高频事件走 `events.ndjson`，不 bump revision。
+`PersistedTransitionRecord` 使用 `transition-request/1.0` 与 `transition-outcome/1.0`：request 固化 `request_id`、operation、subject、normalized request hash、precondition fence 与 payload；outcome 固化 `transition_id`、applied/rejected、postcondition fence、exit/error、result hash 与 result。相同 request 的 retry 返回既有 receipt；request hash 或 authority state 不一致时 fail closed，不能把 replay 当成 force bypass。
 
 ### 6.2 `GateRecord`（内联记录，取代 `gates.json`）
 
@@ -281,19 +289,28 @@ runs/{YYYYMMDD}-{NNN}-{command}/
 
 ```ts
 interface CommandRun {
-  schema_version: 'run/1.1';
-  run_id: string;                      // {YYYYMMDD}-{NNN}-{command}，自含 sequence/command/日期（sequence 与 session_id 键已删：ID 与目录位置即表达）
-  parent_run_id: string | null;        // 重试指向被重试 Run
-  command: string;                     // 仅名称；version/source_path/hash 类审计信息 → events 的 run_created 事件
+  schema_version: 'command-run/1.3';
+  session_id: string;
+  run_id: string;
+  sequence: number;
+  parent_run_id: string | null;
+  command: { name: string; version: string; source_path: string; content_hash: string; resolved_prompt_hash: string; contract_hash?: string };
   status: 'created' | 'running' | 'blocked' | 'failed' | 'completed' | 'sealed';
-  goal: string | null;                 // run 级 definition of done，prepare 阶段由 LLM 定义（§7.1a）；complete verdict 对照它裁决；无 --prep 时为 null
-  input: { args: string[]; consumes: string[] };   // context_identity_revision 已删（双 revision 已废）
-  gates: GateRecord[];                 // 内联（§6.2），取代 gate_ids[] 跨文件引用
-  primary: string | null;              // primary artifact_id；原 output 对象拍平（produces 由 artifacts.json 按 run_id 反查；verdict 与 handoff.verdict 重复已删）
-  handoff: Handoff | null;             // 见 §7.3
-  started_at: string; ended_at: string | null;     // completed_at+sealed_at 合并；seal 时刻 events 有记录
+  input: { args: string[]; consumes: string[]; context_identity_revision: number; reuse_assessments: object[] };
+  gate_ids: string[];
+  output: { produces: string[]; primary_artifact_id: string | null; verdict: string | null };
+  handoff: Handoff | null;
+  resolved_platform: string;
+  contract_snapshot: object | null;
+  guidance_snapshot: object | null;
+  creation_decision: object | null;
+  creation_provenance: object;
+  transition: { transition_id: string; request_id: string; outcome_hash: string } | null;
+  started_at: string; completed_at: string | null; sealed_at: string | null;
 }
 ```
+
+Reader compatibility is `command-run/1.0`–`command-run/1.3`; older generations are normalized to the 1.3 read shape. Unknown Run schema versions are rejected instead of being guessed.
 
 ### 7.1a 三类 JSON · 三种归属 · 零协议学习
 
@@ -367,6 +384,14 @@ for file in outputs/*（report.md 除外）:
 - 无 contract → 完全依赖文件名自发现，零配置可用
 
 > 新命令不加 contract 也能跑——文件名自带 kind，扫描器自发现，门禁列表为空（全 `skipped`）。contract 是渐进式质量约束，不是启动前提。同名异义即冲突信号：文件名 stem 与 kind 不一致时应改文件名（如 review 的产物命名 `review-findings.json`），而非依赖 `_meta` 长期覆盖。
+
+### 7.1c CLI transition、paused recovery 与 machine matrix
+
+Canonical paused recovery 是两段式状态转换：`maestro session resolve` 处置一个 decision/failed-step blocker 后保持 `paused`，`maestro session resume` 只在所有 blocker 清空后转为 `running`。两者都要求 exact `--session`、`--request-id`、`--actor`、`--reason`、一个或多个 `--evidence`、expected identity/activity revision，并可带 lease triple；两者都不创建 Run。恢复后的 chain 只能由显式 `maestro run next` 分配和绑定下一个 Run。
+
+所有 receipt-backed mutation 都先校验 revision/lease fence，再把 request/outcome 写入 `session.json.requests[]`；Run 只保存必要的 transition pointer。`resolve`、`resume`、`decide`、`chain-insert`、`chain-replace`、`chain-skip`、`meta-update` 的 machine success 从 receipt 投影 applied/replayed `transition_id` 和 `request_id`。
+
+显式 `--json` 的完整 `run-response/1.0` operation matrix 为：`create`、`next`、`complete`、`brief`、`recall`、`fork`、`import`、`check`、`decide`、`seal-session`、`resolve`、`resume`、`chain-insert`、`chain-replace`、`chain-skip`、`meta-update`。每次 machine invocation 只向 stdout 写一行 envelope，stderr 为空，process status 等于 envelope `exit_code`；Commander usage 同样返回 `COMMANDER_USAGE` envelope。`seal-session` 非 receipt-backed，成功时 `replay: null`。
 
 ### 7.2 md 产物统一命名
 

@@ -215,7 +215,8 @@ Claude Code 和 Codex 的 JSONL 会话转写被解析为轻量 note 条目（cat
 `.workflow/sessions/` 下的 Session/Run 生命周期产物按以下规则进入索引：
 
 - **只索引 sealed/archived**：`running`/draft 状态的 session 与 run 不进索引，与 aref 只解析 sealed 的规则一致；
-- **双版本 schema**：读侧同时支持 runtime 当前写出的 v1.0（`session/1.0` + `artifacts/1.0` + `command-run/1.0`，gates 独立 `gates.json`）与 v1.1 目标态（`session/1.1` + `artifacts/1.1` + `run/1.1`，gates 内联），v1.0 在读取边界归一化为 v1.1 形态；未知版本拒绝（`MAESTRO_DEBUG=1` 可见告警）；
+- **Writer/reader 版本矩阵**：runtime writer 当前固定写出 `session/1.3` + `command-run/1.3`；Wiki 读侧兼容 `session/1.0`–`session/1.3` 与 `command-run/1.0`–`command-run/1.3`（即 `1.0-1.3`），统一归一化为当前 read model。未知 Session/Run schema 版本 fail closed，不生成虚拟条目（`MAESTRO_DEBUG=1` 可见告警）；
+- **Live search/load**：真实 runtime writer 产出的 sealed 1.3 Session/Run 可直接经 `maestro search` 命中，再用返回 ID 执行 `maestro load`；`artifacts/1.0`/`artifacts/1.1` 仍在读边界兼容；
 - **条目形态**：每个 sealed session 1 条 + 每个 sealed run 1 条（type 均为 `knowhow`）。run 条目 body 前置 handoff 结构化段（`## 决策`/`## 约束`/`## 关注点`/`## 豁免`），正文拼接 sealed artifact 内容（每文件截 50KB）；
 - **tags**：run 条目携带 `session`、`run`、命令名、`verdict:<verdict>`、`constraint`（含 locked 约束时）及产物 kind（如 `diagnosis`、`review-findings`），支持 `--kind` 过滤；
 - **拓扑**：session 条目 `related` 指向全部 run 条目与被提升的 spec/knowhow（双向互链），run 条目 `parent` 指回 session，aref 引用形成跨 run 边；搜索结果对这类条目透出 `sessionId`/`runId`/`runCount`/`related` 字段。
@@ -235,6 +236,7 @@ Claude Code 和 Codex 的 JSONL 会话转写被解析为轻量 note 条目（cat
 - **触发条件**：Write 或 Edit 工具调用后
 - **作用范围**：仅在工作区启用（`requiresWorkspace: true`）
 - **行为**：自动重建 WikiIndexer 索引，确保搜索结果反映最新文件内容
+- **持久化版本**：`search-cache.json` 当前为 **cache v3**（`version: 3`）；legacy cache generations 均拒绝复用并通过既有原子路径重建
 
 该 hook 在标准 hook 集合中默认启用，无需手动配置。当通过 Write|Edit 修改 `.workflow/` 下的 spec/knowhow 等文件时，搜索索引会自动更新。
 

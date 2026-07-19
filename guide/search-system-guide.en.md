@@ -216,7 +216,8 @@ Claude Code and Codex JSONL transcripts are parsed into lightweight note entries
 Session/Run lifecycle artifacts under `.workflow/sessions/` are indexed with these rules:
 
 - **Sealed/archived only**: `running`/draft sessions and runs stay out of the index, consistent with aref resolving sealed artifacts only;
-- **Dual-schema reads**: the adapter accepts both the v1.0 documents the runtime currently writes (`session/1.0` + `artifacts/1.0` + `command-run/1.0`, gates in a separate `gates.json`) and the v1.1 target state (`session/1.1` + `artifacts/1.1` + `run/1.1`, gates inlined). v1.0 is normalized into the v1.1 shape at the read boundary; unknown versions are rejected (warnings visible with `MAESTRO_DEBUG=1`);
+- **Writer/reader version matrix**: the runtime writer currently emits `session/1.3` + `command-run/1.3`; the Wiki reader accepts `session/1.0`–`session/1.3` and `command-run/1.0`–`command-run/1.3` (that is, `1.0-1.3`) and normalizes them into the current read model. Unknown Session/Run schema versions fail closed and produce no virtual entries (warnings are visible with `MAESTRO_DEBUG=1`);
+- **Live search/load**: sealed 1.3 Sessions/Runs produced by the real runtime writer are immediately discoverable through `maestro search`, and the returned ID can be passed to `maestro load`; `artifacts/1.0`/`artifacts/1.1` remain compatible at the read boundary;
 - **Entry shape**: one entry per sealed session plus one per sealed run (both type `knowhow`). Run bodies are prefixed with structured handoff sections (decisions/constraints/concerns/waivers) followed by sealed artifact contents (50KB cap per file);
 - **Tags**: run entries carry `session`, `run`, the command name, `verdict:<verdict>`, `constraint` (when locked constraints exist), and artifact kinds (e.g. `diagnosis`, `review-findings`) for `--kind` filtering;
 - **Topology**: session entries link `related` to all run entries and promoted spec/knowhow entries (bidirectional), run entries link `parent` back to the session, and aref references form cross-run edges; search results expose `sessionId`/`runId`/`runCount`/`related` for these entries.
@@ -236,6 +237,7 @@ Search hits asynchronously update node `search_hits` counts (via `CredibilitySto
 - **Trigger condition**: After Write or Edit tool calls
 - **Scope**: Only active in workspace (`requiresWorkspace: true`)
 - **Behavior**: Automatically rebuilds WikiIndexer index, ensuring search results reflect latest file content
+- **Persisted version**: `search-cache.json` currently uses **cache v3** (`version: 3`); legacy cache generations are rejected and atomically rebuilt through the existing cache path
 
 This hook is enabled by default in the standard hook collection, no manual configuration needed. When modifying spec/knowhow files under `.workflow/` via Write|Edit, the search index automatically updates.
 
