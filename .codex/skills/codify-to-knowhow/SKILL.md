@@ -13,7 +13,7 @@ allowed-tools:
   - update_plan
 auto-continue: true
 session-mode: none
-version: 0.5.51
+version: 0.5.52
 ---
 
 # Codify to Knowhow

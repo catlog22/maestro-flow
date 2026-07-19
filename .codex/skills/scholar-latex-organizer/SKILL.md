@@ -16,7 +16,7 @@ allowed-tools:
   - request_user_input
   - update_plan
 session-mode: none
-version: 0.5.51
+version: 0.5.52
 ---
 
 # Scholar LaTeX Organizer

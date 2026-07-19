@@ -17,6 +17,18 @@ interface ChangelogEntry {
 
 const changelog: ChangelogEntry[] = [
   {
+    version: '0.5.52',
+    date: '2026-07',
+    changes: [
+      { type: 'feat', text_en: 'Upgrade Session/Run to session/1.2 and command-run/1.2 with a machine-readable run-response/1.0 envelope and automatic next-action discovery after completion', text_zh: 'Session/Run 升级到 session/1.2 与 command-run/1.2，引入可机读 run-response/1.0，并在完成后自动识别下一动作' },
+      { type: 'feat', text_en: 'Expose concise execution guidance, command arguments, requirements, resolved inputs, and missing inputs so an LLM can reason about the next step before dispatch', text_zh: '透出精简执行指南、命令参数、requirements、已解析输入与缺失输入，便于 LLM 在派发前判断所需上下文' },
+      { type: 'feat', text_en: 'Add Unicode-safe intent identity and advisory Session recall with confirmation-token fork, import, and new-session actions instead of unsafe automatic resume', text_zh: '新增 Unicode-safe intent identity 与 advisory Session recall，通过 confirmation token 执行 fork、import、new，避免不安全的自动 resume' },
+      { type: 'fix', text_en: 'Harden SessionStore durability with locks, transition receipts, lineage checks, audited rebind, and fail-closed resolve/resume recovery', text_zh: '通过锁、transition receipt、lineage 校验、审计 rebind 与 fail-closed resolve/resume 加固 SessionStore durability' },
+      { type: 'refactor', text_en: 'Make Ralph a canonical Session/Run adapter and align command, workflow, agent, and generated mirror contracts across supported platforms', text_zh: '将 Ralph 收敛为标准 Session/Run 适配层，并对齐多平台 command、workflow、agent 与生成镜像契约' },
+      { type: 'docs', text_en: 'Refresh the v2 command architecture, Session/Run guidance, knowledge and issue workflows, bilingual guides, and docs-site references', text_zh: '更新 v2 命令架构、Session/Run 指南、knowledge/issue 工作流、双语指南与 docs-site reference' },
+    ],
+  },
+  {
     version: '0.5.51',
     date: '2026-07',
     changes: [

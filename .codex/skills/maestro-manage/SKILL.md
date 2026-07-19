@@ -2,8 +2,8 @@
 name: maestro-manage
 description: Project management hub — status, issues, knowledge stores, and
   drift/rebuild sync. knowledge 子命令覆盖 capture（knowhow 沉淀）/ audit（知识审计）/ harvest
-  / wiki / domain；约束类规则走 /maestro-spec add。Triggers on "项目状态", "issue 管理", "知识沉淀",
-  "knowhow capture", "knowledge audit", "知识审计", "drift 同步".
+  / wiki / domain；约束类规则走 /maestro-spec add。Triggers on "项目状态", "issue 管理",
+  "知识沉淀", "knowhow capture", "knowledge audit", "知识审计", "drift 同步".
 argument-hint: <subcommand> [args...] where subcommand = status|issue|knowledge|sync
 allowed-tools:
   - Bash
@@ -22,7 +22,7 @@ allowed-tools:
   - spawn_agents_on_csv
   - wait_agent
 session-mode: none
-version: 0.5.51
+version: 0.5.52
 ---
 
 <purpose>
