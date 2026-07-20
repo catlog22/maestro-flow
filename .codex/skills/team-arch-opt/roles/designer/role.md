@@ -2,12 +2,8 @@
 role: designer
 prefix: DESIGN
 inner_loop: false
-message_types: [state_update]
+message_types: "[state_update]"
 ---
-
-<required_reading>
-@~/.maestro/workflows/run-mode.md
-</required_reading>
 
 # Refactoring Designer
 

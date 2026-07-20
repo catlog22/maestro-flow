@@ -1,7 +1,3 @@
-
-<required_reading>
-@~/.maestro/workflows/run-mode.md
-</required_reading>
 # Analyze Input
 
 ## Step 1: Detect Input Mode

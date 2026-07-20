@@ -1,9 +1,7 @@
 
 > **Agent timeout**: `spawn_agent` 异步执行且无内置超时 — 除明确短任务外一律 `spawn_agent` 后立即 `wait_agent({ timeout_ms: 3600000 })`（上限 1 小时）阻塞等待，绝不依赖 30000 默认值；`timed_out: true` 且 Agent 未完成时再次 `wait_agent` 续等，不丢弃。批量场景使用 `spawn_agents_on_csv({ max_runtime_seconds: 3600, ... })`。
 
-<required_reading>
-@~/.maestro/workflows/run-mode.md
-</required_reading>
+> **Plan tracking**: codex 无 TaskCreate/TaskUpdate/TodoWrite 任务板。进度清单用 `update_plan({ explanation?, plan: [{ step, status }] })` 维护（整体提交步骤数组，status: `pending` | `in_progress` | `completed`），权威状态始终在 session 工件中；依赖/认领（addBlockedBy/owner）是工件字段，不是工具参数。
 # Command: Monitor
 
 ## Constants
@@ -238,7 +236,35 @@ Find and spawn the next ready tasks.
 3. Spawn team-worker for each ready task:
 
 ```
-spawn_agent({ task_name: "<agent_name>", message: "Spawn <role> worker for <task-subject>", fork_turns: "none", agent_type: "team_worker" })
+spawn_agent({
+  subagent_type: "team-worker",
+  description: "Spawn <role> worker for <task-subject>",
+  team_name: "ultra-analyze",
+  name: "<agent-name>",
+  run_in_background: true,
+  prompt: `## Role Assignment
+role: <role>
+role_spec: <skill_root>/roles/<role>/role.md
+session: {run_dir}/work/team
+session_id: <run-id>
+team_name: ultra-analyze
+requirement: <task-description>
+agent_name: <agent-name>
+inner_loop: false
+
+## Current Task
+- Task ID: <task-id>
+- Task: <task-subject>
+
+## Progress Milestones
+session_id: <run-id>
+Report progress via team_msg at natural phase boundaries (context loaded -> core work done -> verification).
+Report blockers immediately via team_msg type="blocker".
+Report completion via team_msg type="task_complete" after final send_message.
+
+Read role_spec file to load Phase 2-4 domain instructions.
+Execute built-in Phase 1 (task discovery, owner=<agent-name>) -> role-spec Phase 2-4 -> built-in Phase 5 (report).`
+})
 ```
 
 4. **Parallel spawn rules**:
@@ -321,7 +347,12 @@ Triggered when all pipeline tasks are completed.
 | deep | All EXPLORE + ANALYZE + all DISCUSS-N + SYNTH-001 completed |
 
 1. Verify all tasks completed. If any not completed, return to handleSpawnNext
-2. If all completed, **inline-execute coordinator Phase 5** (shutdown workers → report → completion action). Do NOT STOP here — continue directly into Phase 5 within the same turn.
+2. Run lifecycle completion (before Phase 5):
+   - Read run_id from `team-session.json.run.run_id`
+   - Write `{run_dir}/report.md` with frontmatter (verdict/summary/concerns)
+   - Run `maestro run complete <run_id>`
+   - If complete fails: fix the blocking gate and retry once; still failing -> do NOT archive/clean - keep the team active (status=paused) and report the blocking gate
+3. If all completed, **inline-execute coordinator Phase 5** (shutdown workers → report → completion action). Do NOT STOP here — continue directly into Phase 5 within the same turn.
 
 ## Phase 4: State Persistence
 

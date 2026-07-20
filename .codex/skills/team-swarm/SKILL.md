@@ -13,7 +13,6 @@ allowed-tools:
   - Grep
   - Read
   - Write
-  - update_plan
   - followup_task
   - interrupt_agent
   - list_agents
@@ -22,6 +21,7 @@ allowed-tools:
   - send_message
   - spawn_agent
   - spawn_agents_on_csv
+  - update_plan
   - wait_agent
 session-mode: run
 version: 0.5.52
@@ -34,11 +34,11 @@ contract:
     exit: []
 ---
 
+> **Agent timeout**: `spawn_agent` 异步执行且无内置超时 — 除明确短任务外一律 `spawn_agent` 后立即 `wait_agent({ timeout_ms: 3600000 })`（上限 1 小时）阻塞等待，绝不依赖 30000 默认值；`timed_out: true` 且 Agent 未完成时再次 `wait_agent` 续等，不丢弃。批量场景使用 `spawn_agents_on_csv({ max_runtime_seconds: 3600, ... })`。
+
 <required_reading>
 @~/.maestro/workflows/run-mode-lite.md
 </required_reading>
-
-> **Agent timeout**: `spawn_agent` 异步执行且无内置超时 — 除明确短任务外一律 `spawn_agent` 后立即 `wait_agent({ timeout_ms: 3600000 })`（上限 1 小时）阻塞等待，绝不依赖 30000 默认值；`timed_out: true` 且 Agent 未完成时再次 `wait_agent` 续等，不丢弃。批量场景使用 `spawn_agents_on_csv({ max_runtime_seconds: 3600, ... })`。
 
 # Team Swarm
 
@@ -47,7 +47,7 @@ Orchestrate ant-colony-style exploration over a user-defined task space. **Hybri
 ## Architecture
 
 ```
-spawn_agent({ task_name: "team_swarm", message: "Execute skill team-swarm, args: "task description"" })
+spawn_agent({ task_name: "team_swarm", message: "Execute skill team-swarm, args: task description" })
                     |
          SKILL.md (this file) = Router
                     |
@@ -102,7 +102,33 @@ Parse `$ARGUMENTS`:
 Coordinator spawns workers using this template:
 
 ```
-spawn_agent({ task_name: "<role>", message: "Spawn <role> worker", fork_turns: "none", agent_type: "team_worker" })
+spawn_agent({
+  subagent_type: "team-worker",
+  description: "Spawn <role> worker",
+  team_name: "swarm",
+  name: "<role>",
+  run_in_background: true,
+  prompt: `## Role Assignment
+role: <role>
+role_spec: <skill_root>/roles/<role>/role.md
+session: {run_dir}/work/team
+session_id: <run-id>
+team_name: swarm
+requirement: <task-description>
+inner_loop: false
+
+## Assignment (ant only)
+<assignment JSON from aco.py select>
+
+## Progress Milestones
+session_id: <run-id>
+Report progress via team_msg at natural phase boundaries.
+Report blockers immediately via team_msg type="blocker".
+Report completion via team_msg type="task_complete" after final send_message.
+
+Read role_spec file (@<skill_root>/roles/<role>/role.md) to load Phase 2-4 domain instructions.
+Execute built-in Phase 1 (task discovery) -> role Phase 2-4 -> built-in Phase 5 (report).`
+})
 ```
 
 ## User Commands
@@ -146,7 +172,7 @@ spawn_agent({ task_name: "<role>", message: "Spawn <role> worker", fork_turns: "
 │   └── history/<iter>.json     # Per-iter snapshot
 ├── trails/<iter>.jsonl         # Per-iter all-ant paths + scores
 ├── scores/iter-<iter>-scores.json  # Scorer output (if mode == llm)
-├── artifacts/
+├── {run_dir}/outputs/          # Formal deliverables
 │   ├── ant-<iter>-<id>.json    # Per-ant schema-locked output
 │   ├── swarm-report.json       # Phase 4 full report dump
 │   └── best-solution.md        # Analyst final synthesis

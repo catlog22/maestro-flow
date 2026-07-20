@@ -1,7 +1,5 @@
 
-<required_reading>
-@~/.maestro/workflows/run-mode.md
-</required_reading>
+> **Plan tracking**: codex 无 TaskCreate/TaskUpdate/TodoWrite 任务板。进度清单用 `update_plan({ explanation?, plan: [{ step, status }] })` 维护（整体提交步骤数组，status: `pending` | `in_progress` | `completed`），权威状态始终在 session 工件中；依赖/认领（addBlockedBy/owner）是工件字段，不是工具参数。
 # Dispatch
 
 ## Context Loading
@@ -62,7 +60,7 @@ update_plan({
   subject: "EXPLORE-001",
   description: "PURPOSE: Analyze issue context and map codebase impact | Success: Context report with relevant files and dependencies
 TASK:
-  - Load issue details via `exec_command({ cmd: "maestro issue status <issueId> --json" })`
+  - Load issue details via `Bash("maestro issue status <issueId> --json")`
   - Explore codebase for relevant files and patterns
   - Assess complexity and impact scope
 CONTEXT:
@@ -88,7 +86,7 @@ TASK:
 CONTEXT:
   - Session: {run_dir}/work/team
   - Issue IDs: <issue-id-list>
-  - Upstream artifacts: explorations/context-<issueId>.json
+  - Upstream artifacts: {run_dir}/work/team/explorations/context-<issueId>.json
 EXPECTED: {run_dir}/outputs/solutions/solution-<issueId>.json with solution plan and task list
 CONSTRAINTS: Solution design only, no code implementation
 ---
@@ -110,7 +108,7 @@ CONTEXT:
   - Session: {run_dir}/work/team
   - Issue IDs: <issue-id-list>
   - Upstream artifacts: {run_dir}/outputs/solutions/solution-<issueId>.json
-EXPECTED: .workflow/issues/queue/execution-queue.json with queue, conflicts, parallel groups
+EXPECTED: {run_dir}/outputs/queue/execution-queue.json with queue, conflicts, parallel groups
 CONSTRAINTS: Queue formation only, no implementation
 ---
 InnerLoop: false"
@@ -131,7 +129,7 @@ TASK:
 CONTEXT:
   - Session: {run_dir}/work/team
   - Issue IDs: <issue-id-list>
-  - Upstream artifacts: explorations/context-<issueId>.json, {run_dir}/outputs/solutions/solution-<issueId>.json, queue/execution-queue.json
+  - Upstream artifacts: {run_dir}/work/team/explorations/context-<issueId>.json, {run_dir}/outputs/solutions/solution-<issueId>.json, {run_dir}/outputs/queue/execution-queue.json
 EXPECTED: {run_dir}/outputs/builds/ with implementation results, tests passing
 CONSTRAINTS: Follow solution plan, no scope creep
 ---
@@ -160,7 +158,7 @@ TASK:
 CONTEXT:
   - Session: {run_dir}/work/team
   - Issue IDs: <issue-id-list>
-  - Upstream artifacts: explorations/context-<issueId>.json, {run_dir}/outputs/solutions/solution-<issueId>.json
+  - Upstream artifacts: {run_dir}/work/team/explorations/context-<issueId>.json, {run_dir}/outputs/solutions/solution-<issueId>.json
 EXPECTED: {run_dir}/outputs/audits/audit-report.json with per-issue scores and overall verdict
 CONSTRAINTS: Review only, do not modify solutions
 ---
@@ -220,7 +218,7 @@ TASK:
 CONTEXT:
   - Session: {run_dir}/work/team
   - Issue IDs: <issueId>
-  - Upstream artifacts: explorations/context-<issueId>.json
+  - Upstream artifacts: {run_dir}/work/team/explorations/context-<issueId>.json
 EXPECTED: {run_dir}/outputs/solutions/solution-<issueId>.json
 CONSTRAINTS: Solution design only
 ---
@@ -241,7 +239,7 @@ TASK:
 CONTEXT:
   - Session: {run_dir}/work/team
   - Issue IDs: <all-issue-ids>
-  - Upstream artifacts: explorations/*.json, {run_dir}/outputs/solutions/*.json
+  - Upstream artifacts: {run_dir}/work/team/explorations/*.json, {run_dir}/outputs/solutions/*.json
 EXPECTED: {run_dir}/outputs/audits/audit-report.json with batch results
 CONSTRAINTS: Review only
 ---
@@ -274,7 +272,7 @@ TASK:
 CONTEXT:
   - Session: {run_dir}/work/team
   - Issue IDs: <issueId>
-  - Upstream artifacts: explorations/context-<issueId>.json, {run_dir}/outputs/solutions/solution-<issueId>.json, queue/execution-queue.json
+  - Upstream artifacts: {run_dir}/work/team/explorations/context-<issueId>.json, {run_dir}/outputs/solutions/solution-<issueId>.json, {run_dir}/outputs/queue/execution-queue.json
 EXPECTED: {run_dir}/outputs/builds/ with results
 CONSTRAINTS: Follow solution plan
 ---

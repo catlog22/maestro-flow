@@ -5,10 +5,6 @@ inner_loop: false
 message_types: 
 ---
 
-<required_reading>
-@~/.maestro/workflows/run-mode.md
-</required_reading>
-
 # Analyzer
 
 ## Identity
@@ -30,7 +26,7 @@ message_types:
 
 ## Phase 2: Load Evidence
 
-1. Load debug specs: Run `ccw maestro-spec load --category debug` for known issues, workarounds, and root-cause notes
+1. Load debug specs: Run `maestro spec load --category debug` for known issues, workarounds, and root-cause notes
 2. Read upstream artifacts via team_msg(operation="get_state", role="reproducer")
 3. Extract evidence paths from reproducer's state_update ref
 3. Load evidence-summary.json from session evidence/

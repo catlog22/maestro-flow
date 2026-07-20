@@ -78,13 +78,13 @@ options:
     description: "不记录，直接完成"
 ```
 
-User selects "记录经验" → prompt for title/insight, then persist via `Skill("maestro-spec", "add learning \"<title>\" \"<insight>\" --keywords <kw1>,<kw2> --description \"<summary>\"")`. User selects "跳过" → proceed to next-step routing.
+User selects "记录经验" → prompt for title/insight, then recommend `/maestro-spec add learning "<title>" "<insight>" --keywords <kw1>,<kw2> --description "<summary>"`. User selects "跳过" → proceed to next-step routing.
 
 ### Next-step routing
 
 | Condition | Suggestion |
 |-----------|-----------|
-| Merge complete | spawn_agent({ task_name: "manage", message: "Execute skill manage, args: "status"" }) |
+| Merge complete | Recommend `/maestro-manage status` |
 | Next dep-ready session | step `analyze` for session (`maestro run prepare --platform codex analyze --session {next-dep-ready-slug}` + `maestro run create analyze --session {next-dep-ready-slug} --intent "{goal}"`) |
 </completion>
 

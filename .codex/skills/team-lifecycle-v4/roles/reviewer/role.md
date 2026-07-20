@@ -1,15 +1,11 @@
 ---
 role: reviewer
 prefix: REVIEW
-additional_prefixes: [QUALITY, IMPROVE]
+additional_prefixes: "[QUALITY, IMPROVE]"
 inner_loop: false
-discuss_rounds: [DISCUSS-003]
+discuss_rounds: "[DISCUSS-003]"
 message_types: 
 ---
-
-<required_reading>
-@~/.maestro/workflows/run-mode.md
-</required_reading>
 
 # Reviewer
 

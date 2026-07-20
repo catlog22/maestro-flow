@@ -72,7 +72,9 @@ session-mode: {{session_mode}}
 ## Directory Setup
 
 \`\`\`javascript
-const workDir = runStart.run_dir;
+// run_dir comes from the birth packet (orchestrator-injected) or the
+// maestro run create return value when self-starting. See run-mode.md.
+const workDir = \`${runStart.run_dir}/outputs\`;
 {{additional_dirs}}
 \`\`\`
 
@@ -230,6 +232,7 @@ function filterDocsByPhase(specs, phase, phaseIndex) {
 name: api-docs-generator
 description: Generate API documentation from source code. Triggers on "generate api docs", "api documentation".
 allowed-tools: Agent, Read, Write, Glob, Grep, Bash
+session-mode: run
 ---
 
 # API Docs Generator
@@ -272,6 +275,7 @@ Phase 3: Generation      → api-docs.md
 name: task-manager
 description: Interactive task management with CRUD operations. Triggers on "manage tasks", "task list".
 allowed-tools: Agent, request_user_input, Read, Write
+session-mode: run
 ---
 
 # Task Manager

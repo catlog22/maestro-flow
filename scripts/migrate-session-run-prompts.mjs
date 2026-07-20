@@ -12,7 +12,7 @@ const runCommands = new Set([
   'learn-investigate', 'maestro-amend', 'maestro-analyze', 'maestro-blueprint',
   'maestro-brainstorm', 'maestro-collab', 'maestro-companion', 'maestro-execute', 'maestro-fork', 'maestro-grill',
   'maestro-impeccable', 'maestro-merge', 'maestro-next', 'maestro-plan',
-  'maestro-player', 'maestro-quick', 'maestro-ralph-cli-execute',
+  'maestro-player', 'maestro-ralph-cli-execute',
   'maestro-ralph-cli', 'maestro-ralph-execute', 'maestro-ralph-v2',
   'maestro-ralph', 'maestro-roadmap', 'maestro-swarm-workflow',
   'maestro-ui-codify', 'maestro-universal-workflow', 'maestro', 'manage-drift-realign',

@@ -1,6 +1,6 @@
 
 <required_reading>
-@~/.maestro/workflows/run-mode.md
+@~/.maestro/workflows/run-mode-lite.md
 </required_reading>
 # Coordinator - Ultra Analyze Team
 
@@ -110,7 +110,7 @@ TEXT-LEVEL ONLY. No source code reading.
 
 1. Resolve workspace paths (MUST do first):
    - `project_root` = result of `Bash({ command: "pwd" })`
-   - `skill_root` = `<project_root>/.codex/skills/team-ultra-analyze`
+   - `skill_root` = `<project_root>/.claude/skills/team-ultra-analyze`
 3. Generate session ID: `UAN-{slug}-{YYYY-MM-DD}`
 4. Create session folder structure:
 
@@ -144,6 +144,18 @@ mcp__maestro__team_msg({
 })
 ```
 7. Call `TeamCreate({ team_name: "ultra-analyze" })`
+
+### Run Lifecycle Integration
+
+After session folder creation and before role-spec generation:
+
+1. **Resolve Run** (birth-packet first): if the dispatch context already carries `run_id` / `run_dir` (injected by an orchestrator), store them in `team-session.json` and skip create — a second create mints an empty duplicate Run. Otherwise: `maestro run create team-ultra-analyze --session <slug> --intent "<task summary>"`
+   - Slug format: `YYYYMMDD-team-ultra-analyze-<topic>` (ASCII, ≤64 chars)
+   - Store returned `run_id` and `run_dir` in `team-session.json`:
+     ```json
+     "run": { "run_id": "<id>", "run_dir": "<path>" }
+     ```
+2. **Resume**: Read `team-session.json.run.run_id` → `maestro run check <run_id>` (idempotent). If status=sealed, create a new run and update the field. If `run.run_id` is missing, resolve in order: birth-packet injection, then `<session>/artifacts/`; if all are absent, fail closed — report session corruption and do NOT create a new Run.
 
 ---
 

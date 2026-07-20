@@ -1,4 +1,6 @@
 
+> **Plan tracking**: codex 无 TaskCreate/TaskUpdate/TodoWrite 任务板。进度清单用 `update_plan({ explanation?, plan: [{ step, status }] })` 维护（整体提交步骤数组，status: `pending` | `in_progress` | `completed`），权威状态始终在 session 工件中；依赖/认领（addBlockedBy/owner）是工件字段，不是工具参数。
+
 <required_reading>
 @~/.maestro/workflows/run-mode.md
 </required_reading>
@@ -95,14 +97,13 @@ Rebuttal Writing Configuration:
 > 2. Full protocol (Step 4.X — 4.4) is in active memory, not just sentinel
 > If only sentinel remains → `Read("phases/04-rebuttal-writing.md")` now.
 
-Load template from claude-scholar or custom templates:
+Load template from the skill-local `templates/` directory (paths relative to the skill root, same convention as phase file reads):
 
 ```javascript
 // Template search paths
 const templatePaths = [
-  `G:/github_lib/claude-scholar/skills/review-response/references/${templateId}-template.md`,
-  `d:/ccws/.workflow/参考文档1/${templateId}-template.md`,
-  `d:/ccws/.workflow/参考文档1/discussion.md` // Fallback to generic discussion template
+  `templates/${templateId}-template.md`, // skill-local, user may add conference-specific templates
+  `templates/discussion.md`              // Fallback to generic discussion template
 ]
 
 let templateContent = null
@@ -191,10 +192,11 @@ TONE GUIDELINES:
 `
 
 // Call rebuttal-writer agent
-const agentResult = spawn_agent({
-  task_name: "rebuttal_writer",
-  message: agentPrompt,
-  fork_turns: "none"
+const agentResult = Task({
+  subagent_type: "general-purpose", // Use general-purpose agent with full write capabilities
+  description: "Generate academic rebuttal document",
+  prompt: agentPrompt,
+  run_in_background: false
 })
 
 // Parse agent output

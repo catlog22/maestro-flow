@@ -1,6 +1,10 @@
 
+> **Agent timeout**: `spawn_agent` 异步执行且无内置超时 — 除明确短任务外一律 `spawn_agent` 后立即 `wait_agent({ timeout_ms: 3600000 })`（上限 1 小时）阻塞等待，绝不依赖 30000 默认值；`timed_out: true` 且 Agent 未完成时再次 `wait_agent` 续等，不丢弃。批量场景使用 `spawn_agents_on_csv({ max_runtime_seconds: 3600, ... })`。
+
+> **Plan tracking**: codex 无 TaskCreate/TaskUpdate/TodoWrite 任务板。进度清单用 `update_plan({ explanation?, plan: [{ step, status }] })` 维护（整体提交步骤数组，status: `pending` | `in_progress` | `completed`），权威状态始终在 session 工件中；依赖/认领（addBlockedBy/owner）是工件字段，不是工具参数。
+
 <required_reading>
-@~/.maestro/workflows/run-mode.md
+@~/.maestro/workflows/run-mode-lite.md
 </required_reading>
 # Coordinator Role
 
@@ -145,12 +149,6 @@ mcp__maestro__team_msg({
 })
 ```
 
-**CLI fallback** (when MCP unavailable):
-
-```
-Bash("ccw team log --session-id <run-id> --from coordinator --type <type> --json")
-```
-
 ---
 
 ## Execution (5-Phase)
@@ -202,7 +200,7 @@ Delegate to `@commands/roadmap-discuss.md`:
 
 1. Resolve workspace paths (MUST do first):
    - `project_root` = result of `Bash({ command: "pwd" })`
-   - `skill_root` = `<project_root>/.codex/skills/team-roadmap-dev`
+   - `skill_root` = `<project_root>/.claude/skills/team-roadmap-dev`
 
 2. Call `TeamCreate({ team_name: "roadmap-dev" })`
 
@@ -224,8 +222,16 @@ mcp__maestro__team_msg({
 })
 ```
 
-4. Spawn worker roles (see SKILL.md Coordinator Spawn Template)
-5. Load `@commands/dispatch.md` for task chain creation
+4. Run Lifecycle Integration (after session folder creation and before role-spec generation):
+   - **Resolve Run** (birth-packet first): if the dispatch context already carries `run_id` / `run_dir` (injected by an orchestrator), store them in `team-session.json` and skip create — a second create mints an empty duplicate Run. Otherwise: `maestro run create team-roadmap-dev --session <slug> --intent "<task summary>"`
+     - Slug format: `YYYYMMDD-team-roadmap-dev-<topic>` (ASCII, ≤64 chars)
+     - Store returned `run_id` and `run_dir` in `team-session.json`:
+       ```json
+       "run": { "run_id": "<id>", "run_dir": "<path>" }
+       ```
+   - **Resume**: Read `team-session.json.run.run_id` → `maestro run check <run_id>` (idempotent). If status=sealed, create a new run and update the field. If `run.run_id` is missing, resolve in order: birth-packet injection, then `<session>/artifacts/`; if all are absent, fail closed — report session corruption and do NOT create a new Run.
+5. Spawn worker roles (see SKILL.md Coordinator Spawn Template)
+6. Load `@commands/dispatch.md` for task chain creation
 
 | Step | Action |
 |------|--------|
@@ -243,7 +249,7 @@ mcp__maestro__team_msg({
 **Objective**: Monitor phase execution, handle callbacks, advance pipeline.
 
 **Design**: Spawn-and-Stop + Callback pattern.
-- Spawn workers with `Task(run_in_background: true)` -> immediately return
+- Spawn workers with `spawn_agent(subagent_type: "team-worker", run_in_background: true)` -> immediately return
 - Worker completes -> send_message callback -> auto-advance
 - User can use "check" / "resume" to manually advance
 - Coordinator does one operation per invocation, then STOPS

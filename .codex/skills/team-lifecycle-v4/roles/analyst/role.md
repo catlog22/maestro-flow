@@ -2,13 +2,9 @@
 role: analyst
 prefix: RESEARCH
 inner_loop: false
-discuss_rounds: [DISCUSS-001]
+discuss_rounds: "[DISCUSS-001]"
 message_types: 
 ---
-
-<required_reading>
-@~/.maestro/workflows/run-mode.md
-</required_reading>
 
 # Analyst
 

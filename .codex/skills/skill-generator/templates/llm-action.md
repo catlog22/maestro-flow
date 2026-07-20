@@ -168,6 +168,7 @@ tool:
   primary: agy
   fallback_chain: [qwen]
 mode: analysis
+rule: analysis-analyze-code-patterns
 prompt:
   template: |
     PURPOSE: Analyze code structure and patterns, extract key design features
@@ -179,7 +180,6 @@ prompt:
     MODE: analysis
     CONTEXT: {{code_context}}
     EXPECTED: JSON formatted analysis report with modules, dependencies, patterns, quality_score
-    RULES: $(cat ~/.ccw/workflows/cli-templates/protocols/analysis-protocol.md)
   variables:
     - code_context
 input:
@@ -198,6 +198,7 @@ tool:
   primary: agy
   fallback_chain: [qwen, codex]
 mode: write
+rule: universal-rigorous-style
 prompt:
   template: |
     PURPOSE: Generate high-quality documentation based on analysis results
@@ -209,7 +210,6 @@ prompt:
     MODE: write
     CONTEXT: {{analysis_report}}
     EXPECTED: Complete Markdown documentation with table of contents, chapters, diagrams
-    RULES: $(cat ~/.ccw/workflows/cli-templates/protocols/write-protocol.md)
   variables:
     - analysis_report
 input:
@@ -228,6 +228,7 @@ tool:
   primary: codex
   fallback_chain: [agy]
 mode: analysis
+rule: analysis-review-code-quality
 prompt:
   template: |
     PURPOSE: Analyze code and provide refactoring suggestions
@@ -239,7 +240,6 @@ prompt:
     MODE: analysis
     CONTEXT: {{source_code}}
     EXPECTED: List of refactoring suggestions with location, issue, suggestion, impact fields
-    RULES: $(cat ~/.ccw/workflows/cli-templates/protocols/analysis-protocol.md)
   variables:
     - source_code
 input:

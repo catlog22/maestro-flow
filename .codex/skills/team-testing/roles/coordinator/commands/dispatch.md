@@ -1,7 +1,5 @@
 
-<required_reading>
-@~/.maestro/workflows/run-mode.md
-</required_reading>
+> **Plan tracking**: codex 无 TaskCreate/TaskUpdate/TodoWrite 任务板。进度清单用 `update_plan({ explanation?, plan: [{ step, status }] })` 维护（整体提交步骤数组，status: `pending` | `in_progress` | `completed`），权威状态始终在 session 工件中；依赖/认领（addBlockedBy/owner）是工件字段，不是工具参数。
 # Dispatch Tasks
 
 ## Workflow
@@ -33,7 +31,7 @@ EXPECTED: <deliverable path> + <quality criteria>
 CONSTRAINTS: <scope limits, focus areas>
 ---
 InnerLoop: <true|false>
-RoleSpec: ~  or <project>/.codex/skills/team-testing/roles/<role>/role.md
+RoleSpec: ~  or <project>/.claude/skills/team-testing/roles/<role>/role.md
 ```
 
 ## Pipeline Task Registry

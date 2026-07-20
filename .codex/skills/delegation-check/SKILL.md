@@ -51,7 +51,7 @@ Parse `$ARGUMENTS` to identify what to check.
 |--------|-------|
 | File path to command `.md` | Single command + its agents |
 | File path to agent `.md` | Single agent + commands that spawn it |
-| Directory path (e.g., `.codex/skills/team-*/`) | All commands + agents in that skill |
+| Directory path (e.g., `.claude/skills/team-*/`) | All commands + agents in that skill |
 | "all" or no args | Scan all `.claude/commands/`, `.claude/skills/*/`, `.claude/agents/` |
 
 If ambiguous, ask:
@@ -75,8 +75,8 @@ For each command file in scope:
 **2a. Extract spawn_agent() calls from commands:**
 
 ```bash
-# Search both spawn_agent (current) and legacy GSD Task invocation patterns
-grep -nE "spawn_agent\(|Task\(" "$COMMAND_FILE"
+# Search both spawn_agent() (current) and the legacy GSD Task syntax
+grep -n "spawn_agent(\|Task[(]" "$COMMAND_FILE"
 grep -n "subagent_type" "$COMMAND_FILE"
 ```
 

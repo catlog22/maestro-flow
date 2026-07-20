@@ -5,10 +5,6 @@ inner_loop: false
 message_types: 
 ---
 
-<required_reading>
-@~/.maestro/workflows/run-mode.md
-</required_reading>
-
 # Performance Profiler
 
 ## Phase 2: Context & Environment Detection

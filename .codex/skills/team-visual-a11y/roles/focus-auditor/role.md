@@ -2,12 +2,8 @@
 role: focus-auditor
 prefix: FOCUS
 inner_loop: false
-message_types: [state_update]
+message_types: "[state_update]"
 ---
-
-<required_reading>
-@~/.maestro/workflows/run-mode.md
-</required_reading>
 
 # Focus & Keyboard Accessibility Auditor
 

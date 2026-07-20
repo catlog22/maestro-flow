@@ -12,7 +12,6 @@ allowed-tools:
   - Grep
   - Read
   - Write
-  - update_plan
   - followup_task
   - interrupt_agent
   - list_agents
@@ -21,6 +20,7 @@ allowed-tools:
   - send_message
   - spawn_agent
   - spawn_agents_on_csv
+  - update_plan
   - wait_agent
 session-mode: none
 version: 0.5.52
@@ -95,7 +95,9 @@ This skill is **executor-only**. Workers do NOT invoke this skill -- they are sp
 
 ### Orchestration Mode
 
-**Invocation**: `spawn_agent({ task_name: "team_executor", message: "Execute skill team-executor, args: "--session={run_dir}/work/team"" })`
+**Invocation**: `spawn_agent({ task_name: "team_executor", message: "Execute skill team-executor, args: --session=.workflow/sessions/<session-id>/runs/<run-id>/work/team" })`
+
+The `--session` path is the `work/team` directory of an existing team-coordinate Run; its `run_dir` was created by that upstream Run, not by team-executor.
 
 **Lifecycle**:
 ```
@@ -131,7 +133,29 @@ Validate session
 When executor spawns workers, use `team-worker` agent with role-spec path:
 
 ```
-spawn_agent({ task_name: "<role>", message: "Spawn <role> worker", fork_turns: "none", agent_type: "team_worker" })
+spawn_agent({
+  subagent_type: "team-worker",
+  description: "Spawn <role> worker",
+  team_name: <team-name>,
+  name: "<role>",
+  run_in_background: true,
+  prompt: `## Role Assignment
+role: <role>
+role_spec: {run_dir}/work/team/role-specs/<role>.md
+session: {run_dir}/work/team
+session_id: <run-id>
+team_name: <team-name>
+requirement: <task-description>
+inner_loop: <true|false>
+
+## Progress Milestones
+session_id: <run-id>
+Report progress via team_msg at natural phase boundaries (context loaded -> core work done -> verification).
+Report blockers immediately via team_msg type="blocker".
+Report completion via team_msg type="task_complete" after final send_message.
+
+Read role_spec file to load Phase 2-4 domain instructions.`
+})
 ```
 
 ---
@@ -160,7 +184,7 @@ request_user_input({
 | Choice | Steps |
 |--------|-------|
 | Archive & Clean | Update session status="completed" -> TeamDelete -> output final summary with artifact paths |
-| Keep Active | Update session status="paused" -> output: "Resume with: spawn_agent({ task_name: "team_executor", message: "Execute skill team-executor, args: "--session=<path>"" })" |
+| Keep Active | Update session status="paused" -> output: "Resume with: spawn_agent({ task_name: "team_executor", message: "Execute skill team-executor, args: --session=<path>" })" |
 | Export Results | request_user_input(target path) -> copy artifacts to target -> Archive & Clean |
 
 ---

@@ -47,16 +47,6 @@
 
 ---
 
-### `maestro-quick` — 快速任务
-
-**Usage:** `/maestro-quick [description] [--full] [--discuss]`
-
-快速执行单个任务，跳过规划阶段，同时保持原子提交和验证等工作流质量保证
-
-**Flags:** [description] (任务描述) · --full (包含所有代理) · --discuss (执行前讨论)
-
----
-
 ### `maestro-brainstorm` — 头脑风暴
 
 **Usage:** `/maestro-brainstorm [topic|role-name] [--yes] [--count N] [--session ID] [--update] [--skip-questions] [--include-questions] [--style-skill PKG]`
@@ -193,13 +183,13 @@
 
 ---
 
-### `maestro-companion` — 知识伴侣
+### `maestro-companion` — 轻量执行伴侣
 
-**Usage:** `/maestro-companion [before|note|after|route] [--task <description>] [--type <task_type>] [--category <cat>]`
+**Usage:** `/maestro-companion <intent> [--note <text>] [--promote] [-y]`
 
-知识伴侣工具：加载上下文、记录伴侣文档、捕获洞察、路由到技能。四种模式：before（预任务加载）、note（中任务记录）、after（后任务复盘）、route（意图路由）。纯 side-car，不创建 session
+轻量任务直接执行入口：创建最小 Run，直接完成明确任务，持续记录非正式 evidence log，最后完成 Run。
 
-**Flags:** [before|note|after|route] (模式) · --task <description> (任务描述) · --type <task_type> (任务类型) · --category <cat> (分类过滤)
+**Flags:** <intent> (任务描述) · --note <text> (追加记录) · --promote (提升洞察) · -y (跳过确认)
 
 ---
 

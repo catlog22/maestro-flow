@@ -2,13 +2,9 @@
 role: generator
 prefix: QAGEN
 inner_loop: false
-additional_prefixes: [QAGEN-fix]
+additional_prefixes: "[QAGEN-fix]"
 message_types: 
 ---
-
-<required_reading>
-@~/.maestro/workflows/run-mode.md
-</required_reading>
 
 # Test Generator
 

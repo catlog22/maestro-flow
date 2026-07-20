@@ -3,7 +3,7 @@
   "team_name": "perf-opt",
   "team_display_name": "Performance Optimization",
   "skill_name": "team-perf-opt",
-  "skill_path": "~  or <project>/.codex/skills/team-perf-opt/",
+  "skill_path": "~  or <project>/.claude/skills/team-perf-opt/",
   "worker_agent": "team-worker",
   "pipeline_type": "Linear with Review-Fix Cycle (Parallel-Capable)",
   "completion_action": "interactive",

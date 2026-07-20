@@ -1,7 +1,5 @@
 
-<required_reading>
-@~/.maestro/workflows/run-mode.md
-</required_reading>
+> **Plan tracking**: codex 无 TaskCreate/TaskUpdate/TodoWrite 任务板。进度清单用 `update_plan({ explanation?, plan: [{ step, status }] })` 维护（整体提交步骤数组，status: `pending` | `in_progress` | `completed`），权威状态始终在 session 工件中；依赖/认领（addBlockedBy/owner）是工件字段，不是工具参数。
 # Dispatch Tasks
 
 ## Workflow
@@ -31,7 +29,7 @@ EXPECTED: <artifact path> + <quality criteria>
 CONSTRAINTS: <scope limits>
 ---
 InnerLoop: <true|false>
-RoleSpec: ~  or <project>/.codex/skills/team-lifecycle-v4/roles/<role>/role.md
+RoleSpec: ~  or <project>/.claude/skills/team-lifecycle-v4/roles/<role>/role.md
 ```
 
 ## InnerLoop Flag Rules
@@ -47,7 +45,7 @@ CHECKPOINT tasks are dispatched like regular tasks but handled differently at sp
 - Owner: supervisor
 - **NOT spawned as team-worker** — coordinator wakes the resident supervisor via send_message
 - If `supervision: false` in team-session.json, skip creating CHECKPOINT tasks entirely
-- RoleSpec in description: `~  or <project>/.codex/skills/team-lifecycle-v4/roles/supervisor/role.md`
+- RoleSpec in description: `~  or <project>/.claude/skills/team-lifecycle-v4/roles/supervisor/role.md`
 
 ## Dependency Validation
 

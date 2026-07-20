@@ -106,8 +106,10 @@ async function runOrchestrator(workDir) {
       };
 
       const result = await spawn_agent({
-        task_name: `tuning_${actionId}`,
-        message: `
+        subagent_type: 'universal-executor',
+        description: `Execute skill-tuning action: ${actionId}`,
+        run_in_background: false,
+        prompt: `
 [CONTEXT]
 Action: ${actionId}
 Work directory: ${workDir}
@@ -124,8 +126,7 @@ ${actionPrompt}
 
 [OUTPUT]
 Return JSON: { stateUpdates: {}, outputFiles: [], summary: "..." }
-`,
-        fork_turns: "none"
+`
       });
 
       // 5. Parse result

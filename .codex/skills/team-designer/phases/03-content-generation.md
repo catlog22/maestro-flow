@@ -1,8 +1,10 @@
 
 > **Agent timeout**: `spawn_agent` 异步执行且无内置超时 — 除明确短任务外一律 `spawn_agent` 后立即 `wait_agent({ timeout_ms: 3600000 })`（上限 1 小时）阻塞等待，绝不依赖 30000 默认值；`timed_out: true` 且 Agent 未完成时再次 `wait_agent` 续等，不丢弃。批量场景使用 `spawn_agents_on_csv({ max_runtime_seconds: 3600, ... })`。
 
+> **Plan tracking**: codex 无 TaskCreate/TaskUpdate/TodoWrite 任务板。进度清单用 `update_plan({ explanation?, plan: [{ step, status }] })` 维护（整体提交步骤数组，status: `pending` | `in_progress` | `completed`），权威状态始终在 session 工件中；依赖/认领（addBlockedBy/owner）是工件字段，不是工具参数。
+
 <required_reading>
-@~/.maestro/workflows/run-mode.md
+@~/.maestro/workflows/run-mode-lite.md
 </required_reading>
 # Phase 3: Content Generation
 
@@ -16,7 +18,7 @@
 
 ## Golden Sample Reference
 
-Read the golden sample at `~  or <project>/.codex/skills/team-lifecycle-v4/` for each file type before generating. This ensures pattern fidelity.
+Read the golden sample at `~  or <project>/.claude/skills/team-lifecycle-v4/` for each file type before generating. This ensures pattern fidelity.
 
 ## Step 3.1: Generate Coordinator
 
@@ -78,6 +80,18 @@ If `{run_dir}/work/team/team-session.json` exists:
 - Initialize team_msg message bus
 - Create session directory structure
 
+### Run Lifecycle Integration
+
+After session folder creation and before task dispatch:
+
+1. **Resolve Run** (birth-packet first): if the dispatch context already carries `run_id` / `run_dir` (injected by an orchestrator), store them in `team-session.json` and skip create — a second create mints an empty duplicate Run. Otherwise: `maestro run create ${teamConfig.skillName} --session <slug> --intent "<task summary>"`
+   - Slug format: `YYYYMMDD-${teamConfig.skillName}-<topic>` (ASCII, ≤64 chars)
+   - Store returned `run_id` and `run_dir` in `team-session.json`:
+     \```json
+     "run": { "run_id": "<id>", "run_dir": "<path>" }
+     \```
+2. **Resume**: Read `team-session.json.run.run_id` → `maestro run check <run_id>` (idempotent). If status=sealed, create a new run and update the field.
+
 ## Phase 3: Dispatch
 
 - Execute `commands/dispatch.md`
@@ -90,6 +104,12 @@ If `{run_dir}/work/team/team-session.json` exists:
 - **STOP after spawning** — wait for callback
 
 ## Phase 5: Report & Completion
+
+Run lifecycle completion (before generating the summary):
+- Read run_id from team-session.json.run.run_id
+- Write {run_dir}/report.md with frontmatter (verdict/summary/concerns)
+- Run `maestro run complete <run_id>`
+- If complete fails: fix the blocking gate and retry once; still failing -> do NOT archive/clean - keep the team active (status=paused) and report the blocking gate
 
 - Aggregate all task artifacts
 - Present completion action to user
@@ -309,7 +329,7 @@ For each additional spec in `teamConfig.specs` (beyond pipelines), generate doma
 
 For each template in `teamConfig.templates`:
 
-1. Check if golden sample has matching template at `~  or <project>/.codex/skills/team-lifecycle-v4/templates/`
+1. Check if golden sample has matching template at `~  or <project>/.claude/skills/team-lifecycle-v4/templates/`
 2. If exists: copy and adapt for new domain
 3. If not: generate domain-appropriate template structure
 

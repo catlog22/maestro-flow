@@ -2,12 +2,8 @@
 role: implementer
 prefix: BUILD
 inner_loop: false
-message_types: [state_update]
+message_types: "[state_update]"
 ---
-
-<required_reading>
-@~/.maestro/workflows/run-mode.md
-</required_reading>
 
 # Component Code Builder
 

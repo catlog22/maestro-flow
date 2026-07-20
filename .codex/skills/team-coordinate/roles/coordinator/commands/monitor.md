@@ -1,9 +1,8 @@
 
 > **Agent timeout**: `spawn_agent` 异步执行且无内置超时 — 除明确短任务外一律 `spawn_agent` 后立即 `wait_agent({ timeout_ms: 3600000 })`（上限 1 小时）阻塞等待，绝不依赖 30000 默认值；`timed_out: true` 且 Agent 未完成时再次 `wait_agent` 续等，不丢弃。批量场景使用 `spawn_agents_on_csv({ max_runtime_seconds: 3600, ... })`。
 
-<required_reading>
-@~/.maestro/workflows/run-mode.md
-</required_reading>
+> **Plan tracking**: codex 无 TaskCreate/TaskUpdate/TodoWrite 任务板。进度清单用 `update_plan({ explanation?, plan: [{ step, status }] })` 维护（整体提交步骤数组，status: `pending` | `in_progress` | `completed`），权威状态始终在 session 工件中；依赖/认领（addBlockedBy/owner）是工件字段，不是工具参数。
+
 # Command: monitor
 
 ## Purpose
@@ -30,7 +29,7 @@ Event-driven pipeline coordination with Spawn-and-Stop pattern. Role names are r
 
 | Constant | Value | Description |
 |----------|-------|-------------|
-| SPAWN_MODE | background | All workers spawned via `Task(run_in_background: true)` |
+| SPAWN_MODE | background | All workers spawned via `spawn_agent(subagent_type: "team-worker", run_in_background: true)` |
 | ONE_STEP_PER_INVOCATION | true | Coordinator does one operation then STOPS |
 | FAST_ADVANCE_AWARE | true | Workers may skip coordinator for simple linear successors |
 | WORKER_AGENT | team-worker | All workers spawned as team-worker agents |
@@ -189,7 +188,29 @@ Ready tasks found?
 **Spawn worker tool call** (one per ready task):
 
 ```
-spawn_agent({ task_name: "<role>", message: "Spawn <role> worker for <subject>", fork_turns: "none", agent_type: "team_worker" })
+spawn_agent({
+  subagent_type: "team-worker",
+  description: "Spawn <role> worker for <subject>",
+  team_name: <team-name>,
+  name: "<role>",
+  run_in_background: true,
+  prompt: `## Role Assignment
+role: <role>
+role_spec: {run_dir}/work/team/role-specs/<role>.md
+session: {run_dir}/work/team
+session_id: <run-id>
+team_name: <team-name>
+requirement: <task-description>
+inner_loop: <true|false>
+
+## Progress Milestones
+session_id: <run-id>
+Report progress via team_msg at natural phase boundaries (context loaded -> core work done -> verification).
+Report blockers immediately via team_msg type="blocker".
+Report completion via team_msg type="task_complete" after final send_message.
+
+Read role_spec file to load Phase 2-4 domain instructions.`
+})
 ```
 
 ---
@@ -200,6 +221,12 @@ Pipeline complete. Execute completion action based on session configuration.
 
 ```
 All tasks completed (no pending, no in_progress)
+  +- Run lifecycle completion:
+  |   - Read run_id from team-session.json.run.run_id
+  |   - Write {run_dir}/report.md with frontmatter (verdict/summary/concerns)
+  |   - Run `maestro run complete <run_id>`
+  |   - If complete fails: fix the blocking gate and retry once; still failing -> do NOT archive/clean - keep the team active (status=paused) and report the blocking gate
+  |
   +- Generate pipeline summary:
   |   - Deliverables list with paths
   |   - Pipeline stats (tasks completed, duration)
@@ -226,7 +253,7 @@ All tasks completed (no pending, no in_progress)
       |   |   Output final summary with artifact paths
       |   +- "Keep Active":
       |   |   Update session status="paused"
-      |   |   Output: "Resume with: spawn_agent({ task_name: "team_coordinate", message: "Execute skill team-coordinate, args: "resume"" })"
+      |   |   Output: "Resume with: spawn_agent({ task_name: "team_coordinate", message: "Execute skill team-coordinate, args: resume" })"
       |   +- "Export Results":
       |       request_user_input for target directory
       |       Copy deliverables to target

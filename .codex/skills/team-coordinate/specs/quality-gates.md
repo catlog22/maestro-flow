@@ -41,7 +41,7 @@ Quality checks vary by `output_type` (from task-analysis.json role metadata).
 | Files modified | Claimed files actually changed (Read to confirm) |
 | Syntax valid | No syntax errors in modified files |
 | No regressions | Existing functionality preserved |
-| Summary artifact | Implementation summary written to artifacts/ |
+| Summary artifact | Implementation summary written to {run_dir}/outputs/ |
 
 ### output_type: mixed
 

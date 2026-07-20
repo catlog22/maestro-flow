@@ -1,4 +1,6 @@
 
+> **Plan tracking**: codex 无 TaskCreate/TaskUpdate/TodoWrite 任务板。进度清单用 `update_plan({ explanation?, plan: [{ step, status }] })` 维护（整体提交步骤数组，status: `pending` | `in_progress` | `completed`），权威状态始终在 session 工件中；依赖/认领（addBlockedBy/owner）是工件字段，不是工具参数。
+
 <required_reading>
 @~/.maestro/workflows/run-mode.md
 </required_reading>
@@ -113,7 +115,7 @@ Quality Validation Input:
 Use Agy CLI to perform comprehensive quality validation:
 
 ```bash
-ccw cli -p "PURPOSE: Validate academic rebuttal quality across multiple dimensions (completeness, professionalism, persuasiveness, evidence strength)
+maestro delegate "PURPOSE: Validate academic rebuttal quality across multiple dimensions (completeness, professionalism, persuasiveness, evidence strength)
 
 REBUTTAL DOCUMENT:
 ${rebuttalContent}
@@ -198,7 +200,7 @@ EXPECTED: JSON with {
     {'priority': 1, 'issue': '...', 'action': '...', 'impact': 'high|medium|low'}
   ],
   'summary': '...'
-}" --tool agy --mode analysis --rule analysis-review-code-quality
+}" --to agy --mode analysis --rule analysis-review-code-quality
 ```
 
 ### Step 5.3: Parse Validation Results

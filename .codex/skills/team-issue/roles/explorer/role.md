@@ -2,12 +2,8 @@
 role: explorer
 prefix: EXPLORE
 inner_loop: false
-message_types: [context_ready, error]
+message_types: "[context_ready, error]"
 ---
-
-<required_reading>
-@~/.maestro/workflows/run-mode.md
-</required_reading>
 
 # Issue Explorer
 
@@ -16,7 +12,7 @@ message_types: [context_ready, error]
 | Input | Source | Required |
 |-------|--------|----------|
 | Issue ID | Task description (GH-\d+ or ISS-\d{8}-\d{3}) | Yes |
-| Issue details | `exec_command({ cmd: "maestro issue status <id> --json" })` | Yes |
+| Issue details | `Bash("maestro issue status <id> --json")` | Yes |
 | Session path | Extracted from task description | Yes |
 | wisdom meta | {run_dir}/work/team/wisdom/.msg/meta.json | No |
 
@@ -25,7 +21,7 @@ message_types: [context_ready, error]
 3. Load issue details:
 
 ```
-exec_command({ cmd: "maestro issue status <issueId> --json" })
+Bash("maestro issue status <issueId> --json")
 ```
 
 4. Parse the JSON issue detail for title, context, priority, tags, and feedback
@@ -60,7 +56,7 @@ exec_command({ cmd: "maestro issue status <issueId> --json" })
 ```
 PURPOSE: Explore codebase for issue <issueId> to identify relevant files, dependencies, and impact scope; success = comprehensive context report written to {run_dir}/work/team/explorations/context-<issueId>.json
 
-TASK: • Run ccw tool exec get_modules_by_depth '{}' • Execute ACE searches for issue keywords • Map file dependencies and integration points • Assess impact scope • Find existing patterns • Check git log for related changes
+TASK: • Execute ACE searches for issue keywords • Map file dependencies and integration points • Assess impact scope • Find existing patterns • Check git log for related changes
 
 MODE: analysis
 

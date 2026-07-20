@@ -66,15 +66,14 @@ graph TB
         MC["/maestro-session-seal"]
     end
 
-    subgraph quick["Quick Channel"]
-        MQ["/maestro-next"]
-        LP["/workflow-lite-plan"]
+    subgraph companion["Companion Lightweight Channel"]
+        MQ["/maestro-companion"]
     end
 
     M -->|"Intent routing"| init
     M -->|"Intent routing"| pipeline
     M -->|"continue"| pipeline
-    M -->|quick| quick
+    M -->|"Lightweight intent"| companion
 
     BS -.->|"Optional"| INIT
     INIT --> RM
@@ -302,10 +301,10 @@ Unlike the Quality pipeline (fast gate), Odyssey commands are long-running persi
 | `full-lifecycle` | init→analyze→roadmap→...→session-seal | Brand new project |
 | `roadmap-driven` | init→roadmap→... | Lightweight roadmap |
 | `brainstorm-driven` | brainstorm→init→roadmap→... | Start from brainstorming |
-| `analyze-plan-execute` | analyze→plan→execute | Quick execution |
+| `analyze-plan-execute` | analyze→plan→execute | Multi-step delivery that needs planning |
 | `quality-loop` | review→test→debug | Quality pipeline |
 | `milestone-close` | session-seal | Close a milestone |
-| `quick` | next task | Instant small tasks |
+| `companion` | `/maestro-companion "<intent>"` | Instant small tasks |
 
 ---
 

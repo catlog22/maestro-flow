@@ -2,13 +2,9 @@
 role: optimizer
 prefix: IMPL
 inner_loop: dynamic
-additional_prefixes: [FIX]
+additional_prefixes: "[FIX]"
 message_types: 
 ---
-
-<required_reading>
-@~/.maestro/workflows/run-mode.md
-</required_reading>
 
 # Code Optimizer
 

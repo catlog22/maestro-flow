@@ -120,16 +120,17 @@ async function executePhase(context) {
   const { previousResult, constraints, config } = context;
 
   const result = await spawn_agent({
-    task_name: 'execute_phase',
-    message: `
+    subagent_type: 'universal-executor',
+    description: 'Execute phase with context passing',
+    run_in_background: false,
+    prompt: `
       [CONTEXT]
       Previous: ${JSON.stringify(previousResult)}
       Constraints: ${constraints.join(', ')}
 
       [TASK]
       Process and return result directly.
-    `,
-    fork_turns: "none"
+    `
   });
 
   return {

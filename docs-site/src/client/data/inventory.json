@@ -139,23 +139,6 @@
       ]
     },
     {
-      "name": "maestro-quick",
-      "file": ".claude/commands/maestro-quick.md",
-      "category": "maestro",
-      "description": "Execute a quick task with workflow guarantees but skip optional agents",
-      "argumentHint": "[description] [--full] [--discuss]",
-      "allowedTools": [
-        "Read",
-        "Write",
-        "Edit",
-        "Bash",
-        "Glob",
-        "Grep",
-        "Task",
-        "AskUserQuestion"
-      ]
-    },
-    {
       "name": "maestro-brainstorm",
       "file": ".claude/commands/maestro-brainstorm.md",
       "category": "maestro",
@@ -1062,8 +1045,8 @@
       "name": "maestro-companion",
       "file": ".claude/commands/maestro-companion.md",
       "category": "maestro",
-      "description": "Knowledge companion — side-car utility for task context loading, structured companion doc recording, insight capture, and skill routing",
-      "argumentHint": "[before|note|after|route] [--task <description>] [--type <task_type>] [--category <cat>]",
+      "description": "Quick execution for small tasks — minimal Run lifecycle with direct execution and evidence recording",
+      "argumentHint": "<intent> [--note <text>] [--promote] [-y]",
       "allowedTools": [
         "Read",
         "Write",
@@ -1071,7 +1054,7 @@
         "Bash",
         "Glob",
         "Grep",
-        "Skill",
+        "Agent",
         "AskUserQuestion"
       ]
     },

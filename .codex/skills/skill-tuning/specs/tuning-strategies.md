@@ -145,9 +145,10 @@ function updateHistory(state, newItem) {
 ```javascript
 // Add summarization before passing to next phase
 const summary = await spawn_agent({
-  task_name: 'summarize_context',
-  message: `Summarize in <100 words: ${fullContent}\nReturn JSON: { summary, key_points[] }`,
-  fork_turns: "none"
+  subagent_type: 'universal-executor',
+  description: 'Summarize content for context compression',
+  run_in_background: false,
+  prompt: `Summarize in <100 words: ${fullContent}\nReturn JSON: { summary, key_points[] }`
 });
 nextPhasePrompt = `Previous summary: ${summary.summary}`;
 ```
@@ -279,10 +280,10 @@ function validateAgentResult(result, requiredFields) {
 // Orchestrator:
 if (parsedA.needs_agent_b) {
   resultB = await spawn_agent({
-    task_name: 'handle_agent_b',
-    message: `Context: ${parsedA.context}`,
-    fork_turns: "none",
-    agent_type: "B"
+    subagent_type: 'B',
+    description: 'Handle delegated task from Agent A',
+    run_in_background: false,
+    prompt: `Context: ${parsedA.context}`
   });
 }
 ```

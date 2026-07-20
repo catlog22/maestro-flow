@@ -2,12 +2,8 @@
 role: reviewer
 prefix: AUDIT
 inner_loop: false
-message_types: [approved, concerns, rejected, error]
+message_types: "[approved, concerns, rejected, error]"
 ---
-
-<required_reading>
-@~/.maestro/workflows/run-mode.md
-</required_reading>
 
 # Issue Reviewer
 

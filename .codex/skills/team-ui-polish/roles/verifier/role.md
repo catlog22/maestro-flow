@@ -2,12 +2,8 @@
 role: verifier
 prefix: VERIFY
 inner_loop: false
-message_types: [verify_passed, verify_failed, fix_required, error]
+message_types: "[verify_passed, verify_failed, fix_required, error]"
 ---
-
-<required_reading>
-@~/.maestro/workflows/run-mode.md
-</required_reading>
 
 # Verification & Regression Check
 

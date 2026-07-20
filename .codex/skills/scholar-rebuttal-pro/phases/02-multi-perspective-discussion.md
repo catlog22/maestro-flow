@@ -1,4 +1,6 @@
 
+> **Plan tracking**: codex 无 TaskCreate/TaskUpdate/TodoWrite 任务板。进度清单用 `update_plan({ explanation?, plan: [{ step, status }] })` 维护（整体提交步骤数组，status: `pending` | `in_progress` | `completed`），权威状态始终在 session 工件中；依赖/认领（addBlockedBy/owner）是工件字段，不是工具参数。
+
 <required_reading>
 @~/.maestro/workflows/run-mode.md
 </required_reading>
@@ -102,7 +104,7 @@ Use Agy CLI to simulate three perspectives discussing each major issue:
 ```bash
 # For each major issue, run multi-perspective analysis
 for issue in majorIssues:
-  ccw cli -p "PURPOSE: Simulate multi-perspective discussion on reviewer comment to develop robust response strategy
+  maestro delegate "PURPOSE: Simulate multi-perspective discussion on reviewer comment to develop robust response strategy
 
 PERSPECTIVES:
 1. Author Perspective: How can we most effectively respond to this concern? What evidence do we have? What experiments can we add?
@@ -145,7 +147,7 @@ EXPECTED: JSON with {
     'priority': '...',
     'sourceStrategyId': 0
   }
-}" --tool agy --mode analysis --rule analysis-review-architecture
+}" --to agy --mode analysis --rule analysis-review-architecture
 ```
 
 **Alternative: Use team-ultra-analyze skill**
@@ -154,9 +156,10 @@ If `team-ultra-analyze` skill is available, use it for richer discussion:
 
 ```javascript
 // Spawn team-ultra-analyze for multi-perspective discussion
-spawn_agent({
-  task_name: "ultra_analyze_discussion",
-  message: `Analyze reviewer comment from three perspectives (author/reviewer/expert) and develop consensus response strategy.
+Task({
+  subagent_type: "team-ultra-analyze",
+  description: "Multi-perspective rebuttal strategy discussion",
+  prompt: `Analyze reviewer comment from three perspectives (author/reviewer/expert) and develop consensus response strategy.
 
 REVIEWER COMMENT:
 ${issue.text}
@@ -172,8 +175,7 @@ ROLES:
 - Expert: Validate technical accuracy and academic norms
 
 OUTPUT: Consensus strategy with rationale, priority, and source strategy ID`,
-  fork_turns: "none",
-  agent_type: "team_worker"
+  run_in_background: false
 })
 ```
 

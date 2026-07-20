@@ -54,5 +54,12 @@ describe('maestro run durable context CLI', () => {
     expect(create?.options.some(option => option.long === '--parent-run')).toBe(false);
     expect(create?.options.some(option => option.long === '--retry-token')).toBe(true);
     expect(create?.options.some(option => option.long === '--platform')).toBe(true);
+    expect(create?.options.find(option => option.long === '--intent')?.description)
+      .toBe('Session metadata only (not passed to the command or Run input.args)');
+    expect(create?.options.find(option => option.long === '--arg')?.description)
+      .toBe('command input stored in Run input.args (repeatable)');
+    expect(create?.helpInformation()).toContain('--intent <text>');
+    expect(create?.helpInformation()).toContain('not passed to the command');
+    expect(create?.helpInformation()).toContain('command input stored in Run input.args (repeatable)');
   });
 });

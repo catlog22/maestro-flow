@@ -377,7 +377,7 @@ Maestro 使用 `action x object` 矩阵进行语义路由：
 
 | 输入 | 路由 | 命令链 |
 |------|------|--------|
-| `"Add API endpoint"` | quick | `/maestro-next` |
+| `"修正 README 拼写"` | companion | `/maestro-companion "修正 README 拼写"` |
 | `"plan phase 2"` | plan | `/maestro-next "<plan intent>"` |
 | `"debug auth crash"` | debug | `/maestro-odyssey --mode debug` |
 | `"fix issue ISS-abc-001"` | issue-full | analyze → plan → execute → review → close |
@@ -397,7 +397,7 @@ Maestro 使用 `action x object` 矩阵进行语义路由：
 | `review` | `/maestro-ralph --engine swarm --script wf-review "{phase}"` |
 | `test` | `/maestro "<test intent> {phase}"` 或 `/security-audit` |
 | `debug` | `/maestro-odyssey --mode debug "{description}"` |
-| `quick` | `/maestro-next "{description}"` |
+| `companion` | `/maestro-companion "{description}"` |
 
 **多步链**
 

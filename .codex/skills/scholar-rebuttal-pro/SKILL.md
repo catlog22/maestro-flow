@@ -14,8 +14,8 @@ allowed-tools:
   - Task
   - Write
   - mcp__ace-tool__search_context
-  - mcp__ccw-tools__edit_file
-  - mcp__ccw-tools__read_file
+  - mcp__maestro__edit_file
+  - mcp__maestro__read_file
   - request_user_input
   - spawn_agent
   - update_plan
@@ -29,6 +29,8 @@ contract:
     entry: []
     exit: []
 ---
+
+> **Plan tracking**: codex 无 TaskCreate/TaskUpdate/TodoWrite 任务板。进度清单用 `update_plan({ explanation?, plan: [{ step, status }] })` 维护（整体提交步骤数组，status: `pending` | `in_progress` | `completed`），权威状态始终在 session 工件中；依赖/认领（addBlockedBy/owner）是工件字段，不是工具参数。
 
 <required_reading>
 @~/.maestro/workflows/run-mode.md
@@ -52,16 +54,16 @@ Enhanced academic paper review response workflow combining Agy/CLI collaborative
 ┌─────────────────────────────────────────────────────────────────┐
 │  Scholar Rebuttal Pro Orchestrator (SKILL.md)                    │
 │  → Pure coordinator: Execute phases, parse outputs, pass context  │
-│  → Optional: --session <session-id> for WFS session integration   │
+│  → Run lifecycle: create/resume → phases → check → complete       │
 └───────────────────────┬─────────────────────────────────────────┘
                         │
-    ┌─────────┐ ┌─────────┐ ┌─────────┐ ┌─────────┐ ┌─────────┐ ┌─────────┐
-    │ Phase 1 │ │ Phase 2 │ │ Phase 3 │ │ Phase 4 │ │ Phase 5 │ │ Step 6  │
-    │ Review  │ │ Multi-  │ │Strategy │ │Rebuttal │ │ Quality │ │Session  │
-    │ Parsing │ │Perspect │ │Formula  │ │ Writing │ │Validat  │ │Finalize │
-    └─────────┘ └─────────┘ └─────────┘ └─────────┘ └─────────┘ └─────────┘
-      reviewA    discussion   strategy    rebuttal    quality     git commit
-      nalysis    Consensus    Matrix      Draft       Score      + register
+    ┌─────────┐ ┌─────────┐ ┌─────────┐ ┌─────────┐ ┌─────────┐
+    │ Phase 1 │ │ Phase 2 │ │ Phase 3 │ │ Phase 4 │ │ Phase 5 │
+    │ Review  │ │ Multi-  │ │Strategy │ │Rebuttal │ │ Quality │
+    │ Parsing │ │Perspect │ │Formula  │ │ Writing │ │Validat  │
+    └─────────┘ └─────────┘ └─────────┘ └─────────┘ └─────────┘
+      reviewA    discussion   strategy    rebuttal    quality
+      nalysis    Consensus    Matrix      Draft       Score
 ```
 
 ## Key Design Principles
@@ -138,9 +140,14 @@ When `workflowPreferences.autoYes === true`:
 > Only compress phases marked `completed` or `pending`.
 
 ```
+Run Setup (see run-mode.md):
+   └─ Birth packet injected run_id/run_dir? → use them, skip create.
+      Else self-start: maestro run create scholar-rebuttal-pro --session <YYYYMMDD-scholar-rebuttal-pro-{topic}> --intent "..."
+      (Optional --resume <run_id> → maestro run brief --platform codex <run_id> to continue an existing Run.)
+   └─ output_base = {run_dir}/outputs
+
 Input Parsing:
    └─ Convert user input to structured format (reviewCommentsPath + paperPath + conferenceType)
-   └─ Parse --session flag → resolve output_base (session: {sessionDir}/rebuttal/ | default: .)
 
 Phase 1: Review Parsing & Classification
    └─ Ref: phases/01-review-parsing.md
@@ -167,10 +174,9 @@ Phase 5: Quality Validation
       ├─ Tasks attached: Check completeness (all comments addressed) → Assess professionalism and tone → Evaluate persuasiveness and evidence strength → Generate improvement recommendations
       └─ Output: qualityScore, improvements, ${output_base}/quality-report.md, ${output_base}/improvement-suggestions.json
 
-Step 6: Session Finalization (only when --session provided)
-   └─ Git commit artifacts → Register in context/index.json
-      ├─ Tasks: git add rebuttal/ → git commit → register artifacts in index.json
-      └─ Output: commit hash, updated index.json
+Run Closure (see run-mode.md):
+   └─ maestro run check {run_id} → repair any reported gate → maestro run complete {run_id}
+      (Report success only after run complete.)
 
 Return:
    └─ Summary with recommended next steps
@@ -200,7 +206,7 @@ Return:
 5. **Track Progress**: Update update_plan dynamically with task attachment/collapse pattern
 6. **Progressive Phase Loading**: Read phase docs ONLY when that phase is about to execute
 7. **DO NOT STOP**: Continuous multi-phase workflow until all phases complete
-8. **CLI Integration**: Use `ccw cli --tool agy --mode analysis` for semantic analysis tasks
+8. **CLI Integration**: Use `maestro delegate --to agy --mode analysis` for semantic analysis tasks
 9. **Evidence Linking**: Every response strategy must link to paper content or experimental evidence
 
 ## Input Processing
@@ -211,36 +217,20 @@ User provides review comments in one of these formats:
 2. **Inline text**: Paste reviewer comments directly
 3. **Structured JSON**: Pre-parsed review structure
 
-**Optional flag**: `--session <session-id>` to integrate with WFS session.
+**Optional flag**: `--resume <run_id>` to continue an existing Run.
 
-### Session Resolution
+### Run Resolution
+
+The Run is the single source of truth (see run-mode.md). Resolve `run_dir`, then derive `output_base`:
 
 ```javascript
-// Parse --session flag from $ARGUMENTS
-const sessionMatch = $ARGUMENTS.match(/--session\s+(\S+)/);
+// If the birth packet injected run_id/run_dir, use them (do NOT create).
+// Else if --resume <run_id>: maestro run brief --platform codex <run_id> → run_dir.
+// Else self-start: maestro run create scholar-rebuttal-pro --session <slug> --intent "..."
+//   (slug: YYYYMMDD-scholar-rebuttal-pro-{topic}, ASCII-only, ≤64 chars)
 
-if (sessionMatch) {
-  const sessionId = sessionMatch[1];
-  // Resolve session directory (follows paper:assemble pattern)
-  const sessionDir = `.workflow/${sessionId}`;
-
-  // Validate session exists
-  if (!fs.existsSync(`${sessionDir}/session.json`)) {
-    error(`Session not found: ${sessionDir}. Run /session:start first.`);
-  }
-
-  // Create rebuttal subdirectory if it doesn't exist
-  // mkdir -p ${sessionDir}/rebuttal/
-  const output_base = `${sessionDir}/rebuttal`;
-
-  // Remove --session flag from arguments before further parsing
-  const cleanArgs = $ARGUMENTS.replace(/--session\s+\S+/, '').trim();
-} else {
-  // No session: use current working directory (backward-compatible default)
-  const output_base = '.';
-  const sessionDir = null;
-  const cleanArgs = $ARGUMENTS;
-}
+const output_base = `${run_dir}/outputs`;  // all phase outputs land here
+const cleanArgs = $ARGUMENTS.replace(/--resume\s+\S+/, '').trim();
 ```
 
 ### Structured Input
@@ -253,20 +243,18 @@ const structuredInput = {
   paperPath: workflowPreferences.paperSource === "Provide Path" ? <user-provided> : <auto-discovered>,
   conferenceType: workflowPreferences.conferenceType,
   autoMode: workflowPreferences.autoYes,
-  sessionId: sessionMatch ? sessionMatch[1] : null,
-  sessionDir: sessionDir,
-  output_base: output_base  // All phase outputs use this base path
+  output_base: output_base  // {run_dir}/outputs — all phase outputs use this base path
 }
 ```
 
 ## Data Flow
 
 ```
-User Input (review comments + paper path + conference type [+ --session <session-id>])
+User Input (review comments + paper path + conference type [+ --resume <run_id>])
     |
-[Session Resolution]
-    | sessionDir = --session provided ? .workflow/{session-id}/ : null
-    | output_base = sessionDir ? {sessionDir}/rebuttal/ : .
+[Run Resolution]  (see run-mode.md)
+    | run_dir = birth packet | --resume brief | self-start create
+    | output_base = {run_dir}/outputs
     | mkdir -p ${output_base}
     |
 [Convert to Structured Format]
@@ -296,9 +284,8 @@ Phase 5: Quality Validation
     | Output: qualityScore + improvements
     | Files: ${output_base}/quality-report.md, ${output_base}/improvement-suggestions.json
     |
-Step 6: Session Finalization (only when --session provided)
-    | Git commit all artifacts in session repo
-    | Register artifacts in {sessionDir}/context/index.json
+[Run Closure]  (see run-mode.md)
+    | maestro run check {run_id} → repair gates → maestro run complete {run_id}
     |
 Return summary to user
 ```
@@ -331,7 +318,7 @@ Return summary to user
   {"content": "Phase 3: Strategy Formulation", "status": "pending"},
   {"content": "Phase 4: Rebuttal Writing", "status": "pending"},
   {"content": "Phase 5: Quality Validation", "status": "pending"},
-  {"content": "Step 6: Session Finalization (if --session)", "status": "pending"}
+  {"content": "Run Closure: check + complete", "status": "pending"}
 ]
 ```
 
@@ -343,7 +330,7 @@ Return summary to user
   {"content": "Phase 3: Strategy Formulation", "status": "pending"},
   {"content": "Phase 4: Rebuttal Writing", "status": "pending"},
   {"content": "Phase 5: Quality Validation", "status": "pending"},
-  {"content": "Step 6: Session Finalization (if --session)", "status": "pending"}
+  {"content": "Run Closure: check + complete", "status": "pending"}
 ]
 ```
 
@@ -385,104 +372,19 @@ After each phase completes:
 - [ ] Improvement suggestions presented
 - [ ] Final rebuttal.md file written
 
-**Step 6 - Session Finalization** (only when `--session` was provided):
-- [ ] All artifacts committed to git within session repo
-- [ ] Artifacts registered in `{sessionDir}/context/index.json` with type `notes` and tag `rebuttal`
-- [ ] Session `session.json` updated with rebuttal progress
+**Run Closure**:
+- [ ] `maestro run check {run_id}` clean (repair any reported gate)
+- [ ] `maestro run complete {run_id}` succeeded before reporting success
 
-## Step 6: Session Finalization
+## Run Closure
 
-> **Condition**: Only executes when `--session <session-id>` was provided. Skip entirely otherwise.
+> Runtime-owned protocol files (`session.json`, `run.json`, `artifacts.json`) MUST NOT be edited directly, and no second manifest/index is maintained. Artifact registration and handoff are derived by the runtime from `{run_dir}/outputs/`. See run-mode.md.
 
-After Phase 5 completes, finalize the session integration:
+After Phase 5 completes:
 
-### 6.1 Git Commit Artifacts
-
-```bash
-# Commit all rebuttal artifacts within the session
-cd "${sessionDir}"
-git add rebuttal/
-git commit -m "feat(rebuttal): add rebuttal artifacts (review analysis, strategy, draft, quality report)"
-```
-
-### 6.2 Register Artifacts in Context Index
-
-Register key rebuttal artifacts in `{sessionDir}/context/index.json` so other session commands can discover them.
-
-```javascript
-// Read existing index
-const indexPath = `${sessionDir}/context/index.json`;
-const index = JSON.parse(Read(indexPath));
-
-// Artifacts to register
-const rebuttalArtifacts = [
-  {
-    id: `rebuttal_analysis_${Date.now()}`,
-    type: "notes",
-    description: "Review analysis and comment classification",
-    path: "rebuttal/review-analysis.json",
-    tags: ["rebuttal", "review-analysis"],
-    added_at: new Date().toISOString()
-  },
-  {
-    id: `rebuttal_strategy_${Date.now()}`,
-    type: "notes",
-    description: "Response strategy matrix with evidence mapping",
-    path: "rebuttal/strategy-matrix.md",
-    tags: ["rebuttal", "strategy"],
-    added_at: new Date().toISOString()
-  },
-  {
-    id: `rebuttal_draft_${Date.now()}`,
-    type: "notes",
-    description: "Rebuttal draft document",
-    path: "rebuttal/rebuttal-draft-v1.md",
-    tags: ["rebuttal", "draft"],
-    added_at: new Date().toISOString()
-  },
-  {
-    id: `rebuttal_quality_${Date.now()}`,
-    type: "notes",
-    description: "Rebuttal quality validation report",
-    path: "rebuttal/quality-report.md",
-    tags: ["rebuttal", "quality"],
-    added_at: new Date().toISOString()
-  }
-];
-
-// Append to materials array and update statistics
-index.materials.push(...rebuttalArtifacts);
-index.statistics.total_materials = index.materials.length;
-index.updated_at = new Date().toISOString();
-
-// Update tag_index
-for (const artifact of rebuttalArtifacts) {
-  for (const tag of artifact.tags) {
-    if (!index.tag_index[tag]) index.tag_index[tag] = [];
-    index.tag_index[tag].push(artifact.id);
-  }
-}
-
-Write(indexPath, JSON.stringify(index, null, 2));
-```
-
-### 6.3 Update Session Status
-
-```bash
-jq --arg ts "$(date -u +%Y-%m-%dT%H:%M:%SZ)" '
-  .progress.rebuttal = {
-    "status": "completed",
-    "artifacts_path": "rebuttal/",
-    "completed_at": $ts
-  }
-' "${sessionDir}/session.json" > temp.json
-mv temp.json "${sessionDir}/session.json"
-
-# Final commit with session metadata update
-cd "${sessionDir}"
-git add context/index.json session.json
-git commit -m "chore(rebuttal): register artifacts in session index"
-```
+1. `maestro run check {run_id}` — repair any blocking artifact or exit gate it reports.
+2. Optionally write `{run_dir}/report.md` (verdict + summary of the rebuttal and quality score).
+3. `maestro run complete {run_id}`. Report success only once the Run is completed.
 
 ## Related Commands
 
@@ -497,15 +399,15 @@ git commit -m "chore(rebuttal): register artifacts in session index"
 
 ## CLI Integration Details
 
-This skill uses `ccw cli` for enhanced analysis:
+This skill uses `maestro delegate` for enhanced analysis:
 
 **Phase 1 - Review Parsing**:
 ```bash
-ccw cli -p "PURPOSE: Parse and classify reviewer comments by type (Major/Minor/Typo/Misunderstanding)
+maestro delegate "PURPOSE: Parse and classify reviewer comments by type (Major/Minor/Typo/Misunderstanding)
 TASK: • Extract comment structure • Classify by severity • Identify sentiment
 MODE: analysis
 CONTEXT: @<review-file>
-EXPECTED: JSON with classification results" --tool agy --mode analysis
+EXPECTED: JSON with classification results" --to agy --mode analysis
 ```
 
 **Phase 2 - Multi-Perspective Discussion**:
@@ -513,27 +415,27 @@ Uses `team-ultra-analyze` skill or custom discussion agent to simulate multiple 
 
 **Phase 3 - Strategy Formulation**:
 ```bash
-ccw cli -p "PURPOSE: Search paper content for evidence supporting response strategies
+maestro delegate "PURPOSE: Search paper content for evidence supporting response strategies
 TASK: • Locate relevant sections • Extract supporting data • Identify evidence gaps
 MODE: analysis
 CONTEXT: @<paper-file>
-EXPECTED: Evidence map with file:line references" --tool agy --mode analysis
+EXPECTED: Evidence map with file:line references" --to agy --mode analysis
 ```
 
 **Phase 5 - Quality Validation**:
 ```bash
-ccw cli -p "PURPOSE: Validate rebuttal quality (completeness, professionalism, persuasiveness)
+maestro delegate "PURPOSE: Validate rebuttal quality (completeness, professionalism, persuasiveness)
 TASK: • Check all comments addressed • Assess tone • Evaluate evidence strength
 MODE: analysis
 CONTEXT: @<rebuttal-file>
-EXPECTED: Quality report with improvement suggestions" --tool agy --mode analysis
+EXPECTED: Quality report with improvement suggestions" --to agy --mode analysis
 ```
 
 ## Conference Template System
 
 Templates are loaded from:
-- **Built-in**: `G:\github_lib\claude-scholar\skills\review-response\references\`
-- **Custom**: `d:\ccws\.workflow\参考文档1\` (user-provided)
+- **Custom**: `templates/` under the skill directory (user-provided, `{templateId}-template.md`)
+- **Fallback**: `templates/discussion.md`, then the built-in generic template in Phase 4
 
 Template selection based on `workflowPreferences.conferenceType`:
 - **ML Conferences**: NeurIPS/ICML/ICLR strategies (novelty, theory, experiments)

@@ -2,12 +2,8 @@
 role: motion-researcher
 prefix: MRESEARCH
 inner_loop: false
-message_types: [state_update]
+message_types: "[state_update]"
 ---
-
-<required_reading>
-@~/.maestro/workflows/run-mode.md
-</required_reading>
 
 # Motion & Animation Researcher
 

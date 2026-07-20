@@ -5,26 +5,27 @@ Required session structure for team-executor v2. All components MUST exist for v
 ## Directory Structure
 
 ```
-{run_dir}/work/team/
-+-- team-session.json           # Session state + dynamic role registry (REQUIRED)
-+-- task-analysis.json          # Task analysis output: capabilities, dependency graph (REQUIRED)
-+-- role-specs/                 # Dynamic role-spec definitions (REQUIRED, >= 1 .md file)
-|   +-- <role-1>.md             # Lightweight: YAML frontmatter + Phase 2-4 only
-|   +-- <role-2>.md
-+-- artifacts/                  # All MD deliverables from workers
+{run_dir}/
++-- outputs/                    # All MD deliverables from workers
 |   +-- <artifact>.md
-+-- .msg/                       # Team message bus + state
-|   +-- messages.jsonl          # Message log
-|   +-- meta.json               # Session metadata + cross-role state
-+-- wisdom/                     # Cross-task knowledge
-|   +-- learnings.md
-|   +-- decisions.md
-|   +-- issues.md
-+-- explorations/               # Shared explore cache
-|   +-- cache-index.json
-|   +-- explore-<angle>.json
-+-- {run_dir}/evidence/discussions/                # Inline discuss records
++-- evidence/discussions/       # Inline discuss records
 |   +-- <round>.md
++-- work/team/                  # Team coordination (non-artifact)
+    +-- team-session.json       # Session state + dynamic role registry (REQUIRED)
+    +-- task-analysis.json      # Task analysis output: capabilities, dependency graph (REQUIRED)
+    +-- role-specs/             # Dynamic role-spec definitions (REQUIRED, >= 1 .md file)
+    |   +-- <role-1>.md         # Lightweight: YAML frontmatter + Phase 2-4 only
+    |   +-- <role-2>.md
+    +-- .msg/                   # Team message bus + state
+    |   +-- messages.jsonl      # Message log
+    |   +-- meta.json           # Session metadata + cross-role state
+    +-- wisdom/                 # Cross-task knowledge
+    |   +-- learnings.md
+    |   +-- decisions.md
+    |   +-- issues.md
+    +-- explorations/           # Shared explore cache
+        +-- cache-index.json
+        +-- explore-<angle>.json
 ```
 
 ## Validation Checklist
@@ -231,22 +232,23 @@ For each role-spec in role-specs/<role>.md:
 ## Example Valid Session
 
 ```
-{run_dir}/work/team/
-+-- team-session.json           # Valid JSON with session metadata
-+-- task-analysis.json          # Valid JSON with dependency graph
-+-- role-specs/
-|   +-- researcher.md           # YAML frontmatter + Phase 2-4
-|   +-- developer.md            # YAML frontmatter + Phase 2-4
-|   +-- tester.md               # YAML frontmatter + Phase 2-4
-+-- artifacts/                  # (may be empty)
-+-- .msg/                       # Team message bus + state (messages.jsonl + meta.json)
-+-- wisdom/
-|   +-- learnings.md
-|   +-- decisions.md
-|   +-- issues.md
-+-- explorations/
-|   +-- cache-index.json
-+-- {run_dir}/evidence/discussions/                # (may be empty)
+{run_dir}/
++-- outputs/                    # (may be empty)
++-- evidence/discussions/       # (may be empty)
++-- work/team/                  # Team coordination (non-artifact)
+    +-- team-session.json       # Valid JSON with session metadata
+    +-- task-analysis.json      # Valid JSON with dependency graph
+    +-- role-specs/
+    |   +-- researcher.md       # YAML frontmatter + Phase 2-4
+    |   +-- developer.md        # YAML frontmatter + Phase 2-4
+    |   +-- tester.md           # YAML frontmatter + Phase 2-4
+    +-- .msg/                   # Team message bus + state (messages.jsonl + meta.json)
+    +-- wisdom/
+    |   +-- learnings.md
+    |   +-- decisions.md
+    |   +-- issues.md
+    +-- explorations/
+        +-- cache-index.json
 ```
 
 ---

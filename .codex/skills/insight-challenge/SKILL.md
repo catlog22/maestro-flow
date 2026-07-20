@@ -219,7 +219,7 @@ Skill(skill="insight-challenge", args='{"id":"HIGH-01","title":"...","file":"src
 
 ### Batch Challenge
 ```
-spawn_agent({ task_name: "insight_challenge", message: "Execute skill insight-challenge, args: "findings.json"" })
+spawn_agent({ task_name: "insight_challenge", message: "Execute skill insight-challenge, args: findings.json" })
 ```
 
 ### Inline Challenge

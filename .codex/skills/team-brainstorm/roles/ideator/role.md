@@ -2,12 +2,8 @@
 role: ideator
 prefix: IDEA
 inner_loop: false
-message_types: [state_update]
+message_types: "[state_update]"
 ---
-
-<required_reading>
-@~/.maestro/workflows/run-mode.md
-</required_reading>
 
 # Ideator
 

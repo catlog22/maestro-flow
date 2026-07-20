@@ -82,6 +82,34 @@ function config(selectedComponentIds: string[]): InstallFlowConfig {
 }
 
 describe('executeInstallPipeline additive semantics', () => {
+  it('removes retired quick step files while preserving active workflow assets', async () => {
+    const globalPrepare = join(process.env.MAESTRO_HOME!, 'prepare');
+    const globalWorkflows = join(process.env.MAESTRO_HOME!, 'workflows');
+    const globalCommands = join(process.env.HOME!, '.claude', 'commands');
+    mkdirSync(globalPrepare, { recursive: true });
+    mkdirSync(globalWorkflows, { recursive: true });
+    mkdirSync(globalCommands, { recursive: true });
+    writeFileSync(join(globalPrepare, 'quick.md'), '---\nname: quick\n---\n');
+    writeFileSync(join(globalWorkflows, 'quick.md'), '# Workflow: Quick\n');
+    writeFileSync(join(globalCommands, 'maestro-quick.md'), 'generated-by: maestro install entry-commands\n');
+    mkdirSync(join(packageRoot, 'prepare'), { recursive: true });
+    mkdirSync(join(packageRoot, 'workflows'), { recursive: true });
+    writeFileSync(join(packageRoot, 'prepare', 'analyze.md'), '---\nname: analyze\n---\n');
+    writeFileSync(join(packageRoot, 'workflows', 'analyze.md'), '# Workflow: Analyze\n');
+
+    await executor.executeInstallPipeline({
+      config: { ...config(['prepare', 'workflows']), mode: 'global' },
+      pkgRoot: packageRoot,
+      version: 'test',
+    });
+
+    expect(existsSync(join(globalPrepare, 'quick.md'))).toBe(false);
+    expect(existsSync(join(globalWorkflows, 'quick.md'))).toBe(false);
+    expect(existsSync(join(globalCommands, 'maestro-quick.md'))).toBe(false);
+    expect(existsSync(join(globalPrepare, 'analyze.md'))).toBe(true);
+    expect(existsSync(join(globalWorkflows, 'analyze.md'))).toBe(true);
+  }, 15_000);
+
   it('gives explicit profile disable precedence and preserves omitted plugin state', () => {
     const disabledCustom = {
       enabled: false,

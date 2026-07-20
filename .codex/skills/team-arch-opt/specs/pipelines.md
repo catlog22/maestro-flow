@@ -97,8 +97,8 @@ Auto-detects based on refactoring count at CP-2.5:
 ## Parallel Mode Invocation
 
 ```bash
-spawn_agent({ task_name: "team_arch_opt", message: "Execute skill team-arch-opt, args: "<task-description>"" })                           # auto mode
-spawn_agent({ task_name: "team_arch_opt", message: "Execute skill team-arch-opt, args: "--parallel-mode=fan-out <task-description>"" })   # force fan-out
+spawn_agent({ task_name: "team_arch_opt", message: "Execute skill team-arch-opt, args: <task-description>" })                           # auto mode
+spawn_agent({ task_name: "team_arch_opt", message: "Execute skill team-arch-opt, args: --parallel-mode=fan-out <task-description>" })   # force fan-out
 Skill(skill="team-arch-opt", args='--parallel-mode=independent "target1" "target2"')  # independent
-spawn_agent({ task_name: "team_arch_opt", message: "Execute skill team-arch-opt, args: "--max-branches=3 <task-description>"" })           # limit branches
+spawn_agent({ task_name: "team_arch_opt", message: "Execute skill team-arch-opt, args: --max-branches=3 <task-description>" })           # limit branches
 ```

@@ -57,8 +57,8 @@ For each command file in scope:
 **2a. Extract Agent() calls from commands:**
 
 ```bash
-# Search both Agent() (current) and Task() (legacy GSD) patterns
-grep -n "Agent(\|Task(" "$COMMAND_FILE"
+# Search both Agent() (current) and the legacy GSD Task syntax
+grep -n "Agent(\|Task[(]" "$COMMAND_FILE"
 grep -n "subagent_type" "$COMMAND_FILE"
 ```
 

@@ -1,6 +1,8 @@
 
+> **Plan tracking**: codex 无 TaskCreate/TaskUpdate/TodoWrite 任务板。进度清单用 `update_plan({ explanation?, plan: [{ step, status }] })` 维护（整体提交步骤数组，status: `pending` | `in_progress` | `completed`），权威状态始终在 session 工件中；依赖/认领（addBlockedBy/owner）是工件字段，不是工具参数。
+
 <required_reading>
-@~/.maestro/workflows/run-mode.md
+@~/.maestro/workflows/run-mode-lite.md
 </required_reading>
 # Coordinator Role
 
@@ -77,7 +79,7 @@ TEXT-LEVEL ONLY. No source code reading.
 
 1. Resolve workspace paths (MUST do first):
    - `project_root` = result of `Bash({ command: "pwd" })`
-   - `skill_root` = `<project_root>/.codex/skills/team-review`
+   - `skill_root` = `<project_root>/.claude/skills/team-review`
 2. Generate session ID: RV-<slug>-<date>
 3. Create `{run_dir}/work/team/wisdom/` and formal directories `{run_dir}/outputs/{scan,review,fix}/`
 4. TeamCreate with team name "review"
@@ -98,6 +100,18 @@ TEXT-LEVEL ONLY. No source code reading.
    })
    ```
 7. Write session meta.json
+
+### Run Lifecycle Integration
+
+After session folder creation and before role-spec generation:
+
+1. **Resolve Run** (birth-packet first): if the dispatch context already carries `run_id` / `run_dir` (injected by an orchestrator), store them in `team-session.json` and skip create — a second create mints an empty duplicate Run. Otherwise: `maestro run create team-review --session <slug> --intent "<task summary>"`
+   - Slug format: `YYYYMMDD-team-review-<topic>` (ASCII, ≤64 chars)
+   - Store returned `run_id` and `run_dir` in `team-session.json`:
+     ```json
+     "run": { "run_id": "<id>", "run_dir": "<path>" }
+     ```
+2. **Resume**: Read `team-session.json.run.run_id` → `maestro run check <run_id>` (idempotent). If status=sealed, create a new run and update the field.
 
 ## Phase 3: Create Task Chain
 

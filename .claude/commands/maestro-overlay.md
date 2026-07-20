@@ -70,7 +70,7 @@ Amend output: `~/.maestro/overlays/amend-{slug}.json` + optional `~/.maestro/ove
 **Amend mode only** (when `--amend`):
 
 7. **Pristine source reads** — signal diagnosis MUST read from `$PKG_ROOT/.claude/commands/` (untouched originals), not installed copies
-8. **Code bugs excluded** — signals classified as code bugs MUST be routed to step `quick` or step `plan` (`--gaps`), NEVER patched via overlay
+8. **Code bugs excluded** — signals classified as code bugs MUST be routed to `/maestro-companion` or step `plan` (`--gaps`), NEVER patched via overlay
 9. **Section existence verified** — target section MUST be confirmed to exist in the pristine source before drafting a patch; missing sections trigger `new-section` mode
 </invariants>
 
@@ -96,7 +96,7 @@ If the user wants a whole new section, use `mode: new-section` with `afterSectio
 **Injection point preview** — after selecting section + mode, render the target command's section map showing existing overlays and the new injection point:
 
 ```
-=== quick.md (1 overlay exists) ===
+=== maestro-next.md (1 overlay exists) ===
 
   <purpose>
   <required_reading>
@@ -131,7 +131,7 @@ Build a slug from the user's intent (kebab-case, lowercase). Write to `~/.maestr
 {
   "name": "<slug>",
   "description": "<short summary of what and why>",
-  "targets": ["quick"],
+  "targets": ["maestro-next"],
   "priority": 50,
   "enabled": true,
   "patches": [
@@ -207,7 +207,7 @@ Show the user:
 === OVERLAY INSTALLED ===
 Name:    <slug>
 Path:    ~/.maestro/overlays/<slug>.json
-Targets: quick (applied), maestro-init (skipped: missing)
+Targets: maestro-next (applied), maestro-init (skipped: missing)
 Chain:   review (via [@ask] AskUserQuestion) | none
 Scopes:  [global]
 
@@ -266,7 +266,7 @@ Per signal, determine: signal_id, source, description, target_command, target_se
 | Entirely new concern | _(new section)_ | new-section |
 
 Read pristine source from `$PKG_ROOT/.claude/commands/<name>.md` to confirm section.
-Classify: command deficiency → proceed; code bug → skip (suggest step `quick`).
+Classify: command deficiency → proceed; code bug → skip (suggest `/maestro-companion`).
 
 ### C. Group overlays
 
@@ -291,7 +291,7 @@ On validation failure: fix JSON, retry (max 2).
 
 ### G. Report
 
-Display summary: signals collected/applied/skipped, overlay details, skipped code-bug routing (to step `quick` or step `plan --gaps`).
+Display summary: signals collected/applied/skipped, overlay details, skipped code-bug routing (to `/maestro-companion` or step `plan --gaps`).
 </amend_mode>
 </execution>
 
@@ -302,7 +302,7 @@ Amend mode only:
 |------|-----------|----------|
 | E001 | No signals from any source | Verify artifact paths or provide description |
 | E002 | Signal source path invalid or unreadable | Check `--from-*` path; ensure artifact exists |
-| E003 | All signals are code bugs, not command gaps | Use step `quick` or step `plan --gaps` |
+| E003 | All signals are code bugs, not command gaps | Use `/maestro-companion` or step `plan --gaps` |
 | E004 | Overlay validation failed after 2 retries | Review JSON manually |
 | W001 | Some signals skipped (code bugs) | Route to appropriate fix command |
 | W002 | Target command has >= 3 existing overlays | Consider consolidating |

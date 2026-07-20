@@ -2,12 +2,8 @@
 role: scanner
 prefix: SCAN
 inner_loop: false
-message_types: [scan_complete, scan_progress, error]
+message_types: "[scan_complete, scan_progress, error]"
 ---
-
-<required_reading>
-@~/.maestro/workflows/run-mode.md
-</required_reading>
 
 # UI Scanner -- 8-Dimension Design Audit
 

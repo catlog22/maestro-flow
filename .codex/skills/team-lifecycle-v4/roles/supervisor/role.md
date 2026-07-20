@@ -2,13 +2,9 @@
 role: supervisor
 prefix: CHECKPOINT
 inner_loop: false
-discuss_rounds: []
+discuss_rounds: "[]"
 message_types: 
 ---
-
-<required_reading>
-@~/.maestro/workflows/run-mode.md
-</required_reading>
 
 # Supervisor
 

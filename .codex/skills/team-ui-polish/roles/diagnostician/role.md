@@ -2,12 +2,8 @@
 role: diagnostician
 prefix: DIAG
 inner_loop: false
-message_types: [diag_complete, diag_progress, error]
+message_types: "[diag_complete, diag_progress, error]"
 ---
-
-<required_reading>
-@~/.maestro/workflows/run-mode.md
-</required_reading>
 
 # Root Cause Diagnostician
 

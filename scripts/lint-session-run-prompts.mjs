@@ -14,6 +14,30 @@ const commandDir = join(root, '.claude', 'commands');
 const skillDir = join(root, '.claude', 'skills');
 const obsoleteRunMode = /\.workflow\/(?:scratch|\.scratchpad)|Legacy Compatibility Mapping|state\.json\.artifacts\[\]|<run_mode>|## Run Mode Contract|## Run Artifact Boundary|\{run_dir\}\/outputs\/(?:\*|\{YYYYMMDD\}|\$\{date\})/;
 const legacyTeamStateFile = /team-state\.json|(?<!team-)session\.json/;
+const runCreateArgumentChannelTokens = [
+  '--intent',
+  'Session metadata only',
+  '--arg <value>',
+  '-- <args...>',
+];
+
+export function validateRunCreateArgumentChannels(text, label) {
+  return runCreateArgumentChannelTokens
+    .filter(token => !text.includes(token))
+    .map(token => `${label}: missing ${token}`);
+}
+
+export function validateCompanionRunCreate(text, label) {
+  const required = [
+    'maestro run create companion',
+    '--intent "<intent>"',
+    '--arg "<intent>"',
+    'required command arguments',
+  ];
+  return required
+    .filter(token => !text.includes(token))
+    .map(token => `${label}: missing ${token}`);
+}
 
 function field(text, name) {
   return text.match(new RegExp(`^${name}:\\s*([^\\r\\n]+)`, 'm'))?.[1]?.trim() ?? null;
@@ -179,6 +203,7 @@ else {
   for (const token of ['maestro run create', 'topic grouping/index', 'same Session', 'Historical similarity is read-only', '{run_dir}/outputs/', 'complete top-level `_meta` object', '`kind` and `schema` are required together', 'maestro run check', 'maestro run complete', 'suggest_only', 'maestro run next', 'deprecated admin-only']) {
     if (!text.includes(token)) errors.push(`workflows/run-mode.md: missing ${token}`);
   }
+  errors.push(...validateRunCreateArgumentChannels(text, 'workflows/run-mode.md'));
   if (text.includes('same normalized intent')) errors.push('workflows/run-mode.md: obsolete intent-only Session routing remains');
 }
 
@@ -189,7 +214,15 @@ else {
   for (const token of ['Team State Authority', 'team-session.json', 'merge-write', 'complete top-level `_meta` object', '`kind` and `schema` are required together']) {
     if (!text.includes(token)) errors.push(`workflows/run-mode-lite.md: missing ${token}`);
   }
+  errors.push(...validateRunCreateArgumentChannels(text, 'workflows/run-mode-lite.md'));
 }
+
+const canonicalCompanion = join(commandDir, 'maestro-companion.md');
+if (!existsSync(canonicalCompanion)) errors.push('.claude/commands/maestro-companion.md: missing canonical Companion command');
+else errors.push(...validateCompanionRunCreate(
+  readFileSync(canonicalCompanion, 'utf8'),
+  '.claude/commands/maestro-companion.md',
+));
 
 const canonicalTeamWorker = join(root, '.claude', 'agents', 'team-worker.md');
 if (!existsSync(canonicalTeamWorker)) errors.push('.claude/agents/team-worker.md: missing canonical team worker');

@@ -41,7 +41,6 @@ const migratedStepAssociations = {
   'maestro-execute': 'execute',
   'maestro-grill': 'grill',
   'maestro-plan': 'plan',
-  'maestro-quick': 'quick',
   'quality-retrospective': 'retrospective',
   'quality-review': 'review',
   'maestro-roadmap': 'roadmap',
@@ -415,18 +414,25 @@ gates:
     }
   });
 
-  it('accepts command flags after -- as Run input arguments', async () => {
+  it('keeps intent as Session metadata while merging --arg and positional command inputs', async () => {
     const projectRoot = root();
     const program = new Command();
     registerRunCommand(program);
     const output = vi.spyOn(console, 'log').mockImplementation(() => undefined);
     await program.parseAsync([
       'node', 'maestro', 'run', 'create', 'empty',
-      '--workflow-root', projectRoot, '--', '-y', '--depth', 'deep',
+      '--session', 'cli-args',
+      '--intent', 'session metadata only',
+      '--arg', 'explicit-input',
+      '--workflow-root', projectRoot,
+      '--', 'positional-input', '-y', '--depth', 'deep',
     ]);
     const created = JSON.parse(String(output.mock.calls.at(-1)?.[0]));
-    const run = new SessionStore(projectRoot).readRun(created.session_id, created.run_id);
-    expect(run.input.args).toEqual(['-y', '--depth', 'deep']);
+    const store = new SessionStore(projectRoot);
+    const run = store.readRun(created.session_id, created.run_id);
+    expect(run.input.args).toEqual(['explicit-input', 'positional-input', '-y', '--depth', 'deep']);
+    expect(run.input.args).not.toContain('session metadata only');
+    expect(store.readBundle(created.session_id).session.intent).toBe('session metadata only');
     expect(run.schema_version).toBe('command-run/1.3');
     expect(run.contract_snapshot?.schema_version).toBe('contract-snapshot/1.0');
     output.mockRestore();

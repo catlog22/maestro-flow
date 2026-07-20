@@ -73,7 +73,7 @@ Maestro uses an `action x object` matrix for semantic routing:
 
 | Input | Route | Command Chain |
 |-------|-------|---------------|
-| `"Add API endpoint"` | quick | `/maestro-next` |
+| `"Fix a README typo"` | companion | `/maestro-companion "Fix a README typo"` |
 | `"plan phase 2"` | plan | `/maestro-next "<plan intent>"` |
 | `"debug auth crash"` | debug | `/maestro-odyssey --mode debug` |
 | `"fix issue ISS-abc-001"` | issue-full | analyze → plan → execute → review → close |
@@ -95,7 +95,7 @@ Maestro uses an `action x object` matrix for semantic routing:
 | `review` | `/maestro-ralph --engine swarm --script wf-review "{phase}"` |
 | `test` | `/maestro "<test intent> {phase}"` or `/security-audit` |
 | `debug` | `/maestro-odyssey --mode debug "{description}"` |
-| `quick` | `/maestro-next "{description}"` |
+| `companion` | `/maestro-companion "{description}"` |
 
 ### Multi-Step Chains
 

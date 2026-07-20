@@ -823,3 +823,20 @@ roadmap-common.md  → shared scope routing, milestone resolution, state updates
 | No `---` separators between H2 sections | Always separate for visual parsing |
 | H1 title inconsistency ("X Workflow" vs "Workflow: X") | Standardize on `# Workflow: {Name}` |
 | Workflow under 100 lines as separate file | Inline into the command file instead |
+
+---
+
+## 8. Language Style
+
+Command 与其 Workflow 使用一种主要自然语言，并保持同一章节内一致。仓库级控制指令默认使用 English；面向用户的菜单、提示和报告模板可按目标 locale 使用简体中文或其他语言。
+
+**Voice and wording**：
+- 使用直接、命令式、结果导向的短句；一条 bullet 只承载一个动作、条件或约束。
+- `MUST`/“必须”只用于 gate、invariant、安全边界和不可破坏的 contract；`SHOULD`/“应”表示强建议；`MAY`/“可”表示真正可选。
+- 用显式条件和优先级表达路由，不用叙事段落暗示控制流。
+- 保留 command 名、flag、tool 名、代码标识符、schema 字段、路径及原始错误文本的 English 拼写。
+- 技术术语可嵌入中文句子，但不要在同一句中切换语法语言或重复双语释义。
+- 删除营销文案、人格化叙述、哲学宣言和不影响执行结果的 commentary。
+- 避免 `handle`、`ensure`、`improve`、`properly` 等不可验证动词；写出具体动作、产物与验收条件。
+- 错误信息说明“发生条件 + 恢复动作”；成功准则必须能通过文件、字段、命令输出或明确状态验证。
+- Command、Workflow 与平台镜像使用相同语义；仅转换真实存在的平台 tool 调用，不进行逐句机械翻译。

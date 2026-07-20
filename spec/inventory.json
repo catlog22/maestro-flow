@@ -69,12 +69,6 @@
       "parameters": "<phase|topic> [-y] [-c] [-q]"
     },
     {
-      "name": "maestro-quick",
-      "description": "Execute a quick task with workflow guarantees but skip optional agents",
-      "category": "maestro",
-      "parameters": "[description] [--full] [--discuss]"
-    },
-    {
       "name": "maestro-blueprint",
       "description": "Generate formal specification package (Product Brief, PRD, Architecture, Epics) through 6-phase document chain",
       "category": "maestro",

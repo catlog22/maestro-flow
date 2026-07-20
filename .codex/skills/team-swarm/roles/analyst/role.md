@@ -2,13 +2,9 @@
 role: analyst
 prefix: ANALYST
 inner_loop: false
-output_tag: [analyst]
+output_tag: "[analyst]"
 message_types: 
 ---
-
-<required_reading>
-@~/.maestro/workflows/run-mode.md
-</required_reading>
 
 # Analyst Role — Phase 2-4
 

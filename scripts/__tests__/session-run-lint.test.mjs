@@ -10,6 +10,10 @@ import {
   RUN_MODE_REF,
 } from '../session-run-profiles.mjs';
 import { lintSessionRunMirrors } from '../lint-session-run-mirrors.mjs';
+import {
+  validateCompanionRunCreate,
+  validateRunCreateArgumentChannels,
+} from '../lint-session-run-prompts.mjs';
 
 const fm = (mode, body = '', extra = '') => `---\nname: demo\nsession-mode: ${mode}\n${extra}---\n${body}`;
 
@@ -40,6 +44,29 @@ test('rejects missing and mixed lifecycle ownership with stable diagnostic famil
     path: '.claude/skills/team-demo/SKILL.md', kind: 'skill', text: fm('run', `${RUN_MODE_REF}\n${RUN_MODE_LITE_REF}`),
   });
   assert.match(mixed.errors.join('\n'), /both full and lite/);
+});
+
+test('canonical Run creation lint separates Session metadata from command inputs', () => {
+  const complete = '--intent is Session metadata only; use --arg <value> or -- <args...>.';
+  assert.deepEqual(validateRunCreateArgumentChannels(complete, 'fixture.md'), []);
+
+  const missing = validateRunCreateArgumentChannels(
+    '--intent is Session metadata only; command inputs are positional.',
+    'fixture.md',
+  );
+  assert.ok(missing.includes('fixture.md: missing --arg <value>'));
+  assert.ok(missing.includes('fixture.md: missing -- <args...>'));
+});
+
+test('Companion creation lint requires intent in both metadata and command args', () => {
+  const complete = 'maestro run create companion --intent "<intent>" --arg "<intent>"; required command arguments are validated.';
+  assert.deepEqual(validateCompanionRunCreate(complete, 'fixture.md'), []);
+
+  const missing = validateCompanionRunCreate(
+    'maestro run create companion --intent "<intent>"; required command arguments are validated.',
+    'fixture.md',
+  );
+  assert.ok(missing.includes('fixture.md: missing --arg "<intent>"'));
 });
 
 test('mirror lint reports a deterministic missing-root diagnostic', () => {
@@ -155,5 +182,8 @@ test('package release gate orders source lint, generation, freshness, then parit
     assert.ok(next > cursor, `${token} must appear in safe order`);
     cursor = next;
   }
-  assert.match(pkg.scripts.prepublishOnly, /^node scripts\/lint-session-run-prompts\.mjs/);
+  assert.match(
+    pkg.scripts.prepublishOnly,
+    /^node scripts\/lint-invocation-policy\.mjs && node scripts\/lint-session-run-prompts\.mjs/,
+  );
 });

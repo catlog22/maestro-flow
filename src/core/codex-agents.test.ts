@@ -35,7 +35,7 @@ describe('Codex agent generation', () => {
     const worker = readFileSync(join(targetDir, 'team-worker.toml'), 'utf8');
     const supervisor = readFileSync(join(targetDir, 'team-supervisor.toml'), 'utf8');
     expect(worker).toContain('If absent, resolve from `<session>/team-session.json`');
-    expect(worker).toContain('the coordinator MUST pass a resolved `run_dir`');
+    expect(worker).toContain('coordinators MUST keep the Run mapping in that single state file');
     expect(worker).toContain('initial `spawn_agent` prompt');
     expect(supervisor).toContain('concrete checkpoint assignment through `followup_task`');
     expect(`${worker}\n${supervisor}`).not.toMatch(/\b(?:TaskList|TaskGet|TaskUpdate)\b/);

@@ -5,10 +5,6 @@ inner_loop: true
 message_types: 
 ---
 
-<required_reading>
-@~/.maestro/workflows/run-mode.md
-</required_reading>
-
 # Test Executor
 
 ## Phase 2: Context Loading
@@ -22,7 +18,7 @@ message_types:
 | .msg/meta.json | {run_dir}/work/team/wisdom/.msg/meta.json | No |
 
 1. Extract session path and test directory from task description
-2. Load test specs: Run `ccw maestro-spec load --category test` for test framework conventions and coverage targets
+2. Load test specs: Run `maestro spec load --category test` for test framework conventions and coverage targets
 3. Extract coverage target (default: 80%)
 3. Read .msg/meta.json for framework info (from strategist namespace)
 4. Determine test framework:

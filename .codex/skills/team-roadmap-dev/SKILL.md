@@ -12,7 +12,6 @@ allowed-tools:
   - Grep
   - Read
   - Write
-  - update_plan
   - followup_task
   - interrupt_agent
   - list_agents
@@ -21,6 +20,7 @@ allowed-tools:
   - send_message
   - spawn_agent
   - spawn_agents_on_csv
+  - update_plan
   - wait_agent
 session-mode: run
 version: 0.5.52
@@ -33,11 +33,11 @@ contract:
     exit: []
 ---
 
+> **Agent timeout**: `spawn_agent` 异步执行且无内置超时 — 除明确短任务外一律 `spawn_agent` 后立即 `wait_agent({ timeout_ms: 3600000 })`（上限 1 小时）阻塞等待，绝不依赖 30000 默认值；`timed_out: true` 且 Agent 未完成时再次 `wait_agent` 续等，不丢弃。批量场景使用 `spawn_agents_on_csv({ max_runtime_seconds: 3600, ... })`。
+
 <required_reading>
 @~/.maestro/workflows/run-mode-lite.md
 </required_reading>
-
-> **Agent timeout**: `spawn_agent` 异步执行且无内置超时 — 除明确短任务外一律 `spawn_agent` 后立即 `wait_agent({ timeout_ms: 3600000 })`（上限 1 小时）阻塞等待，绝不依赖 30000 默认值；`timed_out: true` 且 Agent 未完成时再次 `wait_agent` 续等，不丢弃。批量场景使用 `spawn_agents_on_csv({ max_runtime_seconds: 3600, ... })`。
 
 # Team Roadmap Dev
 
@@ -46,7 +46,7 @@ Roadmap-driven development with phased execution pipeline. Coordinator discusses
 ## Architecture
 
 ```
-spawn_agent({ task_name: "team_roadmap_dev", message: "Execute skill team-roadmap-dev, args: "<task-description>"" })
+spawn_agent({ task_name: "team_roadmap_dev", message: "Execute skill team-roadmap-dev, args: <task-description>" })
                     |
          SKILL.md (this file) = Router
                     |
@@ -107,7 +107,30 @@ Parse `$ARGUMENTS`:
 Coordinator spawns workers using this template:
 
 ```
-spawn_agent({ task_name: "<role>", message: "Spawn <role> worker", fork_turns: "none", agent_type: "team_worker" })
+spawn_agent({
+  subagent_type: "team-worker",
+  description: "Spawn <role> worker",
+  team_name: "roadmap-dev",
+  name: "<role>",
+  run_in_background: true,
+  prompt: `## Role Assignment
+role: <role>
+role_spec: <skill_root>/roles/<role>/role.md
+session: {run_dir}/work/team
+session_id: <run-id>
+team_name: roadmap-dev
+requirement: <task-description>
+inner_loop: true
+
+## Progress Milestones
+session_id: <run-id>
+Report progress via team_msg at natural phase boundaries (context loaded -> core work done -> verification).
+Report blockers immediately via team_msg type="blocker".
+Report completion via team_msg type="task_complete" after final send_message.
+
+Read role_spec file (@<skill_root>/roles/<role>/role.md) to load Phase 2-4 domain instructions.
+Execute built-in Phase 1 (task discovery) -> role Phase 2-4 -> built-in Phase 5 (report).`
+})
 ```
 
 **All worker roles** (planner, executor, verifier): Set `inner_loop: true`.
@@ -122,25 +145,25 @@ spawn_agent({ task_name: "<role>", message: "Spawn <role> worker", fork_turns: "
 ## Session Directory
 
 ```
-{run_dir}/work/team/
-+-- {run_dir}/outputs/roadmap.md                 # Phase plan with requirements and success criteria
-+-- state.md                   # Living memory (concise)
-+-- config.json                # Session settings (mode, depth, gates)
-+-- wisdom/                    # Cross-task knowledge accumulation
+{run_dir}/
++-- outputs/roadmap.md         # Phase plan with requirements and success criteria
++-- work/team/state.md         # Living memory (concise)
++-- work/team/config.json      # Session settings (mode, depth, gates)
++-- work/team/wisdom/          # Cross-task knowledge accumulation
 |   +-- learnings.md
 |   +-- decisions.md
 |   +-- conventions.md
 |   +-- issues.md
-+-- phase-1/                   # Per-phase artifacts
++-- outputs/phase-1/           # Per-phase artifacts
 |   +-- context.md
 |   +-- IMPL_PLAN.md
 |   +-- TODO_LIST.md
 |   +-- .task/IMPL-*.json
 |   +-- summary-*.md
 |   +-- verification.md
-+-- phase-N/
++-- outputs/phase-N/
 |   +-- ...
-+-- .msg/
++-- work/team/.msg/
     +-- messages.jsonl          # Team message bus log
     +-- meta.json               # Session metadata + shared state
 ```

@@ -1,7 +1,5 @@
 
-<required_reading>
-@~/.maestro/workflows/run-mode.md
-</required_reading>
+> **Plan tracking**: codex 无 TaskCreate/TaskUpdate/TodoWrite 任务板。进度清单用 `update_plan({ explanation?, plan: [{ step, status }] })` 维护（整体提交步骤数组，status: `pending` | `in_progress` | `completed`），权威状态始终在 session 工件中；依赖/认领（addBlockedBy/owner）是工件字段，不是工具参数。
 # Monitor Pipeline
 
 ## Constants
@@ -184,6 +182,12 @@ Pipeline done. Generate report and completion action.
    ```
    followup_task({ target: "supervisor", message: { type: "shutdown_request", reason: "Pipeline complete" } })
    ```
+  +- Run lifecycle completion:
+  |   - Read run_id from team-session.json.run.run_id
+  |   - Write {run_dir}/report.md with frontmatter (verdict/summary/concerns)
+  |   - Run `maestro run complete <run_id>`
+  |   - If complete fails: fix the blocking gate and retry once; still failing -> do NOT archive/clean - keep the team active (status=paused) and report the blocking gate
+  |
 2. Generate summary (deliverables, stats, discussions)
 3. Read session.completion_action:
    - interactive -> request_user_input (Archive/Keep/Export)

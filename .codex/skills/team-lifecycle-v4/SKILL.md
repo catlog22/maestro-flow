@@ -11,7 +11,6 @@ allowed-tools:
   - Grep
   - Read
   - Write
-  - update_plan
   - followup_task
   - interrupt_agent
   - list_agents
@@ -20,6 +19,7 @@ allowed-tools:
   - send_message
   - spawn_agent
   - spawn_agents_on_csv
+  - update_plan
   - wait_agent
 session-mode: run
 version: 0.5.52
@@ -32,11 +32,11 @@ contract:
     exit: []
 ---
 
+> **Agent timeout**: `spawn_agent` 异步执行且无内置超时 — 除明确短任务外一律 `spawn_agent` 后立即 `wait_agent({ timeout_ms: 3600000 })`（上限 1 小时）阻塞等待，绝不依赖 30000 默认值；`timed_out: true` 且 Agent 未完成时再次 `wait_agent` 续等，不丢弃。批量场景使用 `spawn_agents_on_csv({ max_runtime_seconds: 3600, ... })`。
+
 <required_reading>
 @~/.maestro/workflows/run-mode-lite.md
 </required_reading>
-
-> **Agent timeout**: `spawn_agent` 异步执行且无内置超时 — 除明确短任务外一律 `spawn_agent` 后立即 `wait_agent({ timeout_ms: 3600000 })`（上限 1 小时）阻塞等待，绝不依赖 30000 默认值；`timed_out: true` 且 Agent 未完成时再次 `wait_agent` 续等，不丢弃。批量场景使用 `spawn_agents_on_csv({ max_runtime_seconds: 3600, ... })`。
 
 # Team Lifecycle v4
 
@@ -45,7 +45,7 @@ Orchestrate multi-agent software development: specification → planning → imp
 ## Architecture
 
 ```
-spawn_agent({ task_name: "team_lifecycle_v4", message: "Execute skill team-lifecycle-v4, args: "task description"" })
+spawn_agent({ task_name: "team_lifecycle_v4", message: "Execute skill team-lifecycle-v4, args: task description" })
                     |
          SKILL.md (this file) = Router
                     |
@@ -97,7 +97,31 @@ Parse `$ARGUMENTS`:
 Coordinator spawns workers using this template:
 
 ```
-spawn_agent({ task_name: "<role>", message: "Spawn <role> worker", fork_turns: "none", agent_type: "team_worker" })
+spawn_agent({
+  subagent_type: "team-worker",
+  description: "Spawn <role> worker",
+  team_name: <team-name>,
+  name: "<role>",
+  run_in_background: true,
+  prompt: `## Role Assignment
+role: <role>
+role_spec: <skill_root>/roles/<role>/role.md
+session: {run_dir}/work/team
+session_id: <run-id>
+team_name: <team-name>
+requirement: <task-description>
+inner_loop: <true|false>
+run_dir: <run-dir from team-session.json run.run_dir>
+
+## Progress Milestones
+session_id: <run-id>
+Report progress via team_msg at natural phase boundaries (context loaded -> core work done -> verification).
+Report blockers immediately via team_msg type="blocker".
+Report completion via team_msg type="task_complete" after final send_message.
+
+Read role_spec file (@<skill_root>/roles/<role>/role.md) to load Phase 2-4 domain instructions.
+Execute built-in Phase 1 (task discovery) -> role Phase 2-4 -> built-in Phase 5 (report).`
+})
 ```
 
 ## Supervisor Spawn Template
@@ -107,7 +131,31 @@ Supervisor is a **resident agent** (independent from team-worker). Spawned once 
 ### Spawn (Phase 2 — once per session)
 
 ```
-spawn_agent({ task_name: "supervisor", message: "Spawn resident supervisor", fork_turns: "none", agent_type: "team_supervisor" })
+spawn_agent({
+  subagent_type: "team-supervisor",
+  description: "Spawn resident supervisor",
+  team_name: <team-name>,
+  name: "supervisor",
+  run_in_background: true,
+  prompt: `## Role Assignment
+role: supervisor
+role_spec: <skill_root>/roles/supervisor/role.md
+session: {run_dir}/work/team
+session_id: <run-id>
+team_name: <team-name>
+requirement: <task-description>
+run_dir: <run-dir from team-session.json run.run_dir>
+
+## Progress Milestones
+session_id: <run-id>
+Report progress via team_msg at natural phase boundaries (context loaded -> core work done -> verification).
+Report blockers immediately via team_msg type="blocker".
+Report completion via team_msg type="task_complete" after final send_message.
+
+Read role_spec file (@<skill_root>/roles/supervisor/role.md) to load checkpoint definitions.
+Init: load baseline context, report ready, go idle.
+Wake cycle: coordinator sends checkpoint requests via send_message.`
+})
 ```
 
 ### Wake (handleSpawnNext — per CHECKPOINT task)
@@ -173,15 +221,18 @@ request_user_input({
 ## Session Directory
 
 ```
-{run_dir}/work/team/
-├── team-session.json           # Session state + role registry
-├── {run_dir}/outputs/spec/                       # Spec phase outputs
-├── {run_dir}/outputs/plan/                       # Implementation plan + TASK-*.json
-├── artifacts/                  # All deliverables
-├── wisdom/                     # Cross-task knowledge
-├── explorations/               # Shared explore cache
-├── {run_dir}/evidence/discussions/                # Discuss round records
-└── .msg/                       # Team message bus
+{run_dir}/
+├── outputs/
+│   ├── spec/                   # Spec phase outputs
+│   └── plan/                   # Implementation plan + TASK-*.json
+├── evidence/
+│   └── discussions/            # Discuss round records
+├── report.md                   # Human-readable synthesis + handoff
+└── work/team/                  # Team coordination (non-artifact)
+    ├── team-session.json       # Session state + role registry
+    ├── wisdom/                 # Cross-task knowledge
+    ├── explorations/           # Shared explore cache
+    └── .msg/                   # Team message bus
 ```
 
 ## Error Handling

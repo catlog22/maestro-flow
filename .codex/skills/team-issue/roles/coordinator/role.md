@@ -3,7 +3,7 @@ role: coordinator
 ---
 
 <required_reading>
-@~/.maestro/workflows/run-mode.md
+@~/.maestro/workflows/run-mode-lite.md
 </required_reading>
 
 # Coordinator — Issue Resolution Team
@@ -71,7 +71,7 @@ TEXT-LEVEL ONLY. No source code reading.
 | `GH-\d+` | GitHub issue ID |
 | `ISS-\d{8}-\d{3}` | Local issue ID |
 | `--mode=<mode>` | Explicit mode override |
-| `--all-pending` | Load open/legacy pending issues via `exec_command({ cmd: "maestro issue list --status \"open,registered,pending\" --json" })` |
+| `--all-pending` | Load open/legacy pending issues via `Bash("maestro issue list --status \"open,registered,pending\" --json")` |
 
 2. If no issue IDs found -> request_user_input for clarification
 
@@ -99,7 +99,7 @@ TEXT-LEVEL ONLY. No source code reading.
 
 1. Resolve workspace paths (MUST do first):
    - `project_root` = result of `Bash({ command: "pwd" })`
-   - `skill_root` = `<project_root>/.codex/skills/team-issue`
+   - `skill_root` = `<project_root>/.claude/skills/team-issue`
 2. Generate session ID: `TISL-<issue-slug>-<date>`
 3. Create session folder structure:
    ```
@@ -116,6 +116,18 @@ TEXT-LEVEL ONLY. No source code reading.
    })
    ```
 7. Initialize wisdom files (learnings.md, decisions.md, conventions.md, issues.md)
+
+### Run Lifecycle Integration
+
+After session folder creation and before role-spec generation:
+
+1. **Resolve Run** (birth-packet first): if the dispatch context already carries `run_id` / `run_dir` (injected by an orchestrator), store them in `team-session.json` and skip create — a second create mints an empty duplicate Run. Otherwise: `maestro run create team-issue --session <slug> --intent "<task summary>"`
+   - Slug format: `YYYYMMDD-team-issue-<topic>` (ASCII, ≤64 chars)
+   - Store returned `run_id` and `run_dir` in `team-session.json`:
+     ```json
+     "run": { "run_id": "<id>", "run_dir": "<path>" }
+     ```
+2. **Resume**: Read `team-session.json.run.run_id` → `maestro run check <run_id>` (idempotent). If status=sealed, create a new run and update the field. If `run.run_id` is missing, resolve in order: birth-packet injection, then `<session>/artifacts/`; if all are absent, fail closed — report session corruption and do NOT create a new Run.
 
 ## Phase 3: Create Task Chain
 
@@ -142,7 +154,7 @@ Delegate to @commands/monitor.md#handleSpawnNext:
 | Context Reports | {run_dir}/work/team/explorations/context-*.json |
 | Solution Plans | {run_dir}/outputs/solutions/solution-*.json |
 | Audit Reports | {run_dir}/outputs/audits/audit-report.json |
-| Execution Queue | .workflow/issues/queue/execution-queue.json |
+| Execution Queue | {run_dir}/outputs/queue/execution-queue.json |
 | Build Results | {run_dir}/outputs/builds/ |
 
 3. Output pipeline summary: issue count, pipeline mode, fix cycles used, issues resolved
@@ -163,7 +175,7 @@ Delegate to @commands/monitor.md#handleSpawnNext:
 | Choice | Steps |
 |--------|-------|
 | Archive & Clean | Verify all completed -> update session status="completed" -> TeamDelete() -> output final summary |
-| Keep Active | Update session status="paused" -> output: "Resume with: spawn_agent({ task_name: "team_issue", message: "Execute skill team-issue, args: "resume"" })" |
+| Keep Active | Update session status="paused" -> output: "Resume with: spawn_agent({ task_name: "team_issue", message: "Execute skill team-issue, args: resume" })" |
 | New Batch | Return to Phase 1 |
 
 ## Error Handling

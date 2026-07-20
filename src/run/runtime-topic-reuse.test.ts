@@ -254,6 +254,7 @@ arguments:
   - name: target
     type: string
     required: true
+    question: Which target should be processed?
   - name: --mode
     type: string
     required: false
@@ -265,14 +266,29 @@ arguments:
 consumes: []
 produces: []
 gates: { entry: [], exit: [] }`);
-    expect(() => createRun({ projectRoot: actualRoot, command: 'args-demo', args: [] })).toThrow(/Missing required arguments.*target/s);
+    expect(() => createRun({
+      projectRoot: actualRoot,
+      command: 'args-demo',
+      intent: 'target supplied only as Session metadata',
+      args: [],
+    })).toThrow(
+      /Missing required arguments: target \(Which target should be processed\?\).*--intent is Session metadata only.*--arg <value>.*-- <args\.\.\.>/s,
+    );
     expect(existsSync(join(actualRoot, '.workflow', 'sessions'))).toBe(false);
-    const actual = createRun({ projectRoot: actualRoot, command: 'args-demo', args: ['chosen', '--mode=fast'] });
+    const actual = createRun({
+      projectRoot: actualRoot,
+      command: 'args-demo',
+      intent: 'metadata-only goal',
+      args: ['chosen', '--mode=fast'],
+    });
     expect(actual.argument_requirements).toEqual([
       expect.objectContaining({ name: 'target', missing: false, source: 'actual-arg' }),
       expect.objectContaining({ name: '--mode', missing: false, source: 'actual-arg', default: 'safe' }),
       expect.objectContaining({ name: '--dry-run', missing: false, source: 'contract-default', default: false }),
     ]);
+    const actualStore = new SessionStore(actualRoot);
+    expect(actualStore.readRun(actual.session_id, actual.run_id).input.args).toEqual(['chosen', '--mode=fast']);
+    expect(actualStore.readBundle(actual.session_id).session.intent).toBe('metadata-only goal');
 
     const hintedRoot = root();
     commandFile(hintedRoot, 'hinted', 'consumes: []\nproduces: []\ngates: { entry: [], exit: [] }', '<target> [--dry-run]');

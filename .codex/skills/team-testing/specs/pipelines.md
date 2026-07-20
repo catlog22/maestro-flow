@@ -87,15 +87,15 @@ TESTGEN -> TESTRUN -> (if pass_rate < 0.95 OR coverage < target) -> TESTGEN-fix 
 │   ├── decisions.md
 │   ├── conventions.md
 │   └── issues.md
-├── {run_dir}/outputs/strategy/                   # Strategist output
+├── strategy/                   # Strategist output
 │   └── test-strategy.md
-├── {run_dir}/outputs/tests/                      # Generator output
+├── tests/                      # Generator output
 │   ├── L1-unit/
 │   ├── L2-integration/
 │   └── L3-e2e/
-├── {run_dir}/outputs/results/                    # Executor output
+├── results/                    # Executor output
 │   ├── run-001.json
 │   └── coverage-001.json
-└── {run_dir}/outputs/analysis/                   # Analyst output
+└── analysis/                   # Analyst output
     └── quality-report.md
 ```

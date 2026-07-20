@@ -3,9 +3,7 @@ name: maestro-overlay
 disable-model-invocation: true
 description: Create or edit command overlays from natural language, or
   auto-generate them from workflow deficiency signals
-argument-hint: <intent> | --amend [description] [--from-verify <dir>]
-  [--from-review <dir>] [--from-session <id>] [--from-issues ISS-xxx,...]
-  [--scan] [--dry-run] [-y]
+argument-hint: <intent> | --amend [--scan] [--dry-run] [-y]
 allowed-tools:
   - Bash
   - Glob
@@ -75,7 +73,7 @@ Amend output: `~/.maestro/overlays/amend-{slug}.json` + optional `~/.maestro/ove
 **Amend mode only** (when `--amend`):
 
 7. **Pristine source reads** — signal diagnosis MUST read from `$PKG_ROOT/.claude/commands/` (untouched originals), not installed copies
-8. **Code bugs excluded** — signals classified as code bugs MUST be routed to step `quick` or step `plan` (`--gaps`), NEVER patched via overlay
+8. **Code bugs excluded** — signals classified as code bugs MUST be routed to `/maestro-companion` or step `plan` (`--gaps`), NEVER patched via overlay
 9. **Section existence verified** — target section MUST be confirmed to exist in the pristine source before drafting a patch; missing sections trigger `new-section` mode
 </invariants>
 
@@ -101,7 +99,7 @@ If the user wants a whole new section, use `mode: new-section` with `afterSectio
 **Injection point preview** — after selecting section + mode, render the target command's section map showing existing overlays and the new injection point:
 
 ```
-=== quick.md (1 overlay exists) ===
+=== maestro-next.md (1 overlay exists) ===
 
   <purpose>
   <required_reading>
@@ -119,7 +117,7 @@ Use request_user_input to confirm:
 
 ### 2.5. Skill chain configuration
 
-After confirming the injection point, ask whether this overlay should chain to another skill upon completion. This enables the overlay's injected content to hand off to a skill via request_user_input at runtime, using `spawn_agent({ task_name: "...", message: "Execute skill ..., args: "..."" })` syntax.
+After confirming the injection point, ask whether this overlay should recommend another retained command upon completion. Emit its exact slash command after confirmation. `team-*` and `maestro-odyssey` are not valid handoff targets.
 
 Use request_user_input:
 - **"No chain"** — standard overlay, no skill handoff
@@ -136,7 +134,7 @@ Build a slug from the user's intent (kebab-case, lowercase). Write to `~/.maestr
 {
   "name": "<slug>",
   "description": "<short summary of what and why>",
-  "targets": ["quick"],
+  "targets": ["maestro-next"],
   "priority": 50,
   "enabled": true,
   "patches": [
@@ -175,7 +173,7 @@ On user selection:
 
 Handoff rules:
 - Always include a **"Skip"** option — the user can always decline the chain
-- Use `spawn_agent({ task_name: "<name>", message: "Execute skill <name>, args: "..."" })` syntax for handoff calls
+- Use an exact slash command for confirmed retained-command handoffs
 - Mark handoff heading with `(overlay)` tag
 - Support runtime variable placeholders: `{phase}`, `{description}`, `{session_id}`
 - Keep handoff block under 10 lines of markdown
@@ -212,7 +210,7 @@ Show the user:
 === OVERLAY INSTALLED ===
 Name:    <slug>
 Path:    ~/.maestro/overlays/<slug>.json
-Targets: quick (applied), maestro-init (skipped: missing)
+Targets: maestro-next (applied), maestro-init (skipped: missing)
 Chain:   review (via request_user_input) | none
 Scopes:  [global]
 
@@ -271,7 +269,7 @@ Per signal, determine: signal_id, source, description, target_command, target_se
 | Entirely new concern | _(new section)_ | new-section |
 
 Read pristine source from `$PKG_ROOT/.claude/commands/<name>.md` to confirm section.
-Classify: command deficiency → proceed; code bug → skip (suggest step `quick`).
+Classify: command deficiency → proceed; code bug → skip (suggest `/maestro-companion`).
 
 ### C. Group overlays
 
@@ -296,7 +294,7 @@ On validation failure: fix JSON, retry (max 2).
 
 ### G. Report
 
-Display summary: signals collected/applied/skipped, overlay details, skipped code-bug routing (to step `quick` or step `plan --gaps`).
+Display summary: signals collected/applied/skipped, overlay details, skipped code-bug routing (to `/maestro-companion` or step `plan --gaps`).
 </amend_mode>
 </execution>
 
@@ -307,7 +305,7 @@ Amend mode only:
 |------|-----------|----------|
 | E001 | No signals from any source | Verify artifact paths or provide description |
 | E002 | Signal source path invalid or unreadable | Check `--from-*` path; ensure artifact exists |
-| E003 | All signals are code bugs, not command gaps | Use step `quick` or step `plan --gaps` |
+| E003 | All signals are code bugs, not command gaps | Use `/maestro-companion` or step `plan --gaps` |
 | E004 | Overlay validation failed after 2 retries | Review JSON manually |
 | W001 | Some signals skipped (code bugs) | Route to appropriate fix command |
 | W002 | Target command has >= 3 existing overlays | Consider consolidating |
@@ -321,7 +319,7 @@ Default mode:
 - [ ] Re-running `maestro overlay apply` produces no file changes (idempotent)
 - [ ] User shown the report with target list and removal instructions
 - [ ] Injection point preview shown (with existing overlays + `>>>` marker) and confirmed before drafting
-- [ ] If chain configured, `content` includes Skill Handoff block with request_user_input + Skip option + `Skill()` calls
+- [ ] If chain configured, `content` includes a retained-command recommendation with request_user_input + Skip option
 
 Amend mode:
 - [ ] Signals classified: command deficiency vs code bug

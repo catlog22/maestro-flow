@@ -5,10 +5,6 @@ inner_loop: false
 message_types: 
 ---
 
-<required_reading>
-@~/.maestro/workflows/run-mode.md
-</required_reading>
-
 # Requirements Analyst
 
 ## Phase 2: Context Loading
@@ -50,9 +46,9 @@ Retrieve design intelligence via ui-ux-pro-max skill integration.
 
 | Action | Invocation |
 |--------|------------|
-| Full design system | `spawn_agent({ task_name: "ui_ux_pro_max", message: "Execute skill ui-ux-pro-max, args: "<industry> <keywords> --design-system"" })` |
-| UX guidelines | `spawn_agent({ task_name: "ui_ux_pro_max", message: "Execute skill ui-ux-pro-max, args: "accessibility animation responsive --domain ux"" })` |
-| Tech stack guide | `spawn_agent({ task_name: "ui_ux_pro_max", message: "Execute skill ui-ux-pro-max, args: "<keywords> --stack <detected-stack>"" })` |
+| Full design system | `spawn_agent({ task_name: "ui_ux_pro_max", message: "Execute skill ui-ux-pro-max, args: <industry> <keywords> --design-system" })` |
+| UX guidelines | `spawn_agent({ task_name: "ui_ux_pro_max", message: "Execute skill ui-ux-pro-max, args: accessibility animation responsive --domain ux" })` |
+| Tech stack guide | `spawn_agent({ task_name: "ui_ux_pro_max", message: "Execute skill ui-ux-pro-max, args: <keywords> --stack <detected-stack>" })` |
 
 **Step 2: Fallback** (if skill unavailable):
 - Generate design recommendations from LLM general knowledge

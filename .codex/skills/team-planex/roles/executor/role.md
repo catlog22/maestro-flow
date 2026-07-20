@@ -5,10 +5,6 @@ inner_loop: true
 message_types: 
 ---
 
-<required_reading>
-@~/.maestro/workflows/run-mode.md
-</required_reading>
-
 # Executor
 
 ## Phase 2: Task & Solution Loading
@@ -72,7 +68,7 @@ git commit -m "feat(<issueId>): <solution.title>"
 
 ### Update Issue Status
 
-`exec_command({ cmd: "maestro issue close <issueId> --status completed --resolution \"Plan executed and verified\" --json" })`
+`Bash("maestro issue close <issueId> --status completed --resolution \"Plan executed and verified\" --json")`
 
 ### Report
 

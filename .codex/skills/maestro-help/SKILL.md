@@ -61,7 +61,7 @@ Single source of truth: **[index/catalog.json](index/catalog.json)**
 | `cli_commands[]` | 21 个终端命令 |
 | `guide_files[]` | 17 个 Guide 文档索引（planned，尚未创建） |
 | `essential_commands[]` | 10 个核心命令（新手用） |
-| `workflows` | 主干管线、快速渠道、Issue 闭环、初始化路径 |
+| `workflows` | 主干管线、Companion 轻量入口、Issue 闭环、初始化路径 |
 
 ## Operation Modes
 
@@ -101,7 +101,7 @@ Single source of truth: **[index/catalog.json](index/catalog.json)**
 **Process**:
 1. Read `Ref: phases/03-workflow-guide.md`
 2. 分析用户任务类型和复杂度
-3. 推荐匹配的工作流（主干管线/快速渠道/Issue 闭环）
+3. 推荐匹配的工作流（主干管线/Companion 轻量入口/Issue 闭环）
 4. 给出具体命令序列
 
 ### Mode 5: Beginner Onboarding
@@ -185,7 +185,7 @@ $ARGUMENTS → Parse:
 
 ### 上游起源 + 核心 (core)
 
-> 裸名称为 first-tier step：经 `/maestro "<意图>"` 自动路由，或 `maestro run prepare <step>` + `maestro run create <step> ...` 直接执行；`/` 前缀为独立命令。
+> 裸名称为 first-tier step：经 `/maestro "<意图>"` 自动路由，或 `maestro run prepare --platform codex <step>` + `maestro run create <step> ...` 直接执行；`/` 前缀为独立命令。
 
 | 命令 | 用途 |
 |------|------|
@@ -194,7 +194,7 @@ $ARGUMENTS → Parse:
 | `brainstorm` | 头脑风暴 — 发散探索，多角色创意 |
 | `blueprint` | 正式规格文档化 — 7-phase 收敛规格链 |
 | `roadmap` | 路线图编排 — 消费上游 context，纯 Milestone > Phase 分解 |
-| `quick` | 快速任务 |
+| `/maestro-companion` | 轻量任务直接执行 |
 | `/maestro-overlay` | Overlay 管理 — 自然语言创建，或 `--amend` 从信号自动生成修正补丁 |
 | `grill` | 压力测试 — 对计划或需求进行代码库现实性压力测试 |
 | `/maestro-next` | 智能导航 — 检测状态并推荐下一步最优命令 |
@@ -293,7 +293,7 @@ Odyssey 长周期循环（独立路径）
 | Path D | 小改动 | `plan "fix auth bug"` → `execute` |
 | Path E | 纯规格文档 | `blueprint "project idea"` → (供人阅读) |
 | Path F | 纯探索 | `brainstorm "idea"` → (供人决策) |
-| 快速修复 | 已知简单问题 | `quick "修复描述"` |
+| 轻量修复 | 已知简单问题 | `/maestro-companion "修复描述"` |
 | Bug 追踪 | Issue 闭环 | `/maestro-manage issue discover` → `/maestro-manage issue create` → analyze/plan/execute → close |
 | 全自动 | /maestro 入口 | `/maestro -y "任务描述"` |
 | 代码审查 | 质量管线 | `review` → `auto-test` → `test` |

@@ -76,8 +76,8 @@ const taskPatterns = [
 2. `plan --from analyze:ANL-xxx` — 直达规划，跳过 roadmap
 3. `execute`
 
-### 快速渠道（简单功能）
-1. `quick "功能描述"` — 一键完成
+### Companion 轻量入口（简单功能）
+1. `/maestro-companion "功能描述"` — 直接执行并记录非正式证据
 
 ### 全自动
 1. `/maestro -y "功能描述"` — 自动选择并执行完整流程
@@ -91,8 +91,8 @@ const taskPatterns = [
 1. `plan "fix auth bug"` — 直接规划
 2. `execute`
 
-### 快速修复（已知问题）
-1. `quick "修复 Bug 描述"`
+### 轻量修复（已知问题）
+1. `/maestro-companion "修复 Bug 描述"`
 ```
 
 **Bug 追踪** (Issue 闭环):
@@ -158,7 +158,7 @@ const taskPatterns = [
 理解层:   analyze "topic"(宏观) → scope_verdict 路由
 编排层:   roadmap(可选，仅 scope_verdict=large 时建议)
 执行层:   plan → execute → quality → session-seal
-快速渠道: quick → (直接完成)
+Companion: /maestro-companion → (直接完成)
 Issue 闭环: discover → create → analyze --gaps → plan --gaps → execute → close
 全自动:   /maestro -y → (自动路由)
 Odyssey:  maestro-odyssey --mode debug|improve|planex|ui → (自主循环)
@@ -213,7 +213,7 @@ Odyssey:  maestro-odyssey --mode debug|improve|planex|ui → (自主循环)
 | 6 | `roadmap` | 路线图编排 | scope_verdict=large 时，Milestone > Phase 分解 |
 | 7 | `plan` | 规划 | 分析完成后生成执行计划，支持 `--from analyze:ANL-xxx` 直达 |
 | 8 | `execute` | 执行 | 计划完成后，执行实现 |
-| 9 | `quick` | 快速任务 | 简单任务跳过管线 |
+| 9 | `/maestro-companion` | 轻量任务 | 机械明确任务直接执行 |
 | 10 | `/maestro-next` | 智能导航 | 不确定下一步时，自动检测状态推荐 |
 ```
 

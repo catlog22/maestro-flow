@@ -236,18 +236,18 @@ const COMMANDS: CommandData[] = [
     },
   },
   {
-    id: 'quick', cmd: '/maestro-quick', category: 'quick', status: 'core', level: 1,
+    id: 'companion', cmd: '/maestro-companion', category: 'quick', status: 'core', level: 1,
     zh: {
-      desc: '跳过管线，直接完成任务（分析→执行一步到位）',
+      desc: '轻量任务直接执行，并记录非正式证据',
       when: 'Bug 修复、小功能、简单重构等不需要完整管线的任务',
-      how: '/maestro-quick "修复登录页 Bug"',
-      tips: ['--full 模式带规划和验证', '--discuss 模式先讨论方案再执行'],
+      how: '/maestro-companion "修复登录页 Bug"',
+      tips: ['不创建 plan/execute chain', '需要规划、验证或讨论时升级到 /maestro 或 /maestro-next --run'],
     },
     en: {
-      desc: 'Skip pipeline, complete task directly (analyze+execute in one step)',
+      desc: 'Execute lightweight tasks directly with informal evidence recording',
       when: 'Bug fixes, small features, simple refactors that don\'t need full pipeline',
-      how: '/maestro-quick "fix login page bug"',
-      tips: ['--full adds planning and verification', '--discuss discusses approach before executing'],
+      how: '/maestro-companion "fix login page bug"',
+      tips: ['Does not create a plan/execute chain', 'Use /maestro or /maestro-next --run when planning or gates are needed'],
     },
   },
   {
@@ -435,12 +435,12 @@ const SCENARIOS: ScenarioData[] = [
     zh: {
       title: '快速修复',
       desc: 'Bug 修复和小改动，跳过完整管线',
-      steps: ['/maestro-quick "修复登录页 Bug"', '# 或带验证', '/maestro-quick --full "重构 API 层"'],
+      steps: ['/maestro-companion "修复登录页 Bug"', '# 需要规划和验证时', '/maestro "重构 API 层"'],
     },
     en: {
       title: 'Quick Fix',
       desc: 'Bug fixes and small changes, skip full pipeline',
-      steps: ['/maestro-quick "fix login bug"', '# or with verification', '/maestro-quick --full "refactor API layer"'],
+      steps: ['/maestro-companion "fix login bug"', '# use the full orchestrator when gates are needed', '/maestro "refactor API layer"'],
     },
   },
   {
@@ -513,12 +513,12 @@ const SCENARIOS: ScenarioData[] = [
     zh: {
       title: '安全审计与修复',
       desc: '发布前安全扫描 → 发现漏洞 → 修复 → 验证',
-      steps: ['/security-audit standard', '# 全面安全审计', '/manage-issue create --title "修复 XSS 漏洞" --severity critical', '# 创建安全 Issue', '/maestro-quick --full "修复 XSS 漏洞"', '# 带验证的快速修复', '/security-audit quick', '# 复查确认'],
+      steps: ['/security-audit standard', '# 全面安全审计', '/manage-issue create --title "修复 XSS 漏洞" --severity critical', '# 创建安全 Issue', '/maestro "修复 XSS 漏洞"', '# 使用完整编排和验证', '/security-audit quick', '# 复查确认'],
     },
     en: {
       title: 'Security Audit & Fix',
       desc: 'Pre-release security scan → discover vulnerabilities → fix → verify',
-      steps: ['/security-audit standard', '# full security audit', '/manage-issue create --title "Fix XSS vulnerability" --severity critical', '# create security issue', '/maestro-quick --full "Fix XSS vulnerability"', '# quick fix with verification', '/security-audit quick', '# re-audit to confirm'],
+      steps: ['/security-audit standard', '# full security audit', '/manage-issue create --title "Fix XSS vulnerability" --severity critical', '# create security issue', '/maestro "Fix XSS vulnerability"', '# full orchestration and verification', '/security-audit quick', '# re-audit to confirm'],
     },
   },
   {
@@ -899,7 +899,7 @@ export default function QuickStartPage() {
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-[var(--spacing-3)]">
           {[
             { icon: '1', color: 'bg-tint-blue text-accent-blue', zh: '管线是核心', en: 'Pipeline is king', zhDesc: 'analyze → plan → execute → verify 四步循环。每个 Phase 走完整管线质量最高。', enDesc: 'analyze → plan → execute → verify loop. Full pipeline per phase yields best quality.' },
-            { icon: '2', color: 'bg-tint-green text-accent-green', zh: '简单任务用 quick', en: 'Quick for simple tasks', zhDesc: 'Bug 修复、小改动不需要走完整管线。/maestro-quick 一步到位。', enDesc: 'Bug fixes and small changes don\'t need full pipeline. /maestro-quick does it in one step.' },
+            { icon: '2', color: 'bg-tint-green text-accent-green', zh: '简单任务用 Companion', en: 'Use Companion for simple tasks', zhDesc: 'Bug 修复、小改动不需要走完整管线。/maestro-companion 直接执行并记录证据。', enDesc: 'Bug fixes and small changes do not need the full pipeline. /maestro-companion executes directly and records evidence.' },
             { icon: '3', color: 'bg-tint-purple text-accent-purple', zh: '-y 省时间', en: '-y saves time', zhDesc: '大多数命令支持 -y 自动确认。熟悉后加上 -y 可以大幅提升效率。', enDesc: 'Most commands support -y auto-confirm. Add -y once familiar to boost efficiency.' },
             { icon: '4', color: 'bg-tint-orange text-accent-orange', zh: '质量闭环别跳过', en: 'Don\'t skip quality loop', zhDesc: '执行后一定要 verify + test。质量管线是代码质量的最后一道防线。', enDesc: 'Always verify + test after execute. Quality pipeline is the last line of defense.' },
             { icon: '5', color: 'bg-tint-blue text-accent-blue', zh: '知识要沉淀', en: 'Persist knowledge', zhDesc: '每个阶段结束后用 /manage-harvest 提取知识。积累的知识会在下次 /maestro-plan 时自动注入。', enDesc: 'Use /manage-harvest after each phase. Accumulated knowledge auto-injects in next /maestro-plan.' },

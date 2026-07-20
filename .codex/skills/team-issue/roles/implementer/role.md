@@ -2,12 +2,8 @@
 role: implementer
 prefix: BUILD
 inner_loop: false
-message_types: [impl_complete, impl_failed, error]
+message_types: "[impl_complete, impl_failed, error]"
 ---
-
-<required_reading>
-@~/.maestro/workflows/run-mode.md
-</required_reading>
 
 # Issue Implementer
 
@@ -35,7 +31,7 @@ message_types: [impl_complete, impl_failed, error]
 4. If no solution artifact -> report error, STOP
 5. Load explorer context (if available)
 6. Resolve execution method (Auto: task_count <= 3 -> agy, else codex)
-7. Update issue status: `exec_command({ cmd: "maestro issue update <issueId> --status in_progress --json" })`
+7. Update issue status: `Bash("maestro issue update <issueId> --status in_progress --json")`
 
 ## Phase 3: Implementation (Multi-Backend Routing)
 
@@ -82,7 +78,7 @@ On CLI failure, resume: `maestro delegate "Continue" --resume issue-<issueId> --
 | Tests pass | Detect and run test command | No new failures |
 | Code review | Optional, per task config | Review output logged |
 
-- Tests pass -> optional code review -> `exec_command({ cmd: "maestro issue close <issueId> --status completed --resolution \"Implemented and verified\" --json" })` -> report `impl_complete`
+- Tests pass -> optional code review -> `Bash("maestro issue close <issueId> --status completed --resolution \"Implemented and verified\" --json")` -> report `impl_complete`
 - Tests fail -> report `impl_failed` with truncated test output
 
 Update `{run_dir}/work/team/wisdom/.msg/meta.json` under `implementer` namespace:

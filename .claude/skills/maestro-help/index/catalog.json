@@ -10,7 +10,6 @@
     {"name": "brainstorm", "command": "brainstorm", "type": "step", "category": "core", "description": "头脑风暴 — 发散探索，多角色创意，上游起源 step", "source": "~/.maestro/workflows/brainstorm.md"},
     {"name": "blueprint", "command": "blueprint", "type": "step", "category": "core", "description": "正式规格文档化 — 7-phase 收敛规格链，产出 .workflow/blueprint/", "source": "~/.maestro/workflows/blueprint.md"},
     {"name": "roadmap", "command": "roadmap", "type": "step", "category": "core", "description": "路线图编排 — 消费上游 context，Milestone/Session DAG 分解", "source": "~/.maestro/workflows/roadmap.md"},
-    {"name": "quick", "command": "quick", "type": "step", "category": "core", "description": "快速任务 — 跳过管线直接完成，支持 --full/--discuss 模式", "source": "~/.maestro/workflows/quick.md"},
     {"name": "maestro-overlay", "command": "/maestro-overlay", "category": "core", "description": "Overlay 管理 — 自然语言创建命令补丁，或 --amend 从工作流信号自动生成", "source": "../../commands/maestro-overlay.md"},
     {"name": "maestro-guard", "command": "/maestro-guard", "category": "core", "description": "编辑边界治理", "source": "../../commands/maestro-guard.md"},
     {"name": "maestro-update", "command": "/maestro-update", "category": "core", "description": "版本更新 — 检查并安装最新版本", "source": "../../commands/maestro-update.md"},
@@ -228,10 +227,10 @@
       "quality": ["review", "auto-test", "test"],
       "close": ["maestro-session-seal"]
     },
-    "quick": {
-      "name": "快速渠道",
-      "entry": "quick (step)",
-      "modes": ["default (analyze+execute)", "--full (analyze+plan+execute)", "--discuss (multi-cli讨论)"]
+    "companion": {
+      "name": "Companion 轻量入口",
+      "entry": "/maestro-companion",
+      "modes": ["direct execution", "--note", "--promote"]
     },
     "issue_loop": {
       "name": "Issue 闭环",

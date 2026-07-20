@@ -2,13 +2,9 @@
 role: scorer
 prefix: SCORE
 inner_loop: false
-output_tag: [scorer]
+output_tag: "[scorer]"
 message_types: 
 ---
-
-<required_reading>
-@~/.maestro/workflows/run-mode.md
-</required_reading>
 
 # Scorer Role — Phase 2-4
 

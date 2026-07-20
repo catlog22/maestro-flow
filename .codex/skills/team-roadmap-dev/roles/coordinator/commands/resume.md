@@ -1,7 +1,3 @@
-
-<required_reading>
-@~/.maestro/workflows/run-mode.md
-</required_reading>
 # Command: resume
 
 ## Purpose
@@ -10,7 +6,7 @@ Restore execution context from a paused session and continue the monitor loop. T
 
 ## When to Use
 
-- User invokes `spawn_agent({ task_name: "team_roadmap_dev", message: "Execute skill team-roadmap-dev, args: "--resume {sessionFolder}"" })`
+- User invokes `spawn_agent({ task_name: "team_roadmap_dev", message: "Execute skill team-roadmap-dev, args: --resume {sessionFolder}" })`
 - Coordinator detects a paused session during init
 
 ## Parameters

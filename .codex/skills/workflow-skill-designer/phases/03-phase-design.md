@@ -312,15 +312,14 @@ function generatePhaseFromRequirements(phase, config) {
       phaseContent += `### Step: ${agentType} Delegation\n\n`;
       phaseContent += '```javascript\n';
       phaseContent += `const result = spawn_agent({\n`;
-      phaseContent += `  task_name: "${mapAgentType(agentType)}",\n`;
-      phaseContent += `  agent_type: "${mapAgentType(agentType)}",\n`;
-      phaseContent += `  message: \`\n`;
+      phaseContent += `  subagent_type: "${mapAgentType(agentType)}",\n`;
+      phaseContent += `  prompt: \`\n`;
       phaseContent += `    [ROLE] ${agentType}\n`;
       phaseContent += `    [TASK] ${phase.description}\n`;
       phaseContent += `    [INPUT] \${inputData}\n`;
       phaseContent += `    [OUTPUT] \${outputPath}\n`;
       phaseContent += `  \`,\n`;
-      phaseContent += `  fork_turns: "none"\n`;
+      phaseContent += `  run_in_background: false\n`;
       phaseContent += `});\n`;
       phaseContent += '```\n\n';
     }

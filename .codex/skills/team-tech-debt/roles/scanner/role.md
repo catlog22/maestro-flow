@@ -2,12 +2,8 @@
 role: scanner
 prefix: TDSCAN
 inner_loop: false
-message_types: [state_update]
+message_types: "[state_update]"
 ---
-
-<required_reading>
-@~/.maestro/workflows/run-mode.md
-</required_reading>
 
 # Tech Debt Scanner
 
@@ -20,7 +16,7 @@ message_types: [state_update]
 | .msg/meta.json | {run_dir}/work/team/.msg/meta.json | Yes |
 
 1. Extract session path and scan scope from task description
-2. Load debug specs: Run `ccw maestro-spec load --category debug` for known issues, workarounds, and root-cause notes
+2. Load debug specs: Run `maestro spec load --category debug` for known issues, workarounds, and root-cause notes
 3. Read .msg/meta.json for team context
 3. Detect project type and framework:
 

@@ -1637,7 +1637,11 @@ export function createRun(options: CreateRunOptions): CreateRunResult {
   const argumentRequirements = resolveArgumentRequirements(options.projectRoot, options.command, options.args ?? []);
   const missingArguments = argumentRequirements.filter(item => item.required && item.missing);
   if (missingArguments.length > 0) {
-    throw new Error(`Missing required arguments: ${missingArguments.map(item => `${item.name} (${item.question})`).join(', ')}`);
+    throw new Error(
+      `Missing required arguments: ${missingArguments.map(item => `${item.name} (${item.question})`).join(', ')}. `
+      + '--intent is Session metadata only and does not fill command arguments; '
+      + 'pass required inputs with --arg <value> or -- <args...>.',
+    );
   }
 
   const resolvedSession = resolveSessionId(

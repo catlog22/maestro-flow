@@ -85,12 +85,12 @@ SKILL.md (Coordinator — this file)
 **所有依赖均在本 skill 内部，无外部引用。**
 
 - **Python ACO 脚本**: `<this-skill>/scripts/aco.py`
-  - 运行时解析: `Glob(".codex/skills/team-adversarial-swarm/scripts/aco.py")`
+  - 运行时解析: `Glob(".claude/skills/team-adversarial-swarm/scripts/aco.py")`
   - 依赖模块: `pheromone.py`, `scoring.py`（同目录）
   - 命令: `init` / `select` / `update` / `converged` / `report`
   - 协议: [specs/swarm-protocol.md](specs/swarm-protocol.md)
 - **Workflow 脚本**: `<this-skill>/workflows/wf-swarm-*.js`
-  - 运行时解析: `Glob(".codex/skills/team-adversarial-swarm/workflows/wf-swarm-*.js")`
+  - 运行时解析: `Glob(".claude/skills/team-adversarial-swarm/workflows/wf-swarm-*.js")`
 
 ## Specs Reference
 
@@ -113,7 +113,7 @@ SKILL.md (Coordinator — this file)
 ├── trails/                 # Per-iteration trails (managed by aco.py)
 ├── scores/                 # Adversarial scoring results
 │   └── iter-<k>-scores.json
-├── artifacts/
+├── {run_dir}/outputs/      # Formal deliverables
 │   ├── ant-<k>-<id>.json   # Ant outputs
 │   └── best-solution.md    # Final synthesis
 ├── workflows/              # Workflow run artifacts
@@ -164,6 +164,18 @@ Write 到 `{run_dir}/work/team/swarm-config.json`。
 3. `Bash: python <aco.py> --session {run_dir}/work/team init`
 4. 解析输出: `{ n_nodes, n_edges, pheromone_path }`
 
+### Run Lifecycle Integration
+
+After session folder creation and before role-spec generation:
+
+1. **Resolve Run** (birth-packet first): if the dispatch context already carries `run_id` / `run_dir` (injected by an orchestrator), store them in `team-session.json` and skip create — a second create mints an empty duplicate Run. Otherwise: `maestro run create team-adversarial-swarm --session <slug> --intent "<task summary>"`
+   - Slug format: `YYYYMMDD-team-adversarial-swarm-<topic>` (ASCII, ≤64 chars)
+   - Store returned `run_id` and `run_dir` in `team-session.json`:
+     ```json
+     "run": { "run_id": "<id>", "run_dir": "<path>" }
+     ```
+2. **Resume**: Read `team-session.json.run.run_id` → `maestro run check <run_id>` (idempotent). If status=sealed, create a new run and update the field. If `run.run_id` is missing, resolve in order: birth-packet injection, then `<session>/artifacts/`; if all are absent, fail closed — report session corruption and do NOT create a new Run.
+
 ### Phase 3: Iteration Loop
 
 ```python
@@ -185,7 +197,7 @@ for k in range(1, max_iterations + 1):
     
     # 3d. Write scores + pheromone update
     Write("{run_dir}/work/team/scores/iter-k-scores.json", score_result)
-    Bash("python aco.py --session {run_dir}/work/team update --iter k")
+    Bash("python aco.py --session {run_dir}/work/team --run-dir <run_dir> update --iter k")
     
     # 3e. Adversarial convergence check (Workflow Module 3)
     converge_result = Workflow({
@@ -257,6 +269,12 @@ synthesize(best, top_k) → best-solution.md
 | 幻觉集群 (>50% 蚁被降分) | 暂停，request_user_input（继续/调整评分规则） |
 
 ## Completion
+
+Run lifecycle completion (before displaying results):
+- Read run_id from team-session.json.run.run_id
+- Write {run_dir}/report.md with frontmatter (verdict/summary/concerns)
+- Run `maestro run complete <run_id>`
+- If complete fails: fix the blocking gate and retry once; still failing -> do NOT archive/clean - keep the team active (status=paused) and report the blocking gate
 
 展示最终结果 + 交互选择:
 - **归档**: 保存 session，展示 best-solution.md

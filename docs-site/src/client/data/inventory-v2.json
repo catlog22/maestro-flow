@@ -102,6 +102,13 @@
       "argumentHint": "<intent>|--list|--suggest [-y] [--dry-run]"
     },
     {
+      "name": "maestro-companion",
+      "file": ".claude/commands/maestro-companion.md",
+      "category": "maestro",
+      "description": "Quick execution for small tasks — minimal Run lifecycle with direct execution and evidence recording",
+      "argumentHint": "<intent> [--note <text>] [--promote] [-y]"
+    },
+    {
       "name": "maestro-impeccable",
       "file": ".claude/commands/maestro-impeccable.md",
       "category": "maestro",

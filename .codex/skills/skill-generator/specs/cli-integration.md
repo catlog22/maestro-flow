@@ -78,14 +78,14 @@ General-purpose executor, the most commonly used agent type.
 
 ```javascript
 spawn_agent({
-  task_name: 'execute_task',
-  message: `
+  subagent_type: 'universal-executor',
+  prompt: `
 Execute task:
 1. Read configuration file
 2. Analyze dependencies
 3. Generate report to ${outputPath}
   `,
-  fork_turns: "none"
+  run_in_background: false
 });
 ```
 

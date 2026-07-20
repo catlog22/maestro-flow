@@ -1,10 +1,10 @@
 ---
 name: quality-refactor
 disable-model-invocation: true
-description: Use when accumulated tech debt needs systematic identification and
-  safe reduction
-argument-hint:
-  - <scope>
+description: Systematic tech-debt identification and safe reduction — plan →
+  confirm → execute with per-change test verification. For explicit refactoring
+  requests; casual tech-debt mentions route via /maestro-next
+argument-hint: "[<scope>]"
 allowed-tools:
   - Bash
   - Edit
@@ -87,7 +87,7 @@ Follow '~/.maestro/workflows/refactor.md' completely.
 - BLOCKED if tests fail: fix regressions before completing.
 
 **Knowledge inquiry on completion:**
-After successful refactoring, ask user once: "Record refactoring pattern as coding convention?" If yes → `Skill("maestro-spec", "add coding \"<title>\" \"<pattern>\" --keywords <kw1>,<kw2> --description \"<summary>\"")`.
+After successful refactoring, ask user once: "Record refactoring pattern as coding convention?" If yes → recommend `/maestro-spec add coding "<title>" "<pattern>" --keywords <kw1>,<kw2> --description "<summary>"`.
 </execution>
 
 <completion>
@@ -104,8 +104,9 @@ CONCERNS: {description if applicable}
 
 End the step by calling the CLI (no text block output):
 ```
-maestro ralph complete <idx> --status {STATUS} [--evidence {path}]
+maestro run complete --session {session_id} --verdict {done|done-with-concerns|needs-retry|blocked} [--evidence {path}]
 ```
+(run-id 可省略 — 自动解析当前 running 步)
 
 ### Next-step routing
 

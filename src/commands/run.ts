@@ -222,11 +222,11 @@ export function registerRunCommand(program: Command): void {
     .command('create <command> [args...]')
     .description('Create a Run in an existing or new Session')
     .option('--session <id>', 'explicit Session ID')
-    .option('--intent <text>', 'intent used when creating a Session')
+    .option('--intent <text>', 'Session metadata only (not passed to the command or Run input.args)')
     .option('--topic <text>', 'command-independent Session topic (Unicode supported)')
     .option('--retry-token <token>', 'opaque single-use token issued by a needs-retry transition')
     .option('--platform <name>', 'target platform persisted for this Run')
-    .option('--arg <value>', 'command argument (repeatable)', collect, [])
+    .option('--arg <value>', 'command input stored in Run input.args (repeatable)', collect, [])
     .option('--json', 'emit one run-response/1.0 envelope on stdout')
     .option('--workflow-root <path>', 'project root containing .workflow', process.cwd())
     .action((command: string, positionalArgs: string[], opts: {

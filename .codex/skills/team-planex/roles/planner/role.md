@@ -5,9 +5,7 @@ inner_loop: true
 message_types: 
 ---
 
-<required_reading>
-@~/.maestro/workflows/run-mode.md
-</required_reading>
+> **Plan tracking**: codex 无 TaskCreate/TaskUpdate/TodoWrite 任务板。进度清单用 `update_plan({ explanation?, plan: [{ step, status }] })` 维护（整体提交步骤数组，status: `pending` | `in_progress` | `completed`），权威状态始终在 session 工件中；依赖/认领（addBlockedBy/owner）是工件字段，不是工具参数。
 
 # Planner
 
@@ -27,7 +25,7 @@ message_types:
 | Detection | Condition | Action |
 |-----------|-----------|--------|
 | Issue IDs | `ISS-\d{8}-\d{3}` pattern | Use directly |
-| `--text '...'` | Flag in input | Create issue(s) via `exec_command({ cmd: "maestro issue create ... --json" })` |
+| `--text '...'` | Flag in input | Create issue(s) via `Bash("maestro issue create ... --json")` |
 | `--plan <path>` | Flag in input | Read file, parse phases, batch create issues |
 
 ## Phase 3: Issue Processing Loop

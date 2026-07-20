@@ -22,6 +22,7 @@
     "dist",
     "shared",
     "templates",
+    "prepare",
     "workflows",
     "chains",
     ".claude/commands",

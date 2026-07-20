@@ -42,7 +42,7 @@ graph TB
     end
 
     subgraph knowledge["知识管理"]
-        CP["/maestro-next --note/--promote"]
+        CP["/maestro-companion --note/--promote"]
         KA["/maestro-manage knowledge audit 审计淘汰"]
     end
 
@@ -76,20 +76,19 @@ graph TB
         MC["/maestro-session-seal"]
     end
 
-    subgraph quick["快速渠道"]
-        MQ["/maestro-next"]
-        LP["/workflow-lite-plan"]
+    subgraph companion["Companion 轻量渠道"]
+        MQ["/maestro-companion"]
     end
 
     M -->|意图路由| init
     M -->|意图路由| pipeline
     M -->|"continue"| pipeline
-    M -->|quick| quick
+    M -->|轻量意图| companion
     NX -->|推荐单命令| init
     NX -->|推荐单命令| pipeline
+    NX -->|推荐轻量渠道| companion
     SW -->|并行加速| pipeline
     GR -.->|压力测试后| BS
-    CP -.->|任务知识伴侣| pipeline
 
     BS -.->|可选| INIT
     INIT --> RM
@@ -317,10 +316,10 @@ graph TB
 | `full-lifecycle` | init→analyze→roadmap→...→session-seal | 全新项目 |
 | `roadmap-driven` | init→roadmap→... | 轻量路线图 |
 | `brainstorm-driven` | brainstorm→init→roadmap→... | 从头脑风暴开始 |
-| `analyze-plan-execute` | analyze→plan→execute | 快速执行 |
+| `analyze-plan-execute` | analyze→plan→execute | 需要规划的多步交付 |
 | `quality-loop` | review→test→debug | 质量流水线 |
 | `milestone-close` | session-seal | 关闭里程碑 |
-| `quick` | next task | 即时小任务 |
+| `companion` | `/maestro-companion "<intent>"` | 即时小任务 |
 
 ---
 

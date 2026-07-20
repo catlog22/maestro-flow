@@ -2,13 +2,9 @@
 role: ant
 prefix: ANT
 inner_loop: false
-output_tag: [ant]
+output_tag: "[ant]"
 message_types: 
 ---
-
-<required_reading>
-@~/.maestro/workflows/run-mode.md
-</required_reading>
 
 # Ant Role — Phase 2-4
 

@@ -2,13 +2,9 @@
 role: executor
 prefix: QARUN
 inner_loop: true
-additional_prefixes: [QARUN-gc]
+additional_prefixes: "[QARUN-gc]"
 message_types: 
 ---
-
-<required_reading>
-@~/.maestro/workflows/run-mode.md
-</required_reading>
 
 # Test Executor
 
@@ -24,7 +20,7 @@ message_types:
 | Target layer | task description `layer: L1/L2/L3` | Yes |
 
 1. Extract session path and target layer from task description
-2. Load validation specs: Run `ccw maestro-spec load --category quality` for verification rules and acceptance criteria
+2. Load validation specs: Run `maestro spec load --category quality` for verification rules and acceptance criteria
 3. Read .msg/meta.json for strategy and generated test file list
 3. Detect test command by framework:
 

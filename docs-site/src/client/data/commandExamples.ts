@@ -101,16 +101,15 @@ const examples: Record<string, CommandExample[]> = {
       ],
     },
   ],
-  'maestro-quick': [
+  'maestro-companion': [
     {
-      scenario: '快速修复 Bug',
-      command: 'maestro-quick "修复登录页密码验证逻辑"',
+      scenario: '轻量修复 Bug',
+      command: 'maestro-companion "修复登录页密码验证逻辑"',
       steps: [
-        { name: '任务解析', description: '解析任务描述，检测执行模式（默认 / --full / --discuss）', detail: '默认模式跳过完整规划，快速执行' },
-        { name: '快速分析', description: '轻量级代码库扫描，识别受影响文件和修改方案', detail: '定位相关文件和函数' },
-        { name: '实现', description: '直接执行修改 — 编辑代码、创建文件、运行命令', detail: '按分析结果修改代码' },
-        { name: '验证', description: '运行相关测试和 lint 检查验证变更（--full 模式扩展验证范围）', detail: '确保修改不引入回归' },
-        { name: '提交', description: '自动提交变更并附带描述性信息', detail: '一步完成 Bug 修复' },
+        { name: '上下文加载', description: '创建最小 Run 并加载相关 spec/knowhow', detail: '不创建 plan/execute chain' },
+        { name: '直接执行', description: '读取、编辑、运行命令并完成明确任务', detail: '不产生 typed artifact' },
+        { name: '证据记录', description: '将关键动作追加到 companion evidence log', detail: '证据日志不参与 gates' },
+        { name: '完成 Run', description: '封存 companion Run 并输出结果摘要', detail: '可选 promote 到 spec/knowhow' },
       ],
     },
   ],

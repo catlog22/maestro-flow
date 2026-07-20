@@ -53,7 +53,7 @@ $ARGUMENTS — intent text + optional flags.
 4. Intent text present → S_STATE → S_RANK → route by complexity verdict
 5. No arguments → lifecycle inference for natural next step
 
-**Candidate pool:** All 15 first-tier steps registered in `prepare/` + `workflows/`. Pipeline orchestrators (`maestro`, `maestro-ralph*`) are NEVER in the candidate pool.
+**Candidate pool:** All 14 first-tier steps registered in `prepare/` + `workflows/`. Companion is a routing channel, not a first-tier step. Pipeline orchestrators (`maestro`, `maestro-ralph*`) are NEVER in the candidate pool.
 </context>
 
 <invariants>
@@ -61,7 +61,7 @@ $ARGUMENTS — intent text + optional flags.
 2. **Pipeline orchestrators excluded** — only recommend registered steps as single-run targets
 3. **Empty intent or "continue"/"next"** → lifecycle_position inference for natural next step
 4. **Literal match priority** — keyword match takes precedence; lifecycle is tie-breaker
-5. **Argument pass-through** — intent text becomes first arg to target step; user can modify at confirmation; `-y` only passes through when user provided it
+5. **Argument pass-through** — `--intent` is Session metadata only; the selected step's domain payload becomes command input through repeatable `--arg <value>` or arguments after `--`. The user can modify command inputs at confirmation; `-y` only passes through when the user provided it
 6. **--suggest never executes** — show recommendation + prepare content only
 7. **Manual campaigns excluded** — `team-*` and `maestro-odyssey` are never candidates, recommendations, retained utilities, or handoff targets
 8. **Retained commands are suggest-only** — route retained commands to an exact slash command. Never execute them in this turn; `-y` applies only to first-tier steps
@@ -214,7 +214,7 @@ init → {brainstorm | blueprint | analyze-macro} → roadmap
 | test / UAT / manual test / browser test / acceptance test | test | Conversational UAT + coverage + optional browser acceptance on verified deliverables |
 | auto-test / automated test / CI test / pipeline test / L0-L3 | auto-test | Automated CSV-layered test pipeline iterating to convergence |
 | roadmap / milestone / phasing / session plan / work breakdown | roadmap | Decompose requirements into session DAG with scope, success criteria, dependency edges |
-| quick / small / ad-hoc / one-off / trivial | quick | Shortened pipeline for small tasks, preserving atomic commits and state tracking |
+| quick / small / ad-hoc / one-off / trivial | `/maestro-companion "<intent>"` | Lightweight direct execution with no typed artifact handoff |
 | retrospective / retro / lessons learned / post-mortem / reflect | retrospective | Post-phase four-lens review (technical/process/quality/decision) → spec/knowhow/issue routing |
 | grill / pressure test / stress test | grill | Socratic pressure-test of a plan/idea against codebase reality — adversarial questioning, terminology collision checks |
 | collab / cross-verify / multi-tool / second opinion | collab | Fan out one requirement to multiple CLI tools, cross-verify findings into a unified conclusion |
@@ -254,8 +254,10 @@ maestro run prepare <step> --workflow-root .
 # 2. LLM performs pre-task thinking using prepare content
 #    Produces prep YAML (goal/approach/scope/risks/gates/reads)
 
-# 3. Create run — always pass --session (ASCII slug) + --intent
-maestro run create <step> --session YYYYMMDD-<step>-<topic> --intent "<short goal>" --workflow-root . [-- args...]
+# 3. Create run — always pass --session (ASCII slug) + metadata-only --intent.
+#    When the command contract or argument-hint requires input, pass it with
+#    repeatable --arg <value> or after -- using the -- <args...> form.
+maestro run create <step> --session YYYYMMDD-<step>-<topic> --intent "<short goal>" --workflow-root . [--arg "<required command input>"] [-- <args...>]
 #    Returns: run_id, run_dir, upstream (alias→artifact), entry_gates, next (progressive hint)
 
 # 4. Load the execution manual (follow the `next` hint from create)
@@ -280,12 +282,12 @@ For retained commands, output the exact slash command as a suggest-only result. 
 
 ### --list mode
 
-Group all 15 first-tier steps by cluster + show channels and retained commands:
+Group all 14 first-tier steps by cluster + show channels and retained commands:
 
 ```
 Core Chain:  analyze → plan → execute → verify
 Quality:     review, test, auto-test, debug, retrospective
-Discovery:   grill, collab, brainstorm, blueprint, roadmap, quick
+Discovery:   grill, collab, brainstorm, blueprint, roadmap
 
 Channels:
   /maestro-companion       — lightweight tasks (≤1-2 files, no artifact handoff)

@@ -2,12 +2,8 @@
 role: researcher
 prefix: RESEARCH
 inner_loop: false
-message_types: [state_update]
+message_types: "[state_update]"
 ---
-
-<required_reading>
-@~/.maestro/workflows/run-mode.md
-</required_reading>
 
 # Design System Researcher
 
@@ -66,9 +62,9 @@ Execute 4 analysis streams:
 - Output: `{run_dir}/outputs/research/accessibility-audit.json`
 
 **Stream 4 -- Design Intelligence (ui-ux-pro-max)**:
-- Call `spawn_agent({ task_name: "ui_ux_pro_max", message: "Execute skill ui-ux-pro-max, args: "<industry> <keywords> --design-system"" })` for design system recommendations
-- Call `spawn_agent({ task_name: "ui_ux_pro_max", message: "Execute skill ui-ux-pro-max, args: "accessibility animation responsive --domain ux"" })` for UX guidelines
-- Call `spawn_agent({ task_name: "ui_ux_pro_max", message: "Execute skill ui-ux-pro-max, args: "<keywords> --stack <detected-stack>"" })` for stack guidelines
+- Call `spawn_agent({ task_name: "ui_ux_pro_max", message: "Execute skill ui-ux-pro-max, args: <industry> <keywords> --design-system" })` for design system recommendations
+- Call `spawn_agent({ task_name: "ui_ux_pro_max", message: "Execute skill ui-ux-pro-max, args: accessibility animation responsive --domain ux" })` for UX guidelines
+- Call `spawn_agent({ task_name: "ui_ux_pro_max", message: "Execute skill ui-ux-pro-max, args: <keywords> --stack <detected-stack>" })` for stack guidelines
 - Degradation: when unavailable, use LLM general knowledge, mark `_source: "llm-general-knowledge"`
 - Output: `{run_dir}/outputs/research/design-intelligence.json`
 

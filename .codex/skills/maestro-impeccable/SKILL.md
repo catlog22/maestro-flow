@@ -3,9 +3,8 @@ name: maestro-impeccable
 disable-model-invocation: true
 description: Use when designing, auditing, polishing, improving, or codifying
   frontend UI — websites, dashboards, landing pages, components, design systems
-argument-hint: "<command|intent> [target] [flags] — chain:
-  build|redesign|improve|enhance|launch|harden|foundation|live · --codify
-  <source-path> 提取设计系统"
+argument-hint: build|redesign|improve|enhance|launch|harden|foundation|live
+  [target] [--codify <path>]
 allowed-tools:
   - Bash
   - Edit
@@ -29,6 +28,8 @@ contract:
   produces: []
 version: 0.5.52
 ---
+
+> **Plan tracking**: codex 无 TaskCreate/TaskUpdate/TodoWrite 任务板。进度清单用 `update_plan({ explanation?, plan: [{ step, status }] })` 维护（整体提交步骤数组，status: `pending` | `in_progress` | `completed`），权威状态始终在 session 工件中；依赖/认领（addBlockedBy/owner）是工件字段，不是工具参数。
 
 <required_reading>
 @~/.maestro/workflows/run-mode.md
@@ -331,7 +332,7 @@ If any artifact is missing: DO NOT report completion.
 
 ## Resume
 
-Scan `.workflow/.maestro/ui-craft-*/status.json` for `status == "running"` → most recent → resume from `current_step`.
+Scan `.workflow/.maestro/ui-craft-*/status.json` for `status == "running" || status == "paused"` → most recent → resume from `current_step`.
 
 ## Quality Gate — Finding → Command Fallback
 

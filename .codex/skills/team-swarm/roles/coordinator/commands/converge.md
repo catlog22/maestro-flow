@@ -1,9 +1,5 @@
 
 > **Agent timeout**: `spawn_agent` 异步执行且无内置超时 — 除明确短任务外一律 `spawn_agent` 后立即 `wait_agent({ timeout_ms: 3600000 })`（上限 1 小时）阻塞等待，绝不依赖 30000 默认值；`timed_out: true` 且 Agent 未完成时再次 `wait_agent` 续等，不丢弃。批量场景使用 `spawn_agents_on_csv({ max_runtime_seconds: 3600, ... })`。
-
-<required_reading>
-@~/.maestro/workflows/run-mode.md
-</required_reading>
 # Command: converge
 
 ## Workflow
@@ -31,7 +27,31 @@ Save full report to `{run_dir}/outputs/swarm-report.json` (raw data for analyst)
 ### Step 2: Spawn analyst worker
 
 ```
-spawn_agent({ task_name: "analyst", message: "Spawn analyst for swarm synthesis", fork_turns: "none", agent_type: "team_worker" })
+spawn_agent({
+  subagent_type: "team-worker",
+  description: "Spawn analyst for swarm synthesis",
+  team_name: "swarm",
+  name: "analyst",
+  run_in_background: true,
+  prompt: `## Role Assignment
+role: analyst
+role_spec: <skill_root>/roles/analyst/role.md
+session: <session_path>
+session_id: <run-id>
+team_name: swarm
+requirement: synthesize swarm results into human-readable best-solution.md
+inner_loop: false
+
+## Context
+Report data: {run_dir}/outputs/swarm-report.json
+Best solution: {run_dir}/work/team/best.json
+All trails: {run_dir}/work/team/trails/*.jsonl
+Original objective: <config.ant_prompt.objective>
+
+## Progress Milestones
+Report via team_msg at: report loaded -> synthesis done -> verification done.
+Report completion via team_msg type="task_complete" after final send_message.`
+})
 ```
 
 STOP. Resume on analyst callback.
@@ -41,6 +61,16 @@ STOP. Resume on analyst callback.
 Verify `{run_dir}/outputs/best-solution.md` exists.
 
 If missing -> request_user_input (skip synthesis / retry analyst).
+
+### Step 3.5: Run lifecycle completion
+
+```
+  +- Run lifecycle completion:
+  |   - Read run_id from team-session.json.run.run_id
+  |   - Write {run_dir}/report.md with frontmatter (verdict/summary/concerns)
+  |   - Run `maestro run complete <run_id>`
+  |   - If complete fails: fix the blocking gate and retry once; still failing -> do NOT archive/clean - keep the team active (status=paused) and report the blocking gate
+```
 
 ### Step 4: Build completion summary
 
@@ -63,8 +93,8 @@ If missing -> request_user_input (skip synthesis / retry analyst).
 [coordinator]   iter 1: <e1>  iter 2: <e2>  iter 3: <e3>  ...
 [coordinator]
 [coordinator] Deliverables:
-[coordinator]   - artifacts/best-solution.md (analyst synthesis)
-[coordinator]   - artifacts/swarm-report.json (raw data)
+[coordinator]   - {run_dir}/outputs/best-solution.md (analyst synthesis)
+[coordinator]   - {run_dir}/outputs/swarm-report.json (raw data)
 [coordinator]   - best.json (canonical best)
 [coordinator]   - trails/*.jsonl (full exploration log)
 [coordinator]

@@ -24,10 +24,10 @@ Lifecycle verbs: **prepare → create → brief → check → complete**.
 
 1. Read the caller frontmatter `name` as `<command-name>`.
 2. **Compose a session slug** — `YYYYMMDD-{command}-{topic}` where `{topic}` is a 1–3 word ASCII-only slug derived from the intent (e.g. `20260715-odyssey-jwt-auth`). NEVER let the runtime auto-generate from a Chinese or long intent string.
-3. Run `maestro run create <command-name> --session <slug> --intent "<short intent phrase>" -- $ARGUMENTS` before domain work.
+3. Run `maestro run create <command-name> --session <slug> --intent "<short intent phrase>" [--arg "<command input>"] [-- <args...>]` before domain work.
    - `--session`: the slug from step 2 (explicit, ASCII-only, ≤64 chars).
-   - `--intent`: a short human-readable phrase (1 sentence) describing the goal. May contain Chinese but is NOT used as the session ID.
-   - `$ARGUMENTS`: command-specific flags (e.g. `--template <name>`).
+   - `--intent`: **Session metadata only** — a short human-readable phrase (1 sentence) describing the goal. It may contain Chinese, is NOT used as the session ID, does not enter `Run input.args`, and does not satisfy the command contract or `argument-hint`.
+   - Command inputs: when the command contract or `argument-hint` requires them, pass each value with repeatable `--arg <value>` or place the command arguments after `--` (the `-- <args...>` form). `$ARGUMENTS` belongs after `--`.
 4. The runtime resolves the Session in this order: an explicit compatible `--session`, an unambiguous canonical topic match, otherwise a newly allocated topic Session. Paused or historical similarity is read-only and never authorizes selection, resume, or mutation.
 5. Retain the returned `session_id`, `run_id`, `run_dir`, and `upstream`. Do not locate Sessions or artifacts with glob, mtime, directory ordering, or hidden command folders.
 6. `maestro run brief <run_id>` returns the Resume Packet — same-Session sealed artifacts, the authoritative upstream map, and open decisions — for continuing an existing Run.
@@ -35,11 +35,14 @@ Lifecycle verbs: **prepare → create → brief → check → complete**.
 **Session slug examples:**
 ```
 # ✅ correct — mode-qualified command name resolves the mode's own contract
-maestro run create odyssey-planex --session 20260715-odyssey-planex-todo-integration --intent "完成 session-run-todo-goal 集成计划"
+maestro run create odyssey-planex --session 20260715-odyssey-planex-todo-integration --intent "完成 session-run-todo-goal 集成计划" --arg "完成 session-run-todo-goal 集成计划"
 maestro run create learn --session 20260715-learn-auth-flow --intent "理解认证流程" -- follow src/auth/
+maestro run create companion --session 20260715-companion-fix-readme --intent "修复 README 拼写" --arg "修复 README 拼写"
 
 # ❌ wrong — no --session, Chinese intent generates unreadable ID
-maestro run create odyssey-planex --intent "完成 docs/session-run-todo-goal-integration-plan.md 的 P0-P6"
+maestro run create odyssey-planex --intent "完成 docs/session-run-todo-goal-integration-plan.md 的 P0-P6" --arg "完成 docs/session-run-todo-goal-integration-plan.md 的 P0-P6"
+# ❌ wrong — --intent is metadata and does not satisfy learn's required command arguments
+maestro run create learn --session 20260715-learn-auth-flow --intent "follow src/auth/"
 # ❌ wrong — mode-less command name (empty contract, ambiguous workflow resolution)
 maestro run create odyssey --session 20260715-odyssey-planex-todo -- --mode planex
 ```

@@ -88,23 +88,6 @@
         "-y (自动模式)"
       ]
     },
-    "maestro-quick": {
-      "name": "maestro-quick",
-      "name_zh": "快速任务",
-      "description": "Execute a quick task with workflow guarantees but skip optional agents",
-      "description_zh": "快速执行单个任务，跳过规划阶段，同时保持原子提交和验证等工作流质量保证",
-      "workflow": "独立使用，适合不需要完整规划流程的小任务",
-      "workflow_zh": "适用场景：bug 修复、小功能、文档更新。替代 plan+execute 组合",
-      "prev_commands": [],
-      "next_commands": [
-        "quality-review"
-      ],
-      "flags": [
-        "[description] (任务描述)",
-        "--full (包含所有代理)",
-        "--discuss (执行前讨论)"
-      ]
-    },
     "maestro-brainstorm": {
       "name": "maestro-brainstorm",
       "name_zh": "头脑风暴",
@@ -1030,18 +1013,18 @@
     },
     "maestro-companion": {
       "name": "maestro-companion",
-      "name_zh": "知识伴侣",
-      "description": "Knowledge companion — side-car utility for task context loading, structured companion doc recording, insight capture, and skill routing",
-      "description_zh": "知识伴侣 — 伴随任意任务的知识上下文加载、结构化记录、洞察捕获和技能路由。不创建 session，不修改工作流状态",
-      "workflow": "before（任务前）→ note（任务中）→ after（任务后）→ route（推荐下一步）",
-      "workflow_zh": "四模式操作：before 加载上下文、note 记录洞察、after 沉淀知识、route 推荐技能",
+      "name_zh": "轻量执行伴侣",
+      "description": "Quick execution for small tasks — minimal Run lifecycle with direct execution and evidence recording",
+      "description_zh": "轻量任务直接执行入口 — 仅使用 run create + run complete，并持续记录非正式证据",
+      "workflow": "create minimal Run → direct execution → evidence log → complete",
+      "workflow_zh": "创建最小 Run → 直接执行 → 记录 evidence log → 完成 Run",
       "prev_commands": [],
       "next_commands": [],
       "flags": [
-        "[before|note|after|route] (模式)",
-        "--task <description> (任务描述)",
-        "--type <task_type> (任务类型)",
-        "--category <cat> (Spec 分类过滤)"
+        "<intent> (任务描述)",
+        "--note <text> (追加结构化记录)",
+        "--promote (将洞察提升为 spec/knowhow)",
+        "-y (跳过确认)"
       ]
     },
     "maestro-next": {

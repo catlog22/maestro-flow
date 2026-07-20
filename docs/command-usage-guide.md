@@ -313,37 +313,36 @@ stateDiagram-v2
 | `roadmap-driven` | init→ralph --roadmap→... | 轻量路线图 |
 | `brainstorm-driven` | wf-brainstorm→init→ralph --roadmap→... | 从头脑风暴开始 |
 | `ui-design-driven` | impeccable→maestro-next→ralph continue→(decision gate) | UI 设计驱动 |
-| `analyze-plan-execute` | wf-analyze→maestro-next→ralph continue | 快速分析-规划-执行 |
+| `analyze-plan-execute` | wf-analyze→maestro-next→ralph continue | 需要分析、规划和执行的多步交付 |
 | `execute-verify` | ralph continue→(decision gate) | 已有计划，直接执行 |
 | `quality-loop` | wf-review→security-audit→odyssey --mode debug | 质量流水线 |
 | `milestone-close` | session-seal→session-seal | 关闭里程碑 |
-| `quick` | maestro-next task | 即时小任务 |
+| `companion` | maestro-companion task | 无正式 artifact handoff 的即时小任务 |
 
 ---
 
-## 二、快速渠道（Scratch Mode）
+## 二、轻量渠道（Companion）
 
-不走 Phase 管线，直接在 scratch 目录中完成任务。
+不创建多步 chain。`/maestro-next` 只评估复杂度并推荐执行渠道；意图机械明确且不需要正式 artifact handoff 时，由 `/maestro-companion` 直接执行。
 
 ### 2.1 快速任务
 
 ```bash
-/maestro-next "修复登录页面 bug"              # 最短路径，跳过可选 agent
-/maestro-next --chain "重构 API 层"            # 带 plan-checker 验证
-/maestro-next --suggest "数据库迁移方案"       # 带决策提取（Locked/Free/Deferred）
+/maestro-next "修复登录页面 bug"              # 评估复杂度并推荐执行渠道
+/maestro-companion "修复登录页面 bug"         # 明确的轻量任务直接执行
+/maestro-companion --note "配置由环境变量覆盖" # 向当前 Companion Run 追加观察
 ```
 
-产出存放在 `.workflow/scratch/{task-slug}/`，不影响主干 Phase。
+Companion 使用最小 Run 生命周期并记录非正式 evidence，不生成供下游步骤消费的 typed artifact。
 
-### 2.2 快速分析 + 规划 + 执行
+### 2.2 需要规划或门控的任务
 
 ```bash
-/maestro-next "性能优化"                # Quick 模式，仅决策提取 → 生成 context.md
-/maestro-next --dir .workflow/scratch/xxx   # 对 scratch 目录规划
-/maestro-ralph continue --dir .workflow/scratch/xxx  # 对 scratch 目录执行
+/maestro-next "制定数据库迁移方案"       # 推荐 Standard 单 Run 或 /maestro
+/maestro "性能优化"                     # 明确需要多步分析、规划和执行
 ```
 
-`--dir` 参数跳过路线图验证，直接在指定目录工作。
+`/maestro-next` 不再隐式展开 analyze → plan → execute；需要多步生命周期时交给 `/maestro`。
 
 ### 2.3 Lite Plan 工作流（技能级别）
 
@@ -604,13 +603,12 @@ graph LR
 
 ```mermaid
 graph LR
-    subgraph quick["快速任务"]
-        MQ["/maestro-next"]
+    subgraph companion["Companion 轻量任务"]
+        MQ["/maestro-next<br>(复杂度评估)"] --> MC["/maestro-companion"]
     end
 
-    subgraph scratch["Scratch 模式"]
-        AQ["/maestro-next<br>(quick analyze)"] --> PD["/maestro-next --dir"]
-        PD --> ED["/maestro-ralph continue --dir"]
+    subgraph standard["需要规划或门控"]
+        MS["/maestro"] --> MR["/maestro-ralph"]
     end
 
     subgraph lite["Lite 链"]

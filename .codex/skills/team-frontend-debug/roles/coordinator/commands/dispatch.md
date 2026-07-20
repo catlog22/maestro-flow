@@ -1,7 +1,5 @@
 
-<required_reading>
-@~/.maestro/workflows/run-mode.md
-</required_reading>
+> **Plan tracking**: codex 无 TaskCreate/TaskUpdate/TodoWrite 任务板。进度清单用 `update_plan({ explanation?, plan: [{ step, status }] })` 维护（整体提交步骤数组，status: `pending` | `in_progress` | `completed`），权威状态始终在 session 工件中；依赖/认领（addBlockedBy/owner）是工件字段，不是工具参数。
 # Dispatch Debug Tasks
 
 ## Workflow
@@ -31,7 +29,7 @@ EXPECTED: <artifact path> + <quality criteria>
 CONSTRAINTS: <scope limits>
 ---
 InnerLoop: <true|false>
-RoleSpec: ~  or <project>/.codex/skills/team-frontend-debug/roles/<role>/role.md
+RoleSpec: ~  or <project>/.claude/skills/team-frontend-debug/roles/<role>/role.md
 ```
 
 ---
@@ -57,7 +55,7 @@ EXPECTED: {run_dir}/outputs/TEST-001-report.md + {run_dir}/outputs/TEST-001-issu
 CONSTRAINTS: Use Chrome DevTools MCP only | Do not modify any code | Test all listed features
 ---
 InnerLoop: true
-RoleSpec: ~  or <project>/.codex/skills/team-frontend-debug/roles/tester/role.md
+RoleSpec: ~  or <project>/.claude/skills/team-frontend-debug/roles/tester/role.md
 ```
 
 ### ANALYZE-001 (Test Mode): Analyze Discovered Issues
@@ -77,7 +75,7 @@ EXPECTED: {run_dir}/outputs/ANALYZE-001-rca.md with root causes for all issues
 CONSTRAINTS: Read-only analysis | Skip low-severity warnings unless user requests
 ---
 InnerLoop: false
-RoleSpec: ~  or <project>/.codex/skills/team-frontend-debug/roles/analyzer/role.md
+RoleSpec: ~  or <project>/.claude/skills/team-frontend-debug/roles/analyzer/role.md
 ```
 
 **Conditional**: If TEST-001 reports zero issues → skip ANALYZE-001, FIX-001, VERIFY-001. Pipeline completes.
@@ -98,7 +96,7 @@ EXPECTED: Modified source files + {run_dir}/outputs/FIX-001-changes.md
 CONSTRAINTS: Minimal changes per issue | Follow existing code style
 ---
 InnerLoop: true
-RoleSpec: ~  or <project>/.codex/skills/team-frontend-debug/roles/fixer/role.md
+RoleSpec: ~  or <project>/.claude/skills/team-frontend-debug/roles/fixer/role.md
 ```
 
 ### VERIFY-001 (Test Mode): Re-Test After Fix
@@ -119,7 +117,7 @@ EXPECTED: {run_dir}/outputs/VERIFY-001-report.md with pass/fail per previously-f
 CONSTRAINTS: Only re-test failed scenarios | Use Chrome DevTools MCP only
 ---
 InnerLoop: false
-RoleSpec: ~  or <project>/.codex/skills/team-frontend-debug/roles/verifier/role.md
+RoleSpec: ~  or <project>/.claude/skills/team-frontend-debug/roles/verifier/role.md
 ```
 
 ---
@@ -145,7 +143,7 @@ EXPECTED: {run_dir}/evidence/ directory with all captures + reproduction report
 CONSTRAINTS: Use Chrome DevTools MCP only | Do not modify any code
 ---
 InnerLoop: false
-RoleSpec: ~  or <project>/.codex/skills/team-frontend-debug/roles/reproducer/role.md
+RoleSpec: ~  or <project>/.claude/skills/team-frontend-debug/roles/reproducer/role.md
 ```
 
 ### ANALYZE-001 (Debug Mode): Root Cause Analysis
@@ -166,7 +164,7 @@ EXPECTED: {run_dir}/outputs/ANALYZE-001-rca.md with root cause, file:line, fix r
 CONSTRAINTS: Read-only analysis | Request more evidence if inconclusive
 ---
 InnerLoop: false
-RoleSpec: ~  or <project>/.codex/skills/team-frontend-debug/roles/analyzer/role.md
+RoleSpec: ~  or <project>/.claude/skills/team-frontend-debug/roles/analyzer/role.md
 ```
 
 ### FIX-001 (Debug Mode): Code Fix
@@ -185,7 +183,7 @@ EXPECTED: Modified source files + {run_dir}/outputs/FIX-001-changes.md
 CONSTRAINTS: Minimal changes | Follow existing code style | No breaking changes
 ---
 InnerLoop: true
-RoleSpec: ~  or <project>/.codex/skills/team-frontend-debug/roles/fixer/role.md
+RoleSpec: ~  or <project>/.claude/skills/team-frontend-debug/roles/fixer/role.md
 ```
 
 ### VERIFY-001 (Debug Mode): Fix Verification
@@ -205,7 +203,7 @@ EXPECTED: {run_dir}/outputs/VERIFY-001-report.md with pass/fail verdict
 CONSTRAINTS: Use Chrome DevTools MCP only | Same steps as reproduction
 ---
 InnerLoop: false
-RoleSpec: ~  or <project>/.codex/skills/team-frontend-debug/roles/verifier/role.md
+RoleSpec: ~  or <project>/.claude/skills/team-frontend-debug/roles/verifier/role.md
 ```
 
 ---
@@ -221,7 +219,7 @@ TASK: <specific evidence requests from Analyzer>
 CONTEXT: Session + Analyzer request
 ---
 InnerLoop: false
-RoleSpec: ~  or <project>/.codex/skills/team-frontend-debug/roles/reproducer/role.md
+RoleSpec: ~  or <project>/.claude/skills/team-frontend-debug/roles/reproducer/role.md
 ```
 
 ### FIX-002 (Either Mode): Re-Fix After Failed Verification
@@ -233,7 +231,7 @@ TASK: Review VERIFY-001 failure details, apply corrective fix
 CONTEXT: Session + VERIFY-001-report.md
 ---
 InnerLoop: true
-RoleSpec: ~  or <project>/.codex/skills/team-frontend-debug/roles/fixer/role.md
+RoleSpec: ~  or <project>/.claude/skills/team-frontend-debug/roles/fixer/role.md
 ```
 
 ## Conditional Skip Rules

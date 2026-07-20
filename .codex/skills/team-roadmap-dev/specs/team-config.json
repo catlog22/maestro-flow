@@ -2,7 +2,7 @@
   "team_name": "roadmap-dev",
   "team_display_name": "Roadmap Dev",
   "skill_name": "team-roadmap-dev",
-  "skill_path": "~  or <project>/.codex/skills/team-roadmap-dev/",
+  "skill_path": "~  or <project>/.claude/skills/team-roadmap-dev/",
   "design_source": "roadmap-driven development workflow design (2026-02-24)",
   "pipeline_type": "Phased",
   "pipeline": {

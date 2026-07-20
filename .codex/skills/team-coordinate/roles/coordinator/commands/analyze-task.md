@@ -1,7 +1,4 @@
 
-<required_reading>
-@~/.maestro/workflows/run-mode.md
-</required_reading>
 # Command: analyze-task
 
 ## Purpose
@@ -137,7 +134,7 @@ For each role, determine frontmatter and generation hints:
 | `inner_loop` | `true` if role has 2+ serial same-prefix tasks |
 | `CLI tools` | Suggested, not mandatory — coordinator may adjust based on task needs |
 | `pattern_hint` | Reference pattern name from role-spec-template (research/document/code/analysis/validation) — guides coordinator's Phase 2-4 composition, NOT a rigid template selector |
-| `output_type` | `artifact` (new files in session/artifacts/) / `codebase` (modify existing project files) / `mixed` (both) — determines verification strategy in Behavioral Traits |
+| `output_type` | `artifact` (new files in {run_dir}/outputs/) / `codebase` (modify existing project files) / `mixed` (both) — determines verification strategy in Behavioral Traits |
 | `message_types.success` | `<prefix>_complete` |
 | `message_types.error` | `error` |
 
@@ -215,7 +212,7 @@ Write `{run_dir}/work/team/task-analysis.json`:
   },
   "needs_research": false,
   "artifacts": [
-    { "name": "research-findings.md", "producer": "researcher", "path": "artifacts/research-findings.md" }
+    { "name": "research-findings.md", "producer": "researcher", "path": "outputs/research-findings.md" }
   ]
 }
 ```

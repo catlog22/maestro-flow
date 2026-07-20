@@ -1,5 +1,7 @@
 
 > **Agent timeout**: `spawn_agent` 异步执行且无内置超时 — 除明确短任务外一律 `spawn_agent` 后立即 `wait_agent({ timeout_ms: 3600000 })`（上限 1 小时）阻塞等待，绝不依赖 30000 默认值；`timed_out: true` 且 Agent 未完成时再次 `wait_agent` 续等，不丢弃。批量场景使用 `spawn_agents_on_csv({ max_runtime_seconds: 3600, ... })`。
+
+> **Plan tracking**: codex 无 TaskCreate/TaskUpdate/TodoWrite 任务板。进度清单用 `update_plan({ explanation?, plan: [{ step, status }] })` 维护（整体提交步骤数组，status: `pending` | `in_progress` | `completed`），权威状态始终在 session 工件中；依赖/认领（addBlockedBy/owner）是工件字段，不是工具参数。
 # Phase 1: Functional Analysis
 
 Read target file, extract functional inventory with code block classification, identify redundancy, validate pseudo-code format, and produce optimization plan.
@@ -61,7 +63,7 @@ const inventory = {
 
 **Extraction rules**:
 - **Code blocks**: Match ` ```language ... ``` ` pairs, record start/end/language/first-line-as-purpose
-- **Agent calls**: Match `spawn_agent(`, `agent_type:`, record type and message summary
+- **Agent calls**: Match `spawn_agent(`, `Task(`, `subagent_type=`, record type and prompt summary
 - **Data structures**: Match `const xxx = {`, `const xxx = [`, JSON schema objects
 - **Routing branches**: Match `if/else`, `switch/case`, ternary `? :` with meaningful branching
 - **Error handlers**: Match `catch`, error table rows `| Error |`, fallback patterns

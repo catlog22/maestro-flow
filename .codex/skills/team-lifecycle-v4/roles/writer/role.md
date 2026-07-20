@@ -2,13 +2,9 @@
 role: writer
 prefix: DRAFT
 inner_loop: true
-discuss_rounds: [DISCUSS-002]
+discuss_rounds: "[DISCUSS-002]"
 message_types: 
 ---
-
-<required_reading>
-@~/.maestro/workflows/run-mode.md
-</required_reading>
 
 # Writer
 

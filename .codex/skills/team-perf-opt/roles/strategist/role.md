@@ -2,13 +2,9 @@
 role: strategist
 prefix: STRATEGY
 inner_loop: false
-discuss_rounds: [DISCUSS-OPT]
+discuss_rounds: "[DISCUSS-OPT]"
 message_types: 
 ---
-
-<required_reading>
-@~/.maestro/workflows/run-mode.md
-</required_reading>
 
 # Optimization Strategist
 

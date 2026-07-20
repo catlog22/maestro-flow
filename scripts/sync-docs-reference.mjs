@@ -143,7 +143,7 @@ function generateReference() {
   out += 'For legacy v1 references, see `inventory.json` (v1 inventory). ';
   out += 'Key replacements:\n';
   out += '>\n';
-  out += '> - `/maestro-plan`, `/maestro-execute`, `/maestro-quick` → `/maestro`, `/maestro-next`, or `/maestro-ralph`\n';
+  out += '> - `/maestro-plan`, `/maestro-execute`, `/maestro-quick` → `/maestro`, `/maestro-next`, or `/maestro-companion`\n';
   out += '> - `/spec-add`, `/spec-load`, `/spec-remove`, `/spec-setup` → `/maestro-spec` subcommands\n';
   out += '> - `/manage-status`, `/manage-knowhow`, `/manage-issue`, `/manage-harvest` → `/maestro-manage` subcommands\n';
   out += '> - `/quality-review`, `/quality-test`, `/quality-debug` → `/maestro-ralph --engine swarm` or `/maestro-odyssey`\n';

@@ -17,6 +17,8 @@ session-mode: none
 version: 0.5.52
 ---
 
+> **Plan tracking**: codex 无 TaskCreate/TaskUpdate/TodoWrite 任务板。进度清单用 `update_plan({ explanation?, plan: [{ step, status }] })` 维护（整体提交步骤数组，status: `pending` | `in_progress` | `completed`），权威状态始终在 session 工件中；依赖/认领（addBlockedBy/owner）是工件字段，不是工具参数。
+
 # Codify to Knowhow
 
 通用 manifest 驱动的知识资产生成器。读取 `knowhow-manifest.json`，按声明创建 knowhow 文件和 spec 条目，通过 ref 建立索引-详文桥梁。

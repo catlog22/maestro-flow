@@ -96,6 +96,7 @@ Entry command for step \`${info.step}\` — a thin wrapper over the Run lifecycl
 1. \`maestro run prepare ${info.step}\` — read the returned pre-task thinking (purpose, contract, boundaries, risks) before doing anything. Note the returned \`workflow.path\`.
 2. Follow run-mode.md: compose an ASCII session slug \`YYYYMMDD-${info.step}-{topic}\`, then run:
    \`maestro run create ${info.step} --session <slug> --intent "<one-line goal>" -- $ARGUMENTS\`
+   \`--intent\` is Session metadata only and never enters the target command's \`Run input.args\`. When the command contract or \`argument-hint\` requires inputs, pass them with repeatable \`--arg <value>\` or after \`--\` using the \`-- <args...>\` form shown above.
    Retain the returned \`run_id\`, \`run_dir\`, and \`upstream\`.
 3. (Optional) \`maestro run brief <run_id>\` — re-attach the execution manual, goals, gate status, and upstream handoff. Recommended when resuming a Run or consuming upstream artifacts; a fresh Run with no upstream may instead read \`workflow.path\` from step 1 directly and skip this.
 4. Execute the workflow completely. Write formal artifacts to \`{run_dir}/outputs/\`.

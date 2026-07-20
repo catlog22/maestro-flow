@@ -133,6 +133,7 @@ S_PLAY:
   → S_FALLBACK    WHEN: template not found / --list        DO: list templates from index.json
 
 S_CLASSIFY:
+  → END           WHEN: chain resolved as `companion`     DO: A_ROUTE_COMPANION
   → S_DECOMPOSE   WHEN: chain resolved                    DO: A_CLASSIFY_INTENT
   → S_FALLBACK    WHEN: no match AND auto_mode
   → S_CLASSIFY    WHEN: no match AND not auto_mode        DO: A_CLARIFY
@@ -141,7 +142,7 @@ S_CLASSIFY:
 S_DECOMPOSE:
   → S_CREATE      DO: A_DECOMPOSE_TASKS
                    GUARD: broad intent (重构/全面/重写/迁移/overhaul/migrate/rewrite) on a multi-step lifecycle chain → MUST clarify even if auto_mode
-                   GUARD: single-step chain OR narrow intent OR chain ∈ {status,init,quick} → skip decomposition (pass through)
+                   GUARD: single-step chain OR narrow intent OR chain ∈ {status,init} → skip decomposition (pass through)
 
 S_CREATE:
   → S_DRY_RUN     WHEN: --dry-run flag                    DO: A_CREATE_SESSION
@@ -272,6 +273,10 @@ Execute a saved workflow template through the ralph chain runner. Flags: `--cont
    - 已有 blueprint artifact → `plan --from blueprint:{BLP_ID}` → execute → quality pipeline
 4. 执行 step：`Bash("maestro ralph skills --platform claude --steps --json --quiet")` 预校验 skill 名（命中 command、skill 或 step 任一即通过；生命周期 step 名 analyze/plan/execute/… 由 `--steps` 步骤注册表命中），命中记录到内存链的 step（未命中标 `missing`，建 chain-file 前阻断）；同时记 `stage` / `goal_ref` / `args`。decision 节点携 `decision_ref`，不预校验 command_path
 
+### A_ROUTE_COMPANION
+
+输出 `/maestro-companion "{intent}"` 作为轻量任务入口；本命令不创建 Session/Run chain，也不把 companion 当作 chain step。
+
 ### A_CLARIFY
 
 1. `[@ask] AskUserQuestion` with parsed intent + available chain options
@@ -281,7 +286,7 @@ Execute a saved workflow template through the ralph chain runner. Flags: `--cont
 
 设 `session.decomposition_owner = "maestro"`。下游 ralph 只消费不二次提问（invariant 4）。Condensed:
 
-1. 分类意图广度。narrow / 单步 / `{status,init,quick}` 链跳过
+1. 分类意图广度。narrow / 单步 / `{status,init}` 链跳过
 2. broad/medium → `[@ask] AskUserQuestion` ≤3 轮：Scope / Constraints / Definition of Done
 3. 派生 `execution_criteria` + `task_decomposition`（每个 sub-goal 含 `done_when` + `evidence` + `lifecycle` + `completion_confirmed: false`）
 4. **session.json 唯一真源**：`boundary_contract` 随 `session create` 建入；`execution_criteria` / `task_decomposition` 装入 chain-file 的 `decomposition`（`execution_criteria` / `goals` / `changelog`）块；不生成 markdown 清单
@@ -423,7 +428,7 @@ post-analyze-scope 触发：读 macro analyze artifact → 提取 scope_verdict 
 
 经 `maestro session create` 建 session — **不直写 session.json**。
 
-0. **Specs 预检**：当 chain 包含 `analyze-macro` / `analyze` / `plan` / `execute` 等执行 stage 且 `.workflow/specs/` 目录不存在时，在 steps 最前面插入 `spec-setup`（stage=`spec-setup`，无 decision）。确保下游可获得项目约束规则注入。chain ∈ {grill, brainstorm, blueprint, init, status, quick} 时跳过
+0. **Specs 预检**：当 chain 包含 `analyze-macro` / `analyze` / `plan` / `execute` 等执行 stage 且 `.workflow/specs/` 目录不存在时，在 steps 最前面插入 `spec-setup`（stage=`spec-setup`，无 decision）。确保下游可获得项目约束规则注入。chain ∈ {grill, brainstorm, blueprint, init, status} 时跳过
 1. Read `.workflow/state.json` 获取 `active_session_id` / 匹配 `sessions[]`（含 D-007-S session 解析）；读最新 macro analyze artifact 取 `scope_verdict` + `analyze_macro_id`（如存在）；读最新 blueprint artifact 取 `blueprint_id`
 2. Validate: 所有 step 的 skill 名预校验通过（`command_scope != "missing"`），否则 raise E005 列出缺失 skill（建 chain-file 前阻断）
 3. 组装 chain-file JSON（内存链 → schema；`{session}`/`{intent}` 占位符由 A_STEP_RESOLVE_ARGS 运行时替换或直接 inline 已知值）：
@@ -492,7 +497,7 @@ post-analyze-scope 触发：读 macro analyze artifact → 提取 scope_verdict 
 - [ ] 主流程调 `maestro run complete --verdict`（免 run-id）上报（非 agent 上报）
 - [ ] Decision 节点通过 Agent 评估、经 `run decide` 落盘，不 handoff 到其他 skill
 - [ ] drift_score 分析：ALIGNED/MINOR_DRIFT → complete；MAJOR_DRIFT → needs-retry/done-with-concerns
-- [ ] Low-complexity intents routed to step `quick`
+- [ ] Low-complexity intents routed to `/maestro-companion`
 - [ ] (super) Requirements validated before roadmap
 - [ ] (super) Each session scored >= 80%
 - [ ] (compose) `--compose` produces a validated template (≤20 nodes, acyclic, no orphans) written to `~/.maestro/templates/workflows/` + index; drafts preserved on abandon

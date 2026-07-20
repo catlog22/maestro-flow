@@ -59,7 +59,7 @@ const commandPrefixes = ["/", "maestro-", "manage-", "quality-", "spec-", "learn
 // Known command names from catalog (without prefix)
 const knownCommands = [
   "maestro", "analyze", "plan", "execute", "init", "roadmap",
-  "brainstorm", "blueprint", "quick", "overlay", "fork", "merge", "collab",
+  "brainstorm", "blueprint", "overlay", "fork", "merge", "collab",
   "session-seal",
   "guard", "ralph",
   "grill", "next",

@@ -7,7 +7,7 @@
 
 import { isAbsolute, join, relative, resolve } from 'node:path';
 import { homedir } from 'node:os';
-import { writeFileSync, existsSync, readdirSync, statSync } from 'node:fs';
+import { writeFileSync, existsSync, readdirSync, statSync, unlinkSync } from 'node:fs';
 import { paths } from '../config/paths.js';
 import {
   scanComponents,
@@ -149,6 +149,10 @@ export async function executeInstallPipeline(opts: ExecutorOptions): Promise<Ins
   const disabledItems = scanDisabledItems(targetBase);
   const prior = findManifest(config.mode, targetPath);
   const globalPrior = config.mode === 'project' ? findManifest('global', paths.home) : null;
+  if (config.installComponents && config.selectedComponentIds.some((id) =>
+    id === 'workflows' || id === 'prepare' || id === 'commands' || id === 'commands-entry')) {
+    removeRetiredQuickArtifacts(targetBase, config.mode);
+  }
   progress('cleanup', 'done', prior ? 'prior state preserved' : 'clean slate');
 
   // --- Replacement manifest ---
@@ -173,7 +177,9 @@ export async function executeInstallPipeline(opts: ExecutorOptions): Promise<Ins
     knownComponentIds: scannedComponents.map((component) => component.def.id),
   });
   if (prior) {
-    copyPriorState(manifest, prior, (entry) => config.mode !== 'project' || !isPathWithin(paths.home, entry.path));
+    copyPriorState(manifest, prior, (entry) =>
+      !isRetiredQuickPath(entry.path)
+      && (config.mode !== 'project' || !isPathWithin(paths.home, entry.path)));
     await clearExplicitlyDisabledState(manifest, prior, config);
   }
   const sharedManifest = config.mode === 'project' && config.installComponents
@@ -187,9 +193,12 @@ export async function executeInstallPipeline(opts: ExecutorOptions): Promise<Ins
         knownComponentIds: scannedComponents.map((component) => component.def.id),
       })
     : null;
-  if (sharedManifest && globalPrior) copyPriorState(sharedManifest, globalPrior);
+  if (sharedManifest && globalPrior) {
+    copyPriorState(sharedManifest, globalPrior, (entry) => !isRetiredQuickPath(entry.path));
+  }
   if (sharedManifest && prior) {
-    for (const entry of prior.entries.filter((candidate) => isPathWithin(paths.home, candidate.path))) {
+    for (const entry of prior.entries.filter((candidate) =>
+      !isRetiredQuickPath(candidate.path) && isPathWithin(paths.home, candidate.path))) {
       if (entry.type === 'file') addFile(sharedManifest, entry.path);
       else addDir(sharedManifest, entry.path);
     }
@@ -522,6 +531,37 @@ async function clearExplicitlyDisabledState(
 function isPathWithin(root: string, candidate: string): boolean {
   const rel = relative(resolve(root), resolve(candidate));
   return rel === '' || (!rel.startsWith('..') && !isAbsolute(rel));
+}
+
+/**
+ * Remove files from the retired quick first-tier step during installation.
+ * Component installation is intentionally additive, so deleted package files
+ * would otherwise remain live after an upgrade.
+ */
+function removeRetiredQuickArtifacts(targetBase: string, mode: InstallFlowConfig['mode']): void {
+  const candidates = new Set([
+    join(paths.home, 'prepare', 'quick.md'),
+    join(paths.home, 'workflows', 'quick.md'),
+    join(targetBase, '.claude', 'commands', 'maestro-quick.md'),
+  ]);
+  if (mode === 'project') {
+    candidates.add(join(homedir(), '.claude', 'commands', 'maestro-quick.md'));
+  }
+  for (const candidate of candidates) {
+    try {
+      if (existsSync(candidate)) unlinkSync(candidate);
+    } catch {
+      // Installation remains best-effort; a later explicit uninstall can retry.
+    }
+  }
+}
+
+function isRetiredQuickPath(candidate: string): boolean {
+  const normalized = resolve(candidate).replaceAll('\\', '/').toLowerCase();
+  const maestroHome = resolve(paths.home).replaceAll('\\', '/').toLowerCase();
+  return normalized === `${maestroHome}/prepare/quick.md`
+    || normalized === `${maestroHome}/workflows/quick.md`
+    || normalized.endsWith('/.claude/commands/maestro-quick.md');
 }
 
 /**

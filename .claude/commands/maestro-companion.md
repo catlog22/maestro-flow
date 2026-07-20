@@ -56,7 +56,7 @@ $ARGUMENTS — intent text + optional flags.
 </context>
 
 <invariants>
-1. **Minimal-run lifecycle** — single Run in a chainless Session. Only `run create` + `run complete` lifecycle verbs apply. No prepare/brief/check, no contract enforcement (consumes/produces/gates all empty)
+1. **Minimal-run lifecycle** — single Run in a chainless Session. Only `run create` + `run complete` lifecycle verbs apply. No prepare/brief/check or artifact gates (consumes/produces/gates all empty); required command arguments are still validated by runtime
 2. **--note is append-only** — never overwrite or reorder existing entries
 3. **--promote delegates** — spec/knowhow promotion routes through `maestro-spec add` / `maestro-manage knowledge capture`, never writes directly
 4. **Evidence is non-formal** — `{run_dir}/evidence/companion-log.md` never enters gates or artifact registry
@@ -109,9 +109,9 @@ Entry point. Minimal-run: create + complete only, skip prepare/brief/check.
 
 1. **Create minimal run** (chainless single-step session):
    ```bash
-   maestro run create companion --session YYYYMMDD-companion-<topic> --intent "<intent>" --workflow-root .
+   maestro run create companion --session YYYYMMDD-companion-<topic> --intent "<intent>" --arg "<intent>" --workflow-root .
    ```
-   Returns: `run_id`, `run_dir`. No chain, no contract enforcement, no gates.
+   `--intent` preserves the goal as Session metadata; `--arg "<intent>"` supplies Companion's required `<intent>` command argument. Returns: `run_id`, `run_dir`. No chain or artifact gates; required command arguments remain runtime-validated.
 
 2. **Load context** (best-effort, non-blocking):
    ```bash

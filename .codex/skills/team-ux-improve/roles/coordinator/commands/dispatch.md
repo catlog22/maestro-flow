@@ -1,7 +1,5 @@
 
-<required_reading>
-@~/.maestro/workflows/run-mode.md
-</required_reading>
+> **Plan tracking**: codex 无 TaskCreate/TaskUpdate/TodoWrite 任务板。进度清单用 `update_plan({ explanation?, plan: [{ step, status }] })` 维护（整体提交步骤数组，status: `pending` | `in_progress` | `completed`），权威状态始终在 session 工件中；依赖/认领（addBlockedBy/owner）是工件字段，不是工具参数。
 # Dispatch Command
 
 ## Purpose
@@ -72,7 +70,7 @@ CONTEXT:
   - Scope: Project path: <project-path>, Framework: <framework>
   - File patterns: **/*.tsx, **/*.vue, **/*.jsx
   - Focus: UI components with user interactions
-EXPECTED: artifacts/scan-report.md with structured issue list (severity: High/Medium/Low, file:line, description, category)
+EXPECTED: {run_dir}/outputs/scan-report.md with structured issue list (severity: High/Medium/Low, file:line, description, category)
 CONSTRAINTS: Focus on interaction issues only, exclude styling/layout problems
 ---
 InnerLoop: false"
@@ -86,7 +84,7 @@ update_plan({
   subject: "DIAG-001",
   description: "PURPOSE: Diagnose root causes of identified UI issues | Success: Complete diagnosis report with fix recommendations for each issue
 TASK:
-  - Load scan report from artifacts/scan-report.md
+  - Load scan report from {run_dir}/outputs/scan-report.md
   - Analyze state management patterns (direct mutation vs reactive updates)
   - Trace event binding and propagation
   - Check async handling (promises, callbacks, error catching)
@@ -95,9 +93,9 @@ TASK:
 CONTEXT:
   - Session: {run_dir}/work/team
   - Scope: Issues from scan report
-  - Upstream artifacts: artifacts/scan-report.md
+  - Upstream artifacts: {run_dir}/outputs/scan-report.md
   - State: via team_msg(operation="get_state", role="scanner")
-EXPECTED: artifacts/diagnosis.md with root cause analysis (issue ID, root cause, pattern type, fix recommendation)
+EXPECTED: {run_dir}/outputs/diagnosis.md with root cause analysis (issue ID, root cause, pattern type, fix recommendation)
 CONSTRAINTS: Focus on actionable root causes, provide specific fix strategies
 ---
 InnerLoop: false"
@@ -111,7 +109,7 @@ update_plan({
   subject: "DESIGN-001",
   description: "PURPOSE: Design feedback mechanisms and state management solutions for identified issues | Success: Complete implementation guide with code patterns and examples
 TASK:
-  - Load diagnosis report from artifacts/diagnosis.md
+  - Load diagnosis report from {run_dir}/outputs/diagnosis.md
   - Design feedback mechanisms (loading/error/success states) for each issue
   - Design state management patterns (useState/ref, reactive updates)
   - Design input control improvements (file selectors, validation)
@@ -120,10 +118,10 @@ TASK:
 CONTEXT:
   - Session: {run_dir}/work/team
   - Scope: Issues from diagnosis report
-  - Upstream artifacts: artifacts/diagnosis.md
+  - Upstream artifacts: {run_dir}/outputs/diagnosis.md
   - Framework: <framework>
   - State: via team_msg(operation="get_state", role="diagnoser")
-EXPECTED: artifacts/design-guide.md with implementation guide (issue ID, solution design, code patterns, state management examples, UI binding templates)
+EXPECTED: {run_dir}/outputs/design-guide.md with implementation guide (issue ID, solution design, code patterns, state management examples, UI binding templates)
 CONSTRAINTS: Solutions must be framework-appropriate, provide complete working examples
 ---
 InnerLoop: false"
@@ -137,7 +135,7 @@ update_plan({
   subject: "IMPL-001",
   description: "PURPOSE: Generate fix code with proper state management, event handling, and UI feedback bindings | Success: All fixes implemented and validated
 TASK:
-  - Load design guide from artifacts/design-guide.md
+  - Load design guide from {run_dir}/outputs/design-guide.md
   - Extract implementation tasks from design guide
   - Generate fix code with proper state management (useState/ref)
   - Add event handlers with error catching
@@ -147,11 +145,11 @@ TASK:
 CONTEXT:
   - Session: {run_dir}/work/team
   - Scope: Fixes from design guide
-  - Upstream artifacts: artifacts/design-guide.md
+  - Upstream artifacts: {run_dir}/outputs/design-guide.md
   - Framework: <framework>
   - State: via team_msg(operation="get_state", role="designer")
   - Context accumulator: Load from prior IMPL tasks (inner loop)
-EXPECTED: artifacts/fixes/ directory with all fix files, implementation summary in artifacts/fixes/README.md
+EXPECTED: {run_dir}/outputs/fixes/ directory with all fix files, implementation summary in {run_dir}/outputs/fixes/README.md
 CONSTRAINTS: Maintain existing code style, ensure backward compatibility, validate all changes
 ---
 InnerLoop: true"
@@ -175,10 +173,10 @@ TASK:
 CONTEXT:
   - Session: {run_dir}/work/team
   - Scope: Fixes from implementer
-  - Upstream artifacts: artifacts/{run_dir}/outputs/fixes/, artifacts/design-guide.md
+  - Upstream artifacts: {run_dir}/outputs/fixes/, {run_dir}/outputs/design-guide.md
   - Framework: <framework>
   - State: via team_msg(operation="get_state", role="implementer")
-EXPECTED: artifacts/test-report.md with test results (pass/fail counts, coverage metrics, fix iterations, remaining issues)
+EXPECTED: {run_dir}/outputs/test-report.md with test results (pass/fail counts, coverage metrics, fix iterations, remaining issues)
 CONSTRAINTS: Pass rate threshold: 95%, max fix iterations: 5
 ---
 InnerLoop: false"

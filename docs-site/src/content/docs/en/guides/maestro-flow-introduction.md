@@ -45,7 +45,7 @@ Entry: /maestro-ralph (Adaptive Lifecycle Engine)
        │
        ├─→ Quality Pipeline: business-test → review → test-gen → test
        │
-       └─→ Quick Channel: /maestro-next | analyze -q → plan --dir → execute --dir
+       └─→ Lightweight Channel: /maestro-next (assess) → /maestro-companion (execute)
 ```
 
 ## Entry Commands
@@ -54,7 +54,7 @@ Entry: /maestro-ralph (Adaptive Lifecycle Engine)
 |---------|---------|
 | `/maestro-ralph` | Primary entry — adaptive lifecycle engine, auto-infers position, builds command chain |
 | `/maestro "..."` | Describe intent, AI auto-routes optimal command chain |
-| `/maestro-next` | Quick fixes, small features (analyze → plan → execute) |
+| `/maestro-next` | Classify intent and recommend Companion, a standard single Run, or `/maestro`; it does not execute a fixed chain |
 
 ## Quality Modes
 

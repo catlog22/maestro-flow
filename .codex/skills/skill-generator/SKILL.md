@@ -30,16 +30,26 @@ contract:
     exit: []
 ---
 
+> **Agent timeout**: `spawn_agent` 异步执行且无内置超时 — 除明确短任务外一律 `spawn_agent` 后立即 `wait_agent({ timeout_ms: 3600000 })`（上限 1 小时）阻塞等待，绝不依赖 30000 默认值；`timed_out: true` 且 Agent 未完成时再次 `wait_agent` 续等，不丢弃。批量场景使用 `spawn_agents_on_csv({ max_runtime_seconds: 3600, ... })`。
+
 <required_reading>
 @~/.maestro/workflows/run-mode.md
 @~/.maestro/workflows/codex-run-mode.md
 </required_reading>
 
-> **Agent timeout**: `spawn_agent` 异步执行且无内置超时 — 除明确短任务外一律 `spawn_agent` 后立即 `wait_agent({ timeout_ms: 3600000 })`（上限 1 小时）阻塞等待，绝不依赖 30000 默认值；`timed_out: true` 且 Agent 未完成时再次 `wait_agent` 续等，不丢弃。批量场景使用 `spawn_agents_on_csv({ max_runtime_seconds: 3600, ... })`。
-
 # Skill Generator
 
 Meta-skill for creating new Claude Code skills with configurable execution modes.
+
+## Run Lifecycle
+
+Follow `~/.maestro/workflows/run-mode.md`. If an orchestrator injected `run_id` / `run_dir` in the birth packet, use them and do NOT call `maestro run create`. Otherwise self-start before Phase 1:
+
+```bash
+maestro run create skill-generator --session <YYYYMMDD-skill-generator-{topic}> --intent "<short phrase>"
+```
+
+Session slug is ASCII-only, ≤64 chars. Retain the returned `run_id` and `run_dir`; all `{run_dir}/...` paths below refer to it. Close per Phase 5.
 
 ## Pre-load (before execution)
 
@@ -239,6 +249,7 @@ Phase 5: Validation & Documentation
    - Generate: README.md (usage instructions)
    - Generate: validation-report.json (completeness check)
    - Output: Final documentation
+   - Close the Run: `maestro run check {run_id}` → repair any reported gate → `maestro run complete {run_id}`. Report success only after completion.
 ```
 
 **Execution Protocol**:

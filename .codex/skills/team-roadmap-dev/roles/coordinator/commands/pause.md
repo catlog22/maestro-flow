@@ -1,7 +1,3 @@
-
-<required_reading>
-@~/.maestro/workflows/run-mode.md
-</required_reading>
 # Command: pause
 
 ## Purpose
@@ -74,7 +70,7 @@ const summary = `[coordinator] Session paused.
 - Gap Iteration: ${gapIteration}
 - Pending Tasks: ${pendingTasks.length}
 
-To resume: spawn_agent({ task_name: "team_roadmap_dev", message: "Execute skill team-roadmap-dev, args: "--resume ${sessionFolder}"" })
+To resume: spawn_agent({ task_name: "team_roadmap_dev", message: "Execute skill team-roadmap-dev, args: --resume ${sessionFolder}" })
 `
 ```
 

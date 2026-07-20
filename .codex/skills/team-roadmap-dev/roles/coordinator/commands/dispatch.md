@@ -1,7 +1,5 @@
 
-<required_reading>
-@~/.maestro/workflows/run-mode.md
-</required_reading>
+> **Plan tracking**: codex 无 TaskCreate/TaskUpdate/TodoWrite 任务板。进度清单用 `update_plan({ explanation?, plan: [{ step, status }] })` 维护（整体提交步骤数组，status: `pending` | `in_progress` | `completed`），权威状态始终在 session 工件中；依赖/认领（addBlockedBy/owner）是工件字段，不是工具参数。
 # Command: dispatch
 
 ## Purpose
@@ -62,7 +60,7 @@ ${phaseSuccessCriteria.map(c => `- ${c}`).join('\n')}
 - ${sessionFolder}/outputs/phase-${phaseNumber}/plan-01.md (execution plan with waves and must_haves)
 
 ## Instructions
-1. Invoke spawn_agent({ task_name: "team_roadmap_dev", message: "Execute skill team-roadmap-dev, args: "--role=planner"" })
+1. Invoke spawn_agent({ task_name: "team_roadmap_dev", message: "Execute skill team-roadmap-dev, args: --role=planner" })
 2. Follow planner role.md research + create-plans commands
 3. Use roadmap requirements as input for plan generation
 4. update_plan this task to completed when plan is written`,
@@ -88,7 +86,7 @@ ${phaseGoal}
 - ${sessionFolder}/outputs/phase-${phaseNumber}/plan-01.md (and any additional plans)
 
 ## Instructions
-1. Invoke spawn_agent({ task_name: "team_roadmap_dev", message: "Execute skill team-roadmap-dev, args: "--role=executor"" })
+1. Invoke spawn_agent({ task_name: "team_roadmap_dev", message: "Execute skill team-roadmap-dev, args: --role=executor" })
 2. Follow executor role.md implement command
 3. Execute all plans in wave order
 4. Write summary to ${sessionFolder}/outputs/phase-${phaseNumber}/summary-01.md
@@ -123,7 +121,7 @@ ${phaseSuccessCriteria.map(c => `- ${c}`).join('\n')}
 - Summaries: ${sessionFolder}/outputs/phase-${phaseNumber}/summary-*.md
 
 ## Instructions
-1. Invoke spawn_agent({ task_name: "team_roadmap_dev", message: "Execute skill team-roadmap-dev, args: "--role=verifier"" })
+1. Invoke spawn_agent({ task_name: "team_roadmap_dev", message: "Execute skill team-roadmap-dev, args: --role=verifier" })
 2. Follow verifier role.md verify command
 3. Check each success criterion against actual implementation
 4. Write verification to ${sessionFolder}/outputs/phase-${phaseNumber}/verification.md

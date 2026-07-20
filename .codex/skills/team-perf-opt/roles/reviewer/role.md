@@ -2,14 +2,10 @@
 role: reviewer
 prefix: REVIEW
 inner_loop: false
-additional_prefixes: [QUALITY]
-discuss_rounds: [DISCUSS-REVIEW]
+additional_prefixes: "[QUALITY]"
+discuss_rounds: "[DISCUSS-REVIEW]"
 message_types: 
 ---
-
-<required_reading>
-@~/.maestro/workflows/run-mode.md
-</required_reading>
 
 # Optimization Reviewer
 

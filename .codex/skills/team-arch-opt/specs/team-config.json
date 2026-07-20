@@ -3,7 +3,7 @@
   "team_name": "arch-opt",
   "team_display_name": "Architecture Optimization",
   "skill_name": "team-arch-opt",
-  "skill_path": "~  or <project>/.codex/skills/team-arch-opt/",
+  "skill_path": "~  or <project>/.claude/skills/team-arch-opt/",
   "pipeline_type": "Linear with Review-Fix Cycle (Parallel-Capable)",
   "completion_action": "interactive",
   "has_inline_discuss": true,

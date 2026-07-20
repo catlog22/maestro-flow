@@ -3,7 +3,7 @@ title: "Maestro Commands Quick Reference"
 ---
 
 > Auto-generated from `inventory-v2.json` + `.claude/commands/*.md` frontmatter.
-> v2 (v0.5.51+): 17 commands across 10 categories.
+> v2 (v0.5.51+): 18 commands across 10 categories.
 > Do not edit by hand — run `npm run sync:docs-reference` to regenerate.
 
 ---
@@ -41,6 +41,14 @@ Adaptive lifecycle orchestrator — compose, dispatch ralph-executor agent, eval
 **Usage:** `<intent>|--list|--suggest [-y] [--dry-run]`
 
 Default interactive entry for development intents — recommend and execute one atomic step; multi-step work builds a user-confirmed manual-engine chain, walks stepwise, or hands off to /maestro
+
+**Invocation:** Automatic entrypoint and explicit slash command
+
+### `maestro-companion`
+
+**Usage:** `<intent> [--note <text>] [--promote] [-y]`
+
+Quick execution for small tasks — minimal Run lifecycle with direct execution and evidence recording
 
 **Invocation:** Automatic entrypoint and explicit slash command
 
@@ -256,9 +264,9 @@ User-invoked learning toolkit — guided reading, investigation, pattern extract
 
 ## v1 → v2 Migration
 
-> v0.5.51 consolidated 66 v1 commands into 17 v2 unified commands. For legacy v1 references, see `inventory.json` (v1 inventory). Key replacements:
+> v0.5.51 consolidated 66 v1 commands into 18 v2 unified commands. For legacy v1 references, see `inventory.json` (v1 inventory). Key replacements:
 >
-> - `/maestro-plan`, `/maestro-execute`, `/maestro-quick` → `/maestro`, `/maestro-next`, or `/maestro-ralph`
+> - `/maestro-plan`, `/maestro-execute`, `/maestro-quick` → `/maestro`, `/maestro-next`, or `/maestro-companion`
 > - `/spec-add`, `/spec-load`, `/spec-remove`, `/spec-setup` → `/maestro-spec` subcommands
 > - `/manage-status`, `/manage-knowhow`, `/manage-issue`, `/manage-harvest` → `/maestro-manage` subcommands
 > - `/quality-review`, `/quality-test`, `/quality-debug` → `/maestro-ralph --engine swarm` or `/maestro-odyssey`

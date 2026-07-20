@@ -1,4 +1,6 @@
 
+> **Plan tracking**: codex 无 TaskCreate/TaskUpdate/TodoWrite 任务板。进度清单用 `update_plan({ explanation?, plan: [{ step, status }] })` 维护（整体提交步骤数组，status: `pending` | `in_progress` | `completed`），权威状态始终在 session 工件中；依赖/认领（addBlockedBy/owner）是工件字段，不是工具参数。
+
 <required_reading>
 @~/.maestro/workflows/run-mode.md
 </required_reading>
@@ -245,14 +247,22 @@ Report to user:
 
 ## Output
 
-- **File**: `outputDir/main.tex` (or conference-specific name) -- complete manuscript
-- **File**: `outputDir/main.pdf` -- compiled PDF
-- **File**: `outputDir/references.bib` -- verified bibliography
+- **File**: `outputDir/main.tex` (or conference-specific name) -- complete manuscript (paper workspace)
+- **File**: `outputDir/main.pdf` -- compiled PDF (paper workspace)
+- **File**: `outputDir/references.bib` -- verified bibliography (paper workspace)
+- **Run**: Write the delivery manifest (paths above + verification/page status + remaining action items) to `{run_dir}/report.md`, and the delivery-paths list to `{run_dir}/outputs/`. See run-mode.md.
 - **update_plan**: Mark Phase 6 completed
 
 ## Completion
 
-The paper writing workflow is complete. The user now has:
+Close the Run before declaring completion (see run-mode.md):
+
+```bash
+maestro run check {run_id}     # repair any reported gate
+maestro run complete {run_id}
+```
+
+Report completion only after `run complete` succeeds. The user then has:
 1. A complete LaTeX manuscript formatted for their target conference
 2. A verified bibliography
 3. A list of any remaining action items

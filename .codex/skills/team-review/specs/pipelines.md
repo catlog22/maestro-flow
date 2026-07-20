@@ -76,27 +76,30 @@ SCAN-001 (quick=true)
 ## Session Directory
 
 ```
-{run_dir}/work/team/
-├── .msg/messages.jsonl          # Message bus log
-├── .msg/meta.json               # Session state + cross-role state
-├── wisdom/                     # Cross-task knowledge
-│   ├── learnings.md
-│   ├── decisions.md
-│   ├── conventions.md
-│   └── issues.md
-├── {run_dir}/outputs/scan/                       # Scanner output
-│   ├── toolchain-findings.json
-│   ├── semantic-findings.json
-│   └── scan-results.json
-├── {run_dir}/outputs/review/                     # Reviewer output
-│   ├── enriched-findings.json
-│   ├── review-report.json
-│   └── review-report.md
-└── {run_dir}/outputs/fix/                        # Fixer output
-    ├── fix-manifest.json
-    ├── fix-plan.json
-    ├── execution-results.json
-    ├── verify-results.json
-    ├── fix-summary.json
-    └── fix-summary.md
+{run_dir}/
+├── outputs/
+│   ├── scan/                   # Scanner output
+│   │   ├── toolchain-findings.json
+│   │   ├── semantic-findings.json
+│   │   └── scan-results.json
+│   ├── review/                 # Reviewer output
+│   │   ├── enriched-findings.json
+│   │   ├── review-report.json
+│   │   └── review-report.md
+│   └── fix/                    # Fixer output
+│       ├── fix-manifest.json
+│       ├── fix-plan.json
+│       ├── execution-results.json
+│       ├── verify-results.json
+│       ├── fix-summary.json
+│       └── fix-summary.md
+├── report.md                   # Human-readable synthesis + handoff
+└── work/team/                  # Team coordination (non-artifact)
+    ├── .msg/messages.jsonl     # Message bus log
+    ├── .msg/meta.json          # Message-bus state + cross-role state
+    └── wisdom/                 # Cross-task knowledge
+        ├── learnings.md
+        ├── decisions.md
+        ├── conventions.md
+        └── issues.md
 ```

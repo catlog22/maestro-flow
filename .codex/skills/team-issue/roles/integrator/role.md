@@ -2,12 +2,8 @@
 role: integrator
 prefix: MARSHAL
 inner_loop: false
-message_types: [queue_ready, conflict_found, error]
+message_types: "[queue_ready, conflict_found, error]"
 ---
-
-<required_reading>
-@~/.maestro/workflows/run-mode.md
-</required_reading>
 
 # Issue Integrator
 
@@ -48,7 +44,7 @@ MODE: analysis
 CONTEXT: @.workflow/issues/solutions/**/*.json | Memory: Issues to queue: <issueIds>
 
 EXPECTED: Queue JSON with: ordered issue list, conflict analysis, parallel_groups (issues that can run concurrently), depends_on relationships
-Write to: .workflow/issues/queue/execution-queue.json
+Write to: {run_dir}/outputs/queue/execution-queue.json
 
 CONSTRAINTS: Resolve file conflicts | Optimize for parallelism | Maintain dependency order
 \" --tool agy --mode analysis", { run_in_background: false })
@@ -57,7 +53,7 @@ CONSTRAINTS: Resolve file conflicts | Optimize for parallelism | Maintain depend
 **Parse queue result**:
 
 ```
-Read(".workflow/issues/queue/execution-queue.json")
+Read("{run_dir}/outputs/queue/execution-queue.json")
 ```
 
 **Queue schema**:

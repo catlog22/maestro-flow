@@ -389,7 +389,9 @@ describe('L2: MCP tool registration chain', () => {
     expect(registered).toContain('store_knowhow');
     expect(registered).toContain('team_task');
     expect(registered).toContain('team_agent');
-    expect(registered).toHaveLength(9);
+    expect(registered).toContain('maestro_wiki_search');
+    expect(registered).toContain('maestro_code_semantic_search');
+    expect(registered).toHaveLength(11);
   });
 
   it('all registered tools have valid schema (name, description, inputSchema)', async () => {

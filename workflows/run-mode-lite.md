@@ -8,7 +8,9 @@ Lightweight Session/Run lifecycle for team skills. Only two verbs: **create** an
 > **Dispatched by an orchestrator?** If the dispatch context already carries `run_id` / `run_dir` (a birth packet from `maestro run next` / `ralph next`), store them in `team-session.json` under `"run"` and do **NOT** call `maestro run create` — a second create mints an empty duplicate Run. The steps below apply only to a skill starting its own Run.
 
 1. Compose a session slug: `YYYYMMDD-<skill>-<topic>` — ASCII-only, ≤64 characters. NEVER let the runtime auto-generate from a Chinese or long intent string.
-2. Run `maestro run create <skill-name> --session <slug> --intent "<short phrase>"` before domain work.
+2. Run `maestro run create <skill-name> --session <slug> --intent "<short session goal>" [--arg "<required command input>"]` before domain work.
+   - `--intent` is **Session metadata only**. It does not enter `Run input.args` and does not satisfy the skill's command contract or `argument-hint`.
+   - When command inputs are required, pass them with repeatable `--arg <value>` or after `--` using the `-- <args...>` form. Runtime still validates every required command argument.
 3. Retain the returned `run_id`, `run_dir`. Merge them into `{run_dir}/work/team/team-session.json` under `"run": { "run_id": "<id>", "run_dir": "<path>" }`.
 
 ### Team State Authority

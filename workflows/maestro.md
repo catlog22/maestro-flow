@@ -38,7 +38,7 @@ Directly match user intent to the best `task_type` (maps to chain in chainMap). 
 
 | task_type | When user intent is about... |
 |-----------|---------------------------|
-| `quick` | Simple/small task, add a feature, quick change |
+| `companion` | Simple/small task with a mechanically clear intent and no artifact handoff |
 | `plan` | Plan, design, architect a phase |
 | `execute` | Implement, develop, code a phase (includes built-in verification gate) |
 | `analyze` | Understand, investigate, evaluate code |
@@ -92,8 +92,8 @@ Directly match user intent to the best `task_type` (maps to chain in chainMap). 
 4. Multiple lifecycle steps implied → prefer multi-step chains
 5. Single specific action → prefer single-step chains
 6. "问题" describing broken behavior → `debug`; tracked item with ISS-ID → `issue`; ambiguous → `debug`
-7. Simple task, no lifecycle context → `quick`
-8. Global fallback → `quick`
+7. Simple task, no lifecycle context → `companion` (route to `/maestro-companion`)
+8. Global fallback → `companion` (route to `/maestro-companion`)
 
 ## task_type → chain
 
@@ -178,7 +178,6 @@ const chainMap = {
   'issue_plan':         [{ cmd: 'plan', args: '--gaps' }],
   'issue_execute':      [{ cmd: 'execute', args: '' }],
   'knowhow':            [{ cmd: 'maestro-manage knowledge knowhow', args: '"{description}"' }],
-  'quick':              [{ cmd: 'quick', args: '"{description}"' }],
   'fork':               [{ cmd: 'maestro-fork', args: '-m {milestone_num}' }],
   'merge':              [{ cmd: 'maestro-merge', args: '-m {milestone_num}' }],
 
@@ -268,7 +267,7 @@ detectNextAction(state):
 | `"status"` | *(exact)* status | maestro-manage status |
 | `"plan phase 2"` | plan | plan 2 |
 | `"execute"` | execute | execute |
-| `"Add API endpoint"` | quick | quick |
+| `"Add API endpoint"` | companion | `/maestro-companion "Add API endpoint"` |
 | `"run tests"` | test | test |
 | `"debug auth crash"` | debug | debug "auth crash" |
 | `"修复登录问题"` | debug | debug "登录" |

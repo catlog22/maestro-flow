@@ -1,4 +1,6 @@
 
+> **Plan tracking**: codex 无 TaskCreate/TaskUpdate/TodoWrite 任务板。进度清单用 `update_plan({ explanation?, plan: [{ step, status }] })` 维护（整体提交步骤数组，status: `pending` | `in_progress` | `completed`），权威状态始终在 session 工件中；依赖/认领（addBlockedBy/owner）是工件字段，不是工具参数。
+
 <required_reading>
 @~/.maestro/workflows/run-mode.md
 </required_reading>
@@ -13,6 +15,16 @@
 - Initialize iteration-state.json
 
 ## Execution
+
+### Step 1.0: Establish Run (see run-mode.md)
+
+If an orchestrator injected `run_id` / `run_dir` in the birth packet, use them and do NOT call `maestro run create`. Otherwise self-start:
+
+```bash
+maestro run create skill-iter-tune --session <YYYYMMDD-skill-iter-tune-{topic}> --intent "<short phrase>"
+```
+
+Session slug is ASCII-only, ≤64 chars (topic derived from the target skill name). Retain the returned `run_id` and `run_dir`; the `{run_dir}/outputs/...` workspace below is created under it.
 
 ### Step 1.1: Parse Input
 

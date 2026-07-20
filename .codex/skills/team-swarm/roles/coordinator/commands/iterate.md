@@ -1,9 +1,7 @@
 
 > **Agent timeout**: `spawn_agent` 异步执行且无内置超时 — 除明确短任务外一律 `spawn_agent` 后立即 `wait_agent({ timeout_ms: 3600000 })`（上限 1 小时）阻塞等待，绝不依赖 30000 默认值；`timed_out: true` 且 Agent 未完成时再次 `wait_agent` 续等，不丢弃。批量场景使用 `spawn_agents_on_csv({ max_runtime_seconds: 3600, ... })`。
 
-<required_reading>
-@~/.maestro/workflows/run-mode.md
-</required_reading>
+> **Plan tracking**: codex 无 TaskCreate/TaskUpdate/TodoWrite 任务板。进度清单用 `update_plan({ explanation?, plan: [{ step, status }] })` 维护（整体提交步骤数组，status: `pending` | `in_progress` | `completed`），权威状态始终在 session 工件中；依赖/认领（addBlockedBy/owner）是工件字段，不是工具参数。
 # Command: iterate
 
 ## Two Entry Points
@@ -108,7 +106,25 @@ If all completed -> proceed.
 If `config.scoring.mode == "llm"`:
 
 ```
-spawn_agent({ task_name: "scorer_<k>", message: "<message>", fork_turns: "none", agent_type: "team_worker" })
+spawn_agent({
+  subagent_type: "team-worker",
+  team_name: "swarm",
+  name: "scorer-<k>",
+  run_in_background: true,
+  prompt: `## Role Assignment
+role: scorer
+role_spec: <skill_root>/roles/scorer/role.md
+session: <session_path>
+session_id: <run-id>
+team_name: swarm
+requirement: score iteration <k> ants
+inner_loop: false
+
+## Context
+Iteration to score: <k>
+Output file: {run_dir}/work/team/scores/iter-<k>-scores.json
+Read all artifacts: {run_dir}/outputs/ant-<k>-*.json`
+})
 ```
 
 STOP and await scorer callback. On callback resume at Step 3.
@@ -118,7 +134,7 @@ If `scoring.mode == "script"` or `"fallback"` -> proceed directly to Step 3.
 ### Step 3: Call aco.py update
 
 ```
-Bash: python <skill_root>/scripts/aco.py --session {run_dir}/work/team update --iter <k>
+Bash: python <skill_root>/scripts/aco.py --session {run_dir}/work/team --run-dir <run_dir> update --iter <k>
 ```
 
 Parse stdout JSON. Expected:

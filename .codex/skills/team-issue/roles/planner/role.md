@@ -2,13 +2,9 @@
 role: planner
 prefix: SOLVE
 inner_loop: false
-additional_prefixes: [SOLVE-fix]
-message_types: [solution_ready, multi_solution, error]
+additional_prefixes: "[SOLVE-fix]"
+message_types: "[solution_ready, multi_solution, error]"
 ---
-
-<required_reading>
-@~/.maestro/workflows/run-mode.md
-</required_reading>
 
 # Issue Planner
 
@@ -53,7 +49,7 @@ Complexity: <explorerContext.complexity_assessment>
 
 EXPECTED: Solution JSON with: issue_id, solution_id, approach, tasks (ordered list with descriptions), estimated_files, dependencies
 Write to: {run_dir}/outputs/solutions/solution-<issueId>.json
-Then record: `exec_command({ cmd: "maestro issue update <issueId> --fix-direction \"Solution: {run_dir}/outputs/solutions/solution-<issueId>.json\" --note \"Solution artifact created\" --json" })`
+Then record: `Bash("maestro issue update <issueId> --fix-direction \"Solution: {run_dir}/outputs/solutions/solution-<issueId>.json\" --note \"Solution artifact created\" --json")`
 
 CONSTRAINTS: Follow existing patterns | Minimal changes | Address reviewer feedback if SOLVE-fix task
 \" --tool agy --mode analysis", { run_in_background: false })

@@ -1,9 +1,7 @@
 
 > **Agent timeout**: `spawn_agent` 异步执行且无内置超时 — 除明确短任务外一律 `spawn_agent` 后立即 `wait_agent({ timeout_ms: 3600000 })`（上限 1 小时）阻塞等待，绝不依赖 30000 默认值；`timed_out: true` 且 Agent 未完成时再次 `wait_agent` 续等，不丢弃。批量场景使用 `spawn_agents_on_csv({ max_runtime_seconds: 3600, ... })`。
 
-<required_reading>
-@~/.maestro/workflows/run-mode.md
-</required_reading>
+> **Plan tracking**: codex 无 TaskCreate/TaskUpdate/TodoWrite 任务板。进度清单用 `update_plan({ explanation?, plan: [{ step, status }] })` 维护（整体提交步骤数组，status: `pending` | `in_progress` | `completed`），权威状态始终在 session 工件中；依赖/认领（addBlockedBy/owner）是工件字段，不是工具参数。
 # Monitor Pipeline
 
 ## Constants
@@ -60,7 +58,7 @@ Worker completed. Process and advance.
 
 5. **Deferred BUILD task creation** (when integrator completes):
    - If completed task is MARSHAL-* AND pipeline is batch:
-   - Read execution queue from `.workflow/issues/queue/execution-queue.json`
+   - Read execution queue from `{run_dir}/outputs/queue/execution-queue.json`
    - Parse parallel_groups to determine BUILD task count M
    - Create BUILD-001..M tasks dynamically (see dispatch.md Batch Pipeline BUILD section)
    - Proceed to handleSpawnNext
@@ -123,7 +121,30 @@ Find ready tasks, spawn workers, STOP.
    b. team_msg log -> task_unblocked
    c. Spawn team-worker (see SKILL.md Spawn Template):
       ```
-      spawn_agent({ task_name: "<role>", message: "Spawn <role> worker for <task-id>", fork_turns: "none", agent_type: "team_worker" })
+      spawn_agent({
+        subagent_type: "team-worker",
+        description: "Spawn <role> worker for <task-id>",
+        team_name: "issue",
+        name: "<role>",
+        run_in_background: true,
+        prompt: `## Role Assignment
+      role: <role>
+      role_spec: ~  or <project>/.claude/skills/team-issue/roles/<role>/role.md
+      session: {run_dir}/work/team
+      session_id: <run-id>
+      team_name: issue
+      requirement: <task-description>
+      inner_loop: false
+
+      ## Progress Milestones
+      session_id: <run-id>
+      Report progress via team_msg at natural phase boundaries (context loaded -> core work done -> verification).
+      Report blockers immediately via team_msg type="blocker".
+      Report completion via team_msg type="task_complete" after final send_message.
+
+      Read role_spec file to load Phase 2-4 domain instructions.
+      Execute built-in Phase 1 (task discovery) -> role Phase 2-4 -> built-in Phase 5 (report).`
+      })
       ```
    d. Add to active_workers
 
@@ -139,7 +160,30 @@ Find ready tasks, spawn workers, STOP.
 
 **Parallel spawn** (Batch mode with multiple ready tasks for same role):
 ```
-spawn_agent({ task_name: "<role>_<n>", message: "<message>", fork_turns: "none", agent_type: "team_worker" })
+spawn_agent({
+  subagent_type: "team-worker",
+  name: "<role>-<N>",
+  team_name: "issue",
+  run_in_background: true,
+  prompt: `## Role Assignment
+role: <role>
+role_spec: ~  or <project>/.claude/skills/team-issue/roles/<role>/role.md
+session: {run_dir}/work/team
+session_id: <run-id>
+team_name: issue
+requirement: <task-description>
+agent_name: <role>-<N>
+inner_loop: false
+
+## Progress Milestones
+session_id: <run-id>
+Report progress via team_msg at natural phase boundaries (context loaded -> core work done -> verification).
+Report blockers immediately via team_msg type="blocker".
+Report completion via team_msg type="task_complete" after final send_message.
+
+Read role_spec file to load Phase 2-4 domain instructions.
+Execute built-in Phase 1 (task discovery, owner=<role>-<N>) -> role Phase 2-4 -> built-in Phase 5 (report).`
+})
 ```
 
 6. Update session, output summary, STOP
@@ -157,7 +201,12 @@ Completion check by mode:
 
 1. Verify all tasks completed via list_agents()
 2. If any tasks not completed, return to handleSpawnNext
-3. If all completed -> transition to coordinator Phase 5
+3. Run lifecycle completion:
+   - Read run_id from team-session.json.run.run_id
+   - Write {run_dir}/report.md with frontmatter (verdict/summary/concerns)
+   - Run `maestro run complete <run_id>`
+   - If complete fails: fix the blocking gate and retry once; still failing -> do NOT archive/clean - keep the team active (status=paused) and report the blocking gate
+4. If all completed -> transition to coordinator Phase 5
 
 ## handleConsensus
 

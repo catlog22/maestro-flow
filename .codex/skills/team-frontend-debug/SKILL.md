@@ -11,7 +11,6 @@ allowed-tools:
   - Grep
   - Read
   - Write
-  - update_plan
   - followup_task
   - interrupt_agent
   - list_agents
@@ -21,6 +20,7 @@ allowed-tools:
   - send_message
   - spawn_agent
   - spawn_agents_on_csv
+  - update_plan
   - wait_agent
 session-mode: run
 version: 0.5.52
@@ -33,11 +33,11 @@ contract:
     exit: []
 ---
 
+> **Agent timeout**: `spawn_agent` 异步执行且无内置超时 — 除明确短任务外一律 `spawn_agent` 后立即 `wait_agent({ timeout_ms: 3600000 })`（上限 1 小时）阻塞等待，绝不依赖 30000 默认值；`timed_out: true` 且 Agent 未完成时再次 `wait_agent` 续等，不丢弃。批量场景使用 `spawn_agents_on_csv({ max_runtime_seconds: 3600, ... })`。
+
 <required_reading>
 @~/.maestro/workflows/run-mode-lite.md
 </required_reading>
-
-> **Agent timeout**: `spawn_agent` 异步执行且无内置超时 — 除明确短任务外一律 `spawn_agent` 后立即 `wait_agent({ timeout_ms: 3600000 })`（上限 1 小时）阻塞等待，绝不依赖 30000 默认值；`timed_out: true` 且 Agent 未完成时再次 `wait_agent` 续等，不丢弃。批量场景使用 `spawn_agents_on_csv({ max_runtime_seconds: 3600, ... })`。
 
 # Frontend Debug Team
 
@@ -46,7 +46,7 @@ Dual-mode frontend debugging: feature-list testing or bug-report debugging, powe
 ## Architecture
 
 ```
-spawn_agent({ task_name: "team_frontend_debug", message: "Execute skill team-frontend-debug, args: "feature list or bug description"" })
+spawn_agent({ task_name: "team_frontend_debug", message: "Execute skill team-frontend-debug, args: feature list or bug description" })
                     |
          SKILL.md (this file) = Router
                     |
@@ -111,7 +111,7 @@ Parse `$ARGUMENTS`:
 Coordinator MUST resolve paths at Phase 2 before TeamCreate:
 
 1. Run `Bash({ command: "pwd" })` → capture `project_root` (absolute path)
-2. `skill_root = <project_root>/.codex/skills/team-frontend-debug`
+2. `skill_root = <project_root>/.claude/skills/team-frontend-debug`
 3. Store in `team-session.json`:
    ```json
    { "project_root": "/abs/path/to/project", "skill_root": "/abs/path/to/skill" }
@@ -148,7 +148,30 @@ All browser inspection operations use Chrome DevTools MCP. Reproducer and Verifi
 Coordinator spawns workers using this template:
 
 ```
-spawn_agent({ task_name: "<role>", message: "Spawn <role> worker", fork_turns: "none", agent_type: "team_worker" })
+spawn_agent({
+  subagent_type: "team-worker",
+  description: "Spawn <role> worker",
+  team_name: <team-name>,
+  name: "<role>",
+  run_in_background: true,
+  prompt: `## Role Assignment
+role: <role>
+role_spec: <skill_root>/roles/<role>/role.md
+session: {run_dir}/work/team
+session_id: <run-id>
+team_name: <team-name>
+requirement: <task-description>
+inner_loop: <true|false>
+
+## Progress Milestones
+session_id: <run-id>
+Report progress via team_msg at natural phase boundaries (context loaded -> core work done -> verification).
+Report blockers immediately via team_msg type="blocker".
+Report completion via team_msg type="task_complete" after final send_message.
+
+Read role_spec file (@<skill_root>/roles/<role>/role.md) to load Phase 2-4 domain instructions.
+Execute built-in Phase 1 (task discovery) -> role Phase 2-4 -> built-in Phase 5 (report).`
+})
 ```
 
 ## User Commands
@@ -191,7 +214,7 @@ request_user_input({
 {run_dir}/work/team/
 ├── team-session.json           # Session state + role registry
 ├── {run_dir}/evidence/evidence/                   # Screenshots, snapshots, network logs
-├── artifacts/                  # Test reports, RCA reports, patches, verification reports
+├── {run_dir}/outputs/          # Run deliverables: test reports, RCA reports, patches, verification reports
 ├── wisdom/                     # Cross-task debug knowledge
 └── .msg/                       # Team message bus
 ```

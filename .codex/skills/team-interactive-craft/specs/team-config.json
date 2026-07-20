@@ -98,7 +98,7 @@
     "base": "{run_dir}/work/team/",
     "research": "{run_dir}/outputs/research/",
     "interaction": "{run_dir}/outputs/interaction/blueprints/",
-    "build": "{run_dir}/outputs/build/",
+    "build": "{run_dir}/outputs/build/components/",
     "a11y": "{run_dir}/outputs/a11y/",
     "messages": "{run_dir}/work/team/.msg/"
   }

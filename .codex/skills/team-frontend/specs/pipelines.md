@@ -68,9 +68,9 @@ Analyst role invokes ui-ux-pro-max via Skill to obtain industry design intellige
 
 | Action | Invocation |
 |--------|------------|
-| Full design system | `spawn_agent({ task_name: "ui_ux_pro_max", message: "Execute skill ui-ux-pro-max, args: "<industry> <keywords> --design-system"" })` |
-| Domain search | `spawn_agent({ task_name: "ui_ux_pro_max", message: "Execute skill ui-ux-pro-max, args: "<query> --domain <domain>"" })` |
-| Tech stack guidance | `spawn_agent({ task_name: "ui_ux_pro_max", message: "Execute skill ui-ux-pro-max, args: "<query> --stack <stack>"" })` |
+| Full design system | `spawn_agent({ task_name: "ui_ux_pro_max", message: "Execute skill ui-ux-pro-max, args: <industry> <keywords> --design-system" })` |
+| Domain search | `spawn_agent({ task_name: "ui_ux_pro_max", message: "Execute skill ui-ux-pro-max, args: <query> --domain <domain>" })` |
+| Tech stack guidance | `spawn_agent({ task_name: "ui_ux_pro_max", message: "Execute skill ui-ux-pro-max, args: <query> --stack <stack>" })` |
 
 **Supported Domains**: product, style, typography, color, landing, chart, ux, web
 **Supported Stacks**: html-tailwind, react, nextjs, vue, svelte, shadcn, swiftui, react-native, flutter
