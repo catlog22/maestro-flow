@@ -17,6 +17,18 @@ interface ChangelogEntry {
 
 const changelog: ChangelogEntry[] = [
   {
+    version: '0.5.53',
+    date: '2026-07',
+    changes: [
+      { type: 'feat', text_en: 'Upgrade Session/Run to session/1.3 and command-run/1.3 with topic identity, reuse assessment, paused recovery, mutation receipts, and release-machine parity gates', text_zh: 'Session/Run 升级到 session/1.3 与 command-run/1.3，补齐 topic identity、reuse assessment、paused recovery、mutation receipt 与 release-machine parity 门禁' },
+      { type: 'refactor', text_en: 'Split development entrypoints into Companion for lightweight direct execution, Next for pure routing, and Maestro for multi-step manual or Ralph orchestration', text_zh: '开发入口分层为：Companion 负责轻量直接执行、Next 负责纯路由、Maestro 负责 manual/Ralph 多步编排' },
+      { type: 'refactor', text_en: 'Retire the first-tier quick step and route quick, small, and ad-hoc intents directly to /maestro-companion', text_zh: '退休 first-tier quick step，将 quick、small、ad-hoc 意图直接路由到 /maestro-companion' },
+      { type: 'fix', text_en: 'Harden SessionStore replay, Windows lock recovery, recall confirmation, artifact template scanning, and TOCTOU validation', text_zh: '加固 SessionStore replay、Windows 锁恢复、recall confirmation、artifact template 扫描与 TOCTOU 校验' },
+      { type: 'fix', text_en: 'Clean retired quick assets during installation and package first-tier prepare contracts for fresh consumers', text_zh: '安装升级时清理退休 quick 资产，并为 fresh consumer 正确打包 first-tier prepare contracts' },
+      { type: 'docs', text_en: 'Add the Session/Run architecture guide and remove stale documentation that described Maestro Next as a fixed analyze-plan-execute quick chain', text_zh: '新增 Session/Run architecture 指南，并移除将 Maestro Next 描述为固定 analyze-plan-execute quick chain 的旧文案' },
+    ],
+  },
+  {
     version: '0.5.52',
     date: '2026-07',
     changes: [
