@@ -4,3 +4,8 @@
 
 # Activity log is append-only; union merge preserves lines from both sides.
 .workflow/collab/activity.jsonl merge=union
+
+# Generated docs and cross-platform mirrors are byte-compared in release gates.
+# Keep their text stable in Windows fresh checkouts.
+*.md text eol=lf
+*.toml text eol=lf
