@@ -160,7 +160,8 @@ const checkMode = process.argv.includes('--check');
 
 if (checkMode) {
   const existing = existsSync(referencePath) ? readFileSync(referencePath, 'utf8') : '';
-  if (existing !== newContent) {
+  const normalizedExisting = existing.replace(/\r\n?/g, '\n');
+  if (normalizedExisting !== newContent) {
     console.error('✗ reference.md is out of sync with inventory-v2.json + .claude/commands/');
     console.error('  Run: npm run sync:docs-reference');
     process.exit(1);
