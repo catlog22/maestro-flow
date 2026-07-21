@@ -41,7 +41,7 @@ function wikiEntry(id: string, tags: string[], overrides: Partial<WikiEntry> = {
   };
 }
 
-describe('search artifact kind facet', () => {
+describe('search tag facet', () => {
   beforeEach(() => {
     daemonSearch.mockReset();
     daemonSearch.mockResolvedValue({
@@ -55,17 +55,18 @@ describe('search artifact kind facet', () => {
     });
   });
 
-  it('filters unified wiki results by exact artifact kind tag', async () => {
-    const results = await runUnifiedSearch('searchable', { kind: 'diagnosis', limit: 20, skipEmbedding: true });
+  it('filters unified wiki results by exact tag', async () => {
+    const results = await runUnifiedSearch('searchable', { tag: 'diagnosis', limit: 20, skipEmbedding: true });
 
     expect(results.map(result => result.id)).toEqual(['diagnosis-run']);
   });
 
-  it('registers --kind as a CLI option', () => {
+  it('registers --tag and --kind (alias) as CLI options', () => {
     const program = new Command();
     registerSearchCommand(program);
 
     const search = program.commands.find(command => command.name() === 'search');
+    expect(search?.options.some(option => option.long === '--tag')).toBe(true);
     expect(search?.options.some(option => option.long === '--kind')).toBe(true);
   });
 });

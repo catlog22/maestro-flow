@@ -97,6 +97,7 @@ export function registerLoadCommand(program: Command): void {
     .option('--id <ids>', 'Load specific entries by ID (comma-separated)')
     .option('--category <cat>', 'Filter by category (e.g. coding, arch, debug, recipe)')
     .option('--keyword <word>', 'Filter entries by keyword in title/body')
+    .option('--tag <tag>', 'Filter entries by exact tag match')
     .option('--list', 'List matching entries (compact, no body)')
     .option('--scope <scope>', 'Spec scope: project|global|team|personal (default: project)')
     .option('--limit <n>', 'Max entries (default: 20 for --list, 10 for load)', '')
@@ -154,9 +155,12 @@ export function registerLoadCommand(program: Command): void {
           const kw = opts.keyword.toLowerCase();
           pool = pool.filter(e =>
             e.title.toLowerCase().includes(kw) ||
-            e.body.toLowerCase().includes(kw) ||
-            e.tags.some(t => t.toLowerCase().includes(kw)),
+            e.body.toLowerCase().includes(kw),
           );
+        }
+        if (opts.tag) {
+          const tag = opts.tag.toLowerCase();
+          pool = pool.filter(e => e.tags.includes(tag));
         }
 
         if (type === 'session' || type === 'scratch') {

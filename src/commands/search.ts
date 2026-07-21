@@ -90,7 +90,8 @@ export function codeIndexHint(status: CodeIndexStatus): string | null {
 export interface UnifiedSearchOptions {
   type?: string;
   category?: string;
-  kind?: string;
+  tag?: string;
+  keyword?: string;
   workspace?: string;
   limit: number;
   /** Include entries with status="deprecated" (superseded). Default: excluded. */
@@ -135,7 +136,7 @@ export async function runUnifiedSearch(q: string, opts: UnifiedSearchOptions & {
   const limit = opts.limit > 0 ? opts.limit : 20;
   // Facet filters run after candidate truncation — widen the pool when any
   // facet is active so narrow queries don't starve to 0 results (G-C3).
-  const hasFacet = Boolean(opts.type || opts.category || opts.kind || opts.workspace);
+  const hasFacet = Boolean(opts.type || opts.category || opts.tag || opts.keyword || opts.workspace);
   const candidateLimit = hasFacet ? Math.max(limit * 2, 200) : Math.max(limit * 2, 40);
 
   // Try daemon first (warm ONNX model, no cold-start penalty)
@@ -180,9 +181,16 @@ export async function runUnifiedSearch(q: string, opts: UnifiedSearchOptions & {
     filtered = filtered.filter(r => r.entry.category === opts.category);
   }
   // Tags are lowercased at parse time — normalize user input to match (G-C10).
-  const kind = opts.kind?.toLowerCase();
-  if (kind) {
-    filtered = filtered.filter(r => r.entry.tags.includes(kind));
+  const tag = opts.tag?.toLowerCase();
+  if (tag) {
+    filtered = filtered.filter(r => r.entry.tags.includes(tag));
+  }
+  if (opts.keyword) {
+    const kw = opts.keyword.toLowerCase();
+    filtered = filtered.filter(r =>
+      r.entry.title.toLowerCase().includes(kw) ||
+      r.entry.body.toLowerCase().includes(kw),
+    );
   }
   if (opts.workspace) {
     filtered = filtered.filter(r => r.entry.source.workspace === opts.workspace);
@@ -193,7 +201,7 @@ export async function runUnifiedSearch(q: string, opts: UnifiedSearchOptions & {
   }
 
   // CATEGORY_CAPS only when user didn't explicitly select a wiki facet.
-  const applyCaps = !opts.type && !opts.category && !opts.kind;
+  const applyCaps = !opts.type && !opts.category && !opts.tag && !opts.keyword;
   // Per-parent cap: a container entry and its -NNN chunks share a parent key.
   // Keep the top 2 per parent — one file cannot flood top-N, while chunk hits
   // (a documented load-the-parent workflow) stay visible (G-C11).
@@ -389,7 +397,9 @@ export function registerSearchCommand(program: Command): void {
     .description('Unified knowledge search across wiki + code (mixed by default)')
     .option('--type <type>', `Filter by type: ${VALID_TYPES.join(', ')}`)
     .option('--category <cat>', 'Filter by category (e.g. coding, arch, debug, test, review, learning)')
-    .option('--kind <kind>', 'Filter wiki artifacts by exact kind tag (wiki only)')
+    .option('--tag <tag>', 'Filter wiki entries by exact tag match (wiki only)')
+    .option('--kind <kind>', 'Alias for --tag (deprecated)')
+    .option('--keyword <word>', 'Filter wiki entries by keyword in title/body (wiki only)')
     .option('--code', 'Code graph results only (no wiki)')
     .option('--kg', 'KG unified search (MaestroGraph full-source)')
     .option('--all', 'Alias for default mixed mode (backward compat)')
@@ -402,7 +412,8 @@ export function registerSearchCommand(program: Command): void {
     .action(async (queryParts: string[], opts) => {
       const q = queryParts.join(' ');
       const limit = parseInt(opts.limit, 10) || 20;
-      const wikiOnly = opts.wikiOnly === true || typeof opts.kind === 'string';
+      const resolvedTag = opts.tag ?? opts.kind;
+      const wikiOnly = opts.wikiOnly === true || typeof resolvedTag === 'string' || typeof opts.keyword === 'string';
       const codeOnly = opts.code === true && !opts.all;
       const kgMode = opts.kg === true;
 
@@ -410,12 +421,20 @@ export function registerSearchCommand(program: Command): void {
         console.error(`Error: --type must be one of ${VALID_TYPES.join(', ')} (got "${opts.type}")`);
         process.exit(1);
       }
-      if (opts.kind && opts.code) {
-        console.error('Error: --kind is a wiki artifact facet and cannot be combined with --code');
+      if (resolvedTag && opts.code) {
+        console.error('Error: --tag is a wiki facet and cannot be combined with --code');
         process.exit(1);
       }
-      if (opts.kind && kgMode) {
-        console.error('Error: --kind is a wiki artifact facet and cannot be combined with --kg');
+      if (resolvedTag && kgMode) {
+        console.error('Error: --tag is a wiki facet and cannot be combined with --kg');
+        process.exit(1);
+      }
+      if (opts.keyword && opts.code) {
+        console.error('Error: --keyword is a wiki facet and cannot be combined with --code');
+        process.exit(1);
+      }
+      if (opts.keyword && kgMode) {
+        console.error('Error: --keyword is a wiki facet and cannot be combined with --kg');
         process.exit(1);
       }
 
@@ -452,7 +471,7 @@ export function registerSearchCommand(program: Command): void {
 
       // Parallel: wiki + code search (skip irrelevant source based on flags)
       const [wikiResults, codeOutcome] = await Promise.all([
-        codeOnly ? [] : runUnifiedSearch(q, { type: opts.type, category: opts.category, kind: opts.kind, workspace: opts.workspace, limit, skipEmbedding, includeDeprecated: opts.includeDeprecated === true }),
+        codeOnly ? [] : runUnifiedSearch(q, { type: opts.type, category: opts.category, tag: resolvedTag, keyword: opts.keyword, workspace: opts.workspace, limit, skipEmbedding, includeDeprecated: opts.includeDeprecated === true }),
         wikiOnly ? { results: [], status: 'ok' as CodeIndexStatus } : runCodeSearch(q, limit, skipEmbedding),
       ]);
       const codeResults = codeOutcome.results;
