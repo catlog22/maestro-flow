@@ -353,7 +353,7 @@ export function mergeRRFSignals(
   }
   const merged: RankedResult[] = [];
   for (const [docId, score] of scores) merged.push({ docId, score });
-  merged.sort((a, b) => b.score - a.score);
+  merged.sort((a, b) => b.score - a.score || a.docId.localeCompare(b.docId));
   return merged.slice(0, limit);
 }
 
@@ -389,11 +389,12 @@ export function mergeHybrid(
     if (seen.has(r.docId)) continue;
     seen.add(r.docId);
     const rn = rrfNorm.get(r.docId) ?? 0;
-    const bn = bm25Norm.get(r.docId) ?? 0;
+    // Vector-only docs get a floor so pure semantic matches aren't capped at alpha*rrf.
+    const bn = bm25Norm.get(r.docId) ?? 0.15;
     merged.push({ docId: r.docId, score: alpha * rn + (1 - alpha) * bn });
   }
 
-  merged.sort((a, b) => b.score - a.score);
+  merged.sort((a, b) => b.score - a.score || a.docId.localeCompare(b.docId));
   return merged.slice(0, limit);
 }
 
@@ -692,7 +693,10 @@ export function vectorSearch(
   index: EmbeddingIndex,
   limit: number,
 ): VectorSearchResult[] {
-  if (index.dimension && queryVector.length !== index.dimension) return [];
+  if (index.dimension && queryVector.length !== index.dimension) {
+    console.error(`[embedding] dimension mismatch: query=${queryVector.length} index=${index.dimension} — falling back to BM25-only (rebuild with "maestro embedding rebuild")`);
+    return [];
+  }
   return flatCosineSearch(queryVector, index, limit);
 }
 
@@ -745,7 +749,7 @@ function flatCosineSearch(
     const sim = cosineSimilarity(queryVector, index.vectors[i]);
     if (sim > 0) scored.push({ docId: index.docIds[i], score: sim });
   }
-  scored.sort((a, b) => b.score - a.score);
+  scored.sort((a, b) => b.score - a.score || a.docId.localeCompare(b.docId));
   return scored.slice(0, limit);
 }
 

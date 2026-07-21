@@ -77,19 +77,23 @@ export async function handler(params: Record<string, unknown>): Promise<CcwToolR
     const daemonResult = await tryDaemonSearch(workflowRoot, query, limit, skipEmbedding);
 
     if (daemonResult?.ok && daemonResult.results) {
+      const embeddingUsed = daemonResult.embeddingUsed ?? false;
+      const maxScore = daemonResult.results.reduce((m, r) => Math.max(m, r.score), 0);
       const results = daemonResult.results.map((r) => ({
         id: r.entry.id,
         title: r.entry.title || 'Untitled',
         type: r.entry.type,
         scope: r.entry.scope || '',
-        score: r.score,
+        score: maxScore > 0 ? r.score / maxScore : 0,
+        rawScore: r.score,
         summary: (r.entry.summary || '').slice(0, 200),
       }));
       return {
         success: true,
         result: {
           results,
-          embeddingUsed: daemonResult.embeddingUsed ?? false,
+          embeddingUsed,
+          scoreScale: 'normalized-to-top',
           totalResults: results.length,
         },
       };
@@ -111,12 +115,14 @@ export async function handler(params: Record<string, unknown>): Promise<CcwToolR
       skipEmbedding: true,
     });
 
+    const maxScore = rawResults.reduce((m, r) => Math.max(m, r.score), 0);
     const results = rawResults.map((r) => ({
       id: r.entry.id,
       title: r.entry.title || 'Untitled',
       type: r.entry.type,
       scope: r.entry.scope || '',
-      score: r.score,
+      score: maxScore > 0 ? r.score / maxScore : 0,
+      rawScore: r.score,
       summary: (r.entry.summary || '').slice(0, 200),
     }));
 
@@ -125,6 +131,7 @@ export async function handler(params: Record<string, unknown>): Promise<CcwToolR
       result: {
         results,
         embeddingUsed,
+        scoreScale: 'normalized-to-top',
         totalResults: results.length,
       },
     };

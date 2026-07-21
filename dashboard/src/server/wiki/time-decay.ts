@@ -61,9 +61,8 @@ export function computeTimeDecayFactor(entry: WikiEntry, nowMs: number): number 
 }
 
 /**
- * Multiply each result's score by its time-decay factor and re-sort in place.
- * Ties break by descending original position is not preserved — sort is stable
- * on score only, matching the BM25 layer's convention.
+ * Multiply each result's score by its time-decay factor and re-sort.
+ * Ties break deterministically by entry id.
  */
 export function applyTimeDecay(
   results: Array<{ entry: WikiEntry; score: number }>,
@@ -72,6 +71,6 @@ export function applyTimeDecay(
   for (const r of results) {
     r.score *= computeTimeDecayFactor(r.entry, nowMs);
   }
-  results.sort((a, b) => b.score - a.score);
+  results.sort((a, b) => b.score - a.score || a.entry.id.localeCompare(b.entry.id));
   return results;
 }

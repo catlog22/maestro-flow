@@ -827,6 +827,6 @@ export function rerankByPhraseProximity(
     r.score *= (1 + Math.min(maxBoost, boost));
   }
 
-  results.sort((a, b) => b.score - a.score);
+  results.sort((a, b) => b.score - a.score || a.entry.id.localeCompare(b.entry.id));
   return results;
 }

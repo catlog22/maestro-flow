@@ -206,10 +206,14 @@ export async function runUnifiedSearch(q: string, opts: UnifiedSearchOptions & {
   // Keep the top 2 per parent — one file cannot flood top-N, while chunk hits
   // (a documented load-the-parent workflow) stay visible (G-C11).
   const PARENT_CAP = 2;
+  // kg-code symbol knowhow are code projections — code search already covers
+  // them; cap wiki-side presence so human knowledge isn't drowned out.
+  const KG_CODE_CAP = 3;
   const seen = new Set<string>();
   const deduped: typeof filtered = [];
   const catCounts = new Map<string, number>();
   const parentCounts = new Map<string, number>();
+  let kgCodeCount = 0;
   for (const r of filtered) {
     if (seen.has(r.entry.id)) continue;
     const parentKey = r.entry.id.replace(/-\d{2,3}$/, '');
@@ -222,6 +226,10 @@ export async function runUnifiedSearch(q: string, opts: UnifiedSearchOptions & {
         const count = catCounts.get(cat) ?? 0;
         if (count >= cap) continue;
         catCounts.set(cat, count + 1);
+      }
+      if (r.entry.id.startsWith('kg-code')) {
+        if (kgCodeCount >= KG_CODE_CAP) continue;
+        kgCodeCount++;
       }
     }
     seen.add(r.entry.id);
@@ -822,6 +830,8 @@ function codeLocation(r: CodeSearchResult): string {
 
 export interface MergedResult {
   source: 'wiki' | 'code';
+  /** Stable entry id — usable with `maestro load --id`. */
+  id: string;
   kind: string;
   name: string;
   detail: string;
@@ -868,11 +878,11 @@ const CODE_KIND_BOOST: Record<string, number> = {
 
 function isCodeIdentifier(query: string): boolean {
   const trimmed = query.trim();
+  if (/\s/.test(trimmed)) return false;
   if (/^[a-z]+[A-Z]/.test(trimmed)) return true;
   if (/^[A-Z][a-z]+[A-Z]/.test(trimmed)) return true;
   if (/^[A-Z]{2,}[a-z]/.test(trimmed)) return true;
   if (/^[a-z]+_[a-z]+/.test(trimmed)) return true;
-  if (/^[A-Z][a-zA-Z]+$/.test(trimmed) && !trimmed.includes(' ')) return true;
   return false;
 }
 
@@ -968,6 +978,7 @@ function mergeAndNormalize(wiki: SearchResult[], code: CodeSearchResult[], limit
     const r = wikiScored[i];
     merged.push({
       source: 'wiki',
+      id: r.id,
       kind: r.type,
       name: r.title,
       detail: r.category ? `${r.category}  ${r.id}` : r.id,
@@ -987,6 +998,7 @@ function mergeAndNormalize(wiki: SearchResult[], code: CodeSearchResult[], limit
     const r = codeScored[i];
     merged.push({
       source: 'code',
+      id: r.id,
       kind: r.kind,
       name: r.name,
       detail: codeLocation(r),
