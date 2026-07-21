@@ -35,6 +35,7 @@ const CONFIG_STEPS = [
   'codex_hooks_config', 'codex_mcp_config',
   'agy_hooks_config', 'extra_mcp_config',
   'statusline_config', 'backup_config', 'embedding_config',
+  'entry_commands_config',
 ];
 
 export function InstallFlow({ pkgRoot, version, initialStep, initialMode, initialStepIds, initialProjectPath }: InstallFlowProps) {

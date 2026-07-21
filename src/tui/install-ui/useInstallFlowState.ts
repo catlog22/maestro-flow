@@ -24,6 +24,7 @@ export type FlowStep =
   | 'codex_hooks_config' | 'codex_mcp_config'
   | 'agy_hooks_config' | 'extra_mcp_config'
   | 'statusline_config' | 'backup_config' | 'embedding_config'
+  | 'entry_commands_config'
   | 'confirm' | 'executing' | 'complete';
 
 export type FlowStepCompat = FlowStep | 'mode';
