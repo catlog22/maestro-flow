@@ -8,7 +8,7 @@ import {
   type RunCheckpoint,
   type SessionState,
 } from './schemas.js';
-import { SessionStore } from './store.js';
+import { SessionStore, type SessionBundle } from './store.js';
 
 export interface ResolvedRunContext {
   session_id: string;
@@ -19,6 +19,12 @@ export interface ResolvedRunContext {
   command_source_hash: string;
   goal_binding: GoalBinding | null;
   checkpoint: RunCheckpoint | null;
+}
+
+export interface ResolvedRunContextFull extends ResolvedRunContext {
+  run: CommandRun;
+  bundle: SessionBundle;
+  store: SessionStore;
 }
 
 export function resolveTargetPlatform(
@@ -60,6 +66,36 @@ export function resolveRunContext(
     command_source_hash: located.run.command.resolved_prompt_hash,
     goal_binding: located.run.goal_binding,
     checkpoint: located.run.checkpoint,
+  };
+}
+
+export function resolveRunContextFull(
+  projectRoot: string,
+  runId: string,
+  sessionId?: string,
+  platformOverride?: TargetPlatform,
+): ResolvedRunContextFull {
+  const store = new SessionStore(projectRoot);
+  const located = store.findRun(runId, sessionId);
+  const bundle = store.readBundle(located.sessionId);
+  const resolvedPlatform = resolveTargetPlatform(undefined, located.run, bundle.session);
+  if (platformOverride && platformOverride !== resolvedPlatform) {
+    throw new Error(
+      `Run ${runId} is bound to platform "${resolvedPlatform}"; cannot re-attach as "${platformOverride}"`,
+    );
+  }
+  return {
+    session_id: located.sessionId,
+    run_id: runId,
+    run_dir: canonicalRunDir(store, located.sessionId, runId),
+    chain_step_id: located.run.chain_step_id,
+    resolved_platform: resolvedPlatform,
+    command_source_hash: located.run.command.resolved_prompt_hash,
+    goal_binding: located.run.goal_binding,
+    checkpoint: located.run.checkpoint,
+    run: located.run,
+    bundle,
+    store,
   };
 }
 

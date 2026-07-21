@@ -68,7 +68,7 @@ import {
   nextPendingIndex,
   issueRetryToken,
 } from './chain.js';
-import { canonicalRunDir, resolveRunContext, resolveTargetPlatform } from './context.js';
+import { canonicalRunDir, resolveRunContext, resolveRunContextFull, resolveTargetPlatform } from './context.js';
 import { checkLease, claimLease, type LeaseClaim } from './lease.js';
 import {
   assertTransitionMutationRevisions,
@@ -655,7 +655,16 @@ function collectReusableUpstream(
   contract: CommandContract,
 ): CollectedReuse {
   if (contract.consumes.length === 0) return { upstream: {}, assessments: [] };
+  const consumedKinds = new Set(contract.consumes.map(c => c.kind));
+  const replacesIndex = new Map<string, string[]>();
+  for (const [id, artifact] of Object.entries(registry.artifacts)) {
+    if (artifact.replaces) {
+      const list = replacesIndex.get(artifact.replaces);
+      if (list) list.push(id); else replacesIndex.set(artifact.replaces, [id]);
+    }
+  }
   const candidates = Object.entries(registry.artifacts)
+    .filter(([, artifact]) => consumedKinds.has(artifact.kind))
     .map(([artifactId, artifact]) => {
       let producer: CommandRun | null = null;
       try { producer = store.readRun(session.session_id, artifact.producer_run_id); } catch { /* assessed as unavailable */ }
@@ -676,9 +685,7 @@ function collectReusableUpstream(
       : matchingKind;
     const assessed = scopedCandidates.map(item => {
       const producer = item.producer!;
-      const supersededBy = Object.entries(registry.artifacts)
-        .filter(([, candidate]) => candidate.replaces === item.artifactId)
-        .map(([id]) => id);
+      const supersededBy = replacesIndex.get(item.artifactId) ?? [];
       const acceptedSchemas = consume.schema
         ? [consume.schema]
         : (contract.contract_version ?? 1) === 1 ? [item.artifact.schema_version] : [];
@@ -835,6 +842,7 @@ function revalidateRunReuse(
   store: SessionStore,
   bundle: SessionBundle,
   run: CommandRun,
+  contract?: CommandContract,
 ): RevalidatedRunReuse {
   const stored = (run.input.reuse_assessments ?? []) as ReuseAssessment[];
   if (stored.length === 0) {
@@ -850,7 +858,7 @@ function revalidateRunReuse(
     bundle.session,
     bundle.artifacts,
     bundle.gates,
-    contractForRun(projectRoot, run).contract,
+    contract ?? contractForRun(projectRoot, run).contract,
   );
   const upstream: Record<string, RunUpstream> = {};
   const assessments: ReuseAssessment[] = [];
@@ -1161,6 +1169,20 @@ function handoffByLatestCompleted(store: SessionStore, session: SessionState): P
   } catch {
     return null;
   }
+}
+
+/** Fast-path-first handoff lookup: O(1) via latest_completed_run_id, fallback to full scan. */
+function handoffBeforeSequence(store: SessionStore, session: SessionState, beforeSequence: number): PrevHandoff | null {
+  const latestId = session.latest_completed_run_id;
+  if (latestId) {
+    try {
+      const latestRun = store.readRun(session.session_id, latestId);
+      if (latestRun.handoff && latestRun.sequence < beforeSequence) {
+        return toPrevHandoff(latestRun.handoff);
+      }
+    } catch { /* fall through to scan */ }
+  }
+  return latestHandoffBefore(store, session.session_id, beforeSequence);
 }
 
 /**
@@ -1990,7 +2012,7 @@ export function checkRun(projectRoot: string, runId: string, sessionId?: string)
   const store = new SessionStore(projectRoot);
   const located = store.findRun(runId, sessionId);
   const resolvedContract = contractForRun(projectRoot, located.run);
-  const reuse = revalidateRunReuse(projectRoot, store, store.readBundle(located.sessionId), located.run);
+  const reuse = revalidateRunReuse(projectRoot, store, store.readBundle(located.sessionId), located.run, resolvedContract.contract);
   const scan = scanOutputs(
     store.runDir(located.sessionId, runId),
     store.sessionDir(located.sessionId),
@@ -3030,11 +3052,8 @@ export function briefRun(
   sessionId?: string,
   platform?: TargetPlatform,
 ): BriefRunResult {
-  const store = new SessionStore(projectRoot);
-  const context = resolveRunContext(projectRoot, runId, sessionId, platform);
-  const located = store.findRun(runId, context.session_id);
-  const bundle = store.readBundle(located.sessionId);
-  const run = located.run;
+  const context = resolveRunContextFull(projectRoot, runId, sessionId, platform);
+  const { store, bundle, run } = context;
   const resolvedPlatform = context.resolved_platform;
   const suffix = PLATFORM_SUFFIX[resolvedPlatform];
   const content = resolveStepContent(projectRoot, run.command.name, suffix);
@@ -3054,13 +3073,13 @@ export function briefRun(
     })
     .filter((item): item is NonNullable<typeof item> => item !== null);
 
-  const validatedReuse = revalidateRunReuse(projectRoot, store, bundle, run);
-  const upstream = validatedReuse.upstream;
-  const prevHandoff = latestHandoffBefore(store, located.sessionId, run.sequence);
-  const anchor = buildAnchorSections(store, bundle.session);
-  const freshness = guidanceFreshness(projectRoot, run);
   const resolvedContract = contractForRun(projectRoot, run);
   const contract = resolvedContract.contract;
+  const validatedReuse = revalidateRunReuse(projectRoot, store, bundle, run, contract);
+  const upstream = validatedReuse.upstream;
+  const prevHandoff = handoffBeforeSequence(store, bundle.session, run.sequence);
+  const anchor = buildAnchorSections(store, bundle.session);
+  const freshness = guidanceFreshness(projectRoot, run);
   const argumentRequirements = resolveArgumentRequirements(projectRoot, run.command.name, run.input.args);
   const reuseAssessments = validatedReuse.assessments;
   const inputs: ExecutionContractView['inputs'] = contract.consumes.map(consume => ({
@@ -3130,12 +3149,12 @@ export function briefRun(
 
   return briefResultV10Schema.parse({
     schema_version: 'brief-result/1.0',
-    session_id: located.sessionId,
+    session_id: context.session_id,
     run_id: runId,
     run_dir: context.run_dir,
     upstream,
     session: {
-      session_id: located.sessionId,
+      session_id: context.session_id,
       intent: bundle.session.intent,
       status: bundle.session.status,
       identity_revision: bundle.session.identity_revision,
