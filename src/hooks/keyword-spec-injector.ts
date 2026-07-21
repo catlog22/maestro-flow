@@ -13,7 +13,7 @@ import { logInjectionEvent } from './spec-analytics.js';
 import { truncateMaestroContext, wrapMaestroContext, type ContextSection } from './context-format.js';
 import { loadGlossary, type DomainTerm } from '../tools/domain-loader.js';
 import { matchDomainTerms, collectRewriteHints } from '../tools/domain-matcher.js';
-import { searchWiki, prewarmWikiIndexer, type WikiSearchHit } from './wiki-search-bridge.js';
+import { searchWiki, type WikiSearchHit } from './wiki-search-bridge.js';
 import { buildKgContextSections } from './kg-context-injector.js';
 
 // ============================================================================
@@ -84,7 +84,6 @@ export async function evaluateKeywordInjection(
   const sections: ContextSection[] = [];
 
   const workflowRoot = join(projectPath, '.workflow');
-  prewarmWikiIndexer(workflowRoot);
 
   // ── Domain context (always evaluated) ──────────────────────────────
   const domainSections = buildDomainSections(prompt, projectPath);

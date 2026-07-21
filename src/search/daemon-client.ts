@@ -13,11 +13,21 @@ export { getDaemonPath, readDaemonInfo, isDaemonAlive } from './daemon-types.js'
 import { getDaemonPath, readDaemonInfo, isDaemonAlive } from './daemon-types.js';
 import type { DaemonSearchRequest, DaemonSearchResponse } from './daemon-types.js';
 
-export function queryDaemon(port: number, req: DaemonSearchRequest): Promise<DaemonSearchResponse> {
+const DEFAULT_DAEMON_TIMEOUT_MS = 5000;
+
+export interface DaemonQueryOptions {
+  timeoutMs?: number;
+}
+
+export function queryDaemon(
+  port: number,
+  req: DaemonSearchRequest,
+  opts?: DaemonQueryOptions,
+): Promise<DaemonSearchResponse> {
   return new Promise((resolve, reject) => {
     const socket = connect(port, '127.0.0.1');
     let buf = '';
-    socket.setTimeout(5000);
+    socket.setTimeout(opts?.timeoutMs ?? DEFAULT_DAEMON_TIMEOUT_MS);
     socket.on('connect', () => { socket.write(JSON.stringify(req) + '\n'); });
     socket.on('data', (chunk) => { buf += chunk.toString(); });
     socket.on('end', () => {
@@ -33,11 +43,12 @@ export async function tryDaemonSearch(
   query: string,
   limit: number,
   skipEmbedding?: boolean,
+  opts?: DaemonQueryOptions,
 ): Promise<DaemonSearchResponse | null> {
   const info = readDaemonInfo(workflowRoot);
   if (!info || !isDaemonAlive(info)) return null;
   try {
-    return await queryDaemon(info.port, { action: 'search', query, limit, skipEmbedding });
+    return await queryDaemon(info.port, { action: 'search', query, limit, skipEmbedding }, opts);
   } catch { return null; }
 }
 
