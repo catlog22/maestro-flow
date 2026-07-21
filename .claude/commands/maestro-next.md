@@ -218,14 +218,14 @@ init → {brainstorm | blueprint | analyze-macro} → roadmap
 | retrospective / retro / lessons learned / post-mortem / reflect | retrospective | Post-phase four-lens review (technical/process/quality/decision) → spec/knowhow/issue routing |
 | grill / pressure test / stress test | grill | Socratic pressure-test of a plan/idea against codebase reality — adversarial questioning, terminology collision checks |
 | collab / cross-verify / multi-tool / second opinion | collab | Fan out one requirement to multiple CLI tools, cross-verify findings into a unified conclusion |
-| refactor / tech debt | `/quality-refactor "<scope>"` (retained command) | Suggest exact slash command; user invokes it |
+| refactor / tech debt | `/maestro-odyssey "<scope>" --mode improve` (odyssey campaign) | Output invocation; user invokes it |
 | sync docs | `/maestro-manage sync codebase` (retained command) | Suggest exact slash command; user invokes it |
 | issue / defect | `/maestro-manage issue <subcommand> ...` (retained command) | Suggest exact slash command; user invokes it |
 | wiki / knowledge graph | `/maestro-manage knowledge wiki ...` (retained command) | Suggest exact slash command; user invokes it |
 | spec / rule / constraint | `/maestro-spec load ...` or `/maestro-spec add ...` (retained command) | Suggest exact slash command; user invokes it |
 | init / project setup | `/maestro-init ...` (retained command) | Suggest exact slash command; user invokes it |
 | status / dashboard | `/maestro-manage status` (retained command) | Suggest exact slash command; user invokes it |
-| security / OWASP | `/security-audit ...` (retained command) | Suggest exact slash command; user invokes it |
+| security / OWASP | `/maestro-odyssey "<scope>" --mode security` (odyssey campaign) | Output invocation; user invokes it |
 | learn / explore code / follow | `/maestro-learn follow|investigate|decompose|consult ...` (retained command) | Suggest exact slash command; user invokes it |
 | UI design / design system / polish / impeccable | `/maestro-impeccable "<intent>" ...` (retained command) | Suggest exact slash command; user invokes it |
 | harvest / extract knowledge | `/maestro-manage knowledge harvest ...` (retained command) | Suggest exact slash command; user invokes it |
@@ -294,7 +294,7 @@ Channels:
   /maestro --engine manual — multi-step stepwise (per-step confirm, no gates)
   /maestro                 — multi-step orchestrated (decision nodes, drift, auto-retry)
 
-Retained Commands (manual): /quality-refactor, /maestro-manage ..., /maestro-learn ..., /maestro-spec ..., /maestro-impeccable ...
+Retained Commands (manual): /maestro-manage ..., /maestro-learn ..., /maestro-spec ..., /maestro-impeccable ...
 ```
 
 ### Normal mode

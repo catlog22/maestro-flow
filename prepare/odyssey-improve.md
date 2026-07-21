@@ -57,6 +57,11 @@ When prior improve sessions of the same target exist, check their audit results 
 - **Fix scope** — fixes target diagnosed root causes, not symptoms. Symptoms may indicate a deeper architectural issue requiring `--mode debug` escalation.
 - **Evidence append-only** — evidence.ndjson entries are immutable observations; modifying or deleting them is forbidden.
 - **Exhaustive audit** — all 6 dimensions (or `--dimensions` subset) must be attempted. Zero dimensions reviewed is BLOCKED, not a warning.
+- **Behavioral equivalence** — fixes MUST preserve existing behavior. All tests MUST pass after each individual change, not just at the end of a tier.
+- **Scope locked after confirmation** — once the fix plan is confirmed (or auto-proceeded via `-y`), no scope expansion to additional files without re-confirmation.
+- **Incremental verification** — each discrete fix step MUST be verified (tests run) before proceeding. NEVER batch multiple unrelated changes into a single verification.
+- **No feature creep** — fixes MUST NOT add new functionality, change APIs, or alter public interfaces. Beneficial changes discovered → evidence phase=decision as recommendations, NOT applied.
+- **Rollback safety** — if any test fails after a fix step, revert that specific change before attempting alternatives. NEVER proceed with failing tests.
 
 ## Risk Checklist
 
@@ -67,6 +72,9 @@ When prior improve sessions of the same target exist, check their audit results 
 - After each severity tier fix, was re-verification scoped to the current tier's dimension only? Cross-dimension regression checks belong at S_VERIFY.
 - Were 3 diagnosis retries exhausted before marking INCONCLUSIVE? Premature escalation misses solvable issues.
 - Is zero-residual enforced — every finding has fix / issue / decision, with no blanket skips?
+- Does each fix preserve behavioral equivalence? A fix that changes observable behavior (API shape, return values, side effects) is scope creep, not a fix.
+- Was each fix step individually verified before proceeding? Batched changes make regression attribution impossible.
+- If a test failed after a fix, was that specific change reverted before trying alternatives? Proceeding with failing tests compounds risk.
 
 ## Gate Intent
 

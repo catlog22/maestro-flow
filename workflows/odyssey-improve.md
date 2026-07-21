@@ -129,7 +129,7 @@ Commit: `"odyssey-improve({slug}): DIAGNOSE — root cause analysis complete"`
 
 **A_ESCALATE_DIAGNOSIS** — `retries++`. < 3: `maestro delegate --role analyze`, new hypotheses, → S_DIAGNOSE. >= 3: Normal → [@ask] AskUserQuestion | `-y` → INCONCLUSIVE → S_RECORD.
 
-**A_FIX** — (1) Exhaustive fix: ALL diagnosed issues by severity tier (critical → high → medium → low within fix_threshold), one dimension at a time. After each tier, re-verify **current tier's dimension only** (not all dimensions); new findings at same or higher severity append to current tier. Cross-dimension regression checks run once at S_VERIFY after all tiers. **No partial-tier advancement** — each tier fully addressed (fixed or individually classified) before advancing; blanket "pre-existing" skip forbidden. (2) For each fix: implement → evidence phase=fix. (3) Normal: [@ask] AskUserQuestion per-fix | `-y`: auto-proceed, record `deferred`.
+**A_FIX** — (1) Exhaustive fix: ALL diagnosed issues by severity tier (critical → high → medium → low within fix_threshold), one dimension at a time. After each tier, re-verify **current tier's dimension only** (not all dimensions); new findings at same or higher severity append to current tier. Cross-dimension regression checks run once at S_VERIFY after all tiers. **No partial-tier advancement** — each tier fully addressed (fixed or individually classified) before advancing; blanket "pre-existing" skip forbidden. (2) For each fix: implement → **run tests covering the modified area immediately** → evidence phase=fix. **Incremental verification** — each discrete fix step verified before proceeding; NEVER batch unrelated changes. **Rollback safety** — if tests fail after a fix step, revert that specific change (`git checkout -- {file}`) before attempting alternatives; NEVER proceed with failing tests. **Behavioral equivalence** — fixes MUST preserve existing behavior; no API changes, no new functionality. Beneficial changes discovered during fixing → evidence phase=decision as recommendations, NOT applied. **Scope lock** — once tier plan confirmed, no scope expansion without re-confirmation. (3) Normal: [@ask] AskUserQuestion per-fix | `-y`: auto-proceed, record `deferred`.
 
 Commit: `"odyssey-improve({slug}): FIX — {dimension} {tier} tier addressed"`
 
@@ -199,7 +199,7 @@ Goals:       {done}/{total} ({skipped} skipped)
 
 - **Discovery gate** (SURVEY): evidence for the phase logged, understanding.md updated. Survey requires all scan types attempted.
 - **Audit gate** (DIAGNOSE): all dimension agents completed, findings merged with severity classification. Zero dimensions reviewed is BLOCKED (W002 partial allowed).
-- **FIX gate:** current severity tier fully addressed. Per-fix evidence phase=fix logged. Auto-commit per tier. No partial-tier advancement.
+- **FIX gate:** current severity tier fully addressed. Per-fix evidence phase=fix logged. **Per-change test verification** — each fix step runs tests before proceeding. **Rollback on failure** — failed fix reverted immediately. **Behavioral equivalence** — no API/behavior changes; beneficial changes logged as recommendations only. Auto-commit per tier. No partial-tier advancement.
 - **VERIFY gate:** tests pass; metrics re-captured; confirmation written, understanding.md updated, verify goal marked. needs_rework → route back to FIX.
 
 ---
