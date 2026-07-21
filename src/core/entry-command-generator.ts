@@ -95,13 +95,13 @@ Entry command for step \`${info.step}\` — a thin wrapper over the Run lifecycl
 <execution>
 1. \`maestro run prepare ${info.step}\` — read the returned pre-task thinking (purpose, contract, boundaries, risks) before doing anything. Note the returned \`workflow.path\`.
 2. Follow run-mode.md: compose an ASCII session slug \`YYYYMMDD-${info.step}-{topic}\`, then run:
-   \`maestro run create ${info.step} --session <slug> --intent "<one-line goal>" -- $ARGUMENTS\`
-   \`--intent\` is Session metadata only and never enters the target command's \`Run input.args\`. When the command contract or \`argument-hint\` requires inputs, pass them with repeatable \`--arg <value>\` or after \`--\` using the \`-- <args...>\` form shown above.
+   \`maestro run start "<one-line goal>" --cmd ${info.step} --session <slug> [--arg "<command input>"]\`
+   Intent text is Session metadata only and never enters the target command's \`Run input.args\`. When the command contract or \`argument-hint\` requires inputs, pass them with repeatable \`--arg <value>\`; use lower-level \`maestro run create\` only when a compatibility caller needs raw positional passthrough after \`--\`.
    Retain the returned \`run_id\`, \`run_dir\`, and \`upstream\`.
 3. (Optional) \`maestro run brief <run_id>\` — re-attach the execution manual, goals, gate status, and upstream handoff. Recommended when resuming a Run or consuming upstream artifacts; a fresh Run with no upstream may instead read \`workflow.path\` from step 1 directly and skip this.
 4. Execute the workflow completely. Write formal artifacts to \`{run_dir}/outputs/\`.
 5. \`maestro run check <run_id>\` — repair any blocking artifact or exit gate it reports.
-6. \`maestro run complete <run_id>\` — report success only after the Run is completed.
+6. \`maestro run done <run_id>\` — report success only after the Run is completed.
 </execution>
 `;
 }

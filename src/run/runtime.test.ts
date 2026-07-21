@@ -113,6 +113,9 @@ describe('Session/Run runtime', () => {
     registerRunCommand(program);
     const run = program.commands.find(command => command.name() === 'run');
     expect(run?.commands.map(command => command.name())).toEqual([
+      'start',
+      'done',
+      'edit',
       'prepare',
       'next',
       'create',
@@ -1030,6 +1033,7 @@ gates:
 
     const bare = prepareStep(projectRoot, 'demo-exec');
     expect(bare.previous).toBeUndefined();
+    expect(bare.session_guidance).toBeUndefined();
 
     const planRun = createRun({ projectRoot, command: 'demo-plan', intent: 'prepare session demo' });
     writePlanRun(projectRoot, planRun.session_id, planRun.run_id);
@@ -1043,6 +1047,17 @@ gates:
     expect(withSession.previous?.handoff?.run_id).toBe(planRun.run_id);
     const consume = withSession.previous?.consumes.find(c => c.alias === 'current-plan');
     expect(consume).toMatchObject({ kind: 'plan', required: true, present: true, status: 'sealed' });
+    expect(withSession.session_guidance).toMatchObject({
+      session_id: planRun.session_id,
+      status: 'running',
+      latest_completed_run_id: planRun.run_id,
+      current_step: null,
+      open_decisions: [],
+      next: {
+        command: `maestro session seal ${planRun.session_id}`,
+        reason: 'chain has no pending execution steps',
+      },
+    });
   });
 
   it('complete --note merges into handoff concerns with de-duplication', () => {

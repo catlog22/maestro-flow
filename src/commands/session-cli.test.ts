@@ -67,7 +67,17 @@ describe('maestro session create', () => {
     const p = program();
     const session = p.commands.find(c => c.name() === 'session');
     expect(session?.description()).toContain('topic grouping/index');
-    expect(session?.commands.map(c => c.name()).sort()).toEqual(['chain', 'create', 'meta', 'migrate', 'resolve', 'resume']);
+    expect(session?.commands.map(c => c.name()).sort()).toEqual([
+      'chain',
+      'create',
+      'list',
+      'meta',
+      'migrate',
+      'resolve',
+      'resume',
+      'seal',
+      'show',
+    ]);
     const chain = session?.commands.find(c => c.name() === 'chain');
     expect(chain?.commands.map(c => c.name()).sort()).toEqual(['insert', 'replace', 'skip']);
     for (const name of ['resolve', 'resume']) {
@@ -108,6 +118,39 @@ describe('maestro session create', () => {
     const session = store.readBundle(String(out.session_id)).session;
     expect(session.intent).toBe('cli intent'); // --intent overrides file intent
     expect(session.orchestration.chain).toHaveLength(2);
+  });
+
+  it('creates a simple chain session from command names and lists/shows it', async () => {
+    await run(
+      'create',
+      '统一 run session',
+      '--id',
+      'simple',
+      '--workflow-root',
+      root,
+      '--chain',
+      'analyze',
+      'execute',
+    );
+
+    const out = lastJson();
+    const sessionId = String(out.session_id);
+    expect(sessionId).toMatch(/^simple-\d{8}-\d{6}$/);
+    expect((out.chain as { total: number }).total).toBe(2);
+
+    const store = new SessionStore(root);
+    const session = store.readBundle(sessionId).session;
+    expect(session.intent).toBe('统一 run session');
+    expect(session.orchestration.chain.map(step => step.command)).toEqual(['analyze', 'execute']);
+
+    await run('list', '--workflow-root', root);
+    const listed = lastJson() as Array<{ session_id: string; chain_total: number; pending_steps: number }>;
+    expect(listed).toEqual([
+      expect.objectContaining({ session_id: sessionId, chain_total: 2, pending_steps: 2 }),
+    ]);
+
+    await run('show', sessionId, '--workflow-root', root);
+    expect(lastJson()).toMatchObject({ session_id: sessionId, intent: '统一 run session' });
   });
 
   it('creates an empty-chain session with no --chain-file', async () => {

@@ -290,8 +290,10 @@ function activeBoundary(chain: OrchestrationStep[]): number {
   return boundary;
 }
 
-/** Resolve an `after` selector (step_id or numeric index) to a chain index. */
+/** Resolve an `after` selector (step_id, numeric index, or start sentinel) to a chain index. */
 function resolveAfterIndex(chain: OrchestrationStep[], after: string): number {
+  const normalized = after.trim().toLowerCase();
+  if (['start', 'head', 'beginning', 'none'].includes(normalized)) return -1;
   const asIndex = Number(after);
   if (Number.isInteger(asIndex) && String(asIndex) === after.trim()) {
     if (asIndex < 0 || asIndex >= chain.length) {

@@ -16,6 +16,7 @@ import {
 } from '../run/runtime.js';
 import { runNextStep } from '../run/next.js';
 import { resolveRunningRun } from '../run/resolve.js';
+import { createChainSession, insertChainStep, replaceChainStep, skipChainStep, type ChainDefinition } from '../run/chain-admin.js';
 import { runDecide, type DecisionConfidence, type DecisionVerdict } from '../run/decide.js';
 import { checkLease } from '../run/lease.js';
 import { SessionStore } from '../run/store.js';
@@ -49,6 +50,49 @@ function collect(value: string, previous: string[]): string[] {
 }
 function print(value: unknown): void {
   console.log(JSON.stringify(value, null, 2));
+}
+
+function slugifySessionTopic(text: string, fallback = 'session'): string {
+  const slug = text
+    .normalize('NFKD')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 64);
+  return slug || fallback;
+}
+
+function chainDefinitionFromCommands(intent: string, commands: string[]): ChainDefinition {
+  const steps = commands.map(command => command.trim()).filter(Boolean);
+  if (steps.length === 0) throw new Error('--chain requires at least one command');
+  return {
+    intent,
+    steps: steps.map(command => ({ command })),
+  };
+}
+
+function summarizeChain(definition: ChainDefinition): { total: number; steps: Array<{ command: string }> } {
+  return {
+    total: definition.steps.length,
+    steps: definition.steps.map(step => ({ command: step.command })),
+  };
+}
+
+function resolveActiveRunTarget(store: SessionStore, sessionId?: string): { sessionId: string; runId: string } | null {
+  if (sessionId) {
+    if (!store.sessionExists(sessionId)) throw new Error(`session not found: ${sessionId}`);
+    const session = store.readBundle(sessionId).session;
+    return session.active_run_id ? { sessionId, runId: session.active_run_id } : null;
+  }
+  const active = store.listSessions({ statuses: ['running'] }).candidates
+    .filter(candidate => candidate.session.active_run_id)
+    .map(candidate => ({ sessionId: candidate.sessionId, runId: candidate.session.active_run_id! }));
+  if (active.length === 1) return active[0];
+  if (active.length > 1) {
+    const list = active.map(candidate => `  - ${candidate.sessionId} (${candidate.runId})`).join('\n');
+    throw new Error(`[run done] ambiguous: ${active.length} running Sessions have active Runs. Pass --session <id>:\n${list}`);
+  }
+  return null;
 }
 
 function mutationTransitionOptions(opts: any): any {
@@ -146,6 +190,233 @@ export function registerRunCommand(program: Command): void {
   const run = program
     .command('run')
     .description('Manage Runs inside topic-grouped Sessions; compatibility/admin commands are never routed automatically');
+
+  run
+    .command('start [intent...]')
+    .description('Start a single Run or a simple command-chain Session')
+    .option('--cmd <command>', 'single-run command to create')
+    .option('--chain <commands...>', 'simple command chain, e.g. --chain learn odyssey-planex odyssey-review')
+    .option('--id <slug>', 'explicit Session ID/slug when creating a chain Session')
+    .option('--session <id>', 'explicit Session ID for a single Run')
+    .option('--topic <text>', 'command-independent Session topic; defaults to intent')
+    .option('--arg <value>', 'command input stored in Run input.args (repeatable)', collect, [])
+    .option('--platform <name>', 'target platform persisted for this Run')
+    .option('--no-dispatch', 'create the chain Session but do not run the first step')
+    .option('--workflow-root <path>', 'project root containing .workflow', process.cwd())
+    .action((intentParts: string[], opts: {
+      cmd?: string;
+      chain?: string[];
+      id?: string;
+      session?: string;
+      topic?: string;
+      arg: string[];
+      platform?: string;
+      dispatch: boolean;
+      workflowRoot: string;
+    }) => {
+      try {
+        const projectRoot = resolve(opts.workflowRoot);
+        const intent = intentParts.join(' ').trim() || opts.topic || opts.cmd || opts.chain?.join(' -> ') || '';
+        if (!intent) throw new Error('run start requires an intent, --cmd, or --chain');
+        const platform = opts.platform as TargetPlatform | undefined;
+        if (platform && !VALID_PLATFORMS.includes(platform)) {
+          throw new Error(`unknown platform "${platform}", valid: ${VALID_PLATFORMS.join(', ')}`);
+        }
+        if ((opts.chain?.length ?? 0) > 0) {
+          if (opts.cmd) throw new Error('use either --cmd or --chain, not both');
+          if (opts.session) throw new Error('--session is for single Run start; use run edit to add steps to an existing Session');
+          const definition = chainDefinitionFromCommands(intent, opts.chain ?? []);
+          const fallbackSlug = slugifySessionTopic(definition.steps.map(step => step.command).join('-'));
+          const sessionSlug = opts.id ?? slugifySessionTopic(intent, fallbackSlug);
+          const created = createChainSession(projectRoot, sessionSlug, { intent, definition });
+          const result: Record<string, unknown> = {
+            session_id: created.sessionId,
+            session_dir: created.sessionDir,
+            chain: summarizeChain(definition),
+            next: `maestro run next --session ${created.sessionId}`,
+          };
+          if (opts.dispatch) {
+            const next = runNextStep(projectRoot, { sessionId: created.sessionId });
+            result.dispatched = next.result;
+            result.message = next.message;
+            if (next.exitCode !== 0) process.exitCode = next.exitCode;
+          }
+          print(result);
+          return;
+        }
+        if (!opts.cmd) throw new Error('single-run start requires --cmd <command> or --chain <commands...>');
+        const result = createRun({
+          projectRoot,
+          command: opts.cmd,
+          sessionId: opts.session,
+          intent,
+          topic: opts.topic,
+          platform,
+          args: opts.arg,
+        });
+        print(result);
+      } catch (error) {
+        reportError(error);
+      }
+    });
+
+  run
+    .command('done [run-id]')
+    .description('Check and complete the current Run (friendly alias for run complete --verdict)')
+    .option('--session <id>', 'explicit Session ID')
+    .option('--verdict <verdict>', `completion verdict: ${VALID_VERDICTS.join('|')} (default done)`)
+    .option('--summary <text>', 'handoff.summary fallback when the report frontmatter left it empty')
+    .option('--reason <text>', 'blocker reason (blocked) merged into handoff concerns')
+    .option('--note <text>', 'supplementary concern merged into the handoff (repeatable)', collect, [])
+    .option('--decision <text>', 'decision appended to handoff.decisions (repeatable)', collect, [])
+    .option('--evidence <path>', 'run-relative evidence path registered as an artifact (repeatable)', collect, [])
+    .option('--artifact <path>', 'run-relative path registered as evidence beyond the outputs scan (repeatable)', collect, [])
+    .option('--workflow-root <path>', 'project root containing .workflow', process.cwd())
+    .action((runIdArg: string | undefined, opts: {
+      session?: string;
+      verdict?: string;
+      summary?: string;
+      reason?: string;
+      note: string[];
+      decision: string[];
+      evidence: string[];
+      artifact: string[];
+      workflowRoot: string;
+    }) => {
+      try {
+        const projectRoot = resolve(opts.workflowRoot);
+        const verdict = parseVerdict(opts.verdict);
+        if (!verdict) throw new Error(`invalid --verdict "${opts.verdict}"; valid: ${VALID_VERDICTS.join(', ')}`);
+        const store = new SessionStore(projectRoot);
+        let sessionId: string;
+        let runId: string;
+        if (runIdArg) {
+          const located = store.findRun(runIdArg, opts.session);
+          sessionId = located.sessionId;
+          runId = runIdArg;
+        } else {
+          const resolved = resolveRunningRun(projectRoot, store, opts.session);
+          if (resolved.kind === 'ok') {
+            sessionId = resolved.sessionId;
+            runId = resolved.step.run_id;
+          } else {
+            const active = resolveActiveRunTarget(store, opts.session);
+            if (!active) throw new Error(resolved.message);
+            sessionId = active.sessionId;
+            runId = active.runId;
+          }
+        }
+        const result = completeRunWithVerdict(projectRoot, runId, sessionId, {
+          verdict,
+          notes: opts.note,
+          decisions: opts.decision,
+          extraArtifacts: [...opts.artifact, ...opts.evidence],
+          summaryFallback: opts.summary,
+          reason: opts.reason,
+        });
+        print(result);
+        process.stderr.write(`next: ${result.next.command}\n      ${result.next.reason}\n`);
+        if (!result.run_sealed) process.exitCode = 1;
+      } catch (error) {
+        reportError(error);
+      }
+    });
+
+  run
+    .command('edit [commands...]')
+    .description('Edit future chain steps; adding commands inserts pending steps, never raw Runs')
+    .option('--session <id>', 'explicit Session ID')
+    .option('--after <selector>', 'insert after current|latest|start|step-id|index', 'current')
+    .option('--replace <step-id>', 'replace a pending step with the first command')
+    .option('--remove <step-id>', 'remove a pending step by marking it skipped')
+    .option('--args <text>', 'step args string (only with one command)')
+    .option('--stage <name>', 'stage label')
+    .option('--goal-ref <id>', 'goal reference id')
+    .option('--inserted-by <actor>', 'who inserted the step', 'manual')
+    .option('--workflow-root <path>', 'project root containing .workflow', process.cwd())
+    .action((commands: string[], opts: {
+      session?: string;
+      after: string;
+      replace?: string;
+      remove?: string;
+      args?: string;
+      stage?: string;
+      goalRef?: string;
+      insertedBy: string;
+      workflowRoot: string;
+    }) => {
+      try {
+        const projectRoot = resolve(opts.workflowRoot);
+        const store = new SessionStore(projectRoot);
+        const selectedCommands = commands.map(command => command.trim()).filter(Boolean);
+        if (opts.replace && opts.remove) throw new Error('use either --replace or --remove, not both');
+        const resolveSessionId = (): string => {
+          if (opts.session) {
+            if (!store.sessionExists(opts.session)) throw new Error(`session not found: ${opts.session}`);
+            return opts.session;
+          }
+          const resolved = resolveRunningRun(projectRoot, store);
+          if (resolved.kind === 'ok') return resolved.sessionId;
+          throw new Error(`${resolved.message}; pass --session <id>`);
+        };
+        const sessionId = resolveSessionId();
+        if (opts.remove) {
+          if (selectedCommands.length > 0) throw new Error('--remove does not accept commands');
+          const skipped = skipChainStep(projectRoot, sessionId, opts.remove);
+          print({ session_id: sessionId, removed: skipped, note: 'removed means skipped; sealed history is preserved' });
+          return;
+        }
+        if (opts.replace) {
+          if (selectedCommands.length !== 1) throw new Error('--replace requires exactly one replacement command');
+          const replaced = replaceChainStep(projectRoot, sessionId, opts.replace, {
+            command: selectedCommands[0],
+            args: opts.args,
+            stage: opts.stage,
+            goalRef: opts.goalRef,
+          });
+          print({ session_id: sessionId, replaced });
+          return;
+        }
+        if (selectedCommands.length === 0) throw new Error('run edit requires commands, --replace, or --remove');
+        if (opts.args && selectedCommands.length !== 1) throw new Error('--args can only be used when inserting one command');
+        const resolveAfter = (): string => {
+          const selector = opts.after.trim().toLowerCase();
+          if (['start', 'head', 'beginning', 'none'].includes(selector)) return 'start';
+          const session = store.readBundle(sessionId).session;
+          if (selector === 'current') {
+            const running = session.orchestration.chain.find(step => step.status === 'running' && step.run_id);
+            if (running) return running.step_id;
+            if (session.orchestration.chain.length === 0) return 'start';
+            throw new Error(`session ${sessionId} has no running chain step; use --after latest, --after start, or a step id`);
+          }
+          if (selector === 'latest') {
+            for (let i = session.orchestration.chain.length - 1; i >= 0; i--) {
+              const step = session.orchestration.chain[i];
+              if (step.status !== 'pending') return step.step_id;
+            }
+            return session.orchestration.chain.at(-1)?.step_id ?? 'start';
+          }
+          return opts.after;
+        };
+        let after = resolveAfter();
+        const inserted = [];
+        for (const command of selectedCommands) {
+          const step = insertChainStep(projectRoot, sessionId, {
+            after,
+            command,
+            args: opts.args,
+            stage: opts.stage,
+            goalRef: opts.goalRef,
+            insertedBy: opts.insertedBy,
+          });
+          inserted.push(step);
+          after = step.step_id;
+        }
+        print({ session_id: sessionId, inserted, next: `maestro run next --session ${sessionId}` });
+      } catch (error) {
+        reportError(error);
+      }
+    });
 
   run
     .command('prepare <step>')

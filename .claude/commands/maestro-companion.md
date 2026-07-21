@@ -1,7 +1,7 @@
 ---
 name: maestro-companion
 disable-model-invocation: false
-description: "Quick execution for small tasks — minimal run lifecycle (create + complete) with evidence recording. Full LLM capability, scoped to mechanically clear tasks."
+description: "Quick execution for small tasks — minimal run lifecycle (start + done) with evidence recording. Full LLM capability, scoped to mechanically clear tasks."
 argument-hint: "<intent> [--note <text>] [--log <run_id>] [--promote] [-y]"
 allowed-tools:
   - Read
@@ -24,7 +24,7 @@ contract:
 </required_reading>
 
 <purpose>
-Minimal-run execution channel. Full LLM capability with minimal protocol: one `run create` + one `run complete`, evidence appended to `{run_dir}/evidence/companion-log.md`.
+Minimal-run execution channel. Full LLM capability with minimal protocol: one `run start` + one `run done`, evidence appended to `{run_dir}/evidence/companion-log.md`.
 
 Use when:
 - Intent is mechanically clear (no design decisions needed; file count irrelevant)
@@ -46,7 +46,7 @@ Mode detection: `--note` → note | `--log` → log | `--promote` → promote | 
 </context>
 
 <invariants>
-1. Only `run create` + `run complete` — no prepare/brief/check/gates
+1. Only `run start` + `run done` — no prepare/brief/check/gates
 2. Evidence is append-only, non-formal (never enters gates or artifact registry)
 3. `--promote` delegates to `maestro-spec add` / knowhow capture, never writes directly
 4. No auto-orchestration — executes directly, never creates chains
@@ -61,8 +61,10 @@ Linear: create → explore → confirm → do → seal.
 ### 1. Create
 
 ```bash
-maestro run create companion --session YYYYMMDD-companion-<topic> --intent "<intent>" --arg "<intent>" --workflow-root .
+maestro run start "<intent>" --cmd companion --session YYYYMMDD-companion-<topic> --arg "<intent>" --workflow-root .
 ```
+
+Compatibility spelling for older callers: `maestro run create companion --session YYYYMMDD-companion-<topic> --intent "<intent>" --arg "<intent>" --workflow-root .`. The intent is Session metadata only; pass the same text with `--arg` because it is the required command arguments payload.
 
 Init `{run_dir}/evidence/companion-log.md`:
 ```markdown
@@ -120,7 +122,7 @@ Append outcome:
 ```
 
 ```bash
-maestro run complete <run_id> --verdict done --workflow-root .
+maestro run done <run_id> --verdict done --workflow-root .
 ```
 
 Display: `Companion done. Run: {run_id} | Evidence: {path}`

@@ -279,6 +279,16 @@ describe('insertChainStep', () => {
     expect(chain[2].command).toBe('extra');
   });
 
+  it('accepts a start sentinel for inserting at the pending head', () => {
+    const projectRoot = root();
+    const sessionId = seededSession(projectRoot, ['pending', 'pending']);
+    const inserted = insertChainStep(projectRoot, sessionId, { after: 'start', command: 'prep', insertedBy: 'manual' });
+    const store = new SessionStore(projectRoot);
+    const chain = store.readBundle(sessionId).session.orchestration.chain;
+    expect(inserted.step_id).toBe('step-000-prep');
+    expect(chain.map(step => step.command)).toEqual(['prep', 'cmd0', 'cmd1']);
+  });
+
   it('rejects inserting before the active position', () => {
     const projectRoot = root();
     const sessionId = seededSession(projectRoot, ['completed', 'running', 'pending']);

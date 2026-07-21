@@ -2,6 +2,9 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import type { Command } from 'commander';
 import { migrateAllSessions, migrateSession } from '../run/migrate.js';
+import { SessionStore } from '../run/store.js';
+import { sealSession } from '../run/runtime.js';
+import type { SessionState } from '../run/schemas.js';
 import {
   chainDefinitionSchema,
   createChainSession,
@@ -136,7 +139,35 @@ function chainSummary(steps: ChainDefinition['steps']): { total: number; steps: 
   };
 }
 
+function persistedChainSummary(session: { orchestration: { chain: Array<{ command: string; decision_ref: string | null }> } }): { total: number; steps: Array<{ command: string; decision: boolean }> } {
+  return {
+    total: session.orchestration.chain.length,
+    steps: session.orchestration.chain.map(step => ({ command: step.command, decision: Boolean(step.decision_ref) })),
+  };
+}
+
 function collect(value: string, prior: string[] = []): string[] { return prior.concat(value); }
+
+function slugifySessionTopic(text: string, fallback = 'session'): string {
+  const slug = text
+    .normalize('NFKD')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 64);
+  return slug || fallback;
+}
+
+function simpleChainDefinition(intent: string, commands: string[] | undefined): ChainDefinition | undefined {
+  const steps = (commands ?? []).map(command => command.trim()).filter(Boolean);
+  if (steps.length === 0) return undefined;
+  return chainDefinitionSchema.parse({
+    intent,
+    steps: steps.map(command => ({ command })),
+  });
+}
+
+const SESSION_STATUS_VALUES: Array<SessionState['status']> = ['running', 'paused', 'sealed', 'archived', 'failed'];
 
 function transitionOptions(opts: any, target?: any): any {
   return {
@@ -267,16 +298,74 @@ export function registerSessionCommand(program: Command): void {
     });
 
   session
-    .command('create <slug>')
-    .description('Create a Session, optionally from a predefined chain definition (--chain-file)')
-    .requiredOption('--intent <text>', 'session intent (overrides intent inside --chain-file)')
-    .option('--chain-file <path>', 'chain definition JSON file; "-" reads stdin. Omit for an empty-chain session')
+    .command('list')
+    .description('List Sessions with compact chain/run status')
+    .option('--status <status>', 'filter by status: running|paused|sealed|archived|failed')
+    .option('--workflow-root <path>', 'project root containing .workflow', process.cwd())
+    .action((opts: { status?: string; workflowRoot: string }) => {
+      try {
+        if (opts.status && !SESSION_STATUS_VALUES.includes(opts.status as SessionState['status'])) {
+          throw new Error(`invalid --status "${opts.status}"`);
+        }
+        const status = opts.status as SessionState['status'] | undefined;
+        const store = new SessionStore(resolve(opts.workflowRoot));
+        const result = store.listSessions(status ? { statuses: [status] } : {});
+        print(result.candidates.map(candidate => ({
+          session_id: candidate.sessionId,
+          status: candidate.session.status,
+          engine: candidate.session.orchestration.engine,
+          active_run_id: candidate.session.active_run_id,
+          latest_completed_run_id: candidate.session.latest_completed_run_id,
+          chain_total: candidate.session.orchestration.chain.length,
+          pending_steps: candidate.session.orchestration.chain.filter(step => step.status === 'pending').length,
+          intent: candidate.session.intent,
+        })));
+      } catch (error) {
+        reportError(error);
+      }
+    });
+
+  session
+    .command('show <session-id>')
+    .description('Show one Session state')
+    .option('--workflow-root <path>', 'project root containing .workflow', process.cwd())
+    .action((sessionId: string, opts: { workflowRoot: string }) => {
+      try {
+        const store = new SessionStore(resolve(opts.workflowRoot));
+        print(store.readBundle(sessionId).session);
+      } catch (error) {
+        reportError(error);
+      }
+    });
+
+  session
+    .command('seal <session-id>')
+    .description('Seal a Session after all Runs and gates are complete')
+    .option('--summary <text>', 'human-readable seal summary', '')
+    .option('--workflow-root <path>', 'project root containing .workflow', process.cwd())
+    .action((sessionId: string, opts: { summary: string; workflowRoot: string }) => {
+      try {
+        print(sealSession(resolve(opts.workflowRoot), sessionId, opts.summary));
+      } catch (error) {
+        reportError(error);
+      }
+    });
+
+  session
+    .command('create <topic>')
+    .description('Create a Session; use --chain <cmd...> for a simple command chain, --chain-file for advanced JSON')
+    .option('--intent <text>', 'session intent; defaults to <topic>')
+    .option('--id <slug>', 'explicit Session ID/slug; defaults to slugified <topic>')
+    .option('--chain <commands...>', 'simple chain command names, e.g. --chain learn odyssey-planex odyssey-review')
+    .option('--chain-file <path>', 'advanced chain definition JSON file; "-" reads stdin')
     .option('--engine <name>', 'orchestration engine: ralph|coordinator|manual')
     .option('--quality <mode>', 'quality mode: quick|standard|full')
     .option('--auto', 'enable auto mode')
     .option('--workflow-root <path>', 'project root containing .workflow', process.cwd())
-    .action(async (slug: string, opts: {
-      intent: string;
+    .action(async (topic: string, opts: {
+      intent?: string;
+      id?: string;
+      chain?: string[];
       chainFile?: string;
       engine?: string;
       quality?: string;
@@ -291,9 +380,17 @@ export function registerSessionCommand(program: Command): void {
         if (opts.quality && !['quick', 'standard', 'full'].includes(opts.quality)) {
           throw new Error(`invalid --quality "${opts.quality}" (quick|standard|full)`);
         }
-        const definition = opts.chainFile ? await loadChainDefinition(opts.chainFile) : undefined;
+        if (opts.chainFile && (opts.chain?.length ?? 0) > 0) {
+          throw new Error('use either --chain or --chain-file, not both');
+        }
+        const intent = opts.intent ?? topic;
+        const fallbackSlug = opts.chain?.length ? opts.chain.join('-') : 'session';
+        const slug = opts.id ?? (opts.intent ? topic : slugifySessionTopic(topic, slugifySessionTopic(fallbackSlug)));
+        const definition = opts.chainFile
+          ? await loadChainDefinition(opts.chainFile)
+          : simpleChainDefinition(intent, opts.chain);
         const result = createChainSession(root, slug, {
-          intent: opts.intent,
+          intent,
           engine: opts.engine as 'ralph' | 'coordinator' | 'manual' | undefined,
           qualityMode: opts.quality as 'quick' | 'standard' | 'full' | undefined,
           autoMode: opts.auto,
@@ -303,7 +400,7 @@ export function registerSessionCommand(program: Command): void {
           session_id: result.sessionId,
           session_dir: result.sessionDir,
           engine: result.session.orchestration.engine,
-          chain: chainSummary(definition?.steps ?? []),
+          chain: definition ? chainSummary(definition.steps) : persistedChainSummary(result.session),
           next: `maestro run next --session ${result.sessionId}`,
         });
       } catch (error) {

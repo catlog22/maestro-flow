@@ -64,6 +64,7 @@ import {
 import { SessionStore, type SessionBundle, type StoreTransaction } from './store.js';
 import { createGateRegistry } from './defaults.js';
 import {
+  activeStepIndex,
   nextPendingDecisionIndex,
   nextPendingIndex,
   issueRetryToken,
@@ -270,6 +271,36 @@ export interface PreparePrevious {
   selected_refs: Array<{ alias: string; artifact_id: string; path: string; assessment_hash: string }>;
 }
 
+export interface PrepareChainStepHint {
+  index: number;
+  step_id: string;
+  command: string;
+  status: SessionState['orchestration']['chain'][number]['status'];
+  run_id: string | null;
+  decision_ref: string | null;
+}
+
+export interface PrepareDecisionHint {
+  point_id: string;
+  after_step_id: string | null;
+  status: SessionState['orchestration']['decision_points'][number]['status'];
+  retry_count: number;
+  max_retries: number;
+  evidence_ref: string | null;
+}
+
+export interface PrepareSessionGuidance {
+  session_id: string;
+  status: SessionState['status'] | 'missing';
+  active_run_id: string | null;
+  latest_completed_run_id: string | null;
+  current_step: PrepareChainStepHint | null;
+  next_pending_step: PrepareChainStepHint | null;
+  open_decisions: PrepareDecisionHint[];
+  reminders: string[];
+  next: { command: string | null; reason: string };
+}
+
 export interface PrepareStepResult {
   step: string;
   platform: string;
@@ -280,6 +311,8 @@ export interface PrepareStepResult {
   goal_mode: { platform: string; instructions: string } | null;
   /** Present only when `sessionId` is supplied — read-only prior-step context. */
   previous?: PreparePrevious;
+  /** Present only when `sessionId` is supplied — read-only chain and decision reminders. */
+  session_guidance?: PrepareSessionGuidance;
 }
 
 export interface SkillContentResult {
@@ -2998,6 +3031,116 @@ function preparePreviousContext(
   };
 }
 
+function prepareStepHint(
+  step: SessionState['orchestration']['chain'][number],
+  index: number,
+): PrepareChainStepHint {
+  return {
+    index,
+    step_id: step.step_id,
+    command: step.command,
+    status: step.status,
+    run_id: step.run_id,
+    decision_ref: step.decision_ref,
+  };
+}
+
+function prepareSessionGuidance(
+  projectRoot: string,
+  sessionId: string,
+): PrepareSessionGuidance {
+  const store = new SessionStore(projectRoot);
+  if (!store.sessionExists(sessionId)) {
+    return {
+      session_id: sessionId,
+      status: 'missing',
+      active_run_id: null,
+      latest_completed_run_id: null,
+      current_step: null,
+      next_pending_step: null,
+      open_decisions: [],
+      reminders: [`Session ${sessionId} was not found; create or select a Session before relying on prior context.`],
+      next: { command: null, reason: 'Session not found' },
+    };
+  }
+
+  const session = store.readBundle(sessionId).session;
+  const chain = session.orchestration.chain;
+  const activeIndex = activeStepIndex(session);
+  const nextExecutionIndex = nextPendingIndex(session, true);
+  const nextDecisionIndex = nextPendingDecisionIndex(session);
+  const currentStep = activeIndex === null ? null : prepareStepHint(chain[activeIndex], activeIndex);
+  const nextPendingStep = nextExecutionIndex === null ? null : prepareStepHint(chain[nextExecutionIndex], nextExecutionIndex);
+  const openDecisions = session.orchestration.decision_points
+    .filter(point => point.status !== 'passed')
+    .map(point => ({
+      point_id: point.point_id,
+      after_step_id: point.after_step_id,
+      status: point.status,
+      retry_count: point.retry_count,
+      max_retries: point.max_retries,
+      evidence_ref: point.evidence_ref,
+    }));
+  const reminders: string[] = [];
+  let next: PrepareSessionGuidance['next'];
+
+  if (session.status !== 'running') {
+    const escalated = openDecisions.filter(point => point.status === 'escalated').map(point => point.point_id);
+    if (escalated.length > 0) reminders.push(`Resolve escalated decision(s): ${escalated.join(', ')}.`);
+    next = {
+      command: null,
+      reason: `session ${session.session_id} is ${session.status}; resolve or resume Session authority before continuing`,
+    };
+  } else if (session.active_run_id && activeIndex === null) {
+    reminders.push(`Re-attach active Run ${session.active_run_id} instead of creating a new Run.`);
+    next = {
+      command: `maestro run brief ${session.active_run_id} --session ${session.session_id}`,
+      reason: `session already has active Run ${session.active_run_id}`,
+    };
+  } else if (activeIndex !== null) {
+    const activeRunId = chain[activeIndex].run_id ?? session.active_run_id;
+    reminders.push(`Finish active chain step ${chain[activeIndex].step_id} before dispatching another step.`);
+    next = {
+      command: activeRunId ? `maestro run check ${activeRunId}` : null,
+      reason: 'active chain step is still running',
+    };
+  } else if (nextDecisionIndex !== null && (nextExecutionIndex === null || nextDecisionIndex < nextExecutionIndex)) {
+    const decision = chain[nextDecisionIndex];
+    reminders.push(`Review decision node ${decision.decision_ref ?? decision.step_id} before later execution steps.`);
+    next = {
+      command: `maestro run next --session ${session.session_id}`,
+      reason: `next chain node is unresolved decision ${decision.decision_ref}`,
+    };
+  } else if (nextExecutionIndex !== null) {
+    next = {
+      command: `maestro run next --session ${session.session_id}`,
+      reason: `next pending step is ${chain[nextExecutionIndex].step_id}`,
+    };
+  } else {
+    reminders.push('No pending chain execution step remains; seal the Session when handoff and knowledge capture are complete.');
+    next = {
+      command: `maestro session seal ${session.session_id}`,
+      reason: 'chain has no pending execution steps',
+    };
+  }
+
+  if (openDecisions.length > 0 && !reminders.some(item => item.includes('decision'))) {
+    reminders.push(`Open decision(s): ${openDecisions.map(point => point.point_id).join(', ')}.`);
+  }
+
+  return {
+    session_id: session.session_id,
+    status: session.status,
+    active_run_id: session.active_run_id,
+    latest_completed_run_id: session.latest_completed_run_id,
+    current_step: currentStep,
+    next_pending_step: nextPendingStep,
+    open_decisions: openDecisions,
+    reminders,
+    next,
+  };
+}
+
 export function prepareStep(
   projectRoot: string,
   stepName: string,
@@ -3022,6 +3165,7 @@ export function prepareStep(
   };
   if (sessionId) {
     result.previous = preparePreviousContext(projectRoot, stepName, sessionId);
+    result.session_guidance = prepareSessionGuidance(projectRoot, sessionId);
   }
   return result;
 }
