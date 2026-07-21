@@ -1,8 +1,8 @@
 ---
 name: maestro-companion
 disable-model-invocation: false
-description: "Quick execution for small tasks (≤1-2 files, no artifact handoff) — minimal run lifecycle (create + complete only) with evidence recording. Can read/write/run any tool, but scoped to tasks completable in a few actions. Not for multi-step workflows or tasks needing downstream gates"
-argument-hint: "<intent> [--note <text>] [--promote] [-y]"
+description: "Quick execution for small tasks — minimal run lifecycle (create + complete) with evidence recording. Full LLM capability, scoped to mechanically clear tasks."
+argument-hint: "<intent> [--note <text>] [--log <run_id>] [--promote] [-y]"
 allowed-tools:
   - Read
   - Write
@@ -24,247 +24,130 @@ contract:
 </required_reading>
 
 <purpose>
-Minimal-run execution channel. Full LLM capability (read/write files, run commands, search code, edit code) with minimal protocol overhead: one `run create` + one `run complete`, continuous recording to `{run_dir}/evidence/companion-log.md`.
+Minimal-run execution channel. Full LLM capability with minimal protocol: one `run create` + one `run complete`, evidence appended to `{run_dir}/evidence/companion-log.md`.
 
 Use when:
-- Intent is mechanically clear — user knows exactly what to change, no design decisions or multi-angle analysis needed (file count is irrelevant; a 20-file rename is still lightweight)
-- No typed artifact needs to be consumed by a downstream step
-- No gate/verdict needs to be recorded for lifecycle tracking
-- Task does not require pre-task thinking (prepare) or structured brief to execute correctly
-
-Also provides companion utilities: structured note recording (--note) and insight promotion (--promote).
-
-This command can be invoked directly by the user or routed to from `/maestro-next` when complexity is assessed as lightweight.
+- Intent is mechanically clear (no design decisions needed; file count irrelevant)
+- No typed artifact consumed by downstream steps
+- No gate/verdict needed for lifecycle tracking
 </purpose>
 
 <context>
 $ARGUMENTS — intent text + optional flags.
 
-**Flags:**
-
 | Flag | Effect |
 |------|--------|
-| `-y` / `--yes` | Skip confirmation, execute directly |
-| `--note <text>` | Append a structured note to the active run's evidence log |
-| `--promote` | Interactively promote run insights to spec/knowhow |
+| `-y` | Skip confirmation, execute directly |
+| `--note <text>` | Append note to active run's evidence log |
+| `--log <run_id>` | View evidence log for a specific run |
+| `--promote` | Promote run insights to spec/knowhow |
 
-**Mode detection (priority order):**
-1. `--note` → S_NOTE (append note to active companion log)
-2. `--promote` → S_PROMOTE (review + promote insights)
-3. Intent text present → S_CTX → S_EXEC → S_SEAL
-4. No arguments → ask for intent via [@ask] AskUserQuestion
+Mode detection: `--note` → note | `--log` → log | `--promote` → promote | intent → execute | empty → ask
 </context>
 
 <invariants>
-1. **Minimal-run lifecycle** — single Run in a chainless Session. Only `run create` + `run complete` lifecycle verbs apply. No prepare/brief/check or artifact gates (consumes/produces/gates all empty); required command arguments are still validated by runtime
-2. **--note is append-only** — never overwrite or reorder existing entries
-3. **--promote delegates** — spec/knowhow promotion routes through `maestro-spec add` / `maestro-manage knowledge capture`, never writes directly
-4. **Evidence is non-formal** — `{run_dir}/evidence/companion-log.md` never enters gates or artifact registry
-5. **Full execution capability** — companion can do anything the LLM can do. It is NOT limited to knowledge loading or read-only operations
-6. **No auto-orchestration** — companion never creates chains or dispatches sub-orchestrators. It executes directly
+1. Only `run create` + `run complete` — no prepare/brief/check/gates
+2. Evidence is append-only, non-formal (never enters gates or artifact registry)
+3. `--promote` delegates to `maestro-spec add` / knowhow capture, never writes directly
+4. No auto-orchestration — executes directly, never creates chains
 </invariants>
 
-<state_machine>
+<flow>
 
-<states>
-S_PARSE   — Parse arguments, extract flags, detect mode
-S_NOTE    — Append structured note to active companion doc
-S_PROMOTE — Review companion/run outputs, promote insights to spec/knowhow
-S_CTX     — Create minimal run, load context, open evidence log
-S_EXEC    — Execute the task directly; record each meaningful step
-S_SEAL    — `run complete`, summarize outcome, offer optional promote
-</states>
+## Execute (default)
 
-<transitions>
+Linear: create → explore → confirm → do → seal.
 
-S_PARSE:
-  → S_NOTE     WHEN: --note flag
-  → S_PROMOTE  WHEN: --promote flag
-  → S_CTX      WHEN: intent present OR -y
-  → S_PARSE    WHEN: no intent (1 clarify round via [@ask] AskUserQuestion)
-
-S_NOTE:
-  → END        DO: A_NOTE
-
-S_PROMOTE:
-  → END        DO: A_PROMOTE
-
-S_CTX:
-  → S_EXEC     DO: A_CTX
-
-S_EXEC:
-  → S_EXEC     WHEN: task has more actions remaining    DO: execute next action + A_RECORD
-  → S_SEAL     WHEN: task complete                      DO: A_RECORD (final entry)
-
-S_SEAL:
-  → END        DO: A_SEAL
-
-</transitions>
-
-<actions>
-
-### A_CTX
-
-Entry point. Minimal-run: create + complete only, skip prepare/brief/check.
-
-1. **Create minimal run** (chainless single-step session):
-   ```bash
-   maestro run create companion --session YYYYMMDD-companion-<topic> --intent "<intent>" --arg "<intent>" --workflow-root .
-   ```
-   `--intent` preserves the goal as Session metadata; `--arg "<intent>"` supplies Companion's required `<intent>` command argument. Returns: `run_id`, `run_dir`. No chain or artifact gates; required command arguments remain runtime-validated.
-
-2. **Load context** (best-effort, non-blocking):
-   ```bash
-   maestro search "<intent keywords>" --type spec --type knowhow
-   ```
-   Load top 2-3 relevant entries. If nothing found, proceed without context.
-
-3. **Initialize evidence log** at `{run_dir}/evidence/companion-log.md`:
-   ```markdown
-   # Companion Log: {intent summary}
-   > run_id: {run_id} | session: {session_id}
-
-   ## Context
-   - {spec/knowhow entries loaded, or "none"}
-
-   ## Work Log
-   ```
-
-4. Proceed to S_EXEC.
-
-### A_RECORD
-
-Append a timestamped entry to `{run_dir}/evidence/companion-log.md` under `## Work Log`. Called after each meaningful action during S_EXEC.
-
-**Entry format:**
-```markdown
-### {HH:MM} — {action summary}
-{what was done, what was found, what changed}
-{files touched: path1, path2 (if any)}
-```
-
-**Recording rules:**
-- One entry per meaningful action (file edit, command run, discovery, decision)
-- Trivial reads (single file lookup) can be batched into one entry
-- Never overwrite or reorder existing entries (invariant 2)
-- Keep entries concise: 1-5 lines each, focus on outcome not process
-- Evidence dir is non-formal: never enters gates or artifact registry
-
-### A_SEAL
-
-Wrap up the companion run:
-
-1. **Append outcome** to `{run_dir}/evidence/companion-log.md`:
-   ```markdown
-   ## Outcome
-   **Status:** done | partial
-   **Summary:** {1-2 sentence result}
-   **Artifacts:** {files created/modified, or "none"}
-   **Follow-up:** {suggested next step if any, or "none"}
-   ```
-
-2. **Complete the run**:
-   ```bash
-   maestro run complete <run_id> --verdict done --workflow-root .
-   ```
-
-3. **Optional promote offer** — if the work produced reusable insights (patterns, decisions, pitfalls):
-   - Suggest: `/maestro-spec add <category> "title" "content"` or `/manage-knowhow-capture`
-   - Only suggest, never auto-execute (invariant 3)
-
-4. Display completion summary to user:
-   ```
-   Companion done. Run: {run_id} | Evidence: {run_dir}/evidence/companion-log.md
-   Outcome: {summary}
-   {promote suggestion if applicable}
-   ```
-
-### A_NOTE
-
-Append a structured note to the active run's evidence log.
-
-1. Locate active companion run:
-   ```bash
-   maestro run recall companion --json
-   ```
-   If no active run, create one via A_CTX (intent = "note recording").
-
-2. Append to `{run_dir}/evidence/companion-log.md`:
-   ```markdown
-   ### {HH:MM} — Note
-   {note text from --note argument}
-   ```
-
-3. Confirm: `Note recorded → {run_dir}/evidence/companion-log.md`
-
-### A_PROMOTE
-
-Review companion/run outputs and promote insights to spec/knowhow.
-
-1. Read the latest companion log(s) from recent runs:
-   ```bash
-   maestro run recall companion --json
-   ```
-   Read `{run_dir}/evidence/companion-log.md` for the most recent completed run.
-
-2. Identify promotable insights:
-   - Patterns discovered during execution
-   - Architectural decisions made
-   - Pitfalls encountered and workarounds found
-   - Reusable solutions
-
-3. For each insight, present to user via [@ask] AskUserQuestion:
-   - **Promote to spec** → suggest `/maestro-spec add <category> "title" "content" --keywords ...`
-   - **Promote to knowhow** → suggest `/manage-knowhow-capture`
-   - **Skip** → no action
-
-4. Never write directly — always delegate to the appropriate command (invariant 3).
-
-</actions>
-
-</state_machine>
-
-<routing_guidance>
-
-### When /maestro-next routes here
-
-`/maestro-next` assesses complexity at its S_RANK state. When all lightweight signals hold, it routes to this command:
-
-**Lightweight signals (all must hold):**
-- Intent is mechanically clear — user knows exactly what to change, no design decisions needed (file count irrelevant)
-- No typed artifact needs to be consumed by a downstream step
-- No gate/verdict needs to be recorded for lifecycle tracking
-- Task does not require pre-task thinking (prepare) or structured brief to execute correctly
-
-**Routing preference:** prefer the lightest channel that satisfies the task. When in doubt, ask the user rather than auto-upgrading to Standard.
-
-### Invocation forms
+### 1. Create
 
 ```bash
-# Direct invocation
-/maestro-companion "fix the typo in README line 42"
-/maestro-companion "what does the parseConfig function do?"
-
-# Routed from maestro-next (lightweight verdict)
-/maestro-next "quick lookup: where is the auth middleware?"
-  → maestro-next displays: "Channel: companion → /maestro-companion \"where is the auth middleware?\""
-
-# Note recording
-/maestro-companion --note "discovered that config.yaml overrides env vars"
-
-# Promote insights
-/maestro-companion --promote
+maestro run create companion --session YYYYMMDD-companion-<topic> --intent "<intent>" --arg "<intent>" --workflow-root .
 ```
 
-</routing_guidance>
+Init `{run_dir}/evidence/companion-log.md`:
+```markdown
+# Companion Log: {intent}
+> run_id: {run_id} | session: {session_id}
 
-<error_codes>
+## Evidence
+```
 
-| Code | Severity | Condition | Recovery |
-|------|----------|-----------|----------|
-| E001 | error | Intent empty after clarification | Provide intent |
-| E002 | error | `run create companion` fails | Check maestro CLI installation |
-| E003 | error | No active run found for --note | Auto-creates a new companion run |
-| W001 | warning | Task exceeds lightweight scope mid-execution | Complete current task, suggest /maestro-next for follow-up |
+### 2. Explore
 
-</error_codes>
+Locate targets and gather evidence before touching anything. Methods (pick what fits):
+
+- `maestro explore "FIND: ...\nSCOPE: ..."` — codebase search
+- `maestro search "<keywords>" --type spec --type knowhow` — knowledge recall
+- Agent (subagent) — multi-file analysis, cross-reference, pattern discovery
+- Direct Read/Grep/Glob — known targets, quick lookups
+
+Record findings under `## Evidence`:
+```markdown
+## Evidence
+- {file:line — what was found}
+- {spec/knowhow entries loaded, or "none"}
+- {subagent conclusions if used}
+```
+
+### 3. Confirm
+
+Before executing, verify evidence is sufficient:
+- Target files/locations identified?
+- Change scope clear (what to modify, what to leave alone)?
+- No ambiguity requiring design decisions?
+
+If insufficient → continue exploring or ask user. If `-y` → skip confirmation, proceed directly.
+
+### 4. Do
+
+Execute the task. After each meaningful action, append under `## Work Log`:
+
+```markdown
+### {HH:MM} — {summary}
+{outcome, files touched if any}
+```
+
+Rules: batch trivial reads; 1-5 lines per entry; focus on outcome not process.
+
+### 5. Seal
+
+Append outcome:
+```markdown
+## Outcome
+**Status:** done | partial
+**Summary:** {1-2 sentences}
+**Files:** {modified/created, or "none"}
+```
+
+```bash
+maestro run complete <run_id> --verdict done --workflow-root .
+```
+
+Display: `Companion done. Run: {run_id} | Evidence: {path}`
+
+If reusable insights emerged, suggest (never auto-execute):
+`/maestro-spec add ...` or `/manage-knowhow-capture`
+
+</flow>
+
+<utilities>
+
+## --note
+
+1. `maestro run recall companion --json` → get active run_dir (if none, create with intent="note recording")
+2. Append `### {HH:MM} — Note\n{text}` to evidence log
+3. Confirm path
+
+## --log <run_id>
+
+Required: run_id. Read `{run_dir}/evidence/companion-log.md` for that run and display.
+If run_id not found, error: "Run not found. Use `maestro run list --command companion` to find ids."
+
+## --promote
+
+1. `maestro run recall companion --json` → read latest evidence log
+2. Identify promotable insights (patterns, decisions, pitfalls)
+3. For each, ask user: promote to spec / knowhow / skip
+4. Delegate to appropriate command, never write directly
+
+</utilities>
