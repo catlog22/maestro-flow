@@ -578,7 +578,7 @@ async function configureProxy(): Promise<void> {
   } catch { /* undici not available */ }
 }
 
-async function loadTransformers(): Promise<{ pipeline: any }> {
+async function loadTransformers(): Promise<{ pipeline: any; env: any }> {
   return await import('@huggingface/transformers');
 }
 
@@ -590,6 +590,15 @@ export function setProgressCallback(cb: ModelProgressCallback | null): void {
   _progressCallback = cb;
 }
 
+// 允许通过 HF_ENDPOINT 指向国内镜像（如 https://hf-mirror.com）。
+// @huggingface/transformers（JS 版）不读 HF_ENDPOINT（那是 Python huggingface_hub 约定），
+// 只认 env.remoteHost，故在此手动透传。
+function configureRemoteHost(env: any): void {
+  const endpoint = process.env.HF_ENDPOINT || process.env.HF_MIRROR;
+  if (!endpoint) return;
+  env.remoteHost = endpoint.endsWith('/') ? endpoint : `${endpoint}/`;
+}
+
 async function getPipeline(): Promise<any> {
   if (_pipeline) return _pipeline;
 
@@ -597,7 +606,8 @@ async function getPipeline(): Promise<any> {
   await configureOnnxRuntimeLogging();
   const config = await detectDevice();
   const modelId = resolveLocalModel();
-  const { pipeline } = await loadTransformers();
+  const { pipeline, env } = await loadTransformers();
+  configureRemoteHost(env);
   const pipelineOpts: Record<string, unknown> = {
     dtype: config.dtype,
     device: config.device,
