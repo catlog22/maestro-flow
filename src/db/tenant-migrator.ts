@@ -9,24 +9,33 @@ export class TenantMigrator {
   ) {}
 
   async runMigrationForTenant(tenantSlug: string): Promise<void> {
+    // Validate slug to prevent SQL injection
+    if (!/^[a-z0-9_]+$/.test(tenantSlug)) {
+      throw new Error(`Invalid tenant slug: ${tenantSlug}`);
+    }
+
+    // Read and validate template SQL files BEFORE touching the database, so a
+    // missing/empty template directory fails loudly instead of creating an
+    // empty schema that is then recorded as "migrated" (false success).
+    const files = await this.getSqlFiles();
+    if (files.length === 0) {
+      throw new Error(
+        `No .sql migration templates found in "${this.templateDir}"; refusing to record an empty migration as applied`,
+      );
+    }
+
     const client = await this.pool.connect();
     try {
-      // Validate slug to prevent SQL injection
-      if (!/^[a-z0-9_]+$/.test(tenantSlug)) {
-        throw new Error(`Invalid tenant slug: ${tenantSlug}`);
-      }
-
       // Create schema if not exists
-      await client.query(`CREATE SCHEMA IF NOT EXISTS ${tenantSlug}`);
+      await client.query(`CREATE SCHEMA IF NOT EXISTS "${tenantSlug}"`);
 
-      // Read and execute template SQL files
-      const files = await this.getSqlFiles();
+      // Execute template SQL files
       for (const file of files.sort()) {
         const sqlPath = join(this.templateDir, file);
         const sqlContent = await readFile(sqlPath, 'utf-8');
         const migratedSql = sqlContent.replace(/__tenant__/g, tenantSlug);
 
-        await client.query(`SET search_path TO ${tenantSlug}, public`);
+        await client.query(`SET search_path TO "${tenantSlug}", public`);
         await client.query(migratedSql);
       }
 
@@ -63,7 +72,7 @@ export class TenantMigrator {
     const client = await this.pool.connect();
     try {
       // Drop the schema (cascade to remove all objects)
-      await client.query(`DROP SCHEMA IF EXISTS ${tenantSlug} CASCADE`);
+      await client.query(`DROP SCHEMA IF EXISTS "${tenantSlug}" CASCADE`);
 
       // Remove migration record
       await client.query(
@@ -76,11 +85,19 @@ export class TenantMigrator {
   }
 
   private async getSqlFiles(): Promise<string[]> {
+    let entries: string[];
     try {
-      const files = await readdir(this.templateDir);
-      return files.filter((f) => f.endsWith('.sql'));
-    } catch {
-      return [];
+      entries = await readdir(this.templateDir);
+    } catch (err) {
+      // A missing/unreadable template directory must fail loudly. Silently
+      // returning [] here previously let runMigrationForTenant create an empty
+      // schema and record it as successfully migrated.
+      throw new Error(
+        `Cannot read migration template directory "${this.templateDir}": ${
+          err instanceof Error ? err.message : String(err)
+        }`,
+      );
     }
+    return entries.filter((f) => f.endsWith('.sql'));
   }
 }

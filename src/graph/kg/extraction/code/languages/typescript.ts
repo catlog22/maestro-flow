@@ -78,6 +78,78 @@ function extractModifiers(node: any): { isExported: boolean; isStatic: boolean; 
   return { isExported, isStatic, isAsync, isAbstract, visibility };
 }
 
+// 提取 JSDoc 注释 — 符号前导的 /** ... */ comment 节点
+function extractDocstring(node: any): string { // eslint-disable-line @typescript-eslint/no-explicit-any
+  // 导出声明的 JSDoc 挂在 export_statement 父节点之前，而非声明节点本身。
+  let target = node;
+  if (target.parent && target.parent.type === 'export_statement') {
+    target = target.parent;
+  }
+  const prev = target.previousNamedSibling ?? target.previousSibling;
+  if (!prev || prev.type !== 'comment') return '';
+  const text: string = prev.text || '';
+  if (!text.startsWith('/**')) return '';
+  // 剥离注释标记: /** 、 */ 、每行前导 *
+  return text
+    .replace(/^\/\*\*?/, '')
+    .replace(/\*\/$/, '')
+    .split('\n')
+    .map((line) => line.replace(/^\s*\*\s?/, '').trimEnd())
+    .join('\n')
+    .trim();
+}
+
+// 提取装饰器名称
+// 装饰器可能位于: (a) export_statement 的直接子节点 (导出类/函数),
+// (b) 声明节点自身子节点或 modifiers 字段 (方法/参数装饰器)。
+// '@Component({...})' → 'Component'; '@Injectable' → 'Injectable'
+function extractDecorators(node: any): string[] { // eslint-disable-line @typescript-eslint/no-explicit-any
+  const decorators: string[] = [];
+  const seen = new Set<string>();
+
+  const addDecorator = (raw: string): void => {
+    const name = raw.replace(/^@/, '').split(/[(\s]/)[0];
+    if (name && !seen.has(name)) {
+      seen.add(name);
+      decorators.push(name);
+    }
+  };
+
+  const collectFrom = (container: any): void => { // eslint-disable-line @typescript-eslint/no-explicit-any
+    if (!container) return;
+    for (const child of container.children ?? []) {
+      if (child.type === 'decorator') addDecorator(child.text || '');
+    }
+    const modifiersNode = container.childForFieldName?.('modifiers');
+    if (modifiersNode) {
+      for (const mod of modifiersNode.children ?? []) {
+        if (mod.type === 'decorator') addDecorator(mod.text || '');
+      }
+    }
+  };
+
+  collectFrom(node);
+  if (node.parent && node.parent.type === 'export_statement') {
+    collectFrom(node.parent);
+  }
+  return decorators;
+}
+
+// 提取泛型参数名 — <T, U extends X> → ['T', 'U']
+function extractTypeParameters(node: any): string[] { // eslint-disable-line @typescript-eslint/no-explicit-any
+  const typeParamsNode = node.childForFieldName?.('type_parameters');
+  if (!typeParamsNode) return [];
+  const names: string[] = [];
+  for (const tp of typeParamsNode.namedChildren ?? []) {
+    if (tp.type === 'type_parameter') {
+      const nameNode = tp.childForFieldName?.('name');
+      const name = nameNode?.text ?? tp.children?.find((c: any) => c.type === 'type_identifier')?.text; // eslint-disable-line @typescript-eslint/no-explicit-any
+      if (name) names.push(name);
+    }
+  }
+  return names;
+}
+
 function traverse(
   node: any, // eslint-disable-line @typescript-eslint/no-explicit-any
   filePath: string,
@@ -110,15 +182,15 @@ function traverse(
         endLine: endRow,
         startColumn: node.startPosition.column + 1,
         endColumn: node.endPosition.column + 1,
-        docstring: '',  // TODO: 提取 JSDoc 注释
+        docstring: extractDocstring(node),
         signature: firstLine,
         visibility: mods.visibility,
         isExported: mods.isExported,
         isAsync: mods.isAsync,
         isStatic: mods.isStatic,
         isAbstract: mods.isAbstract,
-        decorators: [],  // TODO: 提取 @decorator
-        typeParameters: [],  // TODO: 提取 <T>
+        decorators: extractDecorators(node),
+        typeParameters: extractTypeParameters(node),
       });
 
       // 递归处理子节点 (类成员等)

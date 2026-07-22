@@ -2,7 +2,7 @@
 
 ## 概述
 
-Session Run 是 Maestro 的链式执行编排核心，位于 `src/run/`。围绕 `session/1.x` + `command-run/1.x` 协议构建，支持 ralph / coordinator / manual 三种引擎，提供 prepare → create → brief → check → complete 生命周期。
+Session Run 是 Maestro 的链式执行编排核心，位于 `src/run/`。围绕 `session/1.x` + `command-run/1.x` 协议构建，支持 ralph / coordinator / manual 三种引擎，提供 `prepare → create → brief → check → complete` 的 machine 生命周期，并提供 `run start` / `run done` / `run edit` 的人类友好入口。
 
 ## 模块结构
 
@@ -37,27 +37,41 @@ prepare → create → brief → check → complete
 ```
 
 - **prepare**：只读幂等，预览 step 的消费/产出契约，不分配 Session。
-- **create**：分配 Session + Run，返回 `session_id / run_id / run_dir / upstream`。
+- **create**：machine 协议入口，分配 Session + Run，返回 `session_id / run_id / run_dir / upstream`；人类入口优先使用 `maestro run start`。
 - **brief**：Resume Packet，断点续接的单注入点。
 - **check**：校验 gate 状态，识别 blocking 条件。
 - **complete**：提交当前 Run/chain 转换，返回 `suggest_only` 的 next 摘要；绝不执行建议。
 
-显式 `run next` 负责创建下一条 chain-bound Run。
+显式 `run next` 负责创建下一条 chain-bound Run；`run complete` / `run done` 只完成当前 Run 并返回 suggest-only next，不会自动分配下一步。
+
+## 人类入口与 machine 协议
+
+| 场景 | 推荐入口 | 行为 |
+|------|----------|------|
+| 新建单次工作 | `maestro run start "<intent>" --cmd <command> [--arg <value>]` | 创建 topic Session 下的一条 ad-hoc Run |
+| 新建简单链 | `maestro run start "<intent>" --chain <cmd...>` 或 `maestro session create <topic> --chain <cmd...>` | 创建一个 topic Session 和显式命令链；`run start` 默认派发第一步，`--no-dispatch` 只建链 |
+| 完成当前工作 | `maestro run done [run-id] --verdict done|done-with-concerns|needs-retry|blocked` | 运行 check + complete，更新 handoff，返回下一步建议但不执行 |
+| 中途调整未来步骤 | `maestro run edit <cmd...> [--after current|latest|start|<step>]` | 只插入/替换/跳过 pending chain step，不创建新 Session |
+| 自动化 / 兼容调用 | `maestro run create` / `maestro run complete` | 稳定 machine protocol；适合脚本、适配器和旧调用面 |
 
 ## 链编排动词
 
 | 动词 | 语义 | 约束 |
 |------|------|------|
-| `session create --chain-file` | 预定义链建 Session | steps[] >= 1 |
+| `session create <topic> --chain <cmd...>` | 简单命令链建 Session | 命令名即可，适合手写 CLI |
+| `session create <topic> --chain-file <json|->` | 高级链定义建 Session | JSON definition：steps[] >= 1，可携带 args/stage/goal_ref/retry/decision/meta |
+| `run start "<intent>" --chain <cmd...>` | 新建链 Session，可直接 dispatch 第一条 pending step | `--no-dispatch` 只建链 |
+| `run edit <cmd...>` | 在当前 Session 中追加未来步骤 | 不创建新 Session；`--replace` / `--remove` 只作用于 pending step |
 | `session chain insert` | 在指定步骤后插 pending 步骤 | 不能插到 active position 之前 |
 | `session chain skip / replace` | 跳过/原位改字段 | 仅 pending 步骤 |
 | `run next [--pick]` | 步进：取队头 pending 步骤建 Run + 发 birth packet | single-running guard |
-| `run complete --verdict` | 原子推进链步状态 | verdict 驱动 |
+| `run done` / `run complete --verdict` | 原子推进链步状态 | verdict 驱动；不自动执行下一步 |
 | `run decide <point-id>` | decision point 裁决落盘 + 推进 | 评估留在 prompt 层 |
 
 ## 入口治理
 
-- **统一步进器 = CLI 动词**：`maestro run next` / `run complete --verdict` 是所有引擎共享的链步进器。
+- **统一步进器 = CLI 动词**：`maestro run next` / `run complete --verdict` 是所有引擎共享的链步进器；`run start` / `run done` / `run edit` 是其上的人类友好薄封装。
+- **单主题 Session 优先**：中途新增步骤应改同一个 Session 的未来 chain，而不是为同一任务反复创建新 Session。
 - **maestro**：ralph/coordinator 引擎的 FSM 驱动者（自动循环、verdict 推进）。
 - **maestro-next**：默认交互入口（单步推荐 + 执行，No auto-orchestration）。
 - **隔离保证**：ralph 按 `engine !== 'ralph'` 过滤不认领 manual session；lease 惰性（null 零验证）。

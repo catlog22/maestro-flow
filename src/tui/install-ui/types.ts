@@ -37,6 +37,12 @@ export interface InstallFlowConfig {
   mcpProjectRoot: string;
   backupClaudeMd: boolean;
   backupAll: boolean;
+  /**
+   * Reconcile file ownership during upgrade/import installs.
+   * Normal installs are additive; upgrade installs should remove prior-owned
+   * files that are no longer produced by the current package.
+   */
+  pruneObsoleteOwnedFiles?: boolean;
   claudeHooksSelection?: HooksSelection;
   codexHooksSelection?: HooksSelection;
   agyHooksSelection?: HooksSelection;

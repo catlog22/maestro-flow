@@ -63,10 +63,38 @@ Canonical paused recovery 必须严格分成 `resolve` 与 `resume` 两个 phase
 
 ---
 
-## 二、CLI 命令（`src/commands/run.ts`）
+## 二、CLI 命令（`src/commands/run.ts` / `src/commands/session.ts`）
+
+### 2.0 人类入口与 machine 协议
+
+人类入口以 topic Session 为中心：新工作用 `run start`，收口用 `run done`，中途新增/调整未来步骤用 `run edit`。底层 `run create` / `run complete` 仍是稳定 machine protocol，用于脚本、适配器和兼容调用。
+
+```bash
+# 单次 Run：intent 进 Session metadata，命令输入通过 --arg 进入 Run input.args
+maestro run start "理解认证流程" --cmd learn --session 20260721-learn-auth --arg "src/auth"
+
+# 简单链：命令名直接作为链，无需 JSON 文件
+maestro run start "修复登录链路" --chain analyze plan execute verify
+maestro session create "修复登录链路" --chain analyze plan execute verify --engine manual
+
+# 只创建链不派发第一步
+maestro run start "重构 session run 文档" --chain analyze execute review --no-dispatch
+
+# 当前 Run 收口；完成后只返回 suggest-only next
+maestro run done --verdict done-with-concerns --note "后续补充 docs-site 镜像"
+
+# 中途改变未来 chain，不创建第二个 Session
+maestro run edit test review --after latest
+maestro run edit verify --replace step-003-review
+```
+
+`session create --chain-file <json|->` 保留为高级 JSON 入口，用于需要 `args`、`stage`、`goal_ref`、`retry_max`、`decision_ref`、`position`、`decomposition` 或 `executor` 的精细链定义；普通手写 CLI 不应为了传链而先写临时文件。
 
 | 子命令 | 签名 | 功能 |
 |--------|------|------|
+| `start` | `[intent...] --cmd <command> [--arg]` 或 `[intent...] --chain <cmd...>` | 人类入口：创建单 Run 或简单链 Session；链模式默认派发第一步 |
+| `done` | `[run-id] [--verdict] [--note] [--decision] [--artifact]` | 人类入口：check + complete 当前 Run，返回下一步建议但不自动执行 |
+| `edit` | `[commands...] [--after] [--replace] [--remove]` | 人类入口：编辑未来 chain step，不创建 raw Run 或新 Session |
 | `prepare` | `<step> [--platform] [--workflow-root]` | 只读预览：返回 prepare 内容 + workflow 内容 + 合约 + 引用 |
 | `create` | `<command> [args...] [--session] [--intent] [--parent-run]` | 创建 Run：解析 Session → 注册 Gate → 收集上游 → 返回 run_id + run_dir |
 | `next` | `[--session] [--pick]` | chain 唯一 allocator：选择 pending step，创建并绑定下一个 Run |
@@ -77,9 +105,22 @@ Canonical paused recovery 必须严格分成 `resolve` 与 `resume` 两个 phase
 | `seal-session` | `<session-id>` | 锁定 Session：所有 Run 必须已完成，产物变为不可变 |
 | `list` | `[--workflow-root]` | 列出所有 Session 及其 Run |
 
+`session` 命令侧的建链与编辑入口：
+
+| 子命令 | 签名 | 功能 |
+|--------|------|------|
+| `create` | `<topic> --chain <cmd...>` | 简单命令链建 Session，命令名直接传入 |
+| `create` | `<topic> --chain-file <json|->` | 高级 JSON 链定义；`-` 读 stdin |
+| `chain insert` | `--session --after --command` | 追加 pending step，receipt-backed |
+| `chain replace` | `--session --step [--command] [--args]` | 原位替换 pending step |
+| `chain skip` | `--session --step` | 将 pending step 标记 skipped |
+
 ### 2.1 createRun 数据流
 
 ```
+Run start single mode
+  │
+  ▼
 CreateRunOptions
   ├── projectRoot, command, sessionId?, intent?, args[]
   │
@@ -111,6 +152,8 @@ store.update(sessionId) ← 事务写入
   // + 可选字段：workflow, prepare, runMode, refs, platform
 }
 ```
+
+简单链模式不经过 `CreateRunOptions` 直接创建 Run，而是先把 `--chain <cmd...>` 转换为 `ChainDefinition` 并创建 Session；随后由 `run next` 分配第一条 chain-bound Run。`run edit` 同样只修改 pending step，真正的 Run allocation 始终集中在 `run next`。
 
 ### 2.2 当前 authority、transition receipt 与 machine response
 

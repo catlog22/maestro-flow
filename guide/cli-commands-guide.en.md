@@ -208,7 +208,15 @@ maestro serve --port 3600 --host localhost
 
 `run` manages the lifecycle of one command invocation; `session` manages canonical paused recovery, the chain, and orchestration meta. The runtime writer currently emits `session/1.3` + `command-run/1.3`.
 
+Human-facing usage should prefer `run start` / `run done` / `run edit`; `run create` / `run complete` remain the stable machine protocol and compatibility surface.
+
 ```bash
+maestro run start "understand auth flow" --cmd learn --session 20260721-learn-auth --arg "src/auth"
+maestro run start "fix login flow" --chain analyze plan execute verify
+maestro session create "fix login flow" --chain analyze plan execute verify --engine manual
+maestro run edit test review --after latest
+maestro run done --verdict done-with-concerns --note "mirror docs later"
+
 maestro run prepare <step> --platform codex
 maestro run create <command> --session <id> --intent "<intent>" --json
 maestro run brief <run-id> --session <id> --json
@@ -237,6 +245,9 @@ Each `resolve` handles exactly one escalated decision (`--decision` + `proceed|r
 
 | `operation` | CLI surface | Required inputs / behavior |
 |-------------|-------------|----------------------------|
+| human wrapper | `run start` | Handwritten entry; single-Run mode wraps `create`, chain mode creates a Session and may dispatch the first `next` |
+| human wrapper | `run done` | Handwritten entry; wraps `complete --verdict` and returns suggest-only next without executing it |
+| human wrapper | `run edit` | Handwritten entry; inserts/replaces/skips pending chain steps without allocating a Run |
 | `create` | `run create`; legacy confirmed `run new` | `create` requires a command; pass an explicit `--session` for stable identity |
 | `next` | `run next` | Optional `--session`/`--pick`; selects a pending step and allocates its chain Run |
 | `complete` | `run complete` | Optional Run ID; verdict path supports request/revision/lease guards |
@@ -249,6 +260,7 @@ Each `resolve` handles exactly one escalated decision (`--decision` + `proceed|r
 | `seal-session` | `run seal-session <session-id>` | Seals the Session; not receipt-backed, so success has `replay: null` |
 | `resolve` | `session resolve` | Requires audit/revision flags and exactly one recovery target; stays paused |
 | `resume` | `session resume` | Requires audit/revision flags; performs only paused → running |
+| session creation | `session create --chain` | Creates a simple command-chain Session; `--chain-file` is only for advanced JSON definitions |
 | `chain-insert` | `session chain insert` | Requires `--session --after --command`; receipt-backed |
 | `chain-replace` | `session chain replace` | Requires `--session --step`; pending steps only |
 | `chain-skip` | `session chain skip` | Requires `--session --step`; pending steps only |

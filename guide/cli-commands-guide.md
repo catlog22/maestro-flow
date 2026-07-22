@@ -361,7 +361,15 @@ maestro serve --port 3600 --host localhost
 
 `run` 管理一次 command invocation 的生命周期；`session` 管理 canonical Session 的 paused recovery、chain 与 orchestration meta。Runtime writer 当前固定写出 `session/1.3` + `command-run/1.3`。
 
+人类入口优先使用 `run start` / `run done` / `run edit`；`run create` / `run complete` 保留为稳定 machine protocol 和兼容面。
+
 ```bash
+maestro run start "理解认证流程" --cmd learn --session 20260721-learn-auth --arg "src/auth"
+maestro run start "修复登录链路" --chain analyze plan execute verify
+maestro session create "修复登录链路" --chain analyze plan execute verify --engine manual
+maestro run edit test review --after latest
+maestro run done --verdict done-with-concerns --note "后续补充文档镜像"
+
 maestro run prepare <step> --platform codex
 maestro run create <command> --session <id> --intent "<intent>" --json
 maestro run brief <run-id> --session <id> --json
@@ -398,6 +406,9 @@ maestro run next --session <id> --json
 
 | `operation` | CLI surface | 关键参数 / 行为 |
 |-------------|-------------|-----------------|
+| human wrapper | `run start` | 手写入口；单 Run 模式包装 `create`，链模式创建 Session 并可 dispatch 第一条 `next` |
+| human wrapper | `run done` | 手写入口；包装 `complete --verdict`，完成当前 Run 后只返回 suggest-only next |
+| human wrapper | `run edit` | 手写入口；插入/替换/跳过 pending chain step，不创建 Run |
 | `create` | `run create`；legacy confirmed `run new` | `create` 需要 command；Session identity 建议显式传 `--session` |
 | `next` | `run next` | 可选 `--session`/`--pick`；选择 pending step 并分配 chain Run |
 | `complete` | `run complete` | 可选 run ID；verdict path 支持 request/revision/lease guards |
@@ -410,6 +421,7 @@ maestro run next --session <id> --json
 | `seal-session` | `run seal-session <session-id>` | Session seal；非 receipt-backed，成功时 `replay: null` |
 | `resolve` | `session resolve` | 必填 audit/revision flags 和且仅一个 recovery target；保持 paused |
 | `resume` | `session resume` | 必填 audit/revision flags；只执行 paused → running |
+| session creation | `session create --chain` | 简单命令链建 Session；`--chain-file` 仅用于高级 JSON definition |
 | `chain-insert` | `session chain insert` | 必填 `--session --after --command`；receipt-backed |
 | `chain-replace` | `session chain replace` | 必填 `--session --step`；仅 pending step |
 | `chain-skip` | `session chain skip` | 必填 `--session --step`；仅 pending step |

@@ -263,7 +263,7 @@ export function registerInstallCommand(program: Command): void {
     .option('--plugin', 'Register as native plugin instead of file copy (with --force)')
     .option('--export [path]', 'Export current install config as profile JSON')
     .option('--import <path>', 'Import profile and install non-interactively')
-    .option('--upgrade', 'With --import: merge new default-selected components (used by update)')
+    .option('--upgrade', 'With --import: merge new defaults and prune obsolete owned files (used by update)')
     .option('--load <path>', 'Load profile into interactive TUI (pre-fill state)')
     .action(async (opts: { force?: boolean; allPlatforms?: boolean; global?: boolean; path?: string; hooks?: string; mcp?: boolean; codexHooks?: string; codexMcp?: boolean; agyHooks?: string; extraMcp?: string; components?: string; statusline?: boolean | string; plugin?: boolean; export?: boolean | string; import?: string; upgrade?: boolean; load?: string }) => {
       const pkgRoot = getPackageRoot();
@@ -324,6 +324,7 @@ export function registerInstallCommand(program: Command): void {
           pluginCodex: profilePluginPlatformState(profile.plugin, 'codex'),
           backupClaudeMd: profile.backup.claudeMd,
           backupAll: profile.backup.all,
+          pruneObsoleteOwnedFiles: !!opts.upgrade,
         });
         return;
       }
@@ -447,6 +448,7 @@ interface ForceInstallOpts {
   backupClaudeMd?: boolean;
   backupAll?: boolean;
   genericHookLevels?: Record<string, HookLevel>;
+  pruneObsoleteOwnedFiles?: boolean;
 }
 
 type ProfileHookSelection = InstallProfile['claude']['hooks'];
@@ -622,6 +624,7 @@ async function forceInstall(
     mcpProjectRoot: opts.mcpProjectRoot ?? '',
     backupClaudeMd: opts.backupClaudeMd ?? true,
     backupAll: opts.backupAll ?? false,
+    pruneObsoleteOwnedFiles: opts.pruneObsoleteOwnedFiles,
     claudeHooksSelection: claudeHooksSelection as import('../tui/install-ui/HooksConfig.js').HooksSelection,
     codexHooksSelection: codexHooksSelection as import('../tui/install-ui/HooksConfig.js').HooksSelection,
     agyHooksSelection: agyHooksSelection as import('../tui/install-ui/HooksConfig.js').HooksSelection,
@@ -658,6 +661,8 @@ async function forceInstall(
   const parts = [`${result.filesInstalled} files`];
   if (result.dirsCreated > 0) parts.push(`${result.dirsCreated} dirs`);
   if (result.filesSkipped > 0) parts.push(`${result.filesSkipped} preserved`);
+  if (result.obsoleteFilesRemoved > 0) parts.push(`${result.obsoleteFilesRemoved} obsolete removed`);
+  if (result.obsoleteFileErrors > 0) parts.push(`${result.obsoleteFileErrors} cleanup errors`);
   console.error(t.install.forceResult.replace('{summary}', parts.join(', ')));
 
   if (result.migrationWarnings.length > 0) {

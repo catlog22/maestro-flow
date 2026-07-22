@@ -26,6 +26,7 @@ export interface StartOptions {
 
 export class GraphWalker {
   private activeState: WalkerState | null = null;
+  private saveFailures = 0;
 
   constructor(
     private readonly loader: GraphLoader,
@@ -125,7 +126,11 @@ export class GraphWalker {
 
   async walkGraph(state: WalkerState, graph: ChainGraph): Promise<WalkerState> {
     this.activeState = state;
-    await this.walk(state, graph);
+    try {
+      await this.walk(state, graph);
+    } catch (err) {
+      await this.handleWalkFailure(state, err);
+    }
 
     if (this.hooks) {
       try {
@@ -137,6 +142,28 @@ export class GraphWalker {
     }
 
     return state;
+  }
+
+  /**
+   * Error barrier for the walk loop. An unhandled exception from a node
+   * handler (executor spawn failure, assembler/analyzer throw, broken output
+   * parser) must not leave the session stuck in `running`/`waiting_command`
+   * with no persisted failure state. Record the failure, persist it, emit an
+   * error event, and notify the onError hook so callers observe a clean
+   * `failed` session instead of an unhandled rejection.
+   */
+  private async handleWalkFailure(state: WalkerState, err: unknown): Promise<void> {
+    const error = err instanceof Error ? err : new Error(String(err));
+    state.status = 'failed';
+    state.updated_at = new Date().toISOString();
+    this.ensureRecovery(state).last_error = error.message;
+    this.emit({ type: 'walker:error', session_id: state.session_id, error: error.message });
+    this.save(state);
+    if (this.hooks) {
+      try {
+        await this.hooks.onError.call({ nodeId: state.current_node, error, state });
+      } catch (e) { console.error(`[walker] hook error: ${e instanceof Error ? e.message : String(e)}`); }
+    }
   }
 
   private async walk(state: WalkerState, graph: ChainGraph): Promise<void> {
@@ -987,7 +1014,20 @@ export class GraphWalker {
         JSON.stringify(state, null, 2),
         'utf-8',
       );
-    } catch { /* best-effort */ }
+      this.saveFailures = 0;
+    } catch (err) {
+      // Best-effort persistence, but surface *persistent* failures (disk full,
+      // permission denied) so a long-running orchestration does not silently
+      // lose all progress with no diagnostic signal.
+      this.saveFailures += 1;
+      if (this.saveFailures === 1 || this.saveFailures % 10 === 0) {
+        console.error(
+          `[walker] state persistence failed (${this.saveFailures}x) for ${state.session_id}: ${
+            err instanceof Error ? err.message : String(err)
+          }`,
+        );
+      }
+    }
   }
 
   private loadState(sessionId?: string): WalkerState {

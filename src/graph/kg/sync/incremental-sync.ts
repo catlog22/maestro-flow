@@ -1,10 +1,9 @@
 // src/graph/kg/sync/incremental-sync.ts — 增量同步
 // 参考: plan-maestrograph.md D2.4 同步优先级调度 + D1.4 FileLock
 
-import { readFileSync } from 'node:fs';
-import { createHash } from 'node:crypto';
 import type { MaestroGraph } from '../engine.js';
 import type { SyncResult, SourceType } from '../db/types.js';
+import { hashFile } from '../../sync/content-hash.js';
 export { FileLock } from './file-lock.js';
 
 // ---------------------------------------------------------------------------
@@ -44,8 +43,8 @@ export async function runIncrementalSync(
 
 export function computeFileHash(filePath: string): string {
   try {
-    const content = readFileSync(filePath);
-    return createHash('sha256').update(content).digest('hex').substring(0, 16);
+    // 截断前 16 位、错误返回 '' — 保留原有对外契约，底层复用共享 hashFile。
+    return hashFile(filePath, { truncate: 16 });
   } catch {
     return '';
   }

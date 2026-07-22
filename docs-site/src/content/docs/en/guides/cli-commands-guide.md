@@ -23,7 +23,7 @@ Maestro provides 21 terminal commands invoked via `maestro <command>`. Covers in
 | `explore` | -- | Lightweight parallel code search (API-endpoint-driven) |
 | `coordinate` | `coord` | Graph workflow coordinator |
 | `cli` | -- | Run CLI agent tools |
-| `run` | -- | Execute a named workflow |
+| `run` | -- | Manage Session/Run lifecycle |
 | `serve` | -- | Start workflow server |
 | `launcher` | -- | Claude Code launcher |
 | `spec` | -- | Project spec management |
@@ -195,13 +195,29 @@ maestro cli -p "fix bug" --tool gemini --mode write
 
 Options same as `delegate` (`-p` required). Additional subcommands: `show`, `output <id>`, `watch <id>`.
 
-**run** -- Execute a named workflow:
+**run / session** -- Manage topic Sessions, Run lifecycle, and command chains:
 
 ```bash
-maestro run <workflow>           # Execute
-maestro run <workflow> --dry-run # Preview
-maestro run <workflow> -c config.json
+maestro run start "understand auth flow" --cmd learn --session 20260721-learn-auth --arg "src/auth"
+maestro run start "fix login flow" --chain analyze plan execute verify
+maestro session create "fix login flow" --chain analyze plan execute verify --engine manual
+maestro run edit test review --after latest
+maestro run done --verdict done-with-concerns --note "mirror docs later"
+
+maestro run create <command> --session <id> --intent "<intent>" --json
+maestro run next --session <id> --json
+maestro run complete <run-id> --session <id> --json
 ```
+
+| Surface | Description |
+|---------|-------------|
+| `run start --cmd` | Human entry: create one Run; pass command input through `--arg` |
+| `run start --chain` | Human entry: create a simple command-chain Session and dispatch the first step by default |
+| `run start --no-dispatch` | Create the chain Session without dispatching the first step |
+| `run done` | Human entry: check + complete the current Run and return suggest-only next |
+| `run edit` | Mutate future chain steps without creating another Session |
+| `session create --chain` | Simple chain creation from command names |
+| `session create --chain-file` | Advanced JSON chain definition entry |
 
 **serve** -- Start the workflow server:
 

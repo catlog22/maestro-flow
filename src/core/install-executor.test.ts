@@ -164,6 +164,48 @@ describe('executeInstallPipeline additive semantics', () => {
     );
   });
 
+  it('prunes prior-owned files that are not produced during an upgrade reinstall', async () => {
+    const commandsSource = join(packageRoot, '.claude', 'commands');
+    const commandsTarget = join(projectPath, '.claude', 'commands');
+    const staleFile = join(commandsTarget, 'stale.md');
+    const currentFile = join(commandsTarget, 'current.md');
+    mkdirSync(commandsSource, { recursive: true });
+    mkdirSync(commandsTarget, { recursive: true });
+    writeFileSync(join(commandsSource, 'current.md'), 'current');
+    writeFileSync(staleFile, 'stale');
+
+    const prior = manifestApi.createManifest('project', projectPath, {
+      selectedComponentIds: ['commands', 'retired-component'],
+      knownComponentIds: ['commands', 'retired-component'],
+    });
+    manifestApi.addFile(prior, staleFile);
+    manifestApi.recordCodexHooks(prior, {
+      settingsPath: join(projectPath, '.codex', 'hooks.json'),
+      installed: ['session-context'],
+      level: 'minimal',
+    });
+    manifestApi.saveManifest(prior);
+
+    const result = await executor.executeInstallPipeline({
+      config: {
+        ...config(['commands']),
+        pruneObsoleteOwnedFiles: true,
+      },
+      pkgRoot: packageRoot,
+      version: 'test',
+    });
+
+    const current = manifestApi.findManifest('project', projectPath);
+    const ownedPaths = current?.entries.map((entry) => entry.path) ?? [];
+    expect(result.obsoleteFilesRemoved).toBe(1);
+    expect(existsSync(staleFile)).toBe(false);
+    expect(existsSync(currentFile)).toBe(true);
+    expect(ownedPaths).toContain(currentFile);
+    expect(ownedPaths).not.toContain(staleFile);
+    expect(current?.selectedComponentIds).toEqual(['commands']);
+    expect(current?.hooks?.codex?.installed).toEqual(['session-context']);
+  });
+
   it('clears explicitly disabled config while preserving additive component ownership', async () => {
     const prior = manifestApi.createManifest('project', projectPath, {
       hookLevel: 'minimal',

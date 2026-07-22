@@ -174,7 +174,8 @@ async function stopViewServer(): Promise<boolean> {
  *   - Loss of custom hook selections (only level was passed before)
  *
  * The `--upgrade` flag tells the new binary to merge newly added
- * default-selected components into the existing selection.
+ * default-selected components into the existing selection and prune
+ * prior-owned files that the current package no longer produces.
  */
 async function reinstallWorkflows(version: string): Promise<void> {
   const manifests = getAllManifests();

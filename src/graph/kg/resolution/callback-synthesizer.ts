@@ -117,6 +117,16 @@ function phase2_eventEmitter(
 // 全局配对 (Swift/Alamofire 场景)
 // ---------------------------------------------------------------------------
 
+/**
+ * Phase 3: 闭包集合分派 — 当前为空壳（stub）。
+ *
+ * 意图：为 `.forEach { $0() }` / `.append(closure)` 等 Swift/Alamofire 场景建立
+ * 高阶函数 → 闭包内被调函数的 calls 边。
+ *
+ * @todo 尚未实现：目前仅按文件对高阶函数节点分组，未生成任何 edge（groupedByFile
+ * 构建后未被消费）。完整实现需要 AST 级分析闭包内容（将闭包体中的调用关联到对应
+ * 函数节点）。在补齐前保留此空壳以维持调用点（line ~523）与阶段结构稳定。
+ */
 function phase3_closureDispatch(
   nodes: Array<{ id: string; name: string; qualifiedName: string; filePath: string }>,
   edges: UnifiedEdge[],

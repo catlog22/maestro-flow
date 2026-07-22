@@ -26,7 +26,15 @@ export class TenantConnectionManager {
     }
 
     const client = await this.pool.connect();
-    await client.query(`SET search_path TO ${tenantSlug}, public`);
+    try {
+      await client.query(`SET search_path TO "${tenantSlug}", public`);
+    } catch (err) {
+      // Release the client back to the pool before rethrowing; otherwise a
+      // failed SET (broken connection, insufficient privilege) leaks a pool
+      // slot and repeated failures can exhaust the pool (default max=20).
+      client.release();
+      throw err;
+    }
     const db = drizzle(client, { schema: coreSchema });
     return { db, client };
   }
@@ -59,7 +67,7 @@ export class TenantConnectionManager {
     if (!/^[a-z0-9_]+$/.test(slug)) {
       throw new Error(`Invalid tenant slug: ${slug}`);
     }
-    await this.pool.query(`DROP SCHEMA IF EXISTS ${slug} CASCADE`);
+    await this.pool.query(`DROP SCHEMA IF EXISTS "${slug}" CASCADE`);
   }
 
   async close(): Promise<void> {

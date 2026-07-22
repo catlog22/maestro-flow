@@ -35,6 +35,7 @@ import {
   addDir,
   saveManifest,
   findManifest,
+  cleanManifestFiles,
   recordClaudeHooks,
   recordCodexHooks,
   recordAgyHooks,
@@ -79,6 +80,9 @@ export interface InstallResult {
   statuslineInstalled: boolean;
   backupPath: string | null;
   migrationWarnings: string[];
+  obsoleteFilesRemoved: number;
+  obsoleteFilesSkipped: number;
+  obsoleteFileErrors: number;
 }
 
 export type StepName =
@@ -123,6 +127,9 @@ export async function executeInstallPipeline(opts: ExecutorOptions): Promise<Ins
   let statuslineInstalled = false;
   let backupPath: string | null = null;
   const warnings: string[] = [];
+  let obsoleteFilesRemoved = 0;
+  let obsoleteFilesSkipped = 0;
+  let obsoleteFileErrors = 0;
 
   // Pre-scan components once (shared by backup + component-install phases).
   // Keep the full catalog so upgrade logic can later distinguish genuinely
@@ -153,20 +160,29 @@ export async function executeInstallPipeline(opts: ExecutorOptions): Promise<Ins
     id === 'workflows' || id === 'prepare' || id === 'commands' || id === 'commands-entry')) {
     removeRetiredQuickArtifacts(targetBase, config.mode);
   }
-  progress('cleanup', 'done', prior ? 'prior state preserved' : 'clean slate');
+  let priorStateDetail = 'clean slate';
+  if (prior) {
+    priorStateDetail = config.pruneObsoleteOwnedFiles ? 'prior config loaded' : 'prior state preserved';
+  }
+  progress('cleanup', 'done', priorStateDetail);
 
   // --- Replacement manifest ---
   // Installation is additive. Existing ownership/config records remain until
   // an explicit uninstall operation removes them. This prevents a partial
   // `install --components ...` call from silently uninstalling unrelated
   // components, hooks, MCP registrations, statusline, or plugins.
+  // Upgrade/import installs opt into reconcile mode: config records are still
+  // inherited, but file ownership is rebuilt from the current package so
+  // retired assets can be pruned after the replacement manifest is durable.
   paths.ensure(paths.home);
   const alwaysGlobalIds = new Set(
     scannedComponents.filter((component) => component.def.alwaysGlobal).map((component) => component.def.id),
   );
   const requestedIds = config.installComponents ? config.selectedComponentIds : [];
+  const preservePriorFileState = !config.pruneObsoleteOwnedFiles;
   const selectedComponentIds = Array.from(new Set([
-    ...(prior?.selectedComponentIds ?? []).filter((id) => config.mode !== 'project' || !alwaysGlobalIds.has(id)),
+    ...(preservePriorFileState ? prior?.selectedComponentIds ?? [] : [])
+      .filter((id) => config.mode !== 'project' || !alwaysGlobalIds.has(id)),
     ...requestedIds.filter((id) => config.mode !== 'project' || !alwaysGlobalIds.has(id)),
   ]));
   const manifest = createManifest(config.mode, targetPath, {
@@ -178,7 +194,8 @@ export async function executeInstallPipeline(opts: ExecutorOptions): Promise<Ins
   });
   if (prior) {
     copyPriorState(manifest, prior, (entry) =>
-      !isRetiredQuickPath(entry.path)
+      preservePriorFileState
+      && !isRetiredQuickPath(entry.path)
       && (config.mode !== 'project' || !isPathWithin(paths.home, entry.path)));
     await clearExplicitlyDisabledState(manifest, prior, config);
   }
@@ -187,7 +204,8 @@ export async function executeInstallPipeline(opts: ExecutorOptions): Promise<Ins
         hookLevel: globalPrior?.hookLevel,
         selectedComponentIds: Array.from(new Set([
           ...(globalPrior?.selectedComponentIds ?? []),
-          ...(prior?.selectedComponentIds ?? []).filter((id) => alwaysGlobalIds.has(id)),
+          ...(preservePriorFileState ? prior?.selectedComponentIds ?? [] : [])
+            .filter((id) => alwaysGlobalIds.has(id)),
           ...requestedIds.filter((id) => alwaysGlobalIds.has(id)),
         ])),
         knownComponentIds: scannedComponents.map((component) => component.def.id),
@@ -196,7 +214,7 @@ export async function executeInstallPipeline(opts: ExecutorOptions): Promise<Ins
   if (sharedManifest && globalPrior) {
     copyPriorState(sharedManifest, globalPrior, (entry) => !isRetiredQuickPath(entry.path));
   }
-  if (sharedManifest && prior) {
+  if (sharedManifest && prior && preservePriorFileState) {
     for (const entry of prior.entries.filter((candidate) =>
       !isRetiredQuickPath(candidate.path) && isPathWithin(paths.home, candidate.path))) {
       if (entry.type === 'file') addFile(sharedManifest, entry.path);
@@ -426,6 +444,20 @@ export async function executeInstallPipeline(opts: ExecutorOptions): Promise<Ins
   const manifestPath = saveManifest(manifest, { expectedPriorId: prior?.id ?? null });
   progress('manifest', 'done', 'saved');
 
+  if (config.pruneObsoleteOwnedFiles && prior) {
+    if (cancelled()) throw new CancelledError();
+    progress('cleanup', 'active', 'Pruning obsolete install files...');
+    const currentManifests = sharedManifest ? [manifest, sharedManifest] : [manifest];
+    const pruneResult = pruneObsoletePriorEntries(prior, currentManifests);
+    obsoleteFilesRemoved = pruneResult.removed;
+    obsoleteFilesSkipped = pruneResult.skipped;
+    obsoleteFileErrors = pruneResult.errors;
+    const detail = obsoleteFileErrors > 0
+      ? `${obsoleteFilesRemoved} obsolete removed, ${obsoleteFileErrors} errors`
+      : `${obsoleteFilesRemoved} obsolete removed`;
+    progress('cleanup', obsoleteFileErrors > 0 ? 'error' : 'done', detail);
+  }
+
   return {
     filesInstalled, dirsCreated, filesSkipped,
     hooksInstalled, mcpRegistered,
@@ -434,7 +466,45 @@ export async function executeInstallPipeline(opts: ExecutorOptions): Promise<Ins
     extraMcpRegistered, extraMcpFailed,
     manifestPath,
     statuslineInstalled, backupPath, migrationWarnings: warnings,
+    obsoleteFilesRemoved, obsoleteFilesSkipped, obsoleteFileErrors,
   };
+}
+
+interface PruneResult {
+  removed: number;
+  skipped: number;
+  errors: number;
+}
+
+function pruneObsoletePriorEntries(prior: Manifest, currentManifests: Manifest[]): PruneResult {
+  const currentKeys = new Set(
+    currentManifests.flatMap((manifest) => manifest.entries.map(entryKey)),
+  );
+  const obsoleteEntries = dedupeEntries(
+    prior.entries.filter((entry) => !currentKeys.has(entryKey(entry))),
+  );
+
+  if (obsoleteEntries.length === 0) {
+    return { removed: 0, skipped: 0, errors: 0 };
+  }
+
+  return cleanManifestFiles({ ...prior, entries: obsoleteEntries });
+}
+
+function dedupeEntries(entries: Manifest['entries']): Manifest['entries'] {
+  const seen = new Set<string>();
+  const unique: Manifest['entries'] = [];
+  for (const entry of entries) {
+    const key = entryKey(entry);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    unique.push({ ...entry });
+  }
+  return unique;
+}
+
+function entryKey(entry: Manifest['entries'][number]): string {
+  return `${entry.type}:${resolve(entry.path).replaceAll('\\', '/').toLowerCase()}`;
 }
 
 function copyPriorState(
