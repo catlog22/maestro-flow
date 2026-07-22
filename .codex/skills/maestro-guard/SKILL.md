@@ -9,7 +9,7 @@ allowed-tools:
   - Read
   - Write
 session-mode: none
-version: 0.5.54
+version: 0.5.55
 ---
 
 <purpose>

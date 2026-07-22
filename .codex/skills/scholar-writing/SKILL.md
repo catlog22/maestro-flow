@@ -20,7 +20,7 @@ allowed-tools:
   - request_user_input
   - update_plan
 session-mode: run
-version: 0.5.54
+version: 0.5.55
 contract:
   discovery: self-described
   consumes: []

@@ -17,6 +17,14 @@ interface ChangelogEntry {
 
 const changelog: ChangelogEntry[] = [
   {
+    version: '0.5.55',
+    date: '2026-07',
+    changes: [
+      { type: 'feat', text_en: 'Support HF_ENDPOINT / HF_MIRROR env vars to download embedding models from a mirror (e.g. hf-mirror.com) via @huggingface/transformers env.remoteHost', text_zh: 'embedding 支持通过 HF_ENDPOINT / HF_MIRROR 环境变量走镜像（如 hf-mirror.com）下载模型，经 @huggingface/transformers 的 env.remoteHost 透传' },
+      { type: 'chore', text_en: 'npm audit fix: patch transitive dependencies (ws, hono, body-parser, path-to-regexp, postcss, vite, etc.), reducing vulnerabilities from 15 to 5; remaining 5 are unpatched sharp/libvips CVEs via @huggingface/transformers', text_zh: 'npm audit fix：修补传递依赖（ws、hono、body-parser、path-to-regexp、postcss、vite 等），漏洞从 15 降至 5；剩余 5 个为 @huggingface/transformers 引入的 sharp/libvips CVE，暂无上游补丁' },
+    ],
+  },
+  {
     version: '0.5.54',
     date: '2026-07',
     changes: [
