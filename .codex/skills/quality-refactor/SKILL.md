@@ -20,18 +20,9 @@ allowed-tools:
   - spawn_agent
   - spawn_agents_on_csv
   - wait_agent
-session-mode: run
-contract:
-  discovery: self-described
-  consumes: []
-  produces: []
-version: 0.5.53
+session-mode: none
+version: 0.5.54
 ---
-
-<required_reading>
-@~/.maestro/workflows/run-mode.md
-@~/.maestro/workflows/codex-run-mode.md
-</required_reading>
 
 <purpose>
 Targeted refactoring with safety guarantees: plan → confirm → execute with test verification per change → reflection-log.md.

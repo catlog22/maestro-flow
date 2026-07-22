@@ -18,7 +18,7 @@ allowed-tools:
   - request_user_input
   - update_plan
 session-mode: none
-version: 0.5.53
+version: 0.5.54
 ---
 
 > **Plan tracking**: codex 无 TaskCreate/TaskUpdate/TodoWrite 任务板。进度清单用 `update_plan({ explanation?, plan: [{ step, status }] })` 维护（整体提交步骤数组，status: `pending` | `in_progress` | `completed`），权威状态始终在 session 工件中；依赖/认领（addBlockedBy/owner）是工件字段，不是工具参数。

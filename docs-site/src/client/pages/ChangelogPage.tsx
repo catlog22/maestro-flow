@@ -17,6 +17,18 @@ interface ChangelogEntry {
 
 const changelog: ChangelogEntry[] = [
   {
+    version: '0.5.54',
+    date: '2026-07',
+    changes: [
+      { type: 'feat', text_en: 'Add degradation routing in execute when the current-plan artifact is absent, so execution continues gracefully instead of stalling', text_zh: 'execute 在缺少 current-plan 产物时新增降级路由，使执行优雅延续而非卡死' },
+      { type: 'feat', text_en: 'Streamline the run/session CLI surface and add a dedicated run command entry', text_zh: '精简 run/session CLI 面，并新增独立 run 命令入口' },
+      { type: 'fix', text_en: 'Repair the search ranking gap and improve result quality; optimize the UserPromptSubmit hook search hot path', text_zh: '修复搜索排序缺口并提升结果质量；优化 UserPromptSubmit hook 搜索热路径' },
+      { type: 'fix', text_en: 'Complete the install entry command steps', text_zh: '补全安装入口命令步骤' },
+      { type: 'refactor', text_en: 'Unify --tag and --keyword parameter semantics across search/load, remove redundant run-lifecycle I/O and optimize artifact traversal, fold quality-refactor and security-audit into the Odyssey system, and simplify Companion into a linear flow with an added explore phase', text_zh: '统一 search/load 的 --tag 与 --keyword 参数语义，消除 run 生命周期冗余 I/O 并优化 artifact 遍历，将 quality-refactor 与 security-audit 融入 Odyssey 体系，并精简 Companion 为线性流程、补充 explore 阶段' },
+      { type: 'docs', text_en: 'Convert instruction files to English and update Gate rule semantics; broaden test coverage across graph-walker, connection-pool, tenant-migrator, KG scoring/merge, and run-context', text_zh: 'instruction 文件转英文并更新 Gate rule 语义；补充 graph-walker、connection-pool、tenant-migrator、KG scoring/merge 与 run-context 等测试覆盖' },
+    ],
+  },
+  {
     version: '0.5.53',
     date: '2026-07',
     changes: [
