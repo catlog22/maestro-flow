@@ -4,7 +4,10 @@ description: Implement code changes following the DAG and waves of current-plan,
 argument-hint: "[scope] [-y] [--task TASK-ID] [--method agent|cli|auto] [--executor <tool>] [--auto-commit]"
 contract:
   consumes:
-    - { kind: plan, alias: current-plan, required: true }
+    - { kind: plan, alias: current-plan, required: false }
+    - { kind: review-findings, alias: latest-review, required: false }
+    - { kind: fix-directions, alias: latest-fix-directions, required: false }
+    - { kind: diagnosis, alias: latest-debug, required: false }
     - { kind: priors, alias: session-priors, required: false }
   produces:
     - { path: outputs/execution.json, kind: execution, alias: current-execution, role: primary }
@@ -23,9 +26,25 @@ refs:
 
 The output of execute is "an implementation consistent with the real diff + traceable per-task evidence," not "it looks like it ran." Think through the execution boundaries and failure handling before you start.
 
+## Degradation Routing (no plan)
+
+When `current-plan` is absent (entry gate skipped, not failed), execute enters **degradation mode**. Assess the upstream that IS available and route:
+
+| Available upstream | Scope | Route |
+|---|---|---|
+| `latest-review` (review-findings) | ≤3 findings, each ≤2 files | **Companion**: seal this run as `needs-retry` with verdict note "degraded to companion", then `/maestro-companion` with the finding list as intent |
+| `latest-review` (review-findings) | >3 findings or cross-module | **Odyssey planex**: seal this run as `needs-retry`, then `/odyssey-planex` with the review findings as requirement |
+| `latest-debug` (diagnosis + fix-directions) | fix-directions present | **Companion** if ≤2 files; **Odyssey planex** otherwise |
+| No upstream at all | — | **Abort**: report E001 "No plan and no alternative upstream; run plan first" |
+
+Degradation seal: `maestro run complete <run_id> --verdict needs-retry` with report.md noting the degradation reason and target command. This preserves the run record without faking a plan.
+
+**Never fabricate a plan artifact to satisfy the gate.** The degradation path is the compliant escape.
+
 ## Input Interpretation
 
-- The `current-plan` consumed this round has its path injected by create — work only from this plan. Do not step outside the waves and task scope declared in the plan to add ad-hoc work.
+- When `current-plan` is present: its path is injected by create — work only from this plan. Do not step outside the waves and task scope declared in the plan to add ad-hoc work.
+- When `current-plan` is absent: follow the Degradation Routing table above. Do NOT proceed to Step 1+ without a plan.
 - How is the execution method decided? `--method` specifies explicitly (agent / cli / auto), or auto-routes by domain (frontend / backend / general each go to their own executor). When the user names a tool, use `--executor` — don't guess.
 - `--task TASK-ID` runs only a single task; without args, execute the full DAG/waves. Already-completed tasks resume from checkpoint and are not re-executed.
 - `-y` auto mode skips all interactive questions (executor choice, inter-wave confirmation, blocked prompts); non-auto mode must stop and ask the user retry / skip / abort when a wave is blocked.

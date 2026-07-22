@@ -19,7 +19,45 @@ Never mark a task `completed` without running its convergence criteria. Every co
 
 ---
 
-## Step 0: Parse execution options
+## Step 0: Plan availability & degradation routing
+
+Check whether `current-plan` was injected by create (present in `upstream` map).
+
+**Plan present** → proceed to Step 1 (parse execution options).
+
+**Plan absent** → degradation mode. Inspect available upstream artifacts:
+
+```
+IF latest-review (review-findings) is available:
+  count findings with actionable fix scope
+  IF ≤3 findings AND each touches ≤2 files:
+    → Companion path: write report.md with degradation note,
+      run `maestro run complete <run_id> --verdict needs-retry`,
+      then surface: /maestro-companion "<finding summaries as intent>"
+  ELSE:
+    → Odyssey planex path: write report.md with degradation note,
+      run `maestro run complete <run_id> --verdict needs-retry`,
+      then surface: /odyssey-planex "<review findings as requirement>"
+
+ELSE IF latest-debug (diagnosis) is available AND fix-directions present:
+  IF fix scope ≤2 files:
+    → Companion path (same as above)
+  ELSE:
+    → Odyssey planex path (same as above)
+
+ELSE:
+  → E001: No plan and no alternative upstream. Abort.
+    Write report.md with verdict: blocked, summary: "No current-plan; run plan first"
+    run `maestro run complete <run_id> --verdict blocked`
+```
+
+**Degradation seal protocol**: the run is sealed as `needs-retry` (not `done`) to preserve the audit trail without faking completion. report.md MUST note: (1) why degradation was triggered, (2) which upstream was available, (3) the target command. The `next` field in report frontmatter points to the degradation target.
+
+**Never proceed to Step 1+ without a plan.** The wave/DAG execution machinery below requires plan structure that only `current-plan` provides.
+
+---
+
+## Step 1: Parse execution options
 
 With `-y`, use the parsed defaults and skip all interactive questions (throughout the entire execution, not just this step); also skip when the plan already carries executionMethod.
 
@@ -41,14 +79,14 @@ Store `executionMethod`, `domainRouting`, `codeReviewTool`, `verificationTool`.
 
 ---
 
-## Step 1: Load plan
+## Step 2: Load plan
 
 Read the plan from the `current-plan` path injected by create.
 
 ```
-executionMethod = Step 0 choice || --method || plan default || "auto"
+executionMethod = Step 1 choice || --method || plan default || "auto"
 defaultExecutor = --executor || first enabled tool
-domainRouting   = Step 0 || build from delegate-config domain tags (frontend/backend match tag, default "agent")
+domainRouting   = Step 1 || build from delegate-config domain tags (frontend/backend match tag, default "agent")
 ```
 
 **Checkpoint resume**: scan each task's status, collect completed tasks; if any exist record resume state and jump to the first wave containing an incomplete task.
@@ -57,18 +95,18 @@ domainRouting   = Step 0 || build from delegate-config domain tags (frontend/bac
 
 ---
 
-## Step 2: Load project specs
+## Step 3: Load project specs
 
 ```
 # Mandatory, cannot be substituted with manual Read/Grep
 specs_content = maestro spec load --category coding
 ```
 
-Pass to each executor in Step 3. When a task involves UI, additionally append `--category ui`.
+Pass to each executor in Step 4. When a task involves UI, additionally append `--category ui`.
 
 ---
 
-## Step 3: Wave parallel execution
+## Step 4: Wave parallel execution
 
 ### Executor resolution
 
@@ -157,7 +195,7 @@ continue the current wave (other tasks unaffected)
 
 ---
 
-## Step 4: Post-wave validation
+## Step 5: Post-wave validation
 
 ```
 Check 1 summary exists: completed task missing summary → warning "missing_summary"
@@ -173,13 +211,13 @@ Check 4 CLI supplementary validation (optional, skip if no CLI tool or no comple
 
 ---
 
-## Step 5: Code review (optional)
+## Step 6: Code review (optional)
 
 If `codeReviewTool == "Skip"` skip. Otherwise maestro delegate (run_in_background) reviews the git diff (execution start point → HEAD) for correctness/style/bugs, record the findings summary.
 
 ---
 
-## Step 6: Smoke Self-Check
+## Step 7: Smoke Self-Check
 
 If `verificationTool == "Skip"` or there are no completed tasks, skip. **This is only a smoke check, not an acceptance verdict** — formal acceptance is in a separate verify run.
 
@@ -192,7 +230,7 @@ If `verificationTool == "Skip"` or there are no completed tasks, skip. **This is
    - Substance: files have real implementation, not stub/placeholder/TODO-only/empty return
    - Wiring: files are imported and used by the system, not orphaned
    - Anti-patterns: scan for TODO/FIXME/HACK, placeholder, debug print, disabled tests
-4. Write outputs/self-check.json:  # GATE: self-check-passed (smoke executed + no unhandled critical violation, see Step 4 Check 3; gaps_found does NOT block)
+4. Write outputs/self-check.json:  # GATE: self-check-passed (smoke executed + no unhandled critical violation, see Step 5 Check 3; gaps_found does NOT block)
    { checks:[{criterion, status:"verified"|"failed"|"uncertain", evidence}],
      structure:{existence[], substance[], wiring[]}, anti_patterns[],
      overall:"passed"|"gaps_found" }
@@ -202,7 +240,7 @@ The self-check only records the smoke conclusion as supporting evidence for veri
 
 ---
 
-## Step 7: Write artifacts
+## Step 8: Write artifacts
 
 Artifact paths and metadata are declared in `prepare/execute.md` contract.
 
@@ -217,12 +255,12 @@ outputs/task-results.json:
 outputs/change-manifest.json:
   repo-relative file paths, change type (create/modify/delete), task refs
 
-outputs/self-check.json (Step 6)
+outputs/self-check.json (Step 7)
 ```
 
 ---
 
-## Step 8: Extract incremental learnings
+## Step 9: Extract incremental learnings
 
 ```
 Read all outputs/summaries/*.md, extract strategy adjustments, patterns, pitfalls.
@@ -270,7 +308,7 @@ After execution completes, inline-record one entry per declared gate. **GATE: ex
   "artifact": "outputs/self-check.json" }
 ```
 
-BLOCKED conditions: `execution.json` missing, or there are completed tasks but missing summary/status not updated, or Step 4 has an unhandled critical violation.
+BLOCKED conditions: `execution.json` missing, or there are completed tasks but missing summary/status not updated, or Step 5 has an unhandled critical violation.
 
 ---
 
@@ -307,7 +345,7 @@ Resume behavior:
 
 | Code | Condition | Recovery |
 |------|-----------|----------|
-| E001 | No plan | Abort: `current-plan` missing, run plan first |
+| E001 | No plan and no alternative upstream | Abort: `current-plan` missing and no review-findings/fix-directions/diagnosis available. Run plan first, or provide review/debug upstream for degradation routing |
 | E002 | Entire wave all blocked | Stop execution, report the blocked wave; downstream tasks with unmet dependencies marked upstream_blocked |
 | W001 | Task file missing | Skip that task, record error, continue the current wave |
 | W002 | Agent dispatch failed | Retry once, mark blocked if still failing |

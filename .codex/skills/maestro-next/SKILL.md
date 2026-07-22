@@ -263,7 +263,16 @@ maestro run prepare --platform codex <step> --workflow-root .
 #    When the command contract or argument-hint requires input, pass it with
 #    repeatable --arg <value> or after -- using the -- <args...> form.
 maestro run create <step> --session YYYYMMDD-<step>-<topic> --intent "<short goal>" --workflow-root . [--arg "<required command input>"] [-- <args...>]
-#    Returns: run_id, run_dir, upstream (alias→artifact), entry_gates, next (progressive hint)
+#    Returns: run_id, run_dir, upstream (alias→artifact), entry_gates, entry_blockers, next (progressive hint)
+
+# 3a. Entry blocker degradation (execute-specific)
+#    IF step == execute AND entry_blockers is non-empty (missing current-plan):
+#      Inspect upstream for alternative artifacts (latest-review, latest-debug, latest-fix-directions).
+#      Route per the degradation table in prepare/execute.md:
+#        - Small scope (≤3 findings, ≤2 files each) → seal run as needs-retry, surface /maestro-companion
+#        - Larger scope → seal run as needs-retry, surface /odyssey-planex
+#        - No alternative upstream → seal run as blocked, surface E001 + suggest /plan
+#      Do NOT proceed to step 4 with a blocked execute run.
 
 # 4. Load the execution manual (follow the `next` hint from create)
 maestro run brief --platform codex <run_id> --workflow-root .
