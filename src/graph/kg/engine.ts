@@ -357,10 +357,17 @@ export class MaestroGraph {
 
   insertExtractionResults(result: ExtractionResult): void {
     if (!this.queries) throw new Error('MaestroGraph not open');
-    this.conn!.transaction(() => {
+    const write = (): void => {
       this.queries!.insertNodes(result.nodes);
       this.queries!.insertEdges(result.edges);
       this.queries!.upsertFile(result.fileRecord);
-    });
+    };
+    // 已身处事务时直接写入，避免 better-sqlite3 嵌套事务报错
+    // (cannot start a transaction within a transaction)；独立调用时自开事务保证原子性。
+    if (this.conn!.raw.inTransaction) {
+      write();
+    } else {
+      this.conn!.transaction(write);
+    }
   }
 }
