@@ -357,18 +357,10 @@ export class MaestroGraph {
 
   insertExtractionResults(result: ExtractionResult): void {
     if (!this.queries) throw new Error('MaestroGraph not open');
-    const write = (): void => {
+    this.conn!.transaction(() => {
       this.queries!.insertNodes(result.nodes);
       this.queries!.insertEdges(result.edges);
       this.queries!.upsertFile(result.fileRecord);
-    };
-    // 已身处事务时直接写入，避免 node:sqlite 嵌套事务报错
-    // (cannot start a transaction within a transaction)；独立调用时自开事务保证原子性。
-    // 注：node:sqlite DatabaseSync 的事务状态属性是 isTransaction（非 better-sqlite3 的 inTransaction）。
-    if (this.conn!.raw.isTransaction) {
-      write();
-    } else {
-      this.conn!.transaction(write);
-    }
+    });
   }
 }
