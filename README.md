@@ -2,6 +2,8 @@
 
 # Maestro-Flow
 
+[![MCP Toplist](https://mcptoplist.com/badge/pulsemcp%2Fcatlog22-maestro-flow.svg)](https://mcptoplist.com/server/pulsemcp%2Fcatlog22-maestro-flow)
+
 ### 意图驱动的多智能体工作流编排框架
 
 **说出你要做什么，Maestro 自动规划、调度、执行、验证。**
