@@ -31,7 +31,7 @@ export function extractWiki(
   const now = Date.now();
 
   if (!existsSync(knowhowDir)) {
-    return { nodes, edges, fileRecord: createEmptyFileRecord(knowhowDir) };
+    return { nodes, edges, fileRecord: createEmptyFileRecord(knowhowDir), references: [], structuralReferences: [] };
   }
 
   const mdFiles = readdirSync(knowhowDir)
@@ -92,6 +92,8 @@ export function extractWiki(
   return {
     nodes,
     edges,
+    references: [],
+    structuralReferences: [],
     fileRecord: {
       path: knowhowDir,
       contentHash: '',

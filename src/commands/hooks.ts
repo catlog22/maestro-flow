@@ -1025,9 +1025,11 @@ const HOOK_RUNNERS: Record<string, HookRunner> = {
     if (!sessionId) return;
 
     const cwd: string = data.cwd ?? process.cwd();
+    const workspace = resolveWorkspace({ cwd });
+    if (!workspace) return;
 
     const { evaluateKgSync } = await import('../hooks/kg-sync-hook.js');
-    await evaluateKgSync(cwd, sessionId);
+    await evaluateKgSync(workspace, sessionId);
   },
 
   'kg-auto-init': async () => {

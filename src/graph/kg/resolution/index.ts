@@ -2,6 +2,8 @@
 
 export { resolveKnowledgeEdges, expandRelated } from './knowledge-resolver.js';
 export type { KnowledgeResolutionResult, RelatedNode } from './knowledge-resolver.js';
+export { resolveCodeStructuralReferences } from './code-reference-resolver.js';
+export type { CodeStructuralResolutionResult } from './code-reference-resolver.js';
 
 export { matchReference, tokenize } from './name-matcher.js';
 export type { MatchResult, MatchStrategy } from './name-matcher.js';

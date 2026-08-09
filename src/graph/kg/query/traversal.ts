@@ -14,6 +14,36 @@ export interface TraversalResult {
   visited: Set<string>;
 }
 
+export type ImpactDirection = 'outgoing' | 'incoming';
+
+export interface ImpactResult extends TraversalResult {
+  depth: number;
+  traversalDirection: ImpactDirection;
+  truncated: boolean;
+}
+
+export type HierarchyDirection = 'parents' | 'children' | 'both';
+
+export interface TypeHierarchyResult extends TraversalResult {
+  root: UnifiedNode | null;
+  parents: UnifiedNode[];
+  children: UnifiedNode[];
+  rawEdges: UnifiedEdge[];
+  depth: number;
+  direction: HierarchyDirection;
+  truncated: boolean;
+}
+
+export function normalizeTraversalDepth(
+  value: unknown,
+  fallback: number,
+  max: number,
+): number {
+  const parsed = typeof value === 'number' ? value : Number(value);
+  const candidate = Number.isFinite(parsed) ? Math.trunc(parsed) : fallback;
+  return Math.max(0, Math.min(candidate, max));
+}
+
 export interface TraversalOptions {
   /** 最大深度 */
   maxDepth?: number;
@@ -150,13 +180,56 @@ export function getImpactRadius(
   queries: KgQueryBuilder,
   nodeId: string,
   depth: number = 3,
-): TraversalResult {
-  return bfs(queries, nodeId, {
-    maxDepth: depth,
-    direction: 'outgoing',
-    edgeKinds: ['calls', 'imports', 'extends', 'implements', 'references'],
-    maxNodes: 200,
-  });
+  direction: ImpactDirection = 'outgoing',
+): ImpactResult {
+  const maxDepth = normalizePublicDepth(depth, 3);
+  const edgeKinds = new Set(['calls', 'imports', 'extends', 'implements', 'references']);
+  const visited = new Set<string>([nodeId]);
+  const nodes = new Map<string, UnifiedNode>();
+  const rawEdges = new Map<string, UnifiedEdge>();
+  const startNode = queries.getNode(nodeId);
+  if (startNode) nodes.set(nodeId, startNode);
+  let truncated = false;
+
+  let frontier = [nodeId];
+  for (let level = 0; level < maxDepth && frontier.length > 0; level++) {
+    const edgesByNode = direction === 'outgoing'
+      ? queries.getOutgoingEdgesBatch(frontier)
+      : queries.getIncomingEdgesBatch(frontier);
+    const next: string[] = [];
+    scanLevel: for (const currentId of frontier) {
+      const adjacent = (edgesByNode.get(currentId) ?? []).slice().sort(compareEdges);
+      for (const edge of adjacent) {
+        if (!edgeKinds.has(edge.kind)) continue;
+        const neighborId = direction === 'outgoing' ? edge.target : edge.source;
+        const isNew = !visited.has(neighborId);
+        if (isNew && visited.size >= 200) {
+          truncated = true;
+          break scanLevel;
+        }
+        rawEdges.set(edgeIdentity(edge), edge);
+        if (!isNew) continue;
+        visited.add(neighborId);
+        next.push(neighborId);
+      }
+    }
+    queries.getNodesByIds(next).forEach((node, id) => nodes.set(id, node));
+    frontier = next.sort(compareBytes);
+    if (truncated) break;
+  }
+
+  if (!truncated && frontier.length > 0) {
+    truncated = hasUnvisitedNeighbor(queries, frontier, direction, edgeKinds, visited);
+  }
+
+  return {
+    nodes,
+    edges: [...rawEdges.values()].sort(compareEdges),
+    visited,
+    depth: maxDepth,
+    traversalDirection: direction,
+    truncated,
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -205,54 +278,151 @@ export function dfs(
 export function getTypeHierarchy(
   queries: KgQueryBuilder,
   nodeId: string,
-): TraversalResult {
+  options: { direction?: HierarchyDirection; depth?: number; maxNodes?: number } = {},
+): TypeHierarchyResult {
+  const direction = options.direction ?? 'both';
+  // 旧版 API 默认遍历到可达边界；省略 depth 时保留该语义。
+  // CLI/MCP 会显式传入深度上限，并通过 truncated 暴露未遍历完的路径。
+  const requestedDepth = options.depth === undefined
+    ? null
+    : normalizePublicDepth(options.depth, 10);
+  const depthLimit = requestedDepth ?? Number.POSITIVE_INFINITY;
+  const nodeLimit = normalizeOptionalNodeLimit(options.maxNodes);
   const edgeKindSet = new Set(['extends', 'implements']);
-  const visited = new Set<string>([nodeId]);
+  const allVisited = new Set<string>([nodeId]);
   const nodes = new Map<string, UnifiedNode>();
-  const edges: UnifiedEdge[] = [];
+  const rawEdges = new Map<string, UnifiedEdge>();
+  const parentIds = new Set<string>();
+  const childIds = new Set<string>();
+  let nodeLimitTruncated = false;
+  let depthTruncated = false;
+  let reachedDepth = 0;
 
   const startNode = queries.getNode(nodeId);
   if (startNode) nodes.set(nodeId, startNode);
 
-  // 向上遍历（parents: incoming extends/implements）
-  let upFrontier = [nodeId];
-  while (upFrontier.length > 0) {
-    const next: string[] = [];
-    const incomingByNode = queries.getIncomingEdgesBatch(upFrontier);
-    for (const nid of upFrontier) {
-      const incoming = incomingByNode.get(nid) ?? [];
-      for (const edge of incoming) {
-        if (!edgeKindSet.has(edge.kind)) continue;
-        if (visited.has(edge.source)) continue;
-        visited.add(edge.source);
-        edges.push(edge);
-        next.push(edge.source);
+  // inheritance edges are stored child(source) -> parent(target).
+  if (direction === 'parents' || direction === 'both') {
+    const visited = new Set<string>([nodeId]);
+    let frontier = [nodeId];
+    for (let level = 0; level < depthLimit && frontier.length > 0 && !nodeLimitTruncated; level++) {
+      const outgoingByNode = queries.getOutgoingEdgesBatch(frontier);
+      const next: string[] = [];
+      scanParents: for (const currentId of frontier) {
+        const outgoing = (outgoingByNode.get(currentId) ?? []).slice().sort(compareEdges);
+        for (const edge of outgoing) {
+          if (!edgeKindSet.has(edge.kind)) continue;
+          const isNewToDirection = !visited.has(edge.target);
+          const isNewToHierarchy = !allVisited.has(edge.target);
+          if (
+            isNewToDirection
+            && isNewToHierarchy
+            && nodeLimit !== null
+            && allVisited.size >= nodeLimit
+          ) {
+            nodeLimitTruncated = true;
+            break scanParents;
+          }
+          rawEdges.set(edgeIdentity(edge), edge);
+          if (!isNewToDirection) continue;
+          visited.add(edge.target);
+          if (isNewToHierarchy) allVisited.add(edge.target);
+          parentIds.add(edge.target);
+          next.push(edge.target);
+        }
       }
+      queries.getNodesByIds(next).forEach((node, id) => nodes.set(id, node));
+      frontier = next.sort(compareBytes);
+      if (frontier.length > 0) reachedDepth = Math.max(reachedDepth, level + 1);
     }
-    queries.getNodesByIds(next).forEach((node, id) => nodes.set(id, node));
-    upFrontier = next;
+    if (requestedDepth !== null && !nodeLimitTruncated && frontier.length > 0) {
+      depthTruncated ||= hasUnvisitedNeighbor(
+        queries,
+        frontier,
+        'outgoing',
+        edgeKindSet,
+        visited,
+      );
+    }
   }
 
-  // 向下遍历（children: outgoing extends/implements）
-  let downFrontier = [nodeId];
-  while (downFrontier.length > 0) {
-    const next: string[] = [];
-    const outgoingByNode = queries.getOutgoingEdgesBatch(downFrontier);
-    for (const nid of downFrontier) {
-      const outgoing = outgoingByNode.get(nid) ?? [];
-      for (const edge of outgoing) {
-        if (!edgeKindSet.has(edge.kind)) continue;
-        if (visited.has(edge.target)) continue;
-        visited.add(edge.target);
-        edges.push(edge);
-        next.push(edge.target);
+  if ((direction === 'children' || direction === 'both') && !nodeLimitTruncated) {
+    const visited = new Set<string>([nodeId]);
+    let frontier = [nodeId];
+    for (let level = 0; level < depthLimit && frontier.length > 0 && !nodeLimitTruncated; level++) {
+      const incomingByNode = queries.getIncomingEdgesBatch(frontier);
+      const next: string[] = [];
+      scanChildren: for (const currentId of frontier) {
+        const incoming = (incomingByNode.get(currentId) ?? []).slice().sort(compareEdges);
+        for (const edge of incoming) {
+          if (!edgeKindSet.has(edge.kind)) continue;
+          const isNewToDirection = !visited.has(edge.source);
+          const isNewToHierarchy = !allVisited.has(edge.source);
+          if (
+            isNewToDirection
+            && isNewToHierarchy
+            && nodeLimit !== null
+            && allVisited.size >= nodeLimit
+          ) {
+            nodeLimitTruncated = true;
+            break scanChildren;
+          }
+          rawEdges.set(edgeIdentity(edge), edge);
+          if (!isNewToDirection) continue;
+          visited.add(edge.source);
+          if (isNewToHierarchy) allVisited.add(edge.source);
+          childIds.add(edge.source);
+          next.push(edge.source);
+        }
       }
+      queries.getNodesByIds(next).forEach((node, id) => nodes.set(id, node));
+      frontier = next.sort(compareBytes);
+      if (frontier.length > 0) reachedDepth = Math.max(reachedDepth, level + 1);
     }
-    queries.getNodesByIds(next).forEach((node, id) => nodes.set(id, node));
-    downFrontier = next;
+    if (requestedDepth !== null && !nodeLimitTruncated && frontier.length > 0) {
+      depthTruncated ||= hasUnvisitedNeighbor(
+        queries,
+        frontier,
+        'incoming',
+        edgeKindSet,
+        visited,
+      );
+    }
   }
 
-  return { nodes, edges, visited };
+  const parents = [...parentIds]
+    .map(id => nodes.get(id))
+    .filter((node): node is UnifiedNode => Boolean(node))
+    .sort((left, right) => compareBytes(left.id, right.id));
+  const children = [...childIds]
+    .map(id => nodes.get(id))
+    .filter((node): node is UnifiedNode => Boolean(node))
+    .sort((left, right) => compareBytes(left.id, right.id));
+  const edges = [...rawEdges.values()].sort(compareEdges);
+
+  return {
+    root: startNode,
+    parents,
+    children,
+    rawEdges: edges,
+    depth: requestedDepth ?? reachedDepth,
+    direction,
+    truncated: nodeLimitTruncated || depthTruncated,
+    nodes,
+    edges,
+    visited: allVisited,
+  };
+}
+
+function hasUnvisitedNeighbor(
+  queries: KgQueryBuilder,
+  nodeIds: string[],
+  direction: 'outgoing' | 'incoming' | 'both',
+  edgeKinds: Set<string> | null,
+  visited: Set<string>,
+): boolean {
+  return getNeighborsBatch(queries, nodeIds, direction, edgeKinds)
+    .some(({ neighborId }) => !visited.has(neighborId));
 }
 
 // ---------------------------------------------------------------------------
@@ -345,7 +515,7 @@ export interface NodeContext {
   children: UnifiedNode[];
   incomingRefs: Array<{ node: UnifiedNode; edge: UnifiedEdge }>;
   outgoingRefs: Array<{ node: UnifiedNode; edge: UnifiedEdge }>;
-  typeHierarchy: TraversalResult;
+  typeHierarchy: TypeHierarchyResult;
 }
 
 export function getNodeContext(
@@ -482,6 +652,13 @@ export function getNodeMetrics(
 export interface PathStep {
   nodeId: string;
   edge: UnifiedEdge | null;
+  traversalDirection?: 'outgoing' | 'incoming' | null;
+}
+
+export interface PathSearchResult {
+  path: PathStep[] | null;
+  truncated: boolean;
+  visitedCount: number;
 }
 
 export function findShortestPath(
@@ -490,42 +667,83 @@ export function findShortestPath(
   toId: string,
   maxDepth: number = 10,
 ): PathStep[] | null {
+  return findShortestPathResult(queries, fromId, toId, maxDepth).path;
+}
+
+export function findShortestPathResult(
+  queries: KgQueryBuilder,
+  fromId: string,
+  toId: string,
+  maxDepth: number = 10,
+  maxNodes?: number,
+): PathSearchResult {
+  if (fromId === toId) {
+    const exists = Boolean(queries.getNode(fromId));
+    return {
+      path: exists ? [{ nodeId: fromId, edge: null, traversalDirection: null }] : null,
+      truncated: false,
+      visitedCount: exists ? 1 : 0,
+    };
+  }
   const visited = new Set<string>([fromId]);
-  const parent = new Map<string, { from: string; edge: UnifiedEdge }>();
+  const parent = new Map<string, {
+    from: string;
+    edge: UnifiedEdge;
+    traversalDirection: 'outgoing' | 'incoming';
+  }>();
+  const depthLimit = normalizePublicDepth(maxDepth, 10);
+  const nodeLimit = normalizeOptionalNodeLimit(maxNodes);
   let frontier = [fromId];
 
-  for (let depth = 0; depth < maxDepth && frontier.length > 0; depth++) {
+  for (let depth = 0; depth < depthLimit && frontier.length > 0; depth++) {
     const nextFrontier: string[] = [];
 
-    const neighbors = getNeighborsBatch(queries, frontier, 'both', null);
-    for (const { neighborId, edge } of neighbors) {
-        if (visited.has(neighborId)) continue;
-        visited.add(neighborId);
-        const from = frontier.includes(edge.source) ? edge.source : edge.target;
-        parent.set(neighborId, { from, edge });
-        nextFrontier.push(neighborId);
+    const neighbors = getNeighborsBatch(queries, frontier, 'both', null)
+      .sort((left, right) => (
+        compareBytes(left.neighborId, right.neighborId)
+        || compareEdges(left.edge, right.edge)
+        || compareBytes(left.fromNodeId, right.fromNodeId)
+    ));
+    for (const { neighborId, edge, fromNodeId, traversalDirection } of neighbors) {
+      if (visited.has(neighborId)) continue;
+      if (nodeLimit !== null && visited.size >= nodeLimit) {
+        return { path: null, truncated: true, visitedCount: visited.size };
+      }
+      visited.add(neighborId);
+      parent.set(neighborId, { from: fromNodeId, edge, traversalDirection });
+      nextFrontier.push(neighborId);
 
-        if (neighborId === toId) {
-          const path: PathStep[] = [{ nodeId: toId, edge: null }];
-          let current = toId;
-          while (parent.has(current)) {
-            const p = parent.get(current)!;
-            path.unshift({ nodeId: p.from, edge: p.edge });
-            current = p.from;
-          }
-          // 起点 (path[0]) 无入边 — edge 属于 "从上一节点到当前节点的边",
-          // 起点没有上一节点, 故强制置 null。
-          if (path.length > 0 && path[0]!.nodeId === fromId) {
-            path[0] = { nodeId: fromId, edge: null };
-          }
-          return path;
+      if (neighborId === toId) {
+        const reversePath: PathStep[] = [];
+        let current = toId;
+        while (parent.has(current)) {
+          const previous = parent.get(current)!;
+          reversePath.push({
+            nodeId: current,
+            edge: previous.edge,
+            traversalDirection: previous.traversalDirection,
+          });
+          current = previous.from;
         }
+        reversePath.push({ nodeId: fromId, edge: null, traversalDirection: null });
+        return {
+          path: reversePath.reverse(),
+          truncated: false,
+          visitedCount: visited.size,
+        };
+      }
     }
 
     frontier = nextFrontier;
   }
 
-  return null;
+  return {
+    path: null,
+    // 达到深度上限后仅在仍有未访问邻居时标记截断，叶子 frontier 不算截断。
+    truncated: frontier.length > 0
+      && hasUnvisitedNeighbor(queries, frontier, 'both', null, visited),
+    visitedCount: visited.size,
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -535,6 +753,8 @@ export function findShortestPath(
 interface Neighbor {
   edge: UnifiedEdge;
   neighborId: string;
+  fromNodeId: string;
+  traversalDirection: 'outgoing' | 'incoming';
 }
 
 function getNeighbors(
@@ -549,7 +769,12 @@ function getNeighbors(
     const outgoing = queries.getOutgoingEdges(nodeId);
     for (const edge of outgoing) {
       if (edgeKinds && !edgeKinds.has(edge.kind)) continue;
-      neighbors.push({ edge, neighborId: edge.target });
+      neighbors.push({
+        edge,
+        neighborId: edge.target,
+        fromNodeId: nodeId,
+        traversalDirection: 'outgoing',
+      });
     }
   }
 
@@ -557,7 +782,12 @@ function getNeighbors(
     const incoming = queries.getIncomingEdges(nodeId);
     for (const edge of incoming) {
       if (edgeKinds && !edgeKinds.has(edge.kind)) continue;
-      neighbors.push({ edge, neighborId: edge.source });
+      neighbors.push({
+        edge,
+        neighborId: edge.source,
+        fromNodeId: nodeId,
+        traversalDirection: 'incoming',
+      });
     }
   }
 
@@ -575,23 +805,66 @@ function getNeighborsBatch(
 
   if (direction === 'outgoing' || direction === 'both') {
     const outgoingMap = queries.getOutgoingEdgesBatch(nodeIds);
-    outgoingMap.forEach((edges) => {
+    outgoingMap.forEach((edges, fromNodeId) => {
       for (const edge of edges) {
         if (edgeKinds && !edgeKinds.has(edge.kind)) continue;
-        neighbors.push({ edge, neighborId: edge.target });
+        neighbors.push({
+          edge,
+          neighborId: edge.target,
+          fromNodeId,
+          traversalDirection: 'outgoing',
+        });
       }
     });
   }
 
   if (direction === 'incoming' || direction === 'both') {
     const incomingMap = queries.getIncomingEdgesBatch(nodeIds);
-    incomingMap.forEach((edges) => {
+    incomingMap.forEach((edges, fromNodeId) => {
       for (const edge of edges) {
         if (edgeKinds && !edgeKinds.has(edge.kind)) continue;
-        neighbors.push({ edge, neighborId: edge.source });
+        neighbors.push({
+          edge,
+          neighborId: edge.source,
+          fromNodeId,
+          traversalDirection: 'incoming',
+        });
       }
     });
   }
 
   return neighbors;
+}
+
+function edgeIdentity(edge: UnifiedEdge): string {
+  return edge.id !== undefined
+    ? `id:${edge.id}`
+    : `${edge.source}\0${edge.target}\0${edge.kind}\0${edge.originRefKey ?? ''}\0${edge.line ?? ''}\0${edge.column ?? ''}`;
+}
+
+function compareEdges(left: UnifiedEdge, right: UnifiedEdge): number {
+  return compareBytes(left.source, right.source)
+    || compareBytes(left.target, right.target)
+    || compareBytes(left.kind, right.kind)
+    || compareBytes(left.originRefKey ?? '', right.originRefKey ?? '')
+    || (left.id ?? 0) - (right.id ?? 0);
+}
+
+function compareBytes(left: string, right: string): number {
+  return Buffer.from(left).compare(Buffer.from(right));
+}
+
+function normalizeNodeLimit(value: unknown, fallback: number): number {
+  const parsed = typeof value === 'number' ? value : Number(value);
+  return Number.isFinite(parsed) ? Math.max(1, Math.trunc(parsed)) : fallback;
+}
+
+function normalizeOptionalNodeLimit(value: unknown): number | null {
+  return value === undefined ? null : normalizeNodeLimit(value, 1_000);
+}
+
+function normalizePublicDepth(value: unknown, fallback: number): number {
+  const parsed = typeof value === 'number' ? value : Number(value);
+  if (!Number.isFinite(parsed)) return fallback;
+  return Math.max(0, Math.trunc(parsed));
 }

@@ -4,13 +4,24 @@
 import type { Command } from 'commander';
 import { existsSync, unlinkSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { MaestroGraph } from '../engine.js';
+import { MaestroGraph, makeNodeResolutionErrorPayload } from '../engine.js';
 import { searchUnified, parseQuery } from '../query/search.js';
-import { bfs, findShortestPath, getCallers, getCallees, getImpactRadius } from '../query/traversal.js';
+import { bfs, normalizeTraversalDepth } from '../query/traversal.js';
+import type {
+  HierarchyDirection,
+  ImpactResult,
+  PathSearchResult,
+  TypeHierarchyResult,
+} from '../query/traversal.js';
 import { buildContext } from '../query/context-builder.js';
 import { syncKnowledgeGraph, type CodegraphSyncOptions } from '../extraction/orchestrator.js';
-import { getKgDatabasePath } from '../db/connection.js';
+import { KG_SCHEMA_VERSION, getKgDatabasePath } from '../db/connection.js';
 import { SOURCE_TYPES, type UnifiedNode, type SourceType } from '../db/types.js';
+import { validateExternalSurfaceManifest } from '../extraction/code/external/external-surface-manifest.js';
+import {
+  resolveExternalSurfaceProjectRoot,
+  resolveKgCliProjectRoot,
+} from './project-root.js';
 
 function parseCsv(value: string | undefined): string[] | undefined {
   return value
@@ -92,7 +103,7 @@ async function syncProject(
   },
   label = 'Syncing MaestroGraph...',
 ): Promise<void> {
-  const projectRoot = resolve('.');
+  const projectRoot = resolveKgCliProjectRoot();
   const sources = normalizeSources(opts.source);
   const codegraph = normalizeCodegraphOptions(opts);
 
@@ -112,7 +123,7 @@ async function syncProject(
 }
 
 async function openGraph(): Promise<MaestroGraph> {
-  const projectRoot = resolve('.');
+  const projectRoot = resolveKgCliProjectRoot();
   if (!MaestroGraph.isInitialized(projectRoot)) {
     console.error('MaestroGraph not initialized for this project.');
     console.error('  Run: maestro kg sync');
@@ -128,16 +139,73 @@ function formatNodeLabel(node: UnifiedNode): string {
   return `[${node.sourceType}:${node.kind}] ${node.name}${loc}${suffix}`;
 }
 
-function resolveNodeOrExit(mg: MaestroGraph, query: string): UnifiedNode {
-  const direct = mg.getNode(query);
-  if (direct) return direct;
+function resolveNodeOrExit(mg: MaestroGraph, query: string, json = false): UnifiedNode | null {
+  const resolution = mg.resolveNode(query);
+  if (resolution.status === 'resolved') return resolution.node;
 
-  const matches = mg.searchUnified(query, { sourceTypes: ['codegraph'], limit: 5 }).directMatches;
-  if (matches.length === 0) {
+  const error = makeNodeResolutionErrorPayload(resolution);
+  if (json) {
+    console.log(JSON.stringify({ error }, null, 2));
+  } else if (resolution.status === 'ambiguous') {
+    console.error(`Ambiguous node: ${query}`);
+    for (const id of error.candidates) console.error(`  ${id}`);
+  } else {
     console.error(`Node not found: ${query}`);
-    process.exit(1);
   }
-  return matches[0].node;
+  process.exitCode = 1;
+  return null;
+}
+
+function compareBytes(left: string, right: string): number {
+  return Buffer.from(left).compare(Buffer.from(right));
+}
+
+function serializeNode(node: UnifiedNode): Pick<UnifiedNode, 'id' | 'kind' | 'name' | 'qualifiedName' | 'language'> {
+  return {
+    id: node.id,
+    kind: node.kind,
+    name: node.name,
+    qualifiedName: node.qualifiedName,
+    language: node.language,
+  };
+}
+
+function serializeHierarchy(result: TypeHierarchyResult): Record<string, unknown> {
+  return {
+    root: result.root ? serializeNode(result.root) : null,
+    parents: result.parents.map(serializeNode),
+    children: result.children.map(serializeNode),
+    rawEdges: result.rawEdges,
+    depth: result.depth,
+    direction: result.direction,
+    truncated: result.truncated,
+  };
+}
+
+function serializeImpact(nodeId: string, result: ImpactResult): Record<string, unknown> {
+  return {
+    node: nodeId,
+    nodeCount: result.nodes.size,
+    edgeCount: result.edges.length,
+    depth: result.depth,
+    traversalDirection: result.traversalDirection,
+    truncated: result.truncated,
+    nodes: [...result.nodes.values()]
+      .sort((left, right) => compareBytes(left.id, right.id))
+      .map(serializeNode),
+    edges: result.edges,
+  };
+}
+
+function serializePath(fromId: string, toId: string, result: PathSearchResult): Record<string, unknown> {
+  return {
+    from: fromId,
+    to: toId,
+    hops: result.path ? Math.max(0, result.path.length - 1) : null,
+    path: result.path,
+    truncated: result.truncated,
+    visitedCount: result.visitedCount,
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -154,7 +222,7 @@ export function registerKgCommands(program: Command): void {
     .command('init')
     .description('Initialize MaestroGraph database (.workflow/kg/maestro.db)')
     .action(async () => {
-      const projectRoot = resolve('.');
+      const projectRoot = resolveKgCliProjectRoot();
       if (MaestroGraph.isInitialized(projectRoot)) {
         console.log('MaestroGraph already initialized.');
         return;
@@ -210,6 +278,41 @@ export function registerKgCommands(program: Command): void {
     .option('--json', 'Output as JSON')
     .action(async (opts) => syncProject({ ...opts, source: 'codegraph' }, 'Indexing code with MaestroGraph...'));
 
+  // ── exact external surfaces ──────────────────────────────────────
+  const externalSurfaces = kg
+    .command('external-surfaces')
+    .description('Manage the fixed exact-file external surface allowlist');
+
+  externalSurfaces
+    .command('validate')
+    .description('Validate .workflow/kg/external-surfaces.json without indexing')
+    .option('--json', 'Output as JSON')
+    .action((opts) => {
+      const validation = validateExternalSurfaceManifest(resolveExternalSurfaceProjectRoot());
+      const output = {
+        schemaVersion: validation.schemaVersion,
+        configPath: validation.configPath,
+        configured: validation.configured,
+        resolved: validation.resolved,
+        errors: validation.errors,
+        digest: validation.digest,
+      };
+
+      if (opts.json) {
+        console.log(JSON.stringify(output, null, 2));
+      } else if (validation.errors.length > 0) {
+        console.error(`External surface manifest is invalid: ${validation.configPath}`);
+        for (const error of validation.errors) {
+          console.error(`  ${error.code}: ${error.message}`);
+        }
+      } else {
+        console.log(`External surfaces: ${validation.configured} configured, ${validation.resolved} resolved`);
+        console.log(`Config: ${validation.configPath}`);
+      }
+
+      if (validation.errors.length > 0) process.exitCode = 1;
+    });
+
   // ── query ─────────────────────────────────────────────────────────
   kg
     .command('query <text>')
@@ -220,7 +323,7 @@ export function registerKgCommands(program: Command): void {
     .option('--limit <n>', 'Max results', '20')
     .option('--json', 'Output as JSON')
     .action(async (text: string, opts) => {
-      const mg = await MaestroGraph.open(resolve('.'));
+      const mg = await MaestroGraph.open(resolveKgCliProjectRoot());
       try {
         const parsed = parseQuery(text);
         const sourceTypes = normalizeSources(opts.source)
@@ -317,7 +420,8 @@ export function registerKgCommands(program: Command): void {
     .action(async (nodeQuery: string, opts) => {
       const mg = await openGraph();
       try {
-        const node = resolveNodeOrExit(mg, nodeQuery);
+        const node = resolveNodeOrExit(mg, nodeQuery, Boolean(opts.json));
+        if (!node) return;
 
         const traversal = mg.traverse(node.id, {
           maxDepth: Math.min(Number(opts.depth) || 1, 10),
@@ -352,30 +456,103 @@ export function registerKgCommands(program: Command): void {
       }
     });
 
-  // ── path ──────────────────────────────────────────────────────────
+  // ── hierarchy ─────────────────────────────────────────────────────
   kg
-    .command('path <from-id> <to-id>')
-    .description('Find shortest path between two nodes')
+    .command('hierarchy <node>')
+    .description('Show inheritance parents and children for a node')
+    .option('--direction <direction>', 'parents, children, or both', 'both')
+    .option('--depth <n>', 'Max hierarchy depth', '3')
     .option('--json', 'Output as JSON')
-    .action(async (fromId: string, toId: string, opts) => {
-      const mg = await MaestroGraph.open(resolve('.'));
+    .action(async (nodeQuery: string, opts) => {
+      const mg = await openGraph();
       try {
-        const queries = mg.getQueryBuilder();
-        const path = findShortestPath(queries, fromId, toId);
+        const direction = String(opts.direction) as HierarchyDirection;
+        if (!['parents', 'children', 'both'].includes(direction)) {
+          if (opts.json) {
+            console.log(JSON.stringify({
+              error: {
+                code: 'invalid_hierarchy_direction',
+                direction: opts.direction,
+                allowed: ['parents', 'children', 'both'],
+              },
+            }, null, 2));
+          } else {
+            console.error(`Invalid hierarchy direction: ${String(opts.direction)}`);
+          }
+          process.exitCode = 1;
+          return;
+        }
+        const node = resolveNodeOrExit(mg, nodeQuery, Boolean(opts.json));
+        if (!node) return;
+        const hierarchy = mg.getTypeHierarchy(node.id, {
+          direction,
+          depth: normalizeTraversalDepth(opts.depth, 3, 20),
+          maxNodes: 1_000,
+        });
 
         if (opts.json) {
-          console.log(JSON.stringify({ from: fromId, to: toId, path }, null, 2));
+          console.log(JSON.stringify(serializeHierarchy(hierarchy), null, 2));
+          return;
+        }
+
+        console.log(`Hierarchy for ${node.id} (${direction}, depth ${hierarchy.depth})`);
+        if (direction !== 'children') {
+          console.log(`Parents (${hierarchy.parents.length}):`);
+          for (const parent of hierarchy.parents) console.log(`  ${formatNodeLabel(parent)}`);
+        }
+        if (direction !== 'parents') {
+          console.log(`Children (${hierarchy.children.length}):`);
+          for (const child of hierarchy.children) console.log(`  ${formatNodeLabel(child)}`);
+        }
+      } finally {
+        mg.close();
+      }
+    });
+
+  // ── path ──────────────────────────────────────────────────────────
+  kg
+    .command('path <from> <to>')
+    .description('Find shortest path between exact IDs, qualified names, or unique simple names')
+    .option('--depth <n>', 'Max path depth', '10')
+    .option('--json', 'Output as JSON')
+    .action(async (fromQuery: string, toQuery: string, opts) => {
+      const mg = await openGraph();
+      try {
+        const from = resolveNodeOrExit(mg, fromQuery, Boolean(opts.json));
+        if (!from) return;
+        const to = resolveNodeOrExit(mg, toQuery, Boolean(opts.json));
+        if (!to) return;
+        const pathResult = mg.findShortestPathResult(
+          from.id,
+          to.id,
+          normalizeTraversalDepth(opts.depth, 10, 50),
+          1_000,
+        );
+        const path = pathResult.path;
+
+        if (opts.json) {
+          console.log(JSON.stringify(serializePath(from.id, to.id, pathResult), null, 2));
+          if (pathResult.truncated) process.exitCode = 1;
           return;
         }
 
         if (!path) {
-          console.log(`No path found from ${fromId} to ${toId}`);
+          if (pathResult.truncated) {
+            console.error(`Path search truncated after ${pathResult.visitedCount} nodes; no absence conclusion is available.`);
+            process.exitCode = 1;
+          } else {
+            console.log(`No path found from ${from.id} to ${to.id}`);
+          }
         } else {
-          console.log(`Path (${path.length} hops):`);
-          for (const step of path) {
-            const node = mg.getNode(step.nodeId);
-            const edgeLabel = step.edge ? ` --[${step.edge.kind}]-->` : '';
-            console.log(`  [${node?.sourceType ?? '?'}:${node?.kind ?? '?'}] ${node?.name ?? step.nodeId}${edgeLabel}`);
+          console.log(`Path (${Math.max(0, path.length - 1)} hops):`);
+          const first = mg.getNode(path[0].nodeId);
+          console.log(`  [${first?.sourceType ?? '?'}:${first?.kind ?? '?'}] ${first?.name ?? path[0].nodeId}`);
+          for (const step of path.slice(1)) {
+            const pathNode = mg.getNode(step.nodeId);
+            const connector = step.traversalDirection === 'outgoing'
+              ? `--[${step.edge?.kind ?? '?'}]-->`
+              : `<--[${step.edge?.kind ?? '?'}]--`;
+            console.log(`  ${connector} [${pathNode?.sourceType ?? '?'}:${pathNode?.kind ?? '?'}] ${pathNode?.name ?? step.nodeId}`);
           }
         }
       } finally {
@@ -392,7 +569,8 @@ export function registerKgCommands(program: Command): void {
     .action(async (nodeQuery: string, opts) => {
       const mg = await openGraph();
       try {
-        const node = resolveNodeOrExit(mg, nodeQuery);
+        const node = resolveNodeOrExit(mg, nodeQuery, Boolean(opts.json));
+        if (!node) return;
         const callers = mg.getCallers(node.id, Math.min(Number(opts.depth) || 1, 10));
 
         if (opts.json) {
@@ -420,7 +598,8 @@ export function registerKgCommands(program: Command): void {
     .action(async (nodeQuery: string, opts) => {
       const mg = await openGraph();
       try {
-        const node = resolveNodeOrExit(mg, nodeQuery);
+        const node = resolveNodeOrExit(mg, nodeQuery, Boolean(opts.json));
+        if (!node) return;
         const callees = mg.getCallees(node.id, Math.min(Number(opts.depth) || 1, 10));
 
         if (opts.json) {
@@ -448,20 +627,20 @@ export function registerKgCommands(program: Command): void {
     .action(async (nodeQuery: string, opts) => {
       const mg = await openGraph();
       try {
-        const node = resolveNodeOrExit(mg, nodeQuery);
-        const impact = mg.getImpact(node.id, Math.min(Number(opts.depth) || 3, 10));
+        const node = resolveNodeOrExit(mg, nodeQuery, Boolean(opts.json));
+        if (!node) return;
+        const impact = mg.getImpact(
+          node.id,
+          normalizeTraversalDepth(opts.depth, 3, 10),
+          'incoming',
+        );
 
         if (opts.json) {
-          console.log(JSON.stringify({
-            node: node.id,
-            nodeCount: impact.nodes.size,
-            edgeCount: impact.edges.length,
-            nodes: [...impact.nodes.values()].map(n => ({ id: n.id, kind: n.kind, name: n.name })),
-          }, null, 2));
+          console.log(JSON.stringify(serializeImpact(node.id, impact), null, 2));
           return;
         }
 
-        console.log(`Impact radius for ${node.id}: ${impact.nodes.size} nodes, ${impact.edges.length} edges`);
+        console.log(`Impact radius for ${node.id}: ${impact.nodes.size} nodes, ${impact.edges.length} edges (${impact.traversalDirection})`);
         for (const related of impact.nodes.values()) {
           if (related.id === node.id) continue;
           console.log(`  ${formatNodeLabel(related)}`);
@@ -477,7 +656,7 @@ export function registerKgCommands(program: Command): void {
     .description('Show knowledge graph statistics')
     .option('--json', 'Output as JSON')
     .action(async (opts) => {
-      const mg = await MaestroGraph.open(resolve('.'));
+      const mg = await MaestroGraph.open(resolveKgCliProjectRoot());
       try {
         const stats = mg.getStats();
 
@@ -504,6 +683,13 @@ export function registerKgCommands(program: Command): void {
         console.log(`DB size: ${(stats.dbSizeBytes / 1024).toFixed(1)} KB`);
         console.log(`Schema: v${stats.schemaVersion}`);
         console.log(`Staleness: ${(stats.stalenessRatio * 100).toFixed(1)}%`);
+        console.log(`Structural refs: ${stats.structuralRefs?.total ?? 0}`);
+        for (const [status, count] of Object.entries(stats.structuralRefs?.status ?? {})) {
+          console.log(`  ${status}: ${count}`);
+        }
+        console.log(`External nodes: ${stats.externalNodes?.total ?? 0}`);
+        console.log(`  apple catalog: ${stats.externalNodes?.appleCatalog ?? 0}`);
+        console.log(`  exact surfaces: ${stats.externalNodes?.exactSurfaces ?? 0}`);
         if (stats.detectedFrameworks.length > 0) {
           console.log(`Frameworks: ${stats.detectedFrameworks.join(', ')}`);
         }
@@ -516,64 +702,60 @@ export function registerKgCommands(program: Command): void {
   kg
     .command('health')
     .description('Check knowledge graph health')
-    .action(async () => {
-      const dbPath = getKgDatabasePath(resolve('.'));
+    .option('--json', 'Output as JSON')
+    .action(async (opts) => {
+      const projectRoot = resolveKgCliProjectRoot();
+      const dbPath = getKgDatabasePath(projectRoot);
       if (!existsSync(dbPath)) {
-        console.log('✗ MaestroGraph not initialized. Run: maestro kg init');
+        if (opts.json) {
+          console.log(JSON.stringify({
+            status: 'fail',
+            error: { code: 'graph_not_initialized', path: dbPath },
+          }, null, 2));
+        } else {
+          console.log('✗ MaestroGraph not initialized. Run: maestro kg init');
+        }
+        process.exitCode = 1;
         return;
       }
 
-      const mg = await MaestroGraph.open(resolve('.'));
+      let mg: MaestroGraph | null = null;
       try {
-        const checks: Array<{ name: string; status: 'pass' | 'warn' | 'fail'; detail: string }> = [];
-
-        // DB 存在
-        checks.push({ name: 'Database', status: 'pass', detail: dbPath });
-
-        let stats: ReturnType<MaestroGraph['getStats']>;
-        try {
-          stats = mg.getStats();
-        } catch (err) {
-          checks.push({
-            name: 'Schema',
-            status: 'fail',
-            detail: err instanceof Error ? err.message : String(err),
-          });
-          for (const check of checks) {
-            const icon = check.status === 'pass' ? '✓' : '✗';
-            console.log(`${icon} ${check.name}: ${check.detail}`);
-          }
-          process.exitCode = 1;
+        mg = await MaestroGraph.open(projectRoot);
+        const health = mg.getHealth();
+        if (opts.json) {
+          console.log(JSON.stringify({ database: dbPath, ...health }, null, 2));
+          if (health.status === 'fail') process.exitCode = 1;
           return;
         }
 
-        // Schema 版本
-        checks.push({
-          name: 'Schema',
-          status: stats.schemaVersion >= 2 ? 'pass' : 'fail',
-          detail: `v${stats.schemaVersion}`,
-        });
-
-        // 过期率
-        checks.push({
-          name: 'Staleness',
-          status: stats.stalenessRatio < 0.1 ? 'pass' : stats.stalenessRatio < 0.3 ? 'warn' : 'fail',
-          detail: `${(stats.stalenessRatio * 100).toFixed(1)}%`,
-        });
-
-        // 节点数
-        checks.push({
-          name: 'Nodes',
-          status: stats.nodeCount > 0 ? 'pass' : 'warn',
-          detail: String(stats.nodeCount),
-        });
-
-        for (const check of checks) {
-          const icon = check.status === 'pass' ? '✓' : check.status === 'warn' ? '⚠' : '✗';
-          console.log(`${icon} ${check.name}: ${check.detail}`);
+        const icon = health.status === 'pass' ? '✓' : health.status === 'warn' ? '⚠' : '✗';
+        console.log(`${icon} Database: ${dbPath}`);
+        console.log(`${health.schemaVersion === KG_SCHEMA_VERSION ? '✓' : '✗'} Schema: v${health.schemaVersion}`);
+        console.log(`${health.integrity.ok ? '✓' : '✗'} Integrity: ${health.integrity.messages.join(', ')}`);
+        console.log(`${health.foreignKeys.ok ? '✓' : '✗'} Foreign keys: ${health.foreignKeys.violations.length} violation(s)`);
+        console.log(`${health.syncState.stale ? '⚠' : '✓'} Sync state: ${health.syncState.status}`);
+        if (health.syncState.error) console.log(`✗ Last sync error: ${health.syncState.error}`);
+        for (const error of health.errors) console.log(`✗ Health error: ${error}`);
+        if (health.structuralRefs.invariants.invalidResolved > 0) {
+          console.log(`✗ Invalid resolved refs: ${health.structuralRefs.invariants.invalidResolved}`);
         }
+        console.log(`Structural refs unresolved: ${health.structuralRefs.unresolved}/${health.structuralRefs.total} (${(health.structuralRefs.unresolvedRatio * 100).toFixed(1)}%)`);
+        if (health.status === 'fail') process.exitCode = 1;
+      } catch (error) {
+        const payload = {
+          status: 'fail',
+          database: dbPath,
+          error: {
+            code: 'health_check_failed',
+            message: error instanceof Error ? error.message : String(error),
+          },
+        };
+        if (opts.json) console.log(JSON.stringify(payload, null, 2));
+        else console.error(`✗ Health check failed: ${payload.error.message}`);
+        process.exitCode = 1;
       } finally {
-        mg.close();
+        mg?.close();
       }
     });
 
@@ -584,7 +766,7 @@ export function registerKgCommands(program: Command): void {
     .option('--dry-run', 'Show what would be migrated without writing')
     .option('--json', 'Output as JSON')
     .action(async (opts) => {
-      const projectRoot = resolve('.');
+      const projectRoot = resolveKgCliProjectRoot();
       const workflowRoot = resolve(projectRoot, '.workflow');
 
       // Detect legacy sources
@@ -707,7 +889,7 @@ export function registerKgCommands(program: Command): void {
     .option('--json', 'Output as JSON')
     .option('--confirm', 'Skip confirmation warning')
     .action(async (opts) => {
-      const projectRoot = resolve('.');
+      const projectRoot = resolveKgCliProjectRoot();
       const dbPath = getKgDatabasePath(projectRoot);
 
       if (existsSync(dbPath)) {

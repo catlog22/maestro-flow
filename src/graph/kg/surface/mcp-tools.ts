@@ -1,17 +1,30 @@
 // src/graph/kg/surface/mcp-tools.ts — MCP Tool 定义
 // 参考: plan-maestrograph.md Gap C1 — 9 个 MCP 工具
 
-import { MaestroGraph } from '../engine.js';
+import { MaestroGraph, makeNodeResolutionErrorPayload } from '../engine.js';
+import type { NodeResolutionErrorPayload } from '../engine.js';
 import { searchUnified, parseQuery } from '../query/search.js';
-import { bfs, findShortestPath, getCallers, getCallees, getImpactRadius, traceCallChain } from '../query/traversal.js';
+import {
+  bfs,
+  getCallers,
+  getCallees,
+  normalizeTraversalDepth,
+  traceCallChain,
+} from '../query/traversal.js';
+import type {
+  HierarchyDirection,
+  ImpactResult,
+  PathSearchResult,
+  TypeHierarchyResult,
+} from '../query/traversal.js';
 import { buildContext } from '../query/context-builder.js';
 import { getKgDatabasePath } from '../db/connection.js';
 import { existsSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { SOURCE_TYPES, type SourceType } from '../db/types.js';
+import { SOURCE_TYPES, type SourceType, type UnifiedNode } from '../db/types.js';
 
 // ---------------------------------------------------------------------------
-// MCP Tool Schema 定义 (10 个工具)
+// MCP Tool Schema 定义 (12 个工具)
 // ---------------------------------------------------------------------------
 
 export interface McpToolDef {
@@ -113,9 +126,57 @@ export const KG_MCP_TOOLS: McpToolDef[] = [
       type: 'object',
       properties: {
         symbol: { type: 'string', description: 'Symbol being modified' },
-        maxDepth: { type: 'number', description: 'Impact propagation depth', default: 3 },
+        maxDepth: {
+          type: 'integer',
+          minimum: 0,
+          maximum: 10,
+          description: 'Impact propagation depth',
+          default: 3,
+        },
       },
       required: ['symbol'],
+    },
+  },
+  {
+    name: 'maestro_kg_hierarchy',
+    description: 'Get inheritance parents and children using child-to-parent stored edges',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        symbol: { type: 'string', description: 'Exact node ID, qualified name, or unique simple name' },
+        direction: {
+          type: 'string',
+          enum: ['parents', 'children', 'both'],
+          default: 'both',
+        },
+        depth: {
+          type: 'integer',
+          minimum: 0,
+          maximum: 20,
+          description: 'Hierarchy depth',
+          default: 3,
+        },
+      },
+      required: ['symbol'],
+    },
+  },
+  {
+    name: 'maestro_kg_path',
+    description: 'Find a bidirectional shortest path while preserving raw edge direction',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        from: { type: 'string', description: 'Exact node ID, qualified name, or unique simple name' },
+        to: { type: 'string', description: 'Exact node ID, qualified name, or unique simple name' },
+        maxDepth: {
+          type: 'integer',
+          minimum: 0,
+          maximum: 50,
+          description: 'Max path depth',
+          default: 10,
+        },
+      },
+      required: ['from', 'to'],
     },
   },
   {
@@ -163,6 +224,75 @@ export function precheckKg(projectPath: string): KgPrecheck {
   return { status: 'ready', message: '' };
 }
 
+function resolveNodeForMcp(mg: MaestroGraph, query: string): UnifiedNode {
+  const resolution = mg.resolveNode(query);
+  if (resolution.status === 'resolved') return resolution.node;
+  throw new McpNodeResolutionError(makeNodeResolutionErrorPayload(resolution));
+}
+
+class McpNodeResolutionError extends Error {
+  readonly payload: NodeResolutionErrorPayload;
+
+  constructor(payload: NodeResolutionErrorPayload) {
+    super(payload.code === 'ambiguous_node'
+      ? `Ambiguous node: ${payload.query}`
+      : `Node not found: ${payload.query}`);
+    this.payload = payload;
+  }
+}
+
+function compareBytes(left: string, right: string): number {
+  return Buffer.from(left).compare(Buffer.from(right));
+}
+
+function serializeNode(node: UnifiedNode): Pick<UnifiedNode, 'id' | 'kind' | 'name' | 'qualifiedName' | 'language'> {
+  return {
+    id: node.id,
+    kind: node.kind,
+    name: node.name,
+    qualifiedName: node.qualifiedName,
+    language: node.language,
+  };
+}
+
+function serializeHierarchy(result: TypeHierarchyResult): Record<string, unknown> {
+  return {
+    root: result.root ? serializeNode(result.root) : null,
+    parents: result.parents.map(serializeNode),
+    children: result.children.map(serializeNode),
+    rawEdges: result.rawEdges,
+    depth: result.depth,
+    direction: result.direction,
+    truncated: result.truncated,
+  };
+}
+
+function serializeImpact(nodeId: string, result: ImpactResult): Record<string, unknown> {
+  return {
+    node: nodeId,
+    nodeCount: result.nodes.size,
+    edgeCount: result.edges.length,
+    depth: result.depth,
+    traversalDirection: result.traversalDirection,
+    truncated: result.truncated,
+    nodes: [...result.nodes.values()]
+      .sort((left, right) => compareBytes(left.id, right.id))
+      .map(serializeNode),
+    edges: result.edges,
+  };
+}
+
+function serializePath(fromId: string, toId: string, result: PathSearchResult): Record<string, unknown> {
+  return {
+    from: fromId,
+    to: toId,
+    hops: result.path ? Math.max(0, result.path.length - 1) : null,
+    path: result.path,
+    truncated: result.truncated,
+    visitedCount: result.visitedCount,
+  };
+}
+
 // ---------------------------------------------------------------------------
 // MCP Tool Handler — 统一分发
 // ---------------------------------------------------------------------------
@@ -207,6 +337,7 @@ export async function handleMcpTool(
     };
 
     let result: unknown;
+    let resultIsError = false;
 
     switch (toolName) {
       case 'maestro_kg_search': {
@@ -327,12 +458,42 @@ export async function handleMcpTool(
       }
 
       case 'maestro_kg_impact': {
-        const impactResult = getImpactRadius(queries, safeStr(input.symbol, ''), safeInt(input.maxDepth, 3, 10));
-        result = {
-          nodeCount: impactResult.nodes.size,
-          edgeCount: impactResult.edges.length,
-          nodes: [...impactResult.nodes.values()].map(n => ({ id: n.id, kind: n.kind, name: n.name })),
-        };
+        const node = resolveNodeForMcp(mg, safeStr(input.symbol, ''));
+        const impactResult = mg.getImpact(
+          node.id,
+          normalizeTraversalDepth(input.maxDepth, 3, 10),
+          'incoming',
+        );
+        result = serializeImpact(node.id, impactResult);
+        break;
+      }
+
+      case 'maestro_kg_hierarchy': {
+        const node = resolveNodeForMcp(mg, safeStr(input.symbol, ''));
+        const requestedDirection = safeStr(input.direction, 'both');
+        if (!['parents', 'children', 'both'].includes(requestedDirection)) {
+          throw new Error(`Invalid hierarchy direction: ${requestedDirection}`);
+        }
+        const hierarchy = mg.getTypeHierarchy(node.id, {
+          direction: requestedDirection as HierarchyDirection,
+          depth: normalizeTraversalDepth(input.depth, 3, 20),
+          maxNodes: 1_000,
+        });
+        result = serializeHierarchy(hierarchy);
+        break;
+      }
+
+      case 'maestro_kg_path': {
+        const from = resolveNodeForMcp(mg, safeStr(input.from, ''));
+        const to = resolveNodeForMcp(mg, safeStr(input.to, ''));
+        const path = mg.findShortestPathResult(
+          from.id,
+          to.id,
+          normalizeTraversalDepth(input.maxDepth, 10, 50),
+          1_000,
+        );
+        result = serializePath(from.id, to.id, path);
+        resultIsError = path.truncated;
         break;
       }
 
@@ -366,12 +527,18 @@ export async function handleMcpTool(
 
     return {
       content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
-      isError: false,
+      isError: resultIsError,
     };
     } finally {
       mg.close();
     }
   } catch (err) {
+    if (err instanceof McpNodeResolutionError) {
+      return {
+        content: [{ type: 'text', text: JSON.stringify({ error: err.payload }, null, 2) }],
+        isError: true,
+      };
+    }
     return {
       content: [{ type: 'text', text: `Error: ${err instanceof Error ? err.message : String(err)}` }],
       isError: true,

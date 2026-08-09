@@ -3,6 +3,7 @@
 // 参考: codegraph/src/extraction/tree-sitter-types.ts
 
 import type { UnifiedNode, UnifiedEdge, Language } from '../../db/types.js';
+import type { ImportReference, StructuralReference } from '../../resolution/structural-reference.js';
 
 // ---------------------------------------------------------------------------
 // 提取出的符号信息 (tree-sitter 节点 → 符号)
@@ -27,8 +28,15 @@ export interface ExtractedSymbol {
   isAbstract: boolean;
   decorators: string[];
   typeParameters: string[];
+  /** Extractor-owned exact identity facts used by later strict resolution. */
+  metadata?: Record<string, unknown>;
 }
 
+/**
+ * Public extractor reference contract consumed by the generic code resolver.
+ * Keep this shape backward compatible for plugins and non-structural relations
+ * such as imports and calls.
+ */
 export interface ExtractedReference {
   fromSymbolName: string;
   fromSymbolId: string;
@@ -40,10 +48,26 @@ export interface ExtractedReference {
   language: Language;
 }
 
+export function makeImportReference(
+  originFilePath: string,
+  rawTarget: string,
+  line: number,
+  column: number,
+  importKind: string = 'module',
+): ImportReference {
+  return { kind: 'import', originFilePath, importKind, rawTarget, line, column };
+}
+
 export interface LanguageExtractionResult {
   symbols: ExtractedSymbol[];
   references: ExtractedReference[];
+  /** Exact import facts used internally to retain import kind and raw identity. */
+  importReferences?: ImportReference[];
+  /** Replayable exact structural facts resolved independently of generic refs. */
+  structuralReferences?: StructuralReference[];
   edges: Array<{ source: string; target: string; kind: string; line?: number; col?: number }>;
+  /** Non-fatal parser coverage diagnostics retained on the FileRecord. */
+  diagnostics?: string[];
 }
 
 // ---------------------------------------------------------------------------
@@ -78,13 +102,13 @@ export interface LanguageExtractor {
 // ---------------------------------------------------------------------------
 
 export function makeCodeNodeId(filePath: string, qualifiedName: string): string {
-  // 规范化路径 — 统一使用 forward slash
-  const normalizedPath = filePath.replace(/\\/g, '/');
+  // Windows separators normalize to POSIX; POSIX backslashes are identity bytes.
+  const normalizedPath = process.platform === 'win32' ? filePath.replace(/\\/g, '/') : filePath;
   return `code:${normalizedPath}:${qualifiedName}`;
 }
 
 export function makeFileNodeId(filePath: string): string {
-  const normalizedPath = filePath.replace(/\\/g, '/');
+  const normalizedPath = process.platform === 'win32' ? filePath.replace(/\\/g, '/') : filePath;
   return `code:${normalizedPath}:<file>`;
 }
 
@@ -122,7 +146,7 @@ export function symbolToNode(symbol: ExtractedSymbol, now: number): UnifiedNode 
     priority: '',
     status: 'active',
     body: '',
-    metadata: {},
+    metadata: { ...(symbol.metadata ?? {}) },
     updatedAt: now,
   };
 }

@@ -1,0 +1,165 @@
+{
+  "schema_version": "apple-external-catalog/1.0",
+  "entries": [
+    {
+      "module": "Foundation",
+      "objcName": "NSObject",
+      "kind": "class",
+      "swiftVisibleAliases": [],
+      "parent": null,
+      "protocols": []
+    },
+    {
+      "module": "Foundation",
+      "objcName": "NSURLProtocol",
+      "kind": "class",
+      "swiftVisibleAliases": ["URLProtocol"],
+      "parent": "Foundation.NSObject",
+      "protocols": []
+    },
+    {
+      "module": "UIKit",
+      "objcName": "UIResponder",
+      "kind": "class",
+      "swiftVisibleAliases": [],
+      "parent": "Foundation.NSObject",
+      "protocols": []
+    },
+    {
+      "module": "UIKit",
+      "objcName": "UIView",
+      "kind": "class",
+      "swiftVisibleAliases": [],
+      "parent": "UIKit.UIResponder",
+      "protocols": []
+    },
+    {
+      "module": "UIKit",
+      "objcName": "UIViewController",
+      "kind": "class",
+      "swiftVisibleAliases": [],
+      "parent": "UIKit.UIResponder",
+      "protocols": []
+    },
+    {
+      "module": "UIKit",
+      "objcName": "UICollectionReusableView",
+      "kind": "class",
+      "swiftVisibleAliases": [],
+      "parent": "UIKit.UIView",
+      "protocols": []
+    },
+    {
+      "module": "UIKit",
+      "objcName": "UICollectionViewCell",
+      "kind": "class",
+      "swiftVisibleAliases": [],
+      "parent": "UIKit.UICollectionReusableView",
+      "protocols": []
+    },
+    {
+      "module": "UIKit",
+      "objcName": "UITableViewCell",
+      "kind": "class",
+      "swiftVisibleAliases": [],
+      "parent": "UIKit.UIView",
+      "protocols": []
+    },
+    {
+      "module": "UIKit",
+      "objcName": "UIControl",
+      "kind": "class",
+      "swiftVisibleAliases": [],
+      "parent": "UIKit.UIView",
+      "protocols": []
+    },
+    {
+      "module": "UIKit",
+      "objcName": "UILabel",
+      "kind": "class",
+      "swiftVisibleAliases": [],
+      "parent": "UIKit.UIView",
+      "protocols": []
+    },
+    {
+      "module": "UIKit",
+      "objcName": "UICollectionViewLayout",
+      "kind": "class",
+      "swiftVisibleAliases": [],
+      "parent": "Foundation.NSObject",
+      "protocols": []
+    },
+    {
+      "module": "UIKit",
+      "objcName": "UICollectionViewFlowLayout",
+      "kind": "class",
+      "swiftVisibleAliases": [],
+      "parent": "UIKit.UICollectionViewLayout",
+      "protocols": []
+    },
+    {
+      "module": "UIKit",
+      "objcName": "UIButton",
+      "kind": "class",
+      "swiftVisibleAliases": [],
+      "parent": "UIKit.UIControl",
+      "protocols": []
+    },
+    {
+      "module": "UIKit",
+      "objcName": "UIScrollView",
+      "kind": "class",
+      "swiftVisibleAliases": [],
+      "parent": "UIKit.UIView",
+      "protocols": []
+    },
+    {
+      "module": "UIKit",
+      "objcName": "UITableViewController",
+      "kind": "class",
+      "swiftVisibleAliases": [],
+      "parent": "UIKit.UIViewController",
+      "protocols": []
+    },
+    {
+      "module": "UIKit",
+      "objcName": "UITextView",
+      "kind": "class",
+      "swiftVisibleAliases": [],
+      "parent": "UIKit.UIScrollView",
+      "protocols": []
+    },
+    {
+      "module": "UIKit",
+      "objcName": "UINavigationController",
+      "kind": "class",
+      "swiftVisibleAliases": [],
+      "parent": "UIKit.UIViewController",
+      "protocols": []
+    },
+    {
+      "module": "UIKit",
+      "objcName": "UISearchBar",
+      "kind": "class",
+      "swiftVisibleAliases": [],
+      "parent": "UIKit.UIView",
+      "protocols": []
+    },
+    {
+      "module": "PhotosUI",
+      "objcName": "PHLivePhotoView",
+      "kind": "class",
+      "swiftVisibleAliases": [],
+      "parent": "UIKit.UIView",
+      "protocols": []
+    },
+    {
+      "module": "CoreImage",
+      "objcName": "CIFilter",
+      "kind": "class",
+      "swiftVisibleAliases": [],
+      "parent": "Foundation.NSObject",
+      "protocols": []
+    }
+  ]
+}

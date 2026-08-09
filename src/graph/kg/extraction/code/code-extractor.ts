@@ -2,8 +2,8 @@
 // 代码提取编排器 — 扫描源文件 → 语言检测 → tree-sitter 解析 → 生成 nodes + edges
 // 参考: codegraph extraction pipeline
 
-import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
-import { resolve, extname, join, relative } from 'node:path';
+import { existsSync, readdirSync, readFileSync, realpathSync, statSync } from 'node:fs';
+import { basename, resolve, extname, join, relative } from 'node:path';
 import { execFileSync } from 'node:child_process';
 import type { UnifiedNode, UnifiedEdge, FileRecord, ExtractionResult, SourceType, Language } from '../../db/types.js';
 import { getTreeSitterEngine } from './tree-sitter.js';
@@ -21,6 +21,20 @@ import { PluginEngine } from './plugin-engine.js';
 import type { PluginExtractedSymbol } from './plugin-types.js';
 import { buildScanScope } from './scan-scope.js';
 import { CodeParseRunner } from './worker-parser.js';
+import { classifyLanguageForSource } from './language-classifier.js';
+import {
+  loadExternalSurfaceManifest,
+  readExactFile,
+  verifyExactFileIdentity,
+  type LoadedExternalSurfaceManifest,
+  type ResolvedExternalSurfaceFile,
+} from './external/external-surface-manifest.js';
+import {
+  canonicalizeCodeFilePath,
+  ScanPathComparisonIndex,
+  type ImportReference,
+  type StructuralReference,
+} from '../../resolution/structural-reference.js';
 
 // ---------------------------------------------------------------------------
 // 扫描配置
@@ -45,6 +59,65 @@ export interface ScanOptions {
   maxFileSize?: number;
   /** 进度回调 */
   onProgress?: (file: string, count: number, total: number) => void;
+  /**
+   * Orchestrator-owned immutable external snapshot. Standalone extraction
+   * prepares the same snapshot itself before scanning.
+   */
+  externalSurfaceScan?: PreparedExternalSurfaceScan;
+  /** Only one srcDir may inject the exact external files. */
+  includeExternalSurfaces?: boolean;
+  /** Atomic replacement treats every scheduled-file omission as fatal. */
+  failOnSkippedFile?: boolean;
+}
+
+export interface PreparedExternalSurfaceFile {
+  file: ResolvedExternalSurfaceFile;
+  sourceCode: string;
+  contentDigest: string;
+}
+
+export interface PreparedExternalSurfaceScan {
+  manifest: LoadedExternalSurfaceManifest;
+  files: readonly PreparedExternalSurfaceFile[];
+  /** Manifest digest plus exact identity/content snapshot. */
+  externalFingerprint: string;
+}
+
+/**
+ * Captures the exact external bytes before a destructive transaction starts.
+ * Extraction reuses these bytes instead of reopening the path, binding the
+ * graph snapshot and sync watermark to one immutable input.
+ */
+export function prepareExternalSurfaceScan(projectRoot: string): PreparedExternalSurfaceScan {
+  const canonicalProjectRoot = realpathSync(resolve(projectRoot));
+  const manifest = loadExternalSurfaceManifest(canonicalProjectRoot);
+  const files = manifest.files.map((file) => {
+    const sourceCode = readExactFile(file);
+    return Object.freeze({
+      file,
+      sourceCode,
+      contentDigest: createHash('sha256').update(sourceCode).digest('hex'),
+    });
+  });
+  const externalFingerprint = createHash('sha256').update(JSON.stringify({
+    schemaVersion: manifest.schemaVersion,
+    manifestDigest: manifest.digest,
+    files: files.map(item => ({
+      path: item.file.canonicalPath,
+      module: item.file.module,
+      language: item.file.language,
+      size: item.file.size,
+      mtimeMs: item.file.mtimeMs,
+      device: item.file.device,
+      inode: item.file.inode,
+      contentDigest: item.contentDigest,
+    })),
+  })).digest('hex');
+  return Object.freeze({
+    manifest,
+    files: Object.freeze(files),
+    externalFingerprint,
+  });
 }
 
 const BINARY_EXTENSIONS = new Set([
@@ -65,44 +138,118 @@ interface ScannedFile {
   size: number;
   modifiedAt: number;
   contentHash: string;
+  externalSurface?: {
+    module: string;
+    language: 'objc';
+    configuredPath: string;
+    schemaVersion: string;
+    file: ResolvedExternalSurfaceFile;
+    sourceCode: string;
+    contentDigest: string;
+  };
 }
 
-function scanFiles(options: ScanOptions): ScannedFile[] {
+/** One canonical identity space shared by traversal, callbacks, reads, and output records. */
+interface CodeScanPlan {
+  readonly projectRoot: string;
+  readonly srcDir: string;
+  readonly files: ScannedFile[];
+}
+
+function prepareCodeScanPlan(options: ScanOptions): CodeScanPlan {
   const files: ScannedFile[] = [];
+  const fileIndexByPath = new Map<string, number>();
   const maxFileSize = options.maxFileSize ?? DEFAULT_MAX_FILE_SIZE;
-  const srcDir = resolve(options.srcDir);
+  const requestedSrcDir = resolve(options.srcDir);
+  const requestedProjectRoot = options.projectRoot
+    ? resolve(options.projectRoot)
+    : resolve(requestedSrcDir, '..');
+  const projectRoot = realpathSync(requestedProjectRoot);
+  // Resolve/read the fixed allowlist before any ignore traversal or extractor/plugin dispatch.
+  const externalScan = options.externalSurfaceScan ?? prepareExternalSurfaceScan(projectRoot);
+  const externalManifest = externalScan.manifest;
+  const externalByPath = new Map(externalScan.files.map(file => [file.file.canonicalPath, file]));
+  const includeExternalSurfaces = options.includeExternalSurfaces ?? true;
+
+  const addScannedFile = (file: ScannedFile, prefer = false): void => {
+    const existingIndex = fileIndexByPath.get(file.path);
+    if (existingIndex === undefined) {
+      fileIndexByPath.set(file.path, files.length);
+      files.push(file);
+      return;
+    }
+    if (prefer) files[existingIndex] = file;
+  };
+  const addExactExternalFile = (prepared: PreparedExternalSurfaceFile): void => {
+    const file = prepared.file;
+    addScannedFile({
+      path: file.canonicalPath,
+      language: file.language,
+      size: file.size,
+      modifiedAt: file.modifiedAt,
+      contentHash: '',
+      externalSurface: {
+        module: file.module,
+        language: file.language,
+        configuredPath: file.configuredPath,
+        schemaVersion: externalManifest.schemaVersion,
+        file,
+        sourceCode: prepared.sourceCode,
+        contentDigest: prepared.contentDigest,
+      },
+    }, true);
+  };
+
+  if (!existsSync(requestedSrcDir)) {
+    if (options.failOnSkippedFile) {
+      throw new Error(`Code source directory became unavailable during scan: ${requestedSrcDir}`);
+    }
+    if (includeExternalSurfaces) {
+      for (const file of externalScan.files) addExactExternalFile(file);
+    }
+    return { projectRoot, srcDir: requestedSrcDir, files };
+  }
+  const srcDir = realpathSync(requestedSrcDir);
+  const scanRoot = options.projectRoot ? projectRoot : srcDir;
   const scope = buildScanScope({
-    projectRoot: options.projectRoot ?? srcDir,
+    projectRoot: scanRoot,
     srcDir,
     excludeDirs: options.excludeDirs,
     excludeFiles: options.excludeFiles,
     createMaestroIgnore: options.createMaestroIgnore,
   });
 
-  if (!existsSync(srcDir)) return files;
-
   function collectFile(fullPath: string): void {
+    let identityPath: string;
     let stat;
     try {
-      stat = statSync(fullPath);
-    } catch {
+      identityPath = canonicalizeCodeFilePath(scanRoot, fullPath);
+      stat = statSync(identityPath);
+    } catch (err) {
+      if (err instanceof Error && err.message.startsWith('code-path-outside-project:')) throw err;
+      if (options.failOnSkippedFile) {
+        throw new Error(`Code scan failed to inspect file: ${fullPath}`, { cause: err });
+      }
       return;
     }
 
     if (!stat.isFile()) return;
-    if (scope.ignores(fullPath)) return;
+    // Exact allowlisted identities are injected only through the immutable
+    // external snapshot, never rediscovered by overlapping srcDirs.
+    if (externalByPath.has(identityPath)) return;
+    if (scope.ignores(identityPath)) return;
     if (stat.size > maxFileSize) return;
 
-    const ext = extname(fullPath).toLowerCase();
+    const ext = extname(identityPath).toLowerCase();
     if (BINARY_EXTENSIONS.has(ext)) return;
 
-    const language = detectLanguageFromPath(fullPath);
+    const language = detectLanguageFromPath(identityPath);
     if (language === 'unknown') return;
 
-    if (!options.includeTests && isTestFile(fullPath)) return;
+    if (!options.includeTests && isTestFile(identityPath)) return;
 
-    files.push({
-      path: fullPath,
+    addScannedFile({
+      path: identityPath,
       language,
       size: stat.size,
       modifiedAt: Math.floor(stat.mtimeMs),
@@ -113,6 +260,22 @@ function scanFiles(options: ScanOptions): ScannedFile[] {
   function collectGitVisibleFiles(): boolean {
     const srcRel = relative(scope.projectRoot, srcDir).replace(/\\/g, '/') || '.';
     if (srcRel.startsWith('..')) return false;
+    try {
+      const insideWorkTree = execFileSync(
+        'git',
+        ['rev-parse', '--is-inside-work-tree'],
+        {
+          cwd: scope.projectRoot,
+          encoding: 'utf-8',
+          stdio: ['pipe', 'pipe', 'ignore'],
+          timeout: 5000,
+          windowsHide: true,
+        },
+      ).trim();
+      if (insideWorkTree !== 'true') return false;
+    } catch {
+      return false;
+    }
     try {
       const output = execFileSync(
         'git',
@@ -127,10 +290,23 @@ function scanFiles(options: ScanOptions): ScannedFile[] {
         },
       );
       for (const relPath of output.split('\0').filter(Boolean)) {
-        collectFile(resolve(scope.projectRoot, relPath));
+        const fullPath = resolve(scope.projectRoot, relPath);
+        try {
+          statSync(fullPath);
+        } catch (error) {
+          if ((error as NodeJS.ErrnoException).code === 'ENOENT') continue;
+          if (options.failOnSkippedFile) {
+            throw new Error(`Code scan failed to inspect git-visible file: ${fullPath}`, { cause: error });
+          }
+          continue;
+        }
+        collectFile(fullPath);
       }
       return true;
-    } catch {
+    } catch (error) {
+      if (options.failOnSkippedFile) {
+        throw new Error(`Code scan failed to enumerate git-visible files: ${srcDir}`, { cause: error });
+      }
       return false;
     }
   }
@@ -139,7 +315,10 @@ function scanFiles(options: ScanOptions): ScannedFile[] {
     let entries: string[];
     try {
       entries = readdirSync(dir);
-    } catch {
+    } catch (error) {
+      if (options.failOnSkippedFile) {
+        throw new Error(`Code scan failed to read directory: ${dir}`, { cause: error });
+      }
       return;
     }
 
@@ -148,7 +327,10 @@ function scanFiles(options: ScanOptions): ScannedFile[] {
       let stat;
       try {
         stat = statSync(fullPath);
-      } catch {
+      } catch (error) {
+        if (options.failOnSkippedFile) {
+          throw new Error(`Code scan failed to inspect directory entry: ${fullPath}`, { cause: error });
+        }
         continue;
       }
 
@@ -164,7 +346,12 @@ function scanFiles(options: ScanOptions): ScannedFile[] {
   if (!collectGitVisibleFiles()) {
     walkDir(srcDir);
   }
-  return files;
+  // Exact entries bypass ignore rules one file at a time. Their parent is never
+  // added to srcDirs and no sibling/import target is discovered from here.
+  if (includeExternalSurfaces) {
+    for (const file of externalScan.files) addExactExternalFile(file);
+  }
+  return { projectRoot, srcDir, files };
 }
 
 // ---------------------------------------------------------------------------
@@ -213,19 +400,21 @@ async function runCodeExtraction(
   collectResults: boolean,
 ): Promise<{ results: ExtractionResult[]; stats: CodeExtractionStats }> {
   const startMs = Date.now();
-  const resolvedSrcDir = resolve(options.srcDir);
+  // Manifest validation and exact-file resolution must happen before plugins are loaded.
+  const scanPlan = prepareCodeScanPlan(options);
+  const { files: scannedFiles, projectRoot, srcDir: resolvedSrcDir } = scanPlan;
   const engine = getTreeSitterEngine();
   const hasTreeSitter = engine.isAvailable();
   const parser = new CodeParseRunner();
 
   // 插件引擎
-  const projectRoot = options.projectRoot ?? resolve(resolvedSrcDir, '..');
   const pluginEngine = new PluginEngine(projectRoot);
   let hasPlugins = false;
-  try { hasPlugins = await pluginEngine.load({ allowScripts: options.allowExtractorScripts }); } catch { /* plugins optional */ }
+  if (scannedFiles.some(file => !file.externalSurface)) {
+    hasPlugins = await pluginEngine.load({ allowScripts: options.allowExtractorScripts });
+  }
 
-  // 扫描文件
-  const scannedFiles = scanFiles(options);
+  const pathComparisonIndex = new ScanPathComparisonIndex(scannedFiles.map(file => file.path));
   const results: ExtractionResult[] = [];
   const errors: Array<{ filePath: string; message: string }> = [];
   let totalNodes = 0;
@@ -251,24 +440,52 @@ async function runCodeExtraction(
       options.onProgress?.(file.path, i + 1, scannedFiles.length);
 
       try {
-        const sourceCode = readFileSync(file.path, 'utf-8');
-        file.contentHash = createHash('sha256').update(sourceCode).digest('hex').substring(0, 16);
-        const relPath = relative(resolvedSrcDir, file.path).replace(/\\/g, '/');
+        if (file.externalSurface) verifyExactFileIdentity(file.externalSurface.file);
+        const sourceCode = file.externalSurface
+          ? file.externalSurface.sourceCode
+          : readFileSync(file.path, 'utf-8');
+        const contentDigest = createHash('sha256').update(sourceCode).digest('hex');
+        if (file.externalSurface && contentDigest !== file.externalSurface.contentDigest) {
+          throw new Error(`exact external surface snapshot digest mismatch: ${file.path}`);
+        }
+        file.contentHash = contentDigest.substring(0, 16);
+        // `.h` 在扫描时只做 provisional route；读取内容后收敛为全管线共用的最终语言。
+        file.language = file.externalSurface?.language
+          ?? classifyLanguageForSource(file.path, sourceCode, file.language).language;
+        const relPath = relative(
+          file.externalSurface ? projectRoot : resolvedSrcDir,
+          file.path,
+        ).replace(/\\/g, '/');
 
         // 自定义提取器优先 (vue/svelte/liquid/mybatis/dfm)
-        const customResult = await extractWithCustomExtractor(sourceCode, file.path);
+        const customResult = file.externalSurface
+          ? null
+          : await extractWithCustomExtractor(
+            sourceCode,
+            file.path,
+            options.failOnSkippedFile ? 'fail' : 'warn',
+          );
         if (customResult) {
           const { nodes, edges } = buildResultFromCustomExtractor(
-            customResult.symbols, customResult.references, customResult.edges,
-            file, relPath,
+            customResult.symbols, customResult.edges, file,
           );
-          const normalizedRefs = normalizeReferenceAnchors(customResult.references, file.path);
+          applyExternalSurfaceMetadata(nodes, file);
+          const normalizedRefs = normalizeExtractionReferences(
+            customResult.references,
+            customResult.importReferences,
+            file,
+          );
+          const structuralReferences = markStructuralReferencePathCollisions(
+            customResult.structuralReferences ?? [],
+            pathComparisonIndex,
+          );
           await emitResult({
             nodes,
             edges,
             references: normalizedRefs,
-            fileRecord: createFileRecord(file, nodes.length),
-          }, normalizedRefs.length);
+            fileRecord: createFileRecord(file, nodes.length, customResult.diagnostics ?? []),
+            structuralReferences,
+          }, normalizedRefs.length + structuralReferences.length);
           continue;
         }
 
@@ -280,36 +497,42 @@ async function runCodeExtraction(
             edges: [],
             references: [],
             fileRecord: createFileRecord(file, 1),
+            structuralReferences: [],
           }, 0);
           continue;
         }
 
         // tree-sitter 通用提取
         if (!hasTreeSitter) {
+          if (file.externalSurface || options.failOnSkippedFile) {
+            throw new Error(`${file.externalSurface ? 'exact external surface' : 'scheduled file'} requires an available tree-sitter engine`);
+          }
           skippedCount++;
           continue;
         }
 
         const extractor = getExtractor(file.language);
         if (!extractor) {
+          if (file.externalSurface || options.failOnSkippedFile) {
+            throw new Error(`${file.externalSurface ? 'exact external surface' : 'scheduled file'} has no ${file.language} extractor`);
+          }
           skippedCount++;
           continue;
         }
 
         let extracted: LanguageExtractionResult | null = null;
-        const fileMatchesPlugin = hasPlugins && pluginEngine.hasMatchingPlugin(file.path, file.language);
+        const fileMatchesPlugin = !file.externalSurface
+          && hasPlugins
+          && pluginEngine.hasMatchingPlugin(file.path, file.language);
         if (fileMatchesPlugin) {
           const tree = await engine.parse(sourceCode, file.language);
           if (tree) {
             try {
               extracted = extractor.extract(tree, sourceCode, file.path);
-              try {
-                const pluginResult = await pluginEngine.run(file.path, sourceCode, file.language, tree, extracted);
-                if (pluginResult.symbols.length > 0 || (pluginResult.references?.length ?? 0) > 0 || (pluginResult.edges?.length ?? 0) > 0) {
-                  extracted = pluginEngine.mergeResults(extracted, pluginResult);
-                }
-              } catch {
-                // Plugin extraction is best-effort and must not block core indexing.
+              // PluginEngine 自身执行 onError 策略；fail 必须交给外层的逐文件失败处理。
+              const pluginResult = await pluginEngine.run(file.path, sourceCode, file.language, tree, extracted);
+              if (pluginResult.symbols.length > 0 || (pluginResult.references?.length ?? 0) > 0 || (pluginResult.edges?.length ?? 0) > 0) {
+                extracted = pluginEngine.mergeResults(extracted, pluginResult);
               }
             } finally {
               tree.delete();
@@ -320,21 +543,31 @@ async function runCodeExtraction(
         }
 
         if (!extracted) {
+          if (file.externalSurface || options.failOnSkippedFile) {
+            throw new Error(`${file.externalSurface ? 'exact external surface' : 'scheduled file'} tree-sitter parse failed`);
+          }
           errors.push({ filePath: file.path, message: 'tree-sitter parse failed' });
           skippedCount++;
           continue;
         }
 
-        const { nodes, edges, normalizedRefs } = buildResultFromTreeSitter(extracted, file);
+        const { nodes, edges, references: normalizedRefs } = buildResultFromTreeSitter(extracted, file);
+        applyExternalSurfaceMetadata(nodes, file);
 
+        const structuralReferences = markStructuralReferencePathCollisions(
+          extracted.structuralReferences ?? [],
+          pathComparisonIndex,
+        );
         await emitResult({
           nodes,
           edges,
           references: normalizedRefs,
-          fileRecord: createFileRecord(file, nodes.length),
-        }, normalizedRefs.length);
+          fileRecord: createFileRecord(file, nodes.length, extracted.diagnostics ?? []),
+          structuralReferences,
+        }, normalizedRefs.length + structuralReferences.length);
 
       } catch (err) {
+        if (file.externalSurface || options.failOnSkippedFile) throw err;
         errors.push({
           filePath: file.path,
           message: err instanceof Error ? err.message : String(err),
@@ -368,37 +601,33 @@ async function runCodeExtraction(
 async function extractWithCustomExtractor(
   source: string,
   filePath: string,
-): Promise<{ symbols: ExtractedSymbol[]; references: ExtractedReference[]; edges: Array<{ source: string; target: string; kind: string }> } | null> {
+  onEmbeddedParseError: 'warn' | 'fail',
+): Promise<LanguageExtractionResult | null> {
   const ext = extname(filePath).toLowerCase();
 
   // Vue SFC
   if (ext === '.vue') {
-    const result = await extractVueSFC(source, filePath);
-    return { symbols: result.symbols, references: result.references, edges: result.edges };
+    return extractVueSFC(source, filePath, onEmbeddedParseError);
   }
 
   // Svelte
   if (ext === '.svelte') {
-    const result = await extractSvelte(source, filePath);
-    return { symbols: result.symbols, references: result.references, edges: result.edges };
+    return extractSvelte(source, filePath, onEmbeddedParseError);
   }
 
   // Liquid
   if (ext === '.liquid') {
-    const result = extractLiquid(source, filePath);
-    return { symbols: result.symbols, references: result.references, edges: result.edges };
+    return extractLiquid(source, filePath);
   }
 
   // MyBatis XML mapper (检测是否包含 <mapper> 标签)
   if (ext === '.xml' && source.includes('<mapper')) {
-    const result = extractMybatisXml(source, filePath);
-    return { symbols: result.symbols, references: result.references, edges: result.edges };
+    return extractMybatisXml(source, filePath);
   }
 
   // Delphi DFM/FMX
   if (ext === '.dfm' || ext === '.fmx') {
-    const result = extractDfm(source, filePath);
-    return { symbols: result.symbols, references: result.references, edges: result.edges };
+    return extractDfm(source, filePath);
   }
 
   return null;
@@ -410,10 +639,8 @@ async function extractWithCustomExtractor(
 
 function buildResultFromCustomExtractor(
   symbols: ExtractedSymbol[],
-  references: ExtractedReference[],
   rawEdges: Array<{ source: string; target: string; kind: string }>,
   file: ScannedFile,
-  relPath: string,
 ): { nodes: UnifiedNode[]; edges: UnifiedEdge[] } {
   const now = Date.now();
   const nodes: UnifiedNode[] = symbols.map(s => symbolToNode(s, now));
@@ -433,7 +660,7 @@ function buildResultFromCustomExtractor(
 function buildResultFromTreeSitter(
   extracted: LanguageExtractionResult,
   file: ScannedFile,
-): { nodes: UnifiedNode[]; edges: UnifiedEdge[]; normalizedRefs: NonNullable<ExtractionResult['references']> } {
+): { nodes: UnifiedNode[]; edges: UnifiedEdge[]; references: ExtractedReference[] } {
   const now = Date.now();
   const nodes: UnifiedNode[] = extracted.symbols.map(s => {
     const node = symbolToNode(s, now);
@@ -447,8 +674,10 @@ function buildResultFromTreeSitter(
   // 统一引用锚点 — 旧格式 fromSymbolId (\`\${filePath}:<module>\` / \`\${filePath}:\${parent}\`) 不是合法节点 ID,
   // unresolved_refs 有 FK → nodes, 非 code: 前缀的锚点全部改为 file 节点 ID (code:...:<file>)
   const fileNodeId = makeFileNodeId(file.path);
-  const normalizedRefs: NonNullable<ExtractionResult['references']> = normalizeReferenceAnchors(
-    extracted.references ?? [], file.path,
+  const normalizedRefs = normalizeExtractionReferences(
+    extracted.references,
+    extracted.importReferences,
+    file,
   );
 
   const edges: UnifiedEdge[] = [];
@@ -533,20 +762,60 @@ function buildResultFromTreeSitter(
     }
   }
 
-  return { nodes, edges, normalizedRefs };
+  return { nodes, edges, references: normalizedRefs };
 }
 
 // 统一引用锚点 — 所有语言提取器的 fromSymbolId 若非合法节点 ID (code: 前缀)
 // 一律改写为 file 节点 ID, 保证 unresolved_refs FK 与 code-resolution JOIN 可用
 function normalizeReferenceAnchors(
-  refs: ExtractionResult['references'],
-  filePath: string,
-): NonNullable<ExtractionResult['references']> {
-  const fileNodeId = makeFileNodeId(filePath);
-  return (refs ?? []).map(ref => ({
+  refs: readonly ExtractedReference[],
+  file: Pick<ScannedFile, 'path' | 'language'>,
+): ExtractedReference[] {
+  const fileNodeId = makeFileNodeId(file.path);
+  return refs.map(ref => ({
     ...ref,
     fromSymbolId: ref.fromSymbolId.startsWith('code:') ? ref.fromSymbolId : fileNodeId,
+    filePath: file.path,
   }));
+}
+
+/**
+ * Converts strict import facts into the public generic reference contract and
+ * de-duplicates them against extractor/plugin references before persistence.
+ */
+function normalizeExtractionReferences(
+  references: readonly ExtractedReference[],
+  importReferences: readonly ImportReference[] | undefined,
+  file: ScannedFile,
+): ExtractedReference[] {
+  const normalized = normalizeReferenceAnchors(references, file);
+  const fileNodeId = makeFileNodeId(file.path);
+  for (const reference of normalizeImportReferences(importReferences ?? [], file.path)) {
+    normalized.push({
+      fromSymbolName: '<file>',
+      fromSymbolId: fileNodeId,
+      referenceName: reference.rawTarget,
+      referenceKind: 'imports',
+      line: reference.line,
+      col: reference.column,
+      filePath: file.path,
+      language: file.language,
+    });
+  }
+
+  const seen = new Set<string>();
+  return normalized.filter((reference) => {
+    const key = [
+      reference.fromSymbolId,
+      reference.referenceKind,
+      reference.referenceName,
+      reference.line,
+      reference.col,
+    ].join('\0');
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
 }
 
 // 创建 file 节点 (与符号节点共享 code: 命名空间, id = code:<abs-path>:<file>)
@@ -621,7 +890,89 @@ function createFileLevelNode(file: ScannedFile, relPath: string): UnifiedNode {
   };
 }
 
-function createFileRecord(file: ScannedFile, nodeCount: number): FileRecord {
+function applyExternalSurfaceMetadata(nodes: UnifiedNode[], file: ScannedFile): void {
+  if (!file.externalSurface) return;
+  const generatedSwiftHeader = /-Swift\.h$/.test(basename(file.path));
+  const externalSurfaceCanonical = /(?:^|\/)ios-arm64(?:\/|$)/.test(
+    file.externalSurface.configuredPath.replace(/\\/g, '/'),
+  );
+  for (const node of nodes) {
+    node.metadata = {
+      ...node.metadata,
+      externalSurface: true,
+      externalSurfaceSchemaVersion: file.externalSurface.schemaVersion,
+      externalSurfacePath: file.externalSurface.configuredPath,
+      module: file.externalSurface.module,
+      language: file.externalSurface.language,
+      ...(generatedSwiftHeader ? { generatedSwiftHeader: true } : {}),
+      ...(externalSurfaceCanonical ? { externalSurfaceCanonical: true } : {}),
+    };
+  }
+}
+
+export function normalizeImportReferences(
+  references: readonly unknown[],
+  identityFilePath: string,
+): ImportReference[] {
+  const normalized: ImportReference[] = [];
+  for (const value of references) {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) continue;
+    const reference = value as Record<string, unknown>;
+    if (
+      reference.kind === 'import'
+      && typeof reference.rawTarget === 'string'
+      && reference.rawTarget.trim() !== ''
+      && typeof reference.importKind === 'string'
+      && Number.isInteger(reference.line)
+      && Number(reference.line) > 0
+      && Number.isInteger(reference.column)
+      && Number(reference.column) > 0
+    ) {
+      normalized.push({
+        kind: 'import',
+        originFilePath: identityFilePath,
+        importKind: reference.importKind,
+        rawTarget: reference.rawTarget,
+        line: Number(reference.line),
+        column: Number(reference.column),
+      });
+      continue;
+    }
+    // Backward-compatible script-plugin adapter for pre-v5 import payloads.
+    if (
+      reference.referenceKind === 'imports'
+      && typeof reference.referenceName === 'string'
+      && reference.referenceName.trim() !== ''
+      && Number.isInteger(reference.line)
+      && Number(reference.line) > 0
+      && Number.isInteger(reference.col)
+      && Number(reference.col) > 0
+    ) {
+      normalized.push({
+        kind: 'import',
+        originFilePath: identityFilePath,
+        importKind: 'module',
+        rawTarget: reference.referenceName,
+        line: Number(reference.line),
+        column: Number(reference.col),
+      });
+    }
+  }
+  return normalized;
+}
+
+export function markStructuralReferencePathCollisions(
+  references: StructuralReference[],
+  pathComparisonIndex: ScanPathComparisonIndex,
+): StructuralReference[] {
+  return references.map((reference) => {
+    const paths = [reference.origin.filePath, ...reference.targetFileHints];
+    const hasCollision = paths.some(path => !pathComparisonIndex.get(path).ok);
+    return hasCollision ? { ...reference, status: 'ambiguous' } : reference;
+  });
+}
+
+function createFileRecord(file: ScannedFile, nodeCount: number, errors: string[] = []): FileRecord {
   return {
     path: file.path,
     contentHash: file.contentHash,
@@ -630,7 +981,7 @@ function createFileRecord(file: ScannedFile, nodeCount: number): FileRecord {
     modifiedAt: file.modifiedAt,
     indexedAt: Date.now(),
     nodeCount,
-    errors: [],
+    errors,
     sourceType: 'codegraph' as SourceType,
   };
 }

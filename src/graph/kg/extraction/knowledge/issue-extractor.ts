@@ -31,7 +31,7 @@ export function extractIssues(
   const now = Date.now();
 
   if (!existsSync(issuesPath)) {
-    return { nodes, edges, fileRecord: createEmptyFileRecord(issuesPath) };
+    return { nodes, edges, fileRecord: createEmptyFileRecord(issuesPath), references: [], structuralReferences: [] };
   }
 
   const content = readFileSync(issuesPath, 'utf-8');
@@ -89,6 +89,8 @@ export function extractIssues(
   return {
     nodes,
     edges,
+    references: [],
+    structuralReferences: [],
     fileRecord: {
       path: issuesPath,
       contentHash: '',

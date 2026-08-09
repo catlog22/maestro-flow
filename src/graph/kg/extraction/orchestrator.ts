@@ -5,12 +5,19 @@ import { isAbsolute, relative, resolve } from 'node:path';
 import { existsSync, realpathSync } from 'node:fs';
 import type { MaestroGraph } from '../engine.js';
 import { KnowledgeExtractorRegistry } from './knowledge-extractor-registry.js';
-import { forEachCodeExtractionResult } from './code/code-extractor.js';
+import {
+  forEachCodeExtractionResult,
+  prepareExternalSurfaceScan,
+  type PreparedExternalSurfaceScan,
+} from './code/code-extractor.js';
+import { materializeAppleExternalCatalog } from './code/external/apple-catalog.js';
 import { resolveKnowledgeEdges } from '../resolution/knowledge-resolver.js';
 import { resolveCodeReferences } from '../resolution/code-resolver.js';
 import type { SyncResult, SourceType } from '../db/types.js';
+import type { StructuralReference } from '../resolution/structural-reference.js';
+import { resolveCodeStructuralReferences } from '../resolution/code-reference-resolver.js';
 import { FileLock } from '../sync/file-lock.js';
-import { writeSyncState, getGitHead } from '../sync-state.js';
+import { writeSyncState, writeSyncStateFailure, getGitHead } from '../sync-state.js';
 
 export interface CodegraphSyncOptions {
   srcDirs?: string[];
@@ -20,6 +27,7 @@ export interface CodegraphSyncOptions {
   excludeFiles?: string[];
   createMaestroIgnore?: boolean;
   allowExtractorScripts?: boolean;
+  onProgress?: (file: string, count: number, total: number) => void;
 }
 
 export interface SyncKnowledgeGraphOptions {
@@ -28,6 +36,36 @@ export interface SyncKnowledgeGraphOptions {
   codegraph?: CodegraphSyncOptions;
   /** Existing graph connection. The caller retains lifecycle ownership. */
   graph?: MaestroGraph;
+  /** Deterministic failure points for atomicity regression tests. */
+  faultInjection?: {
+    beforeSourceScan?: (srcDir: string, index: number) => void;
+    beforeStructuralResolution?: () => void;
+    beforeFtsRebuild?: () => void;
+    beforeTransactionCommit?: () => void;
+    beforeSyncStateCommit?: () => void;
+  };
+}
+
+interface CodegraphPreflight {
+  canonicalProjectRoot: string;
+  srcDirs: string[];
+  startHead: string | null;
+  startedAt: number;
+  externalScan: PreparedExternalSurfaceScan;
+}
+
+export class CodegraphSyncCommittedError extends Error {
+  readonly graphCommitted = true;
+  readonly retryable = true;
+
+  constructor(cause: unknown) {
+    super(
+      `Codegraph committed but sync watermark failed; graphCommitted=true retryable=true: `
+      + `${cause instanceof Error ? cause.message : String(cause)}`,
+      { cause },
+    );
+    this.name = 'CodegraphSyncCommittedError';
+  }
 }
 
 export async function syncKnowledgeGraph(
@@ -56,11 +94,43 @@ async function syncKnowledgeGraphUnlocked(
       : await MaestroGraphImpl.init(projectPath);
   }
 
+  let codegraphAttempt: {
+    canonicalProjectRoot: string;
+    startedAt: number;
+    committed: boolean;
+  } | null = null;
+
   try {
     const shouldSync = (source: string): boolean => {
       if (!options?.sources) return true;
       return options.sources.includes(source as SourceType);
     };
+
+    // All manifest parsing, exact-file realpath/identity validation, exact byte
+    // reads, and watermarks are captured before any source replacement starts.
+    let codegraphPreflight: CodegraphPreflight | null = null;
+    if (shouldSync('codegraph')) {
+      const canonicalProjectRoot = realpathSync(projectPath);
+      const startedAt = Date.now();
+      codegraphAttempt = { canonicalProjectRoot, startedAt, committed: false };
+      const candidateDirs = options?.codegraph?.srcDirs?.length
+        ? options.codegraph.srcDirs
+        : [canonicalProjectRoot];
+      const srcDirs = [...new Set(candidateDirs.map((inputPath) => {
+        const sourceDirectory = resolveSourceDirectory(canonicalProjectRoot, inputPath);
+        if (!sourceDirectory) {
+          throw new Error(`Code source directory does not exist: ${inputPath}`);
+        }
+        return sourceDirectory;
+      }))];
+      codegraphPreflight = {
+        canonicalProjectRoot,
+        srcDirs,
+        startHead: getGitHead(canonicalProjectRoot),
+        startedAt,
+        externalScan: prepareExternalSurfaceScan(canonicalProjectRoot),
+      };
+    }
 
     // ── Knowledge sources (优先同步) ───────────────────────────────
     const queries = mg.getQueryBuilder();
@@ -111,25 +181,28 @@ async function syncKnowledgeGraphUnlocked(
     // ── Code extraction (R3) ───────────────────────────────────────
 
     if (shouldSync('codegraph')) {
+      if (!codegraphPreflight) throw new Error('Codegraph preflight was not prepared');
+      if (!codegraphAttempt) throw new Error('Codegraph attempt was not initialized');
+      const activeCodegraphAttempt = codegraphAttempt;
       const startMs = Date.now();
-      const candidateDirs = options?.codegraph?.srcDirs?.length
-        ? options.codegraph.srcDirs
-        : [projectPath];
-      const srcDirs = candidateDirs
-        .map(d => resolveSourceDirectory(projectPath, d))
-        .filter((d): d is string => d !== null);
-
       let totalNodes = 0;
-      let totalEdges = 0;
+      let directEdges = 0;
       let stagedEdges = 0;
-      let stagedRefs = 0;
+      let genericReferenceCount = 0;
+      let structuralReferenceCount = 0;
+      let removedFiles = 0;
       const connection = mg.getConnection();
-      const removedCode = await connection.transactionAsync(async () => {
+      const queries = mg.getQueryBuilder();
+      const seenFilePaths = new Set<string>();
+      const replacement = await connection.transactionAsync(async () => {
+        // Internal-storage FTS keeps rows when nodes_ad is intentionally a no-op.
+        // Clear it before node rowids can be reused by the replacement inserts.
+        connection.raw.exec('DELETE FROM code_fts');
         const removed = queries.deleteNodesBySourceType('codegraph');
-        // 同步清理 codegraph 的 files 行 — 修复 files 表残留 (已删文件/目录冒充/旧快照并集)
-        connection.raw.exec("DELETE FROM files WHERE source_type = 'codegraph'");
+        removedFiles = queries.deleteFilesBySourceType('codegraph');
         connection.raw.exec(`
           DROP TABLE IF EXISTS temp._kg_pending_edges;
+          DROP TABLE IF EXISTS temp._kg_pending_structural_refs;
           CREATE TEMP TABLE _kg_pending_edges (
             source TEXT NOT NULL,
             target TEXT NOT NULL,
@@ -138,6 +211,10 @@ async function syncKnowledgeGraphUnlocked(
             line INTEGER,
             col INTEGER,
             provenance TEXT
+          );
+          CREATE TEMP TABLE _kg_pending_structural_refs (
+            ref_key TEXT PRIMARY KEY,
+            payload TEXT NOT NULL
           );
         `);
         const stageEdge = connection.raw.prepare(`
@@ -148,10 +225,16 @@ async function syncKnowledgeGraphUnlocked(
           INSERT INTO unresolved_refs (from_node_id, reference_name, reference_kind, line, col, file_path, language)
           VALUES (?, ?, ?, ?, ?, ?, ?)
         `);
+        const stageStructuralRef = connection.raw.prepare(`
+          INSERT INTO _kg_pending_structural_refs (ref_key, payload)
+          VALUES (?, ?)
+        `);
 
-        for (const srcDir of srcDirs) {
-          await forEachCodeExtractionResult({
-            projectRoot: projectPath,
+        for (let index = 0; index < codegraphPreflight.srcDirs.length; index++) {
+          const srcDir = codegraphPreflight.srcDirs[index];
+          options?.faultInjection?.beforeSourceScan?.(srcDir, index);
+          const stats = await forEachCodeExtractionResult({
+            projectRoot: codegraphPreflight.canonicalProjectRoot,
             srcDir,
             includeTests: options?.codegraph?.includeTests ?? false,
             maxFileSize: options?.codegraph?.maxFileSize ?? 1024 * 1024,
@@ -159,10 +242,31 @@ async function syncKnowledgeGraphUnlocked(
             excludeFiles: options?.codegraph?.excludeFiles,
             createMaestroIgnore: options?.codegraph?.createMaestroIgnore,
             allowExtractorScripts: options?.codegraph?.allowExtractorScripts,
+            externalSurfaceScan: codegraphPreflight.externalScan,
+            includeExternalSurfaces: index === 0,
+            failOnSkippedFile: true,
+            onProgress: options?.codegraph?.onProgress,
           }, (result) => {
-            if (result.nodes.length === 0) return;
+            if (seenFilePaths.has(result.fileRecord.path)) return;
+            seenFilePaths.add(result.fileRecord.path);
             totalNodes += queries.insertNodes(result.nodes);
             queries.upsertFile(result.fileRecord);
+            for (const ref of result.references ?? []) {
+              stageRef.run(
+                ref.fromSymbolId,
+                ref.referenceName,
+                ref.referenceKind,
+                ref.line ?? 0,
+                ref.col ?? 0,
+                ref.filePath,
+                ref.language,
+              );
+              genericReferenceCount++;
+            }
+            for (const reference of result.structuralReferences ?? []) {
+              stageStructuralRef.run(reference.refKey, JSON.stringify(reference));
+              structuralReferenceCount++;
+            }
             for (const edge of result.edges) {
               stageEdge.run(
                 edge.source,
@@ -175,65 +279,126 @@ async function syncKnowledgeGraphUnlocked(
               );
               stagedEdges++;
             }
-            // 未解析引用 (imports/calls) → unresolved_refs, 供 resolveCodeReferences 解析为边
-            for (const ref of result.references ?? []) {
-              stageRef.run(
-                ref.fromSymbolId,
-                ref.referenceName,
-                ref.referenceKind,
-                ref.line ?? 0,
-                ref.col ?? 0,
-                ref.filePath,
-                ref.language,
-              );
-              stagedRefs++;
-            }
           });
+          if (stats.filesExtracted !== stats.filesScanned || stats.filesSkipped !== 0) {
+            throw new Error(
+              `Scheduled code extraction omitted files in ${srcDir}: `
+              + `${stats.filesExtracted}/${stats.filesScanned} extracted, ${stats.filesSkipped} skipped`,
+            );
+          }
         }
 
-        totalEdges = Number(connection.raw.prepare(`
+        const missingExactFiles = codegraphPreflight.externalScan.files
+          .map(item => item.file.canonicalPath)
+          .filter(filePath => !seenFilePaths.has(filePath));
+        if (missingExactFiles.length > 0) {
+          throw new Error(`Exact external files produced no FileRecord: ${missingExactFiles.join(', ')}`);
+        }
+
+        const structuralReferences = (connection.raw.prepare(
+          'SELECT payload FROM _kg_pending_structural_refs ORDER BY ref_key'
+        ).all() as unknown as Array<{ payload: string }>).map(row => (
+          JSON.parse(row.payload) as StructuralReference
+        ));
+        const apple = materializeAppleExternalCatalog(structuralReferences);
+        totalNodes += queries.insertNodes(apple.nodes);
+        for (const edge of apple.edges) {
+          stageEdge.run(
+            edge.source,
+            edge.target,
+            edge.kind,
+            edge.metadata && Object.keys(edge.metadata).length > 0 ? JSON.stringify(edge.metadata) : null,
+            edge.line ?? null,
+            edge.column ?? null,
+            edge.provenance ?? null,
+          );
+          stagedEdges++;
+        }
+
+        directEdges = Number(connection.raw.prepare(`
           INSERT INTO edges (source, target, kind, metadata, line, col, provenance)
           SELECT p.source, p.target, p.kind, p.metadata, p.line, p.col, p.provenance
           FROM _kg_pending_edges p
           JOIN nodes source_node ON source_node.id = p.source
           JOIN nodes target_node ON target_node.id = p.target
         `).run().changes);
-        connection.raw.exec('DROP TABLE _kg_pending_edges');
-        return removed;
+        queries.stageStructuralReferences(structuralReferences);
+        options?.faultInjection?.beforeStructuralResolution?.();
+        const structural = resolveCodeStructuralReferences(queries);
+        const generic = resolveCodeReferences(connection.raw, {
+          projectPath: codegraphPreflight.canonicalProjectRoot,
+          transactionMode: 'caller-owned',
+        });
+
+        options?.faultInjection?.beforeFtsRebuild?.();
+        queries.rebuildCodeFtsStrict();
+        const liveNodeCount = Number((connection.raw.prepare(
+          "SELECT COUNT(*) AS count FROM nodes WHERE source_type = 'codegraph'"
+        ).get() as unknown as { count: number }).count);
+        totalNodes = liveNodeCount;
+        options?.faultInjection?.beforeTransactionCommit?.();
+        connection.raw.exec(`
+          DROP TABLE _kg_pending_edges;
+          DROP TABLE _kg_pending_structural_refs;
+        `);
+        return { removed, generic, structural };
       });
-      if (totalEdges !== stagedEdges) {
-        process.stderr.write(`[MaestroGraph] Skipped ${stagedEdges - totalEdges} unresolved code edge(s) during atomic replacement.\n`);
+      activeCodegraphAttempt.committed = true;
+      if (directEdges !== stagedEdges) {
+        process.stderr.write(`[MaestroGraph] Skipped ${stagedEdges - directEdges} unresolved direct code edge(s) during atomic replacement.\n`);
       }
 
       results.push({
         source: 'codegraph',
         nodesAdded: totalNodes,
         nodesUpdated: 0,
-        nodesRemoved: removedCode,
-        edgesAdded: totalEdges,
+        nodesRemoved: replacement.removed,
+        edgesAdded: directEdges,
         edgesRemoved: 0,
         durationMs: Date.now() - startMs,
       });
-
-      // 记录同步水位 — kg-sync hook 据此发现"已提交但未同步"的变更
-      writeSyncState(projectPath, getGitHead(projectPath));
-    }
-
-    // ── Code reference resolution (unresolved_refs → edges) ────────
-    // 接通两阶段模型: extraction → unresolved_refs → resolution → edges
-    // 产 imports (file→file) 与 calls (file→symbol) 边, provenance='code-resolution'
-    if (shouldSync('codegraph')) {
-      const codeStartMs = Date.now();
-      const codeResult = resolveCodeReferences(mg.getConnection().raw, { projectPath });
       results.push({
         source: 'code-resolution',
         nodesAdded: 0,
         nodesUpdated: 0,
         nodesRemoved: 0,
-        edgesAdded: codeResult.edgesCreated,
+        edgesAdded: replacement.generic.edgesCreated,
         edgesRemoved: 0,
-        durationMs: Date.now() - codeStartMs,
+        durationMs: replacement.generic.durationMs,
       });
+      results.push({
+        source: 'code-structural-resolution',
+        nodesAdded: 0,
+        nodesUpdated: 0,
+        nodesRemoved: 0,
+        edgesAdded: replacement.structural.edgesCreated,
+        edgesRemoved: 0,
+        durationMs: replacement.structural.durationMs,
+      });
+
+      // This is intentionally post-COMMIT. A watermark failure must remain
+      // visible and retryable without pretending the committed graph rolled back.
+      try {
+        writeSyncState(
+          codegraphPreflight.canonicalProjectRoot,
+          codegraphPreflight.startHead,
+          codegraphPreflight.externalScan.manifest.digest,
+          codegraphPreflight.externalScan.externalFingerprint,
+          {
+            startedAt: codegraphPreflight.startedAt,
+            beforeSuccessWrite: options?.faultInjection?.beforeSyncStateCommit,
+          },
+        );
+      } catch (error) {
+        throw new CodegraphSyncCommittedError(error);
+      }
+      if (process.env.MAESTRO_DEBUG === '1') {
+        process.stderr.write(
+          `[MaestroGraph] codegraph inputs: ${seenFilePaths.size} files, `
+          + `${genericReferenceCount} generic refs, ${structuralReferenceCount} structural refs, `
+          + `${removedFiles} replaced file records.\n`,
+        );
+      }
     }
 
     // ── Cross-source edge resolution ────────────────────────────────
@@ -296,17 +461,33 @@ async function syncKnowledgeGraphUnlocked(
     }
 
     return results;
+  } catch (error) {
+    if (codegraphAttempt && !codegraphAttempt.committed) {
+      try {
+        writeSyncStateFailure(
+          codegraphAttempt.canonicalProjectRoot,
+          codegraphAttempt.startedAt,
+          error,
+        );
+      } catch (stateError) {
+        throw new AggregateError(
+          [error, stateError],
+          `Codegraph failed before COMMIT and failure state could not be recorded: `
+          + `${error instanceof Error ? error.message : String(error)}`,
+        );
+      }
+    }
+    throw error;
   } finally {
     if (ownsGraph) mg.close();
   }
 }
 
-function resolveSourceDirectory(projectPath: string, inputPath: string): string | null {
-  const candidate = resolve(projectPath, inputPath);
+function resolveSourceDirectory(canonicalProjectRoot: string, inputPath: string): string | null {
+  const candidate = resolve(canonicalProjectRoot, inputPath);
   if (!existsSync(candidate)) return null;
-  const root = realpathSync(projectPath);
   const actual = realpathSync(candidate);
-  const rel = relative(root, actual);
+  const rel = relative(canonicalProjectRoot, actual);
   if (rel === '' || (!rel.startsWith('..') && !isAbsolute(rel))) return actual;
   throw new Error(`Code source directory must be inside project root: ${inputPath}`);
 }
@@ -314,9 +495,8 @@ function resolveSourceDirectory(projectPath: string, inputPath: string): string 
 // ── FTS 一致性校验 + 重建 ───────────────────────────────────────────────
 // 语义 (schema.sql): code_fts 只含 codegraph 节点, knowledge_fts 只含知识节点。
 // 历史版本曾无过滤全表回填 (两表各 = 全部节点); 外部内容表模式又忽略触发器 WHERE。
-// 现在 FTS 为内部存储表 + INSERT 触发器过滤; DELETE/REPLACE 不直接删 FTS
-// (FTS5 delete 命令无法在触发器中按 source_type 过滤, 且内部表允许重复 rowid),
-// 因此每次同步末尾无条件重建, 保证索引与 nodes 完全一致。
+// 现在 FTS 为内部存储表，触发器负责正常 INSERT/UPDATE/DELETE；这里保留
+// count-level repair，处理表丢失、历史迁移或外部写入造成的结构性漂移。
 function ensureFtsConsistency(db: import('node:sqlite').DatabaseSync): void {
   const codeNodes = Number(db.prepare(
     "SELECT COUNT(*) FROM nodes WHERE source_type = 'codegraph'"

@@ -4,7 +4,7 @@
 import { resolve, dirname, relative, extname } from 'node:path';
 import { existsSync, readFileSync, statSync, readdirSync } from 'node:fs';
 import { pathToFileURL } from 'node:url';
-import type { Language } from '../../db/types.js';
+import { LANGUAGES, type Language } from '../../db/types.js';
 import type { ExtractedSymbol, ExtractedReference, LanguageExtractionResult } from './tree-sitter-types.js';
 import type {
   ExtractorPluginConfig,
@@ -17,6 +17,26 @@ import type {
   ConflictPolicy,
 } from './plugin-types.js';
 
+const PLUGIN_LANGUAGES = new Set<string>([...LANGUAGES, 'all']);
+const NO_PLUGIN_FAILURE_CAUSE = Symbol('no-plugin-failure-cause');
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function isOptionalStringArray(value: unknown): boolean {
+  return value === undefined
+    || (Array.isArray(value) && value.every(item => typeof item === 'string'));
+}
+
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
+function writePluginWarning(message: string): void {
+  process.stderr.write(`[MaestroGraph] Extractor plugin warning: ${message}\n`);
+}
+
 // ---------------------------------------------------------------------------
 // PluginEngine
 // ---------------------------------------------------------------------------
@@ -26,7 +46,7 @@ export class PluginEngine {
   private configPath: string;
   private scriptDir: string;
   private configMtime: number = 0;
-  private scriptModules: Map<string, { extract: (ctx: PluginContext) => PluginExtractionResult | Promise<PluginExtractionResult> }> = new Map();
+  private scriptModules: Map<string, Record<string, unknown>> = new Map();
   private globCache: Map<string, RegExp> = new Map();
 
   constructor(private projectRoot: string) {
@@ -44,7 +64,9 @@ export class PluginEngine {
     if (hasConfig) {
       const stat = statSync(this.configPath);
       if (stat.mtimeMs !== this.configMtime) {
-        this.config = this.parseConfig(readFileSync(this.configPath, 'utf-8'));
+        const config = this.parseConfig(readFileSync(this.configPath, 'utf-8'));
+        if (!config) throw new Error(`Invalid extractor plugin config: ${this.configPath}`);
+        this.config = config;
         this.configMtime = stat.mtimeMs;
       }
     }
@@ -67,34 +89,193 @@ export class PluginEngine {
   }
 
   private parseConfig(raw: string): ExtractorPluginConfig | null {
+    // Simple YAML-subset parser: support version, defaults, plugins array.
+    // For full YAML we'd use a library; here we parse the JSON-compatible subset.
+    let parsed: unknown;
     try {
-      // Simple YAML-subset parser: support version, defaults, plugins array
-      // For full YAML we'd use a library; here we parse the JSON-compatible subset
-      // Users can write YAML or JSON — try JSON first, then basic YAML
-      let parsed: unknown;
-      try {
-        parsed = JSON.parse(raw);
-      } catch {
-        parsed = this.parseSimpleYaml(raw);
-      }
-
-      const config = parsed as ExtractorPluginConfig;
-      if (!config || config.version !== 1 || !Array.isArray(config.plugins)) {
-        return null;
-      }
-      // Validate plugins
-      config.plugins = config.plugins.filter(p => {
-        if (!p.id || !p.mode || !Array.isArray(p.languages)) return false;
-        if (p.enabled === false) return false;
-        if (p.mode === 'declarative' && !p.declarative?.rules?.length) return false;
-        if (p.mode === 'script' && !p.script?.module) return false;
-        return true;
-      });
-
-      return config;
+      parsed = JSON.parse(raw);
     } catch {
+      parsed = this.parseSimpleYaml(raw);
+    }
+
+    if (!isRecord(parsed) || parsed.version !== 1 || !Array.isArray(parsed.plugins)) {
       return null;
     }
+
+    const { defaults, errors: defaultErrors } = this.normalizeDefaults(parsed.defaults);
+    const onError = defaults.onError ?? 'warn';
+    const errors = [...defaultErrors];
+    const plugins: PluginDefinition[] = [];
+
+    for (const [index, candidate] of parsed.plugins.entries()) {
+      if (isRecord(candidate) && candidate.enabled === false) continue;
+
+      const validationError = this.validatePluginDefinition(candidate, index);
+      if (validationError) {
+        errors.push(validationError);
+        continue;
+      }
+      plugins.push(candidate as unknown as PluginDefinition);
+    }
+
+    if (errors.length > 0) {
+      if (onError === 'fail') {
+        throw new Error(`Invalid extractor plugin config: ${errors.join('; ')}`);
+      }
+      for (const error of errors) {
+        writePluginWarning(`Invalid config skipped: ${error}`);
+      }
+    }
+
+    return {
+      version: 1,
+      defaults,
+      plugins,
+    };
+  }
+
+  private normalizeDefaults(
+    value: unknown,
+  ): { defaults: NonNullable<ExtractorPluginConfig['defaults']>; errors: string[] } {
+    const defaults: NonNullable<ExtractorPluginConfig['defaults']> = {};
+    const errors: string[] = [];
+    if (value === undefined) return { defaults, errors };
+    if (!isRecord(value)) {
+      return { defaults, errors: ['defaults must be an object'] };
+    }
+
+    if (value.onError !== undefined) {
+      if (value.onError === 'warn' || value.onError === 'fail') {
+        defaults.onError = value.onError;
+      } else {
+        errors.push('defaults.onError must be warn or fail');
+      }
+    }
+    if (value.conflictPolicy !== undefined) {
+      if (
+        value.conflictPolicy === 'core-wins'
+        || value.conflictPolicy === 'plugin-wins'
+        || value.conflictPolicy === 'merge-metadata'
+      ) {
+        defaults.conflictPolicy = value.conflictPolicy;
+      } else {
+        errors.push('defaults.conflictPolicy is invalid');
+      }
+    }
+    if (value.timeoutMs !== undefined) {
+      if (typeof value.timeoutMs === 'number' && Number.isFinite(value.timeoutMs) && value.timeoutMs >= 0) {
+        defaults.timeoutMs = value.timeoutMs;
+      } else {
+        errors.push('defaults.timeoutMs must be a non-negative finite number');
+      }
+    }
+
+    return { defaults, errors };
+  }
+
+  private validatePluginDefinition(value: unknown, index: number): string | null {
+    if (!isRecord(value)) return `plugins[${index}] must be an object`;
+    const label = typeof value.id === 'string' && value.id.trim()
+      ? `plugin ${value.id}`
+      : `plugins[${index}]`;
+
+    if (typeof value.id !== 'string' || !value.id.trim()) return `${label} requires a non-empty id`;
+    if (value.enabled !== undefined && typeof value.enabled !== 'boolean') {
+      return `${label}.enabled must be a boolean`;
+    }
+    if (value.mode !== 'declarative' && value.mode !== 'script') return `${label} has an invalid mode`;
+    if (
+      !Array.isArray(value.languages)
+      || value.languages.length === 0
+      || value.languages.some(language => typeof language !== 'string' || !PLUGIN_LANGUAGES.has(language))
+    ) {
+      return `${label} requires at least one supported language`;
+    }
+    if (!isOptionalStringArray(value.filePatterns)) return `${label}.filePatterns must be a string array`;
+    if (!isOptionalStringArray(value.excludePatterns)) return `${label}.excludePatterns must be a string array`;
+
+    if (value.mode === 'script') {
+      if (!isRecord(value.script) || typeof value.script.module !== 'string' || !value.script.module.trim()) {
+        return `${label}.script.module must be a non-empty string`;
+      }
+      if (value.script.export !== undefined && typeof value.script.export !== 'string') {
+        return `${label}.script.export must be a string`;
+      }
+      if (
+        value.script.timeoutMs !== undefined
+        && (
+          typeof value.script.timeoutMs !== 'number'
+          || !Number.isFinite(value.script.timeoutMs)
+          || value.script.timeoutMs < 0
+        )
+      ) {
+        return `${label}.script.timeoutMs must be a non-negative finite number`;
+      }
+      return null;
+    }
+
+    if (!isRecord(value.declarative) || !Array.isArray(value.declarative.rules) || value.declarative.rules.length === 0) {
+      return `${label}.declarative.rules must be a non-empty array`;
+    }
+    for (const [ruleIndex, rule] of value.declarative.rules.entries()) {
+      const ruleError = this.validatePatternRule(rule, `${label}.declarative.rules[${ruleIndex}]`);
+      if (ruleError) return ruleError;
+    }
+    return null;
+  }
+
+  private validatePatternRule(value: unknown, label: string): string | null {
+    if (!isRecord(value)) return `${label} must be an object`;
+    if (typeof value.id !== 'string' || !value.id.trim()) return `${label}.id must be a non-empty string`;
+    if (!isRecord(value.match)) return `${label}.match must be an object`;
+    if (!['regex', 'call', 'assignment'].includes(String(value.match.type))) {
+      return `${label}.match.type is invalid`;
+    }
+    if (typeof value.match.pattern !== 'string' || !value.match.pattern.trim()) {
+      return `${label}.match.pattern must be a non-empty string`;
+    }
+    if (value.match.nameRegex !== undefined && typeof value.match.nameRegex !== 'string') {
+      return `${label}.match.nameRegex must be a string`;
+    }
+    if (
+      value.match.scope !== undefined
+      && value.match.scope !== 'module'
+      && value.match.scope !== 'class'
+      && value.match.scope !== 'any'
+    ) {
+      return `${label}.match.scope is invalid`;
+    }
+    if (value.match.type === 'call') {
+      const openParen = value.match.pattern.indexOf('(');
+      const closeParen = value.match.pattern.lastIndexOf(')');
+      const nameArgument = value.match.pattern
+        .slice(openParen + 1, closeParen)
+        .split(',')
+        .some(argument => argument.trim() === '$NAME');
+      if (!/^([A-Za-z_.$]+)\s*\(/.test(value.match.pattern) || closeParen <= openParen || !nameArgument) {
+        return `${label}.match.pattern is not a valid call pattern`;
+      }
+    }
+    if (value.match.type === 'assignment' && !value.match.pattern.includes('$NAME')) {
+      return `${label}.match.pattern must identify $NAME`;
+    }
+    if (!isRecord(value.extract) || typeof value.extract.kind !== 'string' || !value.extract.kind.trim()) {
+      return `${label}.extract.kind must be a non-empty string`;
+    }
+    for (const key of ['name', 'qualifiedName', 'signature', 'visibility'] as const) {
+      if (value.extract[key] !== undefined && typeof value.extract[key] !== 'string') {
+        return `${label}.extract.${key} must be a string`;
+      }
+    }
+    if (value.extract.decorators !== undefined && !isOptionalStringArray(value.extract.decorators)) {
+      return `${label}.extract.decorators must be a string array`;
+    }
+    for (const key of ['isExported', 'isStatic'] as const) {
+      if (value.extract[key] !== undefined && typeof value.extract[key] !== 'boolean') {
+        return `${label}.extract.${key} must be a boolean`;
+      }
+    }
+    return null;
   }
 
   private parseSimpleYaml(raw: string): unknown {
@@ -199,11 +380,17 @@ export class PluginEngine {
       if (this.scriptModules.has(file)) continue;
       try {
         const fullPath = resolve(this.scriptDir, file);
-        const mod = await import(pathToFileURL(fullPath).href);
-        if (typeof mod.extract === 'function') {
-          this.scriptModules.set(file, mod);
-        }
-      } catch { /* skip invalid scripts */ }
+        const mod = await import(pathToFileURL(fullPath).href) as Record<string, unknown>;
+        this.scriptModules.set(file, mod);
+      } catch (error) {
+        const configuredPlugins = this.config?.plugins
+          .filter(plugin => plugin.mode === 'script' && plugin.script?.module === file)
+          .map(plugin => plugin.id) ?? [];
+        const ownership = configuredPlugins.length > 0
+          ? `plugin ${configuredPlugins.join(',')}`
+          : 'standalone module';
+        this.handleFailure(`Script plugin ${file} failed to load (${ownership})`, error);
+      }
     }
   }
 
@@ -243,8 +430,8 @@ export class PluginEngine {
           allSymbols.push(...result.symbols);
           if (result.references) allRefs.push(...result.references);
           if (result.edges) allEdges.push(...result.edges);
-        } catch {
-          if (this.getOnError() === 'fail') throw new Error(`Plugin ${plugin.id} failed`);
+        } catch (error) {
+          this.handleFailure(`Plugin ${plugin.id} failed`, error);
         }
       }
     }
@@ -258,13 +445,21 @@ export class PluginEngine {
 
         const moduleName = plugin.script.module;
         const mod = this.scriptModules.get(moduleName);
-        if (!mod) continue;
+        if (!mod) {
+          this.handleFailure(`Script plugin ${plugin.id} module ${moduleName} is not loaded`);
+          continue;
+        }
 
+        const exportName = plugin.script.export ?? 'extract';
+        const fn = mod[exportName];
+        if (typeof fn !== 'function') {
+          this.handleFailure(
+            `Script plugin ${plugin.id} failed: module ${moduleName} export ${exportName} is not a function`,
+          );
+          continue;
+        }
         try {
           const ctx = this.createPluginContext(filePath, sourceCode, language, tree);
-          const exportName = plugin.script.export ?? 'extract';
-          const fn = (mod as Record<string, unknown>)[exportName];
-          if (typeof fn !== 'function') continue;
           const result = await fn(ctx);
           if (result?.symbols) {
             for (const sym of result.symbols) {
@@ -274,8 +469,11 @@ export class PluginEngine {
           }
           if (result?.references) allRefs.push(...result.references);
           if (result?.edges) allEdges.push(...result.edges);
-        } catch {
-          if (this.getOnError() === 'fail') throw new Error(`Script plugin ${plugin.id} failed`);
+        } catch (error) {
+          this.handleFailure(
+            `Script plugin ${plugin.id} failed: module ${moduleName} export ${exportName}`,
+            error,
+          );
         }
       }
     }
@@ -287,9 +485,14 @@ export class PluginEngine {
       );
       if (isReferenced) continue;
 
+      const fn = mod.extract;
+      if (typeof fn !== 'function') {
+        this.handleFailure(`Standalone script plugin ${fileName} has no extract export`);
+        continue;
+      }
       try {
         const ctx = this.createPluginContext(filePath, sourceCode, language, tree);
-        const result = await mod.extract(ctx);
+        const result = await fn(ctx);
         if (result?.symbols) {
           for (const sym of result.symbols) {
             sym.sourcePluginId = sym.sourcePluginId ?? `script:${fileName}`;
@@ -298,7 +501,9 @@ export class PluginEngine {
         }
         if (result?.references) allRefs.push(...result.references);
         if (result?.edges) allEdges.push(...result.edges);
-      } catch { /* skip */ }
+      } catch (error) {
+        this.handleFailure(`Standalone script plugin ${fileName} failed: export extract`, error);
+      }
     }
 
     return { symbols: allSymbols, references: allRefs, edges: allEdges };
@@ -319,7 +524,9 @@ export class PluginEngine {
       try {
         const matched = this.matchPattern(rule, sourceCode, filePath, language, tree);
         symbols.push(...matched);
-      } catch { /* skip failed rules */ }
+      } catch (error) {
+        this.handleFailure(`Declarative plugin ${plugin.id} rule ${rule.id} failed`, error);
+      }
     }
 
     return { symbols };
@@ -332,8 +539,7 @@ export class PluginEngine {
     language: Language,
     _tree: unknown,
   ): PluginExtractedSymbol[] {
-    const { match, extract } = rule;
-    const symbols: PluginExtractedSymbol[] = [];
+    const { match } = rule;
 
     if (match.type === 'regex') {
       return this.matchRegex(rule, sourceCode, filePath, language);
@@ -347,7 +553,7 @@ export class PluginEngine {
       return this.matchAssignment(rule, sourceCode, filePath, language);
     }
 
-    return symbols;
+    throw new Error(`Unsupported declarative match type: ${String(match.type)}`);
   }
 
   private matchRegex(
@@ -357,14 +563,8 @@ export class PluginEngine {
     language: Language,
   ): PluginExtractedSymbol[] {
     const symbols: PluginExtractedSymbol[] = [];
-    let regex: RegExp;
-    let nameRegex: RegExp | null = null;
-    try {
-      regex = new RegExp(rule.match.pattern, 'gm');
-      nameRegex = rule.match.nameRegex ? new RegExp(rule.match.nameRegex) : null;
-    } catch {
-      return symbols;
-    }
+    const regex = new RegExp(rule.match.pattern, 'gm');
+    const nameRegex = rule.match.nameRegex ? new RegExp(rule.match.nameRegex) : null;
     const lines = sourceCode.split('\n');
     const MAX_MATCHES = 10_000;
 
@@ -403,10 +603,7 @@ export class PluginEngine {
     // Build regex to find function calls
     const escapedFunc = funcName.replace(/\./g, '\\.');
     const callRegex = new RegExp(`${escapedFunc}\\s*\\(`, 'g');
-    let nameRegex: RegExp | null = null;
-    try {
-      nameRegex = rule.match.nameRegex ? new RegExp(rule.match.nameRegex) : null;
-    } catch { /* invalid regex */ }
+    const nameRegex = rule.match.nameRegex ? new RegExp(rule.match.nameRegex) : null;
     const lines = sourceCode.split('\n');
     const MAX_MATCHES = 10_000;
 
@@ -436,10 +633,7 @@ export class PluginEngine {
     language: Language,
   ): PluginExtractedSymbol[] {
     const symbols: PluginExtractedSymbol[] = [];
-    let nameRegex: RegExp | null = null;
-    try {
-      nameRegex = rule.match.nameRegex ? new RegExp(rule.match.nameRegex) : null;
-    } catch { /* invalid regex */ }
+    const nameRegex = rule.match.nameRegex ? new RegExp(rule.match.nameRegex) : null;
     const scope = rule.match.scope ?? 'any';
     const lines = sourceCode.split('\n');
 
@@ -637,6 +831,9 @@ export class PluginEngine {
         ...coreResult.edges,
         ...(pluginResult.edges ?? []),
       ],
+      importReferences: coreResult.importReferences ?? [],
+      structuralReferences: coreResult.structuralReferences ?? [],
+      diagnostics: coreResult.diagnostics,
     };
   }
 
@@ -678,6 +875,19 @@ export class PluginEngine {
 
   private getOnError(): 'warn' | 'fail' {
     return this.config?.defaults?.onError ?? 'warn';
+  }
+
+  private handleFailure(
+    message: string,
+    cause: unknown = NO_PLUGIN_FAILURE_CAUSE,
+  ): void {
+    const hasCause = cause !== NO_PLUGIN_FAILURE_CAUSE;
+    const detail = hasCause ? `${message}: ${errorMessage(cause)}` : message;
+    if (this.getOnError() === 'fail') {
+      if (!hasCause) throw new Error(detail);
+      throw new Error(detail, { cause });
+    }
+    writePluginWarning(detail);
   }
 
   hasPlugins(): boolean {

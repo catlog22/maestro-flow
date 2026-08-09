@@ -18,7 +18,7 @@ export function extractCodebase(
   const now = Date.now();
 
   if (!existsSync(codebaseDir)) {
-    return { nodes, edges, fileRecord: createEmptyFileRecord(codebaseDir) };
+    return { nodes, edges, fileRecord: createEmptyFileRecord(codebaseDir), references: [], structuralReferences: [] };
   }
 
   const mdFiles = readdirSync(codebaseDir)
@@ -83,6 +83,8 @@ export function extractCodebase(
   return {
     nodes,
     edges,
+    references: [],
+    structuralReferences: [],
     fileRecord: {
       path: codebaseDir,
       contentHash: '',

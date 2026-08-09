@@ -58,7 +58,18 @@ export class CodeParseRunner {
       const tree = await getTreeSitterEngine().parse(sourceCode, language);
       if (!tree) return null;
       try {
-        return extractor.extract(tree, sourceCode, filePath);
+        const result = extractor.extract(tree, sourceCode, filePath);
+        if (
+          language === 'objc'
+          && /\.mm$/i.test(filePath)
+          && (tree.rootNode as unknown as { hasError?: boolean }).hasError === true
+        ) {
+          result.diagnostics = [
+            ...(result.diagnostics ?? []),
+            'objcxx-partial-parse: tree-sitter Objective-C grammar reported syntax errors',
+          ];
+        }
+        return result;
       } finally {
         tree.delete();
       }

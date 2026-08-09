@@ -14,6 +14,15 @@ import {
   computeScore,
   type CandidateScoreMetadata,
 } from '../query/scoring.js';
+import {
+  assertStructuralReference,
+  STRUCTURAL_REFERENCE_STATUSES,
+  validateStructuralReferenceStatus,
+  type StoredStructuralReference,
+  type StructuralReference,
+  type StructuralReferenceResolution,
+  type StructuralReferenceStatus,
+} from '../resolution/structural-reference.js';
 
 // ---------------------------------------------------------------------------
 // Row ↔ Object mappers
@@ -61,6 +70,49 @@ interface EdgeRow {
   line: number | null;
   col: number | null;
   provenance: string | null;
+  origin_ref_key: string | null;
+}
+
+interface StructuralReferenceRow {
+  ref_key: string;
+  anchor_node_id: string;
+  anchor_qualified_name: string;
+  ref_kind: string;
+  raw_target_name: string;
+  source_declaration_kind: string;
+  lookup_scope: string;
+  relation_hint: string;
+  edge_orientation: string;
+  target_kind_hints: string;
+  target_language_hints: string;
+  module_hints: string;
+  target_file_hints: string;
+  origin_file_path: string;
+  origin_language: string;
+  origin_line: number;
+  origin_column: number;
+  compilation_condition: string | null;
+  evidence_provenance: string;
+  resolved_node_id: string | null;
+  status: string;
+  candidates: string;
+  resolution_strategy: string | null;
+  confidence: number | null;
+  created_at: number;
+  updated_at: number;
+}
+
+export interface StructuralReferenceFilter {
+  refKeys?: string[];
+  originFilePaths?: string[];
+  statuses?: StructuralReferenceStatus[];
+}
+
+export interface StructuralReferenceInvariantCounts {
+  invalidResolved: number;
+  resolvedWithoutTarget: number;
+  resolvedWithoutOriginEdge: number;
+  invalidOriginEdge: number;
 }
 
 interface FileRow {
@@ -177,7 +229,57 @@ function rowToEdge(row: EdgeRow): UnifiedEdge {
     line: row.line ?? undefined,
     column: row.col ?? undefined,
     provenance: row.provenance as EdgeProvenance | undefined,
+    originRefKey: row.origin_ref_key ?? undefined,
   };
+}
+
+function rowToStructuralReference(row: StructuralReferenceRow): StoredStructuralReference {
+  return {
+    kind: row.ref_kind as StoredStructuralReference['kind'],
+    refKey: row.ref_key,
+    anchorNodeId: row.anchor_node_id,
+    anchorQualifiedName: row.anchor_qualified_name,
+    rawTargetName: row.raw_target_name,
+    sourceDeclarationKind: row.source_declaration_kind,
+    lookupScope: row.lookup_scope as StoredStructuralReference['lookupScope'],
+    relationHint: row.relation_hint as StoredStructuralReference['relationHint'],
+    edgeOrientation: row.edge_orientation as StoredStructuralReference['edgeOrientation'],
+    targetKindHints: safeJsonParse<StoredStructuralReference['targetKindHints']>(row.target_kind_hints, []),
+    targetLanguageHints: safeJsonParse<StoredStructuralReference['targetLanguageHints']>(row.target_language_hints, []),
+    moduleHints: safeJsonParse<string[]>(row.module_hints, []),
+    targetFileHints: safeJsonParse<string[]>(row.target_file_hints, []),
+    origin: {
+      filePath: row.origin_file_path,
+      language: row.origin_language as StoredStructuralReference['origin']['language'],
+      line: row.origin_line,
+      column: row.origin_column,
+    },
+    compilationCondition: row.compilation_condition ?? undefined,
+    evidenceProvenance: row.evidence_provenance as 'tree-sitter',
+    resolvedNodeId: row.resolved_node_id,
+    status: row.status as StructuralReferenceStatus,
+    candidates: safeJsonParse<string[]>(row.candidates, []),
+    resolutionStrategy: row.resolution_strategy,
+    confidence: row.confidence,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  } as StoredStructuralReference;
+}
+
+function edgeToSqlValues(edge: UnifiedEdge): Array<string | number | null> {
+  if (edge.originRefKey && edge.provenance && edge.provenance !== 'structural-resolver') {
+    throw new Error('origin-bound edges must use structural-resolver provenance');
+  }
+  return [
+    edge.source,
+    edge.target,
+    edge.kind,
+    edge.metadata && Object.keys(edge.metadata).length > 0 ? JSON.stringify(edge.metadata) : null,
+    edge.line ?? null,
+    edge.column ?? null,
+    edge.originRefKey ? 'structural-resolver' : edge.provenance ?? null,
+    edge.originRefKey ?? null,
+  ];
 }
 
 // ---------------------------------------------------------------------------
@@ -201,15 +303,18 @@ export class KgQueryBuilder {
     const row = nodeToRow(node);
     const cols = Object.keys(row);
     const placeholders = cols.map(() => '?').join(',');
+    const updates = cols.filter(column => column !== 'id')
+      .map(column => `${column}=excluded.${column}`).join(',');
     this.db.prepare(
-      `INSERT OR REPLACE INTO nodes (${cols.join(',')}) VALUES (${placeholders})`
+      `INSERT INTO nodes (${cols.join(',')}) VALUES (${placeholders})
+       ON CONFLICT(id) DO UPDATE SET ${updates}`
     ).run(...cols.map(c => row[c] as string | number | null));
   }
 
   insertNodes(nodes: UnifiedNode[]): number {
     if (nodes.length === 0) return 0;
     const stmt = this.db.prepare(
-      `INSERT OR REPLACE INTO nodes (
+      `INSERT INTO nodes (
         id, kind, name, qualified_name, file_path, language,
         start_line, end_line, start_column, end_column,
         docstring, signature, visibility, is_exported, is_async, is_static, is_abstract,
@@ -217,7 +322,37 @@ export class KgQueryBuilder {
         category, roles, priority, status, body, metadata, updated_at
       ) VALUES (
         ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
-      )`
+      )
+      ON CONFLICT(id) DO UPDATE SET
+        kind=excluded.kind,
+        name=excluded.name,
+        qualified_name=excluded.qualified_name,
+        file_path=excluded.file_path,
+        language=excluded.language,
+        start_line=excluded.start_line,
+        end_line=excluded.end_line,
+        start_column=excluded.start_column,
+        end_column=excluded.end_column,
+        docstring=excluded.docstring,
+        signature=excluded.signature,
+        visibility=excluded.visibility,
+        is_exported=excluded.is_exported,
+        is_async=excluded.is_async,
+        is_static=excluded.is_static,
+        is_abstract=excluded.is_abstract,
+        decorators=excluded.decorators,
+        type_parameters=excluded.type_parameters,
+        source_type=excluded.source_type,
+        definition=excluded.definition,
+        aliases=excluded.aliases,
+        keywords=excluded.keywords,
+        category=excluded.category,
+        roles=excluded.roles,
+        priority=excluded.priority,
+        status=excluded.status,
+        body=excluded.body,
+        metadata=excluded.metadata,
+        updated_at=excluded.updated_at`
     );
     let count = 0;
     for (const node of nodes) {
@@ -251,6 +386,20 @@ export class KgQueryBuilder {
   getNode(id: string): UnifiedNode | null {
     const row = this.db.prepare('SELECT * FROM nodes WHERE id = ?').get(id) as unknown as NodeRow | undefined;
     return row ? rowToNode(row) : null;
+  }
+
+  getNodesByQualifiedName(qualifiedName: string): UnifiedNode[] {
+    const rows = this.db.prepare(
+      'SELECT * FROM nodes WHERE qualified_name = ? ORDER BY id COLLATE BINARY'
+    ).all(qualifiedName) as unknown as NodeRow[];
+    return rows.map(rowToNode);
+  }
+
+  getNodesByName(name: string): UnifiedNode[] {
+    const rows = this.db.prepare(
+      'SELECT * FROM nodes WHERE name = ? ORDER BY id COLLATE BINARY'
+    ).all(name) as unknown as NodeRow[];
+    return rows.map(rowToNode);
   }
 
   getNodesByIds(ids: string[]): Map<string, UnifiedNode> {
@@ -313,32 +462,80 @@ export class KgQueryBuilder {
   // ── Edge CRUD ──────────────────────────────────────────────────────
 
   insertEdge(edge: UnifiedEdge): void {
+    if (edge.originRefKey) {
+      this.upsertStructuralEdge(edge as UnifiedEdge & { originRefKey: string });
+      return;
+    }
+    this.writeEdgeRow(edge);
+  }
+
+  private writeEdgeRow(edge: UnifiedEdge): void {
+    const row = edgeToSqlValues(edge);
+    if (edge.originRefKey) {
+      this.db.prepare(
+        `INSERT INTO edges (source, target, kind, metadata, line, col, provenance, origin_ref_key)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+         ON CONFLICT(origin_ref_key) WHERE origin_ref_key IS NOT NULL DO UPDATE SET
+           source = excluded.source,
+           target = excluded.target,
+           kind = excluded.kind,
+           metadata = excluded.metadata,
+           line = excluded.line,
+           col = excluded.col,
+           provenance = excluded.provenance`
+      ).run(...row);
+      return;
+    }
     this.db.prepare(
-      `INSERT INTO edges (source, target, kind, metadata, line, col, provenance)
-       VALUES (?, ?, ?, ?, ?, ?, ?)`
-    ).run(
-      edge.source, edge.target, edge.kind,
-      edge.metadata && Object.keys(edge.metadata).length > 0 ? JSON.stringify(edge.metadata) : null,
-      edge.line ?? null, edge.column ?? null, edge.provenance ?? null,
-    );
+      `INSERT INTO edges (source, target, kind, metadata, line, col, provenance, origin_ref_key)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+    ).run(...row);
   }
 
   insertEdges(edges: UnifiedEdge[]): number {
     if (edges.length === 0) return 0;
-    const stmt = this.db.prepare(
-      `INSERT INTO edges (source, target, kind, metadata, line, col, provenance)
-       VALUES (?, ?, ?, ?, ?, ?, ?)`
+    const insertStmt = this.db.prepare(
+      `INSERT INTO edges (source, target, kind, metadata, line, col, provenance, origin_ref_key)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
     );
     let count = 0;
     for (const edge of edges) {
-      stmt.run(
-        edge.source, edge.target, edge.kind,
-        edge.metadata && Object.keys(edge.metadata).length > 0 ? JSON.stringify(edge.metadata) : null,
-        edge.line ?? null, edge.column ?? null, edge.provenance ?? null,
-      );
+      if (edge.originRefKey) {
+        this.upsertStructuralEdge(edge as UnifiedEdge & { originRefKey: string });
+        count++;
+        continue;
+      }
+      const values = edgeToSqlValues(edge);
+      insertStmt.run(...values);
       count++;
     }
     return count;
+  }
+
+  upsertStructuralEdge(edge: UnifiedEdge & { originRefKey: string }): void {
+    const ref = this.getStructuralReference(edge.originRefKey);
+    if (!ref) throw new Error(`Structural reference not found: ${edge.originRefKey}`);
+    if (ref.status !== 'resolved' || !ref.resolvedNodeId) {
+      throw new Error(`Structural reference is not resolved: ${edge.originRefKey}`);
+    }
+    const expectedSource = ref.edgeOrientation === 'anchor-to-target'
+      ? ref.anchorNodeId
+      : ref.resolvedNodeId;
+    const expectedTarget = ref.edgeOrientation === 'anchor-to-target'
+      ? ref.resolvedNodeId
+      : ref.anchorNodeId;
+    if (edge.source !== expectedSource || edge.target !== expectedTarget) {
+      throw new Error(`Structural edge endpoints do not match resolution: ${edge.originRefKey}`);
+    }
+    const allowedKinds: UnifiedEdgeKind[] = ref.relationHint === 'inherits-or-conforms'
+      ? ['extends', 'implements']
+      : ref.relationHint === 'contains-owner'
+        ? ['contains']
+        : [ref.relationHint];
+    if (!allowedKinds.includes(edge.kind)) {
+      throw new Error(`Structural edge kind does not match relation: ${edge.originRefKey}`);
+    }
+    this.writeEdgeRow({ ...edge, provenance: 'structural-resolver' });
   }
 
   getOutgoingEdges(nodeId: string, kind?: UnifiedEdgeKind): UnifiedEdge[] {
@@ -464,6 +661,284 @@ export class KgQueryBuilder {
     ).run(filePath).changes);
   }
 
+  // ── Structural Refs CRUD ─────────────────────────────────────────
+
+  /**
+   * Stages replayable syntax facts. This method intentionally owns no
+   * transaction; the codegraph replacement orchestrator is the transaction owner.
+   */
+  stageStructuralReferences(refs: StructuralReference[], now: number = Date.now()): number {
+    if (refs.length === 0) return 0;
+    const deleteMaterializedEdge = this.db.prepare(
+      'DELETE FROM edges WHERE origin_ref_key = ?'
+    );
+    const stmt = this.db.prepare(`
+      INSERT INTO structural_refs (
+        ref_key, anchor_node_id, anchor_qualified_name, ref_kind,
+        raw_target_name, source_declaration_kind, lookup_scope,
+        relation_hint, edge_orientation, target_kind_hints,
+        target_language_hints, module_hints, target_file_hints,
+        origin_file_path, origin_language, origin_line, origin_column,
+        compilation_condition, evidence_provenance, resolved_node_id,
+        status, candidates, resolution_strategy, confidence, created_at, updated_at
+      ) VALUES (
+        ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+        NULL, ?, '[]', NULL, NULL, ?, ?
+      )
+      ON CONFLICT(ref_key) DO UPDATE SET
+        anchor_node_id = excluded.anchor_node_id,
+        anchor_qualified_name = excluded.anchor_qualified_name,
+        ref_kind = excluded.ref_kind,
+        raw_target_name = excluded.raw_target_name,
+        source_declaration_kind = excluded.source_declaration_kind,
+        lookup_scope = excluded.lookup_scope,
+        relation_hint = excluded.relation_hint,
+        edge_orientation = excluded.edge_orientation,
+        target_kind_hints = excluded.target_kind_hints,
+        target_language_hints = excluded.target_language_hints,
+        module_hints = excluded.module_hints,
+        target_file_hints = excluded.target_file_hints,
+        origin_file_path = excluded.origin_file_path,
+        origin_language = excluded.origin_language,
+        origin_line = excluded.origin_line,
+        origin_column = excluded.origin_column,
+        compilation_condition = excluded.compilation_condition,
+        evidence_provenance = excluded.evidence_provenance,
+        resolved_node_id = NULL,
+        status = excluded.status,
+        candidates = '[]',
+        resolution_strategy = NULL,
+        confidence = NULL,
+        updated_at = excluded.updated_at
+    `);
+
+    let count = 0;
+    for (const ref of refs) {
+      assertStructuralReference(ref);
+      if (ref.status === 'resolved') {
+        throw new Error('staged structural references cannot already be resolved');
+      }
+      deleteMaterializedEdge.run(ref.refKey);
+      stmt.run(
+        ref.refKey,
+        ref.anchorNodeId,
+        ref.anchorQualifiedName,
+        ref.kind,
+        ref.rawTargetName,
+        ref.sourceDeclarationKind,
+        ref.lookupScope,
+        ref.relationHint,
+        ref.edgeOrientation,
+        JSON.stringify(ref.targetKindHints),
+        JSON.stringify(ref.targetLanguageHints),
+        JSON.stringify(ref.moduleHints),
+        JSON.stringify(ref.targetFileHints),
+        ref.origin.filePath,
+        ref.origin.language,
+        ref.origin.line,
+        ref.origin.column,
+        ref.compilationCondition ?? null,
+        ref.evidenceProvenance,
+        ref.status ?? 'pending',
+        now,
+        now,
+      );
+      count++;
+    }
+    return count;
+  }
+
+  upsertStructuralReferences(refs: StructuralReference[], now: number = Date.now()): number {
+    return this.stageStructuralReferences(refs, now);
+  }
+
+  getStructuralReference(refKey: string): StoredStructuralReference | null {
+    const row = this.db.prepare(
+      'SELECT * FROM structural_refs WHERE ref_key = ?'
+    ).get(refKey) as unknown as StructuralReferenceRow | undefined;
+    return row ? rowToStructuralReference(row) : null;
+  }
+
+  listStructuralReferences(filter: StructuralReferenceFilter = {}): StoredStructuralReference[] {
+    const { sql, params } = buildStructuralReferenceWhere(filter);
+    const rows = this.db.prepare(
+      `SELECT * FROM structural_refs${sql} ORDER BY origin_file_path, origin_line, origin_column, ref_key`
+    ).all(...params) as unknown as StructuralReferenceRow[];
+    return rows.map(rowToStructuralReference);
+  }
+
+  updateStructuralReferenceResolution(
+    refKey: string,
+    resolution: StructuralReferenceResolution,
+    now: number = Date.now(),
+  ): void {
+    validateStructuralReferenceStatus(resolution.status);
+    const resolvedNodeId = resolution.resolvedNodeId ?? null;
+    if (resolution.status === 'resolved' && !resolvedNodeId) {
+      throw new Error('resolved structural reference requires resolvedNodeId');
+    }
+    if (resolution.status !== 'resolved' && resolvedNodeId) {
+      throw new Error(`${resolution.status} structural reference cannot carry resolvedNodeId`);
+    }
+    const candidates = resolution.candidates ?? [];
+    if (candidates.some(candidate => typeof candidate !== 'string')) {
+      throw new Error('structural reference candidates must be strings');
+    }
+    const canonicalCandidates = [...new Set(candidates)]
+      .sort((left, right) => Buffer.from(left).compare(Buffer.from(right)));
+    if (
+      canonicalCandidates.length !== candidates.length
+      || canonicalCandidates.some((candidate, index) => candidate !== candidates[index])
+    ) {
+      throw new Error('structural reference candidates must be unique and bytewise sorted');
+    }
+    if (
+      resolution.status === 'resolved'
+      && (canonicalCandidates.length !== 1 || canonicalCandidates[0] !== resolvedNodeId)
+    ) {
+      throw new Error('resolved structural reference requires its one candidate to equal resolvedNodeId');
+    }
+    if (resolution.status === 'not_found' && canonicalCandidates.length !== 0) {
+      throw new Error('not_found structural reference requires empty candidates');
+    }
+    const confidence = resolution.confidence ?? null;
+    if (confidence !== null && (!Number.isFinite(confidence) || confidence < 0 || confidence > 1)) {
+      throw new Error('structural reference confidence must be between 0 and 1');
+    }
+    // A resolution update invalidates any prior materialization. The resolver
+    // writes the replacement edge after this call in the caller-owned transaction.
+    this.db.prepare('DELETE FROM edges WHERE origin_ref_key = ?').run(refKey);
+    const result = this.db.prepare(`
+      UPDATE structural_refs
+      SET resolved_node_id = ?, status = ?, candidates = ?,
+          resolution_strategy = ?, confidence = ?, updated_at = ?
+      WHERE ref_key = ?
+    `).run(
+      resolvedNodeId,
+      resolution.status,
+      JSON.stringify(canonicalCandidates),
+      resolution.strategy ?? null,
+      confidence,
+      now,
+      refKey,
+    );
+    if (Number(result.changes) !== 1) {
+      throw new Error(`Structural reference not found: ${refKey}`);
+    }
+  }
+
+  setStructuralReferenceResolution(
+    refKey: string,
+    resolution: StructuralReferenceResolution,
+    now: number = Date.now(),
+  ): void {
+    this.updateStructuralReferenceResolution(refKey, resolution, now);
+  }
+
+  resetStructuralReferenceStatuses(filter: StructuralReferenceFilter = {}, now: number = Date.now()): number {
+    const { sql, params } = buildStructuralReferenceWhere(filter);
+    this.db.prepare(
+      `DELETE FROM edges WHERE origin_ref_key IN (SELECT ref_key FROM structural_refs${sql})`
+    ).run(...params);
+    return Number(this.db.prepare(`
+      UPDATE structural_refs
+      SET resolved_node_id = NULL,
+          status = 'pending',
+          candidates = '[]',
+          resolution_strategy = NULL,
+          confidence = NULL,
+          updated_at = ?${sql}
+    `).run(now, ...params).changes);
+  }
+
+  getStructuralReferenceStatusCounts(): Record<StructuralReferenceStatus, number> {
+    const counts = Object.fromEntries(
+      STRUCTURAL_REFERENCE_STATUSES.map(status => [status, 0]),
+    ) as Record<StructuralReferenceStatus, number>;
+    const rows = this.db.prepare(
+      'SELECT status, COUNT(*) AS count FROM structural_refs GROUP BY status'
+    ).all() as unknown as Array<{ status: StructuralReferenceStatus; count: number }>;
+    for (const row of rows) {
+      validateStructuralReferenceStatus(row.status);
+      counts[row.status] = row.count;
+    }
+    return counts;
+  }
+
+  countStructuralReferencesByStatus(): Record<StructuralReferenceStatus, number> {
+    return this.getStructuralReferenceStatusCounts();
+  }
+
+  getStructuralReferenceInvariantCounts(): StructuralReferenceInvariantCounts {
+    const rows = this.db.prepare(`
+      SELECT
+        r.ref_key,
+        r.anchor_node_id,
+        r.resolved_node_id,
+        r.relation_hint,
+        r.edge_orientation,
+        e.source AS edge_source,
+        e.target AS edge_target,
+        e.kind AS edge_kind
+      FROM structural_refs r
+      LEFT JOIN edges e ON e.origin_ref_key = r.ref_key
+      WHERE r.status = 'resolved'
+      ORDER BY r.ref_key COLLATE BINARY
+    `).all() as unknown as Array<{
+      ref_key: string;
+      anchor_node_id: string;
+      resolved_node_id: string | null;
+      relation_hint: string;
+      edge_orientation: string;
+      edge_source: string | null;
+      edge_target: string | null;
+      edge_kind: string | null;
+    }>;
+    const result: StructuralReferenceInvariantCounts = {
+      invalidResolved: 0,
+      resolvedWithoutTarget: 0,
+      resolvedWithoutOriginEdge: 0,
+      invalidOriginEdge: 0,
+    };
+
+    for (const row of rows) {
+      if (!row.resolved_node_id) {
+        result.resolvedWithoutTarget++;
+        result.invalidResolved++;
+        continue;
+      }
+      if (!row.edge_source || !row.edge_target || !row.edge_kind) {
+        result.resolvedWithoutOriginEdge++;
+        result.invalidResolved++;
+        continue;
+      }
+      const expectedSource = row.edge_orientation === 'anchor-to-target'
+        ? row.anchor_node_id
+        : row.resolved_node_id;
+      const expectedTarget = row.edge_orientation === 'anchor-to-target'
+        ? row.resolved_node_id
+        : row.anchor_node_id;
+      const allowedKinds = row.relation_hint === 'inherits-or-conforms'
+        ? new Set(['extends', 'implements'])
+        : new Set([row.relation_hint === 'contains-owner' ? 'contains' : row.relation_hint]);
+      if (
+        row.edge_source !== expectedSource
+        || row.edge_target !== expectedTarget
+        || !allowedKinds.has(row.edge_kind)
+      ) {
+        result.invalidOriginEdge++;
+        result.invalidResolved++;
+      }
+    }
+    return result;
+  }
+
+  deleteStructuralReferencesByOriginFile(filePath: string): number {
+    return Number(this.db.prepare(
+      'DELETE FROM structural_refs WHERE origin_file_path = ?'
+    ).run(filePath).changes);
+  }
+
   // ── File CRUD ──────────────────────────────────────────────────────
 
   upsertFile(record: FileRecord): void {
@@ -477,6 +952,15 @@ export class KgQueryBuilder {
       record.errors.length > 0 ? JSON.stringify(record.errors) : null,
       record.sourceType,
     );
+  }
+
+  deleteFilesBySourceType(sourceType: SourceType): number {
+    const sql = sourceType === 'codegraph'
+      ? "DELETE FROM files WHERE source_type = 'codegraph' OR source_type IS NULL"
+      : 'DELETE FROM files WHERE source_type = ?';
+    return Number((sourceType === 'codegraph'
+      ? this.db.prepare(sql).run()
+      : this.db.prepare(sql).run(sourceType)).changes);
   }
 
   getFile(filePath: string): FileRecord | null {
@@ -495,10 +979,53 @@ export class KgQueryBuilder {
     };
   }
 
+  /** Includes zero-symbol files so scan-scoped Unicode collisions stay fail-closed. */
+  getFilePathsBySourceType(sourceType: SourceType): string[] {
+    const rows = this.db.prepare(
+      'SELECT path FROM files WHERE source_type = ? ORDER BY path COLLATE BINARY'
+    ).all(sourceType) as unknown as Array<{ path: string }>;
+    return rows.map(row => row.path);
+  }
+
   getStaleFiles(): FileRow[] {
     return this.db.prepare(
       'SELECT * FROM files WHERE modified_at > indexed_at'
     ).all() as unknown as FileRow[];
+  }
+
+  /**
+   * Reconciles the selective internal-storage FTS index inside the caller's
+   * transaction. The FTS5 `delete-all` command is invalid for this table mode,
+   * so use an ordinary DELETE before the filtered refill.
+   */
+  rebuildCodeFtsStrict(): number {
+    this.db.exec(`
+      DELETE FROM code_fts;
+      INSERT INTO code_fts(rowid, id, name, qualified_name, docstring, signature, keywords)
+      SELECT rowid, id, name, qualified_name, docstring, signature, keywords
+      FROM nodes WHERE source_type = 'codegraph';
+    `);
+    const mismatch = this.db.prepare(`
+      SELECT COUNT(*) AS count FROM (
+        SELECT identity FROM (
+          SELECT rowid AS identity FROM nodes WHERE source_type = 'codegraph'
+          EXCEPT
+          SELECT id AS identity FROM code_fts_docsize
+        )
+        UNION ALL
+        SELECT identity FROM (
+          SELECT id AS identity FROM code_fts_docsize
+          EXCEPT
+          SELECT rowid AS identity FROM nodes WHERE source_type = 'codegraph'
+        )
+      )
+    `).get() as unknown as { count: number };
+    if (mismatch.count !== 0) {
+      throw new Error(`code_fts reconciliation mismatch: ${mismatch.count}`);
+    }
+    return Number((this.db.prepare(
+      "SELECT COUNT(*) AS count FROM nodes WHERE source_type = 'codegraph'"
+    ).get() as unknown as { count: number }).count);
   }
 
   // ── Stats ──────────────────────────────────────────────────────────
@@ -531,10 +1058,68 @@ export class KgQueryBuilder {
 
     const schemaVersion = this.conn.getSchemaVersion();
 
+    const structuralStatus: Record<string, number> = Object.fromEntries(
+      STRUCTURAL_REFERENCE_STATUSES.map(status => [status, 0]),
+    );
+    const structuralStatusRows = this.db.prepare(
+      'SELECT status, COUNT(*) AS n FROM structural_refs GROUP BY status ORDER BY status COLLATE BINARY'
+    ).all() as unknown as Array<{ status: string; n: number }>;
+    for (const row of structuralStatusRows) structuralStatus[row.status] = row.n;
+
+    const structuralRelation: Record<string, number> = {};
+    const structuralRelationRows = this.db.prepare(
+      'SELECT relation_hint, COUNT(*) AS n FROM structural_refs GROUP BY relation_hint ORDER BY relation_hint COLLATE BINARY'
+    ).all() as unknown as Array<{ relation_hint: string; n: number }>;
+    for (const row of structuralRelationRows) structuralRelation[row.relation_hint] = row.n;
+
+    const structuralLanguage: Record<string, number> = {};
+    const structuralLanguageRows = this.db.prepare(
+      'SELECT origin_language, COUNT(*) AS n FROM structural_refs GROUP BY origin_language ORDER BY origin_language COLLATE BINARY'
+    ).all() as unknown as Array<{ origin_language: string; n: number }>;
+    for (const row of structuralLanguageRows) structuralLanguage[row.origin_language] = row.n;
+
+    const structuralTotal = structuralStatusRows.reduce((sum, row) => sum + row.n, 0);
+    const exactSurfaceSql = `CASE
+      WHEN metadata IS NOT NULL AND json_valid(metadata)
+        THEN COALESCE(json_extract(metadata, '$.externalSurface'), 0)
+      ELSE 0
+    END`;
+    const externalRow = this.db.prepare(`
+      SELECT
+        COUNT(*) AS total,
+        SUM(CASE WHEN file_path LIKE '@external/apple/%' THEN 1 ELSE 0 END) AS apple_catalog,
+        SUM(CASE WHEN ${exactSurfaceSql} = 1 THEN 1 ELSE 0 END) AS exact_surfaces
+      FROM nodes
+      WHERE source_type = 'codegraph'
+        AND (file_path LIKE '@external/%' OR ${exactSurfaceSql} = 1)
+    `).get() as unknown as { total: number; apple_catalog: number | null; exact_surfaces: number | null };
+    const externalLanguage: Record<string, number> = {};
+    const externalLanguageRows = this.db.prepare(`
+      SELECT language, COUNT(*) AS n
+      FROM nodes
+      WHERE source_type = 'codegraph'
+        AND (file_path LIKE '@external/%' OR ${exactSurfaceSql} = 1)
+      GROUP BY language
+      ORDER BY language COLLATE BINARY
+    `).all() as unknown as Array<{ language: string; n: number }>;
+    for (const row of externalLanguageRows) externalLanguage[row.language] = row.n;
+
     return {
       nodeCount, edgeCount, fileCount, dbSizeBytes,
       nodesByKind, edgesByKind, nodesBySourceType,
       detectedFrameworks, schemaVersion, stalenessRatio,
+      structuralRefs: {
+        total: structuralTotal,
+        status: structuralStatus,
+        relation: structuralRelation,
+        language: structuralLanguage,
+      },
+      externalNodes: {
+        total: externalRow.total,
+        appleCatalog: externalRow.apple_catalog ?? 0,
+        exactSurfaces: externalRow.exact_surfaces ?? 0,
+        language: externalLanguage,
+      },
     };
   }
 
@@ -807,6 +1392,36 @@ export class KgQueryBuilder {
       || compareNodeTie(a, b));
     return scored.slice(0, requested);
   }
+}
+
+// ---------------------------------------------------------------------------
+// Structural reference filter builder
+// ---------------------------------------------------------------------------
+
+function buildStructuralReferenceWhere(
+  filter: StructuralReferenceFilter,
+): { sql: string; params: string[] } {
+  const clauses: string[] = [];
+  const params: string[] = [];
+  const appendValues = (column: string, values: string[] | undefined): void => {
+    if (values === undefined) return;
+    if (values.length === 0) {
+      clauses.push('0 = 1');
+      return;
+    }
+    clauses.push(`${column} IN (${values.map(() => '?').join(',')})`);
+    params.push(...values);
+  };
+  appendValues('ref_key', filter.refKeys);
+  appendValues('origin_file_path', filter.originFilePaths);
+  if (filter.statuses) {
+    for (const status of filter.statuses) validateStructuralReferenceStatus(status);
+    appendValues('status', filter.statuses);
+  }
+  return {
+    sql: clauses.length > 0 ? ` WHERE ${clauses.join(' AND ')}` : '',
+    params,
+  };
 }
 
 // ---------------------------------------------------------------------------

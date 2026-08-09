@@ -35,7 +35,7 @@ export function extractDomain(
   const edges: UnifiedEdge[] = [];
 
   if (!existsSync(glossaryPath)) {
-    return { nodes, edges, fileRecord: createEmptyFileRecord(glossaryPath) };
+    return { nodes, edges, fileRecord: createEmptyFileRecord(glossaryPath), references: [], structuralReferences: [] };
   }
 
   const raw = readFileSync(glossaryPath, 'utf-8');
@@ -105,6 +105,8 @@ export function extractDomain(
   return {
     nodes,
     edges,
+    references: [],
+    structuralReferences: [],
     fileRecord: {
       path: glossaryPath,
       contentHash: computeContentHash(glossaryPath),

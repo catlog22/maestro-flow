@@ -1,6 +1,8 @@
 // src/graph/kg/db/types.ts — MaestroGraph 统一类型系统
 // 参考: guide/plan-maestrograph.md Gap 修补 2 + D8.4 Node ID 命名空间
 
+import type { StructuralReference } from '../resolution/structural-reference.js';
+
 // ---------------------------------------------------------------------------
 // NodeKind — 完整复用 CodeGraph 22 种 + 新增 7 种知识类型
 // ---------------------------------------------------------------------------
@@ -111,6 +113,7 @@ export type EdgeProvenance =
   | 'harvest'             // 知识: harvest 提取
   | 'knowledge-resolver'  // 知识: 跨源自动边解析
   | 'code-resolution'     // 代码: unresolved_refs → edges 解析
+  | 'structural-resolver' // 代码: 严格结构引用解析
   | 'manual';             // 手动添加
 
 // ---------------------------------------------------------------------------
@@ -199,6 +202,8 @@ export interface UnifiedEdge {
   line?: number;
   column?: number;
   provenance?: EdgeProvenance;
+  /** Stable syntax fact that owns this materialized edge. */
+  originRefKey?: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -236,6 +241,8 @@ export interface ExtractionResult {
     language: Language;
   }>;
   fileRecord: FileRecord;
+  /** 严格结构事实独立于 unresolved_refs，可重放解析为 origin-bound edges。 */
+  structuralReferences?: StructuralReference[];
 }
 
 // ---------------------------------------------------------------------------
@@ -244,6 +251,10 @@ export interface ExtractionResult {
 
 export interface ResolutionResult {
   edgesCreated: number;
+  /** 可选增量统计：区分严格结构代码边，兼容旧调用方构造结果对象。 */
+  codeStructuralEdgesCreated?: number;
+  /** 可选增量统计：区分知识边，兼容旧调用方构造结果对象。 */
+  knowledgeEdgesCreated?: number;
   edges: UnifiedEdge[];
   durationMs: number;
 }
@@ -291,4 +302,18 @@ export interface UnifiedGraphStats {
   detectedFrameworks: string[];
   schemaVersion: number;
   stalenessRatio: number;
+  /** 严格结构引用统计为可选增量字段，兼容旧版统计结果类型。 */
+  structuralRefs?: {
+    total: number;
+    status: Record<string, number>;
+    relation: Record<string, number>;
+    language: Record<string, number>;
+  };
+  /** 外部符号面统计为可选增量字段，兼容旧版统计结果类型。 */
+  externalNodes?: {
+    total: number;
+    appleCatalog: number;
+    exactSurfaces: number;
+    language: Record<string, number>;
+  };
 }

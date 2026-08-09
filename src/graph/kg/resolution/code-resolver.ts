@@ -14,8 +14,13 @@ import { sqliteTransaction } from '../db/connection.js';
 const MAX_CALL_TARGETS_PER_NAME = 20;
 
 // calls 目标只匹配这些 kind (property 等低级符号不参与, 避免噪声)
-// calls 目标只匹配这些 kind (property 等低级符号不参与, 避免噪声)
 const CALL_TARGET_KINDS = ['function', 'method', 'class', 'interface', 'struct', 'trait', 'type_alias', 'enum', 'variable'];
+
+export interface CodeResolutionOptions {
+  projectPath?: string;
+  /** The caller already owns the surrounding SQLite transaction. */
+  transactionMode?: 'managed' | 'caller-owned';
+}
 
 export interface CodeResolutionResult {
   edgesCreated: number;
@@ -37,9 +42,14 @@ interface UnresolvedRefRow {
   language: string;
 }
 
+interface PlannedEdge {
+  edge: UnifiedEdge;
+  reference: UnresolvedRefRow;
+}
+
 export function resolveCodeReferences(
   db: DatabaseSync,
-  options?: { projectPath?: string },
+  options?: CodeResolutionOptions,
 ): CodeResolutionResult {
   const startMs = Date.now();
   const projectRoot = options?.projectPath ?? process.cwd();
@@ -50,25 +60,26 @@ export function resolveCodeReferences(
      FROM unresolved_refs`
   ).all() as unknown as UnresolvedRefRow[];
 
-  const allEdges: UnifiedEdge[] = [];
+  const plannedEdges: PlannedEdge[] = [];
   const callsRefs: UnresolvedRefRow[] = [];
-  let importsResolved = 0;
 
   // ── Rule A: imports → file→file ──────────────────────────────────
   for (const ref of refs) {
     if (ref.reference_kind === 'imports') {
       const resolved = resolver.resolveImport(ref.reference_name, ref.file_path, ref.language);
       if (resolved?.targetFilePath) {
-        allEdges.push({
-          source: ref.from_node_id,
-          target: makeFileNodeId(resolved.targetFilePath),
-          kind: 'imports',
-          provenance: 'code-resolution',
-          line: ref.line,
-          column: ref.col,
-          metadata: { strategy: resolved.strategy, confidence: resolved.confidence },
+        plannedEdges.push({
+          reference: ref,
+          edge: {
+            source: ref.from_node_id,
+            target: makeFileNodeId(resolved.targetFilePath),
+            kind: 'imports',
+            provenance: 'code-resolution',
+            line: ref.line,
+            column: ref.col,
+            metadata: { strategy: resolved.strategy, confidence: resolved.confidence },
+          },
         });
-        importsResolved++;
       }
     } else if (ref.reference_kind === 'calls' || ref.reference_kind === 'extends' || ref.reference_kind === 'implements') {
       callsRefs.push(ref);
@@ -76,7 +87,6 @@ export function resolveCodeReferences(
   }
 
   // ── Rule B: calls/extends → file→symbol (按名匹配 nodes) ─────────
-  let callsResolved = 0;
   if (callsRefs.length > 0) {
     const names = [...new Set(callsRefs.map(r => r.reference_name))];
     const byName = new Map<string, Array<{ id: string; file_path: string; kind: string }>>();
@@ -120,16 +130,18 @@ export function resolveCodeReferences(
         const edgeKind = ref.reference_kind === 'extends' || ref.reference_kind === 'implements'
           ? (ref.reference_kind as 'extends' | 'implements')
           : 'calls';
-        allEdges.push({
-          source: ref.from_node_id,
-          target: target.id,
-          kind: edgeKind,
-          provenance: 'code-resolution',
-          line: ref.line,
-          column: ref.col,
-          metadata: { targetKind: target.kind },
+        plannedEdges.push({
+          reference: ref,
+          edge: {
+            source: ref.from_node_id,
+            target: target.id,
+            kind: edgeKind,
+            provenance: 'code-resolution',
+            line: ref.line,
+            column: ref.col,
+            metadata: { targetKind: target.kind },
+          },
         });
-        callsResolved++;
       }
     }
   }
@@ -137,10 +149,11 @@ export function resolveCodeReferences(
   // ── 幂等写入: 先清旧 code-resolution 边, 再插入 ─────────────────
   // 端点必须存在于 nodes (edges FK) — imports 边目标文件可能未被索引
   // (排除/未扫描), 批量查 nodes 过滤后再写, 避免逐条 FK 失败。
-  let insertedEdges = 0;
-  sqliteTransaction(db, () => {
+  const insertedEdges: UnifiedEdge[] = [];
+  const insertedKeys = new Set<string>();
+  const persistEdges = (): void => {
     db.prepare(`DELETE FROM edges WHERE provenance = 'code-resolution'`).run();
-    if (allEdges.length === 0) return;
+    if (plannedEdges.length === 0) return;
 
     const stmt = db.prepare(
       `INSERT INTO edges (source, target, kind, metadata, line, col, provenance)
@@ -149,7 +162,7 @@ export function resolveCodeReferences(
     const seen = new Set<string>();
 
     const endpointIds = new Set<string>();
-    for (const edge of allEdges) {
+    for (const { edge } of plannedEdges) {
       endpointIds.add(edge.source);
       endpointIds.add(edge.target);
     }
@@ -166,8 +179,8 @@ export function resolveCodeReferences(
     }
 
     let skippedMissingEndpoint = 0;
-    for (const edge of allEdges) {
-      const key = `${edge.source}\u0000${edge.target}\u0000${edge.kind}`;
+    for (const { edge } of plannedEdges) {
+      const key = edgeIdentity(edge);
       if (seen.has(key)) continue; // 去重
       seen.add(key);
       if (!existingIds.has(edge.source) || !existingIds.has(edge.target)) {
@@ -179,33 +192,36 @@ export function resolveCodeReferences(
         edge.metadata ? JSON.stringify(edge.metadata) : null,
         edge.line ?? null, edge.column ?? null, edge.provenance ?? null,
       );
-      insertedEdges++;
+      insertedEdges.push(edge);
+      insertedKeys.add(key);
     }
     if (skippedMissingEndpoint > 0 && process.env.MAESTRO_DEBUG === '1') {
       console.warn(`[KG] code-resolution skipped ${skippedMissingEndpoint} edges with missing endpoints`);
     }
-  });
-
-  // 按实际写入统计 imports/calls (有效端点 + 去重后)
-  let writtenImports = 0;
-  let writtenCalls = 0;
-  {
-    const seen = new Set<string>();
-    for (const edge of allEdges) {
-      const key = `${edge.source}\u0000${edge.target}\u0000${edge.kind}`;
-      if (seen.has(key)) continue;
-      seen.add(key);
-      if (edge.kind === 'imports') writtenImports++;
-      else if (edge.kind === 'calls') writtenCalls++;
-    }
+  };
+  if (options?.transactionMode === 'caller-owned') {
+    persistEdges();
+  } else {
+    sqliteTransaction(db, persistEdges);
   }
 
+  const resolvedRefs = new Set<UnresolvedRefRow>();
+  for (const plan of plannedEdges) {
+    if (insertedKeys.has(edgeIdentity(plan.edge))) resolvedRefs.add(plan.reference);
+  }
+  const writtenImports = insertedEdges.filter(edge => edge.kind === 'imports').length;
+  const writtenCalls = insertedEdges.filter(edge => edge.kind === 'calls').length;
+
   return {
-    edgesCreated: insertedEdges,
+    edgesCreated: insertedEdges.length,
     importsEdges: writtenImports,
     callsEdges: writtenCalls,
-    unresolvedCount: refs.length - importsResolved - callsRefs.length,
+    unresolvedCount: refs.length - resolvedRefs.size,
     durationMs: Date.now() - startMs,
-    edges: allEdges,
+    edges: insertedEdges,
   };
+}
+
+function edgeIdentity(edge: UnifiedEdge): string {
+  return `${edge.source}\u0000${edge.target}\u0000${edge.kind}`;
 }

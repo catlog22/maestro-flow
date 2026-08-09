@@ -146,5 +146,5 @@ export function extractDfm(
     }
   }
 
-  return { symbols, references, edges };
+  return { symbols, references, structuralReferences: [], edges };
 }
