@@ -108,5 +108,5 @@ export function extractMybatisXml(
     }
   }
 
-  return { symbols, references, edges };
+  return { symbols, references, structuralReferences: [], edges };
 }

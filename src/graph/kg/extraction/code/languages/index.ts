@@ -2,10 +2,43 @@
 // 19 语言提取器注册表
 // 参考: codegraph/src/extraction/languages/*.ts (逐文件复用)
 
-import type { LanguageExtractor } from '../tree-sitter-types.js';
+import {
+  makeCodeNodeId,
+  makeFileNodeId,
+  makeImportReference as makeStrictImportReference,
+  type ExtractedReference,
+  type LanguageExtractor,
+} from '../tree-sitter-types.js';
 import type { Language } from '../../../db/types.js';
-import { makeCodeNodeId, makeFileNodeId } from '../tree-sitter-types.js';
+import {
+  makeStructuralReferenceKey,
+  type ImportReference,
+  type StructuralOwnerReference,
+  type StructuralTypeReference,
+} from '../../../resolution/structural-reference.js';
 import { typescriptExtractor, javascriptExtractor, tsxExtractor, jsxExtractor } from './typescript.js';
+import { SOURCE_EXTENSION_TO_LANGUAGE, sourceExtension } from '../supported-source-extensions.js';
+
+/** Backward-compatible import fact for the generic unresolved-ref pipeline. */
+function makeImportReference(
+  filePath: string,
+  rawTarget: string,
+  line: number,
+  column: number,
+  _importKind: string = 'module',
+  languageOverride?: Language,
+): ExtractedReference {
+  return {
+    fromSymbolName: '<file>',
+    fromSymbolId: makeFileNodeId(filePath),
+    referenceName: rawTarget,
+    referenceKind: 'imports',
+    line,
+    col: column,
+    filePath,
+    language: languageOverride ?? detectLanguageFromPath(filePath),
+  };
+}
 
 // ---------------------------------------------------------------------------
 // 基础提取器模板 — 用于尚未移植的语言 (复用通用逻辑)
@@ -63,7 +96,7 @@ function createGenericExtractor(language: Language, grammarName: string, nodeTyp
       };
 
       walk(rootNode, '');
-      return { symbols, references, edges: [] };
+      return { symbols, references, structuralReferences: [], edges: [] };
     },
   };
 }
@@ -311,12 +344,8 @@ EXTRACTOR_REGISTRY.set('python', {
       // import
       if (type === 'import_statement' || type === 'import_from_statement') {
         const mod = findChild(node, 'module_name') ?? findChild(node, 'dotted_name');
-        references.push({
-          fromSymbolName: '<module>', fromSymbolId: `${filePath}:<module>`,
-          referenceName: mod?.text ?? node.text, referenceKind: 'imports',
-          line: (node.startPosition?.row ?? 0) + 1, col: (node.startPosition?.column ?? 0) + 1,
-          filePath, language: lang,
-        });
+        references.push(makeImportReference(filePath, mod?.text ?? node.text,
+          (node.startPosition?.row ?? 0) + 1, (node.startPosition?.column ?? 0) + 1));
         return;
       }
 
@@ -328,7 +357,7 @@ EXTRACTOR_REGISTRY.set('python', {
     };
 
     walk((tree as AnyNode).rootNode, '');
-    return { symbols, references, edges: [] };
+    return { symbols, references, structuralReferences: [], edges: [] };
   },
 });
 
@@ -474,13 +503,8 @@ EXTRACTOR_REGISTRY.set('go', {
 
       if (type === 'import_spec') {
         const path = findChild(node, 'path') ?? node.namedChildren?.[node.namedChildren.length - 1];
-        references.push({
-          fromSymbolName: '<module>', fromSymbolId: `${filePath}:<module>`,
-          referenceName: (path?.text ?? '').replace(/"/g, ''),
-          referenceKind: 'imports',
-          line: (node.startPosition?.row ?? 0) + 1, col: (node.startPosition?.column ?? 0) + 1,
-          filePath, language: lang,
-        });
+        references.push(makeImportReference(filePath, (path?.text ?? '').replace(/"/g, ''),
+          (node.startPosition?.row ?? 0) + 1, (node.startPosition?.column ?? 0) + 1));
         return;
       }
 
@@ -503,7 +527,7 @@ EXTRACTOR_REGISTRY.set('go', {
     };
 
     walk((tree as AnyNode).rootNode, '');
-    return { symbols, references, edges: [] };
+    return { symbols, references, structuralReferences: [], edges: [] };
   },
 });
 
@@ -550,13 +574,9 @@ EXTRACTOR_REGISTRY.set('java', {
 
       if (kind === 'import') {
         const scopedId = findChild(node, 'scoped_identifier');
-        references.push({
-          fromSymbolName: '<module>', fromSymbolId: `${filePath}:<module>`,
-          referenceName: scopedId?.text ?? node.text.replace(/^import\s+|;$/g, '').trim(),
-          referenceKind: 'imports',
-          line: (node.startPosition?.row ?? 0) + 1, col: (node.startPosition?.column ?? 0) + 1,
-          filePath, language: lang,
-        });
+        references.push(makeImportReference(filePath,
+          scopedId?.text ?? node.text.replace(/^import\s+|;$/g, '').trim(),
+          (node.startPosition?.row ?? 0) + 1, (node.startPosition?.column ?? 0) + 1));
         return;
       }
 
@@ -649,7 +669,7 @@ EXTRACTOR_REGISTRY.set('java', {
     };
 
     walk((tree as AnyNode).rootNode, '');
-    return { symbols, references, edges };
+    return { symbols, references, structuralReferences: [], edges };
   },
 });
 
@@ -705,13 +725,9 @@ EXTRACTOR_REGISTRY.set('rust', {
 
       if (type === 'use_declaration') {
         const arg = findChild(node, 'use_list') ?? findChild(node, 'scoped_identifier') ?? findChild(node, 'identifier');
-        references.push({
-          fromSymbolName: '<module>', fromSymbolId: `${filePath}:<module>`,
-          referenceName: arg?.text ?? node.text.replace(/^use\s+|;$/g, '').trim(),
-          referenceKind: 'imports',
-          line: (node.startPosition?.row ?? 0) + 1, col: (node.startPosition?.column ?? 0) + 1,
-          filePath, language: lang,
-        });
+        references.push(makeImportReference(filePath,
+          arg?.text ?? node.text.replace(/^use\s+|;$/g, '').trim(),
+          (node.startPosition?.row ?? 0) + 1, (node.startPosition?.column ?? 0) + 1));
         return;
       }
 
@@ -811,7 +827,7 @@ EXTRACTOR_REGISTRY.set('rust', {
     };
 
     walk((tree as AnyNode).rootNode, '');
-    return { symbols, references, edges };
+    return { symbols, references, structuralReferences: [], edges };
   },
 });
 
@@ -875,13 +891,9 @@ EXTRACTOR_REGISTRY.set('csharp', {
 
       if (type === 'using_directive') {
         const nameNode = findChild(node, 'qualified_name') ?? findChild(node, 'identifier');
-        references.push({
-          fromSymbolName: '<module>', fromSymbolId: `${filePath}:<module>`,
-          referenceName: nameNode?.text ?? node.text.replace(/^using\s+|;$/g, '').trim(),
-          referenceKind: 'imports',
-          line: (node.startPosition?.row ?? 0) + 1, col: (node.startPosition?.column ?? 0) + 1,
-          filePath, language: lang,
-        });
+        references.push(makeImportReference(filePath,
+          nameNode?.text ?? node.text.replace(/^using\s+|;$/g, '').trim(),
+          (node.startPosition?.row ?? 0) + 1, (node.startPosition?.column ?? 0) + 1));
         return;
       }
 
@@ -956,7 +968,7 @@ EXTRACTOR_REGISTRY.set('csharp', {
     };
 
     walk((tree as AnyNode).rootNode, '');
-    return { symbols, references, edges: [] };
+    return { symbols, references, structuralReferences: [], edges: [] };
   },
 });
 
@@ -1066,17 +1078,27 @@ EXTRACTOR_REGISTRY.set('ruby', {
           }
           return;
         }
-        // include/extend/prepend → import references
+        // include/extend → mixin references; prepend/require variants → imports
         if (!hasReceiver && ['include', 'extend', 'prepend', 'require', 'require_relative'].includes(methodName)) {
           const args = findChild(node, 'argument_list');
           for (const arg of (args?.namedChildren ?? [])) {
-            references.push({
-              fromSymbolName: parent || '<module>', fromSymbolId: `${filePath}:${parent || '<module>'}`,
-              referenceName: arg.text.replace(/['"]/g, '').replace(/^:/, ''),
-              referenceKind: methodName === 'include' || methodName === 'extend' ? 'mixes_in' : 'imports',
-              line: (node.startPosition?.row ?? 0) + 1, col: (node.startPosition?.column ?? 0) + 1,
-              filePath, language: lang,
-            });
+            if (methodName === 'require' || methodName === 'require_relative') {
+              references.push(makeImportReference(filePath,
+                arg.text.replace(/['"]/g, '').replace(/^:/, ''),
+                (node.startPosition?.row ?? 0) + 1, (node.startPosition?.column ?? 0) + 1,
+                methodName));
+            } else {
+              references.push({
+                fromSymbolName: parent || '<module>',
+                fromSymbolId: `${filePath}:${parent || '<module>'}`,
+                referenceName: arg.text.replace(/['"]/g, '').replace(/^:/, ''),
+                referenceKind: methodName === 'prepend' ? 'imports' : 'mixes_in',
+                line: (node.startPosition?.row ?? 0) + 1,
+                col: (node.startPosition?.column ?? 0) + 1,
+                filePath,
+                language: lang,
+              });
+            }
           }
           return;
         }
@@ -1099,7 +1121,7 @@ EXTRACTOR_REGISTRY.set('ruby', {
     };
 
     walk((tree as AnyNode).rootNode, '');
-    return { symbols, references, edges: [] };
+    return { symbols, references, structuralReferences: [], edges: [] };
   },
 });
 
@@ -1108,28 +1130,116 @@ EXTRACTOR_REGISTRY.set('ruby', {
 // ---------------------------------------------------------------------------
 
 const SWIFT_NODE_MAP: Record<string, string> = {
-  'function_declaration': 'function', 'class_declaration': 'class',
-  'struct_declaration': 'struct', 'protocol_declaration': 'protocol',
-  'enum_declaration': 'enum', 'extension_declaration': 'class',
-  'typealias_declaration': 'type_alias', 'variable_declaration': 'property',
+  'function_declaration': 'function', 'protocol_function_declaration': 'function',
+  'class_declaration': 'class', 'protocol_declaration': 'protocol',
+  'typealias_declaration': 'type_alias', 'property_declaration': 'property',
+  'protocol_property_declaration': 'property', 'variable_declaration': 'property',
   'import_declaration': 'import', 'init_declaration': 'method',
   'deinit_declaration': 'method', 'subscript_declaration': 'method',
   // tree-sitter-swift 实际语法: enum 为 class_declaration + enum_class_body + enum_entry
   'enum_entry': 'enum_member',
 };
 
+function swiftDeclarationKind(node: AnyNode): string | null {
+  if (node.type !== 'class_declaration') return SWIFT_NODE_MAP[node.type] ?? null;
+  const declarationKind = node.childForFieldName?.('declaration_kind')?.text ?? 'class';
+  if (declarationKind === 'struct') return 'struct';
+  if (declarationKind === 'enum') return 'enum';
+  // UnifiedNodeKind 暂无 actor；actor 是引用语义，映射为 class 并通过 decorator 保真。
+  if (declarationKind === 'actor') return 'class';
+  if (declarationKind === 'extension') return null;
+  return 'class';
+}
+
+function swiftNodeName(node: AnyNode): string | null {
+  const type = node.type;
+  const fallback = type === 'init_declaration' ? 'init'
+    : type === 'deinit_declaration' ? 'deinit'
+      : type === 'subscript_declaration' ? 'subscript'
+        : null;
+  const rawName = nodeName(node) ?? fallback;
+  if (!rawName) return null;
+  // 当前 Swift grammar 把 protocol property 的 var/let 一并放进 name field。
+  return type === 'protocol_property_declaration'
+    ? rawName.replace(/^(?:var|let)\s+/, '')
+    : rawName;
+}
+
+function swiftNominalType(node: AnyNode): string | null {
+  const text = node.childForFieldName?.('inherits_from')?.text?.trim() ?? '';
+  return text.match(/^([A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)*)/)?.[1] ?? null;
+}
+
+/**
+ * tree-sitter-swift 把 #if/#elseif/#else/#endif 暴露为平级 directive，
+ * 因此按行维护条件栈，给 structural ref 保留原始 directive 文本。
+ */
+function swiftCompilationConditions(sourceCode: string): Map<number, string> {
+  const conditions = new Map<number, string>();
+  const stack: string[] = [];
+  const lines = sourceCode.split(/\r?\n/);
+
+  for (let index = 0; index < lines.length; index++) {
+    const directive = lines[index].trim();
+    if (/^#if\s+\S/.test(directive)) {
+      stack.push(directive);
+      continue;
+    }
+    if (/^#elseif\s+\S/.test(directive) || directive === '#else') {
+      if (stack.length > 0) stack[stack.length - 1] = directive;
+      continue;
+    }
+    if (directive === '#endif') {
+      stack.pop();
+      continue;
+    }
+    if (stack.length > 0) conditions.set(index + 1, stack.join('\n'));
+  }
+
+  return conditions;
+}
+
+interface SwiftInheritanceCandidate {
+  sourceQualifiedName: string;
+  sourceDeclarationKind: string;
+  targetName: string;
+  line: number;
+  col: number;
+  compilationCondition?: string;
+}
+
+interface SwiftExtensionOwnershipCandidate {
+  ownerQualifiedName: string;
+  memberQualifiedName: string;
+  line: number;
+  col: number;
+  compilationCondition?: string;
+}
+
+interface SwiftEdgeCandidate {
+  source: string;
+  target: string;
+  kind: string;
+  line: number;
+  col: number;
+}
+
 EXTRACTOR_REGISTRY.set('swift', {
   language: 'swift' as Language, grammarName: 'swift', nodeTypeMap: SWIFT_NODE_MAP,
-  extract(tree, _src, filePath) {
+  extract(tree, sourceCode, filePath) {
     const lang = 'swift' as Language;
     const symbols: import('../tree-sitter-types.js').ExtractedSymbol[] = [];
     const references: import('../tree-sitter-types.js').ExtractedReference[] = [];
-    const edges: import('../tree-sitter-types.js').LanguageExtractionResult['edges'] = [];
+    const importReferences: ImportReference[] = [];
     const fileNodeId = makeFileNodeId(filePath);
+    const structuralReferences: Array<StructuralTypeReference | StructuralOwnerReference> = [];
+    const edgeCandidates: SwiftEdgeCandidate[] = [];
+    const inheritanceCandidates: SwiftInheritanceCandidate[] = [];
+    const extensionOwnershipCandidates: SwiftExtensionOwnershipCandidate[] = [];
+    const compilationConditions = swiftCompilationConditions(sourceCode);
 
-    const walk = (node: AnyNode, parent: string): void => {
+    const walk = (node: AnyNode, parent: string, extensionOwner: string | null): void => {
       const type = node.type;
-      const kind = SWIFT_NODE_MAP[type];
 
       // calls 引用 — helper(id) / items.joined() (tree-sitter-swift 新语法:
       // call_expression 直接子为 simple_identifier 或 navigation_expression)
@@ -1159,47 +1269,44 @@ EXTRACTOR_REGISTRY.set('swift', {
       }
 
       if (type === 'import_declaration') {
-        const mod = node.namedChildren?.find((c: AnyNode) => c.type === 'simple_identifier')
-          ?? node.namedChildren?.find((c: AnyNode) => c.type === 'identifier');
-        references.push({
-          fromSymbolName: '<file>', fromSymbolId: fileNodeId,
-          referenceName: mod?.text ?? node.text.replace(/^import\s+/, '').trim(),
-          referenceKind: 'imports',
-          line: (node.startPosition?.row ?? 0) + 1, col: (node.startPosition?.column ?? 0) + 1,
-          filePath, language: lang,
-        });
+        const rawTarget = node.text.replace(
+          /^import\s+(?:(?:typealias|struct|class|enum|protocol|var|let|func)\s+)?/,
+          '',
+        ).trim();
+        const line = (node.startPosition?.row ?? 0) + 1;
+        const column = (node.startPosition?.column ?? 0) + 1;
+        references.push(makeImportReference(filePath, rawTarget, line, column));
+        importReferences.push(makeStrictImportReference(filePath, rawTarget, line, column));
         return;
       }
 
+      const declarationKind = type === 'class_declaration'
+        ? node.childForFieldName?.('declaration_kind')?.text ?? 'class'
+        : type === 'protocol_declaration' ? 'protocol' : '';
+
+      if (declarationKind === 'extension') {
+        const extensionName = swiftNodeName(node);
+        if (!extensionName) { walkChildren(node, parent, extensionOwner); return; }
+        const owner = parent ? `${parent}.${extensionName}` : extensionName;
+        collectInheritance(node, owner, declarationKind);
+        // extension 是 owner context，不是第二个 nominal declaration；否则同 ID 会覆盖原声明。
+        walkChildren(node, owner, owner);
+        return;
+      }
+
+      const kind = swiftDeclarationKind(node);
       if (kind && kind !== 'import') {
-        const name = nodeName(node) ?? (type === 'init_declaration' ? 'init' : type === 'deinit_declaration' ? 'deinit' : null);
-        if (!name) { walkChildren(node, parent); return; }
+        const name = swiftNodeName(node);
+        if (!name) { walkChildren(node, parent, extensionOwner); return; }
         const qn = parent ? `${parent}.${name}` : name;
-
-        // extension UserRepository {} — 不建新类型节点 (与主类型同 qn 会覆盖),
-        // 直接把成员挂到扩展类型的 qn 下 (contains 边 source 与主类型节点一致)
-        if (type === 'extension_declaration') {
-          walkChildren(node, name);
-          return;
-        }
-
-        // tree-sitter-swift: enum/struct 实际都是 class_declaration — 用源码关键字区分
-        let effectiveKind = kind;
-        if (type === 'class_declaration') {
-          const declText = (node.text || '').trimStart();
-          if (declText.startsWith('enum') || (node.namedChildren ?? []).some((c: AnyNode) => c.type === 'enum_class_body')) {
-            effectiveKind = 'enum';
-          } else if (declText.startsWith('struct')) {
-            effectiveKind = 'struct';
-          } else if (declText.startsWith('protocol')) {
-            effectiveKind = 'protocol';
-          } else {
-            effectiveKind = 'class';
-          }
-        }
-
-        const isMethod = parent !== '' && (type === 'function_declaration' || type === 'init_declaration' || type === 'deinit_declaration' || type === 'subscript_declaration');
-        const finalKind = isMethod ? 'method' : effectiveKind;
+        const isMethod = parent !== '' && (
+          type === 'function_declaration'
+          || type === 'protocol_function_declaration'
+          || type === 'init_declaration'
+          || type === 'deinit_declaration'
+          || type === 'subscript_declaration'
+        );
+        const finalKind = isMethod ? 'method' : kind;
 
         // modifiers: public/private/fileprivate/internal/static/class
         let visibility = '', isStatic = false, isAsync = false;
@@ -1211,27 +1318,12 @@ EXTRACTOR_REGISTRY.set('swift', {
         }
 
         // @objc, @IBAction etc. as decorators
-        const decos: string[] = [];
+        const decos: string[] = declarationKind === 'actor' ? ['actor'] : [];
         for (const c of (node.namedChildren ?? [])) {
           if (c.type === 'attribute') {
             const attrName = findChild(c, 'user_type') ?? findChild(c, 'identifier');
-            decos.push(attrName?.text ?? c.text.replace(/^@/, ''));
-          }
-        }
-
-        // protocol conformance → extends 引用 (tree-sitter-swift: inheritance_specifier → user_type)
-        const inheritance = (node.namedChildren ?? []).filter((c: AnyNode) => c.type === 'inheritance_specifier');
-        for (const spec of inheritance) {
-          const ut = spec.namedChildren?.find((c: AnyNode) => c.type === 'user_type');
-          const protoName = (ut?.text ?? spec.text ?? '').trim();
-          if (protoName && protoName !== name) {
-            references.push({
-              fromSymbolName: '<file>', fromSymbolId: fileNodeId,
-              referenceName: protoName, referenceKind: 'extends',
-              line: (spec.startPosition?.row ?? 0) + 1,
-              col: (spec.startPosition?.column ?? 0) + 1,
-              filePath, language: lang,
-            });
+            const decorator = attrName?.text ?? c.text.replace(/^@/, '');
+            if (!decos.includes(decorator)) decos.push(decorator);
           }
         }
 
@@ -1247,29 +1339,230 @@ EXTRACTOR_REGISTRY.set('swift', {
           signature: firstLine(node), docstring,
         }));
 
-        // contains 边 — 父符号 → 子符号 (端点均为合法节点 ID)
         if (parent) {
-          edges.push({
-            source: makeCodeNodeId(filePath, parent),
-            target: makeCodeNodeId(filePath, qn),
-            kind: 'contains',
+          const ownership = {
+            memberQualifiedName: qn,
+            ownerQualifiedName: parent,
             line: (node.startPosition?.row ?? 0) + 1,
-          });
+            col: (node.startPosition?.column ?? 0) + 1,
+            compilationCondition: compilationConditions.get((node.startPosition?.row ?? 0) + 1),
+          };
+          if (extensionOwner === parent) {
+            extensionOwnershipCandidates.push(ownership);
+          } else {
+            edgeCandidates.push({
+              source: makeCodeNodeId(filePath, parent),
+              target: makeCodeNodeId(filePath, qn),
+              kind: 'contains',
+              line: ownership.line,
+              col: ownership.col,
+            });
+          }
         }
 
-        walkChildren(node, qn);
+        if (declarationKind) collectInheritance(node, qn, declarationKind);
+        walkChildren(node, qn, extensionOwner);
         return;
       }
 
-      walkChildren(node, parent);
+      walkChildren(node, parent, extensionOwner);
     };
 
-    const walkChildren = (node: AnyNode, parent: string): void => {
-      for (const c of (node.namedChildren ?? [])) walk(c, parent);
+    const collectInheritance = (
+      node: AnyNode,
+      sourceQualifiedName: string,
+      sourceDeclarationKind: string,
+    ): void => {
+      for (const child of (node.namedChildren ?? [])) {
+        if (child.type !== 'inheritance_specifier') continue;
+        const targetName = swiftNominalType(child);
+        if (!targetName || targetName === 'AnyObject') continue;
+        const line = (child.startPosition?.row ?? 0) + 1;
+        inheritanceCandidates.push({
+          sourceQualifiedName,
+          sourceDeclarationKind,
+          targetName,
+          line,
+          col: (child.startPosition?.column ?? 0) + 1,
+          compilationCondition: compilationConditions.get(line),
+        });
+      }
     };
 
-    walk((tree as AnyNode).rootNode, '');
-    return { symbols, references, edges };
+    const walkChildren = (node: AnyNode, parent: string, extensionOwner: string | null): void => {
+      for (const c of (node.namedChildren ?? [])) walk(c, parent, extensionOwner);
+    };
+
+    walk((tree as AnyNode).rootNode, '', null);
+
+    const typeSymbols = symbols.filter(symbol => ['class', 'struct', 'enum', 'protocol'].includes(symbol.kind));
+    const typesByQualifiedName = new Map<string, typeof typeSymbols>();
+    const typesByName = new Map<string, typeof typeSymbols>();
+    for (const symbol of typeSymbols) {
+      const qualified = typesByQualifiedName.get(symbol.qualifiedName) ?? [];
+      qualified.push(symbol);
+      typesByQualifiedName.set(symbol.qualifiedName, qualified);
+      const named = typesByName.get(symbol.name) ?? [];
+      named.push(symbol);
+      typesByName.set(symbol.name, named);
+    }
+
+    const resolveLocalType = (
+      sourceQualifiedName: string,
+      targetName: string,
+    ): typeof typeSymbols[number] | null => {
+      const scopes = sourceQualifiedName.split('.');
+      scopes.pop();
+      while (scopes.length > 0) {
+        const scoped = typesByQualifiedName.get(`${scopes.join('.')}.${targetName}`) ?? [];
+        if (scoped.length > 0) return scoped.length === 1 ? scoped[0] : null;
+        scopes.pop();
+      }
+
+      const exact = typesByQualifiedName.get(targetName) ?? [];
+      if (exact.length > 0) return exact.length === 1 ? exact[0] : null;
+      // 带 module 的名字必须保持精确，禁止只取尾部组件猜测目标。
+      if (targetName.includes('.')) return null;
+      const named = typesByName.get(targetName) ?? [];
+      return named.length === 1 ? named[0] : null;
+    };
+
+    // `import class UIKit.UIView` 等专用 import 保留完整 ref，
+    // 但 resolver hint 只使用所属 module（`UIKit`）。
+    const moduleHints = [...new Set(importReferences
+      .map(reference => reference.rawTarget.split('.')[0])
+      .filter(Boolean))];
+    const makeTypeReference = (
+      candidate: SwiftInheritanceCandidate,
+      source: typeof symbols[number],
+    ): StructuralTypeReference => {
+      const anchorNodeId = makeCodeNodeId(filePath, source.qualifiedName);
+      const keyInput = {
+        normalizedOriginPath: filePath,
+        anchorNodeId,
+        relationHint: 'inherits-or-conforms' as const,
+        edgeOrientation: 'anchor-to-target' as const,
+        rawTargetName: candidate.targetName,
+        line: candidate.line,
+        column: candidate.col,
+      };
+      return {
+        kind: 'type',
+        refKey: makeStructuralReferenceKey(keyInput),
+        anchorNodeId,
+        anchorQualifiedName: source.qualifiedName,
+        rawTargetName: candidate.targetName,
+        sourceDeclarationKind: candidate.sourceDeclarationKind,
+        relationHint: 'inherits-or-conforms',
+        edgeOrientation: 'anchor-to-target',
+        lookupScope: 'project-and-external',
+        targetKindHints: ['class', 'struct', 'protocol', 'enum'],
+        targetLanguageHints: ['swift', 'objc'],
+        moduleHints,
+        targetFileHints: [],
+        origin: { filePath, language: 'swift', line: candidate.line, column: candidate.col },
+        ...(candidate.compilationCondition
+          ? { compilationCondition: candidate.compilationCondition }
+          : {}),
+        evidenceProvenance: 'tree-sitter',
+      };
+    };
+
+    const makeOwnerReference = (
+      candidate: SwiftExtensionOwnershipCandidate,
+      member: typeof symbols[number],
+    ): StructuralOwnerReference => {
+      const anchorNodeId = makeCodeNodeId(filePath, member.qualifiedName);
+      const keyInput = {
+        normalizedOriginPath: filePath,
+        anchorNodeId,
+        relationHint: 'contains-owner' as const,
+        edgeOrientation: 'target-to-anchor' as const,
+        rawTargetName: candidate.ownerQualifiedName,
+        line: candidate.line,
+        column: candidate.col,
+      };
+      return {
+        kind: 'owner',
+        refKey: makeStructuralReferenceKey(keyInput),
+        anchorNodeId,
+        anchorQualifiedName: member.qualifiedName,
+        rawTargetName: candidate.ownerQualifiedName,
+        sourceDeclarationKind: 'extension',
+        relationHint: 'contains-owner',
+        edgeOrientation: 'target-to-anchor',
+        lookupScope: 'project-and-external',
+        targetKindHints: ['class', 'struct', 'protocol', 'enum'],
+        targetLanguageHints: ['swift', 'objc'],
+        moduleHints,
+        targetFileHints: [],
+        origin: { filePath, language: 'swift', line: candidate.line, column: candidate.col },
+        ...(candidate.compilationCondition
+          ? { compilationCondition: candidate.compilationCondition }
+          : {}),
+        evidenceProvenance: 'tree-sitter',
+      };
+    };
+
+    const symbolsByQualifiedName = new Map<string, typeof symbols>();
+    for (const symbol of symbols) {
+      const values = symbolsByQualifiedName.get(symbol.qualifiedName) ?? [];
+      values.push(symbol);
+      symbolsByQualifiedName.set(symbol.qualifiedName, values);
+    }
+
+    for (const candidate of inheritanceCandidates) {
+      const sources = symbolsByQualifiedName.get(candidate.sourceQualifiedName) ?? [];
+      if (sources.length !== 1) continue;
+      const source = sources[0];
+      const target = resolveLocalType(candidate.sourceQualifiedName, candidate.targetName);
+      if (!target) {
+        structuralReferences.push(makeTypeReference(candidate, source));
+        continue;
+      }
+
+      const edgeKind = target.kind === 'protocol'
+        ? source.kind === 'protocol' ? 'extends' : 'implements'
+        : source.kind === 'class' && target.kind === 'class' ? 'extends' : null;
+      if (!edgeKind) continue;
+      edgeCandidates.push({
+        source: makeCodeNodeId(filePath, source.qualifiedName),
+        target: makeCodeNodeId(filePath, target.qualifiedName),
+        kind: edgeKind,
+        line: candidate.line,
+        col: candidate.col,
+      });
+    }
+
+    for (const candidate of extensionOwnershipCandidates) {
+      const members = symbolsByQualifiedName.get(candidate.memberQualifiedName) ?? [];
+      if (members.length !== 1) continue;
+      const member = members[0];
+      const owner = resolveLocalType(candidate.memberQualifiedName, candidate.ownerQualifiedName);
+      if (!owner) {
+        structuralReferences.push(makeOwnerReference(candidate, member));
+        continue;
+      }
+      edgeCandidates.push({
+        source: makeCodeNodeId(filePath, owner.qualifiedName),
+        target: makeCodeNodeId(filePath, member.qualifiedName),
+        kind: 'contains',
+        line: candidate.line,
+        col: candidate.col,
+      });
+    }
+
+    const symbolIds = new Set(symbols.map(symbol => makeCodeNodeId(filePath, symbol.qualifiedName)));
+    const seenEdges = new Set<string>();
+    const edges = edgeCandidates.filter(edge => {
+      if (!symbolIds.has(edge.source) || !symbolIds.has(edge.target)) return false;
+      const key = `${edge.source}\0${edge.target}\0${edge.kind}`;
+      if (seenEdges.has(key)) return false;
+      seenEdges.add(key);
+      return true;
+    });
+
+    return { symbols, references, importReferences, structuralReferences, edges };
   },
 });
 
@@ -1321,13 +1614,9 @@ EXTRACTOR_REGISTRY.set('kotlin', {
 
       if (type === 'import_header') {
         const id = findChild(node, 'identifier') ?? findChild(node, 'scoped_identifier');
-        references.push({
-          fromSymbolName: '<module>', fromSymbolId: `${filePath}:<module>`,
-          referenceName: id?.text ?? node.text.replace(/^import\s+/, '').trim(),
-          referenceKind: 'imports',
-          line: (node.startPosition?.row ?? 0) + 1, col: (node.startPosition?.column ?? 0) + 1,
-          filePath, language: lang,
-        });
+        references.push(makeImportReference(filePath,
+          id?.text ?? node.text.replace(/^import\s+/, '').trim(),
+          (node.startPosition?.row ?? 0) + 1, (node.startPosition?.column ?? 0) + 1));
         return;
       }
 
@@ -1403,7 +1692,7 @@ EXTRACTOR_REGISTRY.set('kotlin', {
     };
 
     walk((tree as AnyNode).rootNode, '');
-    return { symbols, references, edges: [] };
+    return { symbols, references, structuralReferences: [], edges: [] };
   },
 });
 
@@ -1453,13 +1742,9 @@ EXTRACTOR_REGISTRY.set('php', {
 
       if (type === 'namespace_use_declaration' || type === 'use_declaration') {
         const nameNode = findChild(node, 'qualified_name') ?? findChild(node, 'name');
-        references.push({
-          fromSymbolName: '<module>', fromSymbolId: `${filePath}:<module>`,
-          referenceName: nameNode?.text ?? node.text.replace(/^use\s+|;$/g, '').trim(),
-          referenceKind: 'imports',
-          line: (node.startPosition?.row ?? 0) + 1, col: (node.startPosition?.column ?? 0) + 1,
-          filePath, language: lang,
-        });
+        references.push(makeImportReference(filePath,
+          nameNode?.text ?? node.text.replace(/^use\s+|;$/g, '').trim(),
+          (node.startPosition?.row ?? 0) + 1, (node.startPosition?.column ?? 0) + 1));
         return;
       }
 
@@ -1511,11 +1796,14 @@ EXTRACTOR_REGISTRY.set('php', {
               if (c.type === 'use_declaration') {
                 const traitName = findChild(c, 'qualified_name') ?? findChild(c, 'name');
                 references.push({
-                  fromSymbolName: qn, fromSymbolId: `${filePath}:${qn}`,
+                  fromSymbolName: qn,
+                  fromSymbolId: `${filePath}:${qn}`,
                   referenceName: traitName?.text ?? c.text.replace(/^use\s+|;$/g, '').trim(),
                   referenceKind: 'mixes_in',
-                  line: (c.startPosition?.row ?? 0) + 1, col: (c.startPosition?.column ?? 0) + 1,
-                  filePath, language: lang,
+                  line: (c.startPosition?.row ?? 0) + 1,
+                  col: (c.startPosition?.column ?? 0) + 1,
+                  filePath,
+                  language: lang,
                 });
               }
             }
@@ -1537,7 +1825,7 @@ EXTRACTOR_REGISTRY.set('php', {
     };
 
     walk((tree as AnyNode).rootNode, '');
-    return { symbols, references, edges: [] };
+    return { symbols, references, structuralReferences: [], edges: [] };
   },
 });
 
@@ -1590,13 +1878,8 @@ EXTRACTOR_REGISTRY.set('c', {
       // #include → import reference
       if (type === 'preproc_include') {
         const path = findChild(node, 'string_literal') ?? findChild(node, 'system_lib_string');
-        references.push({
-          fromSymbolName: '<module>', fromSymbolId: `${filePath}:<module>`,
-          referenceName: (path?.text ?? '').replace(/[<>"]/g, ''),
-          referenceKind: 'imports',
-          line: (node.startPosition?.row ?? 0) + 1, col: (node.startPosition?.column ?? 0) + 1,
-          filePath, language: lang,
-        });
+        references.push(makeImportReference(filePath, (path?.text ?? '').replace(/[<>"]/g, ''),
+          (node.startPosition?.row ?? 0) + 1, (node.startPosition?.column ?? 0) + 1, 'header', lang));
         return;
       }
 
@@ -1682,7 +1965,7 @@ EXTRACTOR_REGISTRY.set('c', {
     };
 
     walk((tree as AnyNode).rootNode, '');
-    return { symbols, references, edges: [] };
+    return { symbols, references, structuralReferences: [], edges: [] };
   },
 });
 
@@ -1734,13 +2017,8 @@ EXTRACTOR_REGISTRY.set('cpp', {
       // #include → import
       if (type === 'preproc_include') {
         const path = findChild(node, 'string_literal') ?? findChild(node, 'system_lib_string');
-        references.push({
-          fromSymbolName: '<module>', fromSymbolId: `${filePath}:<module>`,
-          referenceName: (path?.text ?? '').replace(/[<>"]/g, ''),
-          referenceKind: 'imports',
-          line: (node.startPosition?.row ?? 0) + 1, col: (node.startPosition?.column ?? 0) + 1,
-          filePath, language: lang,
-        });
+        references.push(makeImportReference(filePath, (path?.text ?? '').replace(/[<>"]/g, ''),
+          (node.startPosition?.row ?? 0) + 1, (node.startPosition?.column ?? 0) + 1, 'header', lang));
         return;
       }
 
@@ -1847,7 +2125,7 @@ EXTRACTOR_REGISTRY.set('cpp', {
     };
 
     walk((tree as AnyNode).rootNode, '');
-    return { symbols, references, edges };
+    return { symbols, references, structuralReferences: [], edges };
   },
 });
 
@@ -1876,11 +2154,7 @@ EXTRACTOR_REGISTRY.set('dart', {
       const line = lines[i].trim();
       const importMatch = line.match(/^(?:import|export|part|part\s+of)\s+['"]([^'"]+)['"]/);
       if (importMatch) {
-        references.push({
-          fromSymbolName: '<file>', fromSymbolId: fileNodeId,
-          referenceName: importMatch[1], referenceKind: 'imports',
-          line: i + 1, col: 1, filePath, language: lang,
-        });
+        references.push(makeImportReference(filePath, importMatch[1], i + 1, 1));
       }
     }
 
@@ -2041,7 +2315,7 @@ EXTRACTOR_REGISTRY.set('dart', {
     };
 
     walk((tree as AnyNode).rootNode, '');
-    return { symbols, references, edges: [] };
+    return { symbols, references, structuralReferences: [], edges: [] };
   },
 });
 
@@ -2072,11 +2346,7 @@ EXTRACTOR_REGISTRY.set('svelte', {
       // import statements
       const importMatch = line.match(/^import\s+.+\s+from\s+['"]([^'"]+)['"]/);
       if (importMatch) {
-        references.push({
-          fromSymbolName: '<module>', fromSymbolId: `${filePath}:<module>`,
-          referenceName: importMatch[1], referenceKind: 'imports',
-          line: i + 1, col: 1, filePath, language: lang,
-        });
+        references.push(makeImportReference(filePath, importMatch[1], i + 1, 1));
         continue;
       }
 
@@ -2122,7 +2392,7 @@ EXTRACTOR_REGISTRY.set('svelte', {
     };
     walkAst((tree as AnyNode).rootNode);
 
-    return { symbols, references, edges: [] };
+    return { symbols, references, structuralReferences: [], edges: [] };
   },
 });
 
@@ -2158,11 +2428,7 @@ EXTRACTOR_REGISTRY.set('vue', {
       // import statements
       const importMatch = line.match(/^import\s+.+\s+from\s+['"]([^'"]+)['"]/);
       if (importMatch) {
-        references.push({
-          fromSymbolName: '<module>', fromSymbolId: `${filePath}:<module>`,
-          referenceName: importMatch[1], referenceKind: 'imports',
-          line: i + 1, col: 1, filePath, language: lang,
-        });
+        references.push(makeImportReference(filePath, importMatch[1], i + 1, 1));
         continue;
       }
 
@@ -2188,9 +2454,14 @@ EXTRACTOR_REGISTRY.set('vue', {
       const composableMatch = line.match(/(?:const|let)\s+(\w+)\s*=\s+(use\w+)\s*\(/);
       if (composableMatch) {
         references.push({
-          fromSymbolName: '<module>', fromSymbolId: `${filePath}:<module>`,
-          referenceName: composableMatch[2], referenceKind: 'calls',
-          line: i + 1, col: 1, filePath, language: lang,
+          fromSymbolName: '<module>',
+          fromSymbolId: `${filePath}:<module>`,
+          referenceName: composableMatch[2],
+          referenceKind: 'calls',
+          line: i + 1,
+          col: 1,
+          filePath,
+          language: lang,
         });
         continue;
       }
@@ -2212,7 +2483,7 @@ EXTRACTOR_REGISTRY.set('vue', {
         { decorators: ['script_setup'] }));
     }
 
-    return { symbols, references, edges: [] };
+    return { symbols, references, structuralReferences: [], edges: [] };
   },
 });
 
@@ -2240,11 +2511,7 @@ EXTRACTOR_REGISTRY.set('liquid', {
       // {% render 'snippet' %} / {% include 'snippet' %} → import
       const renderMatch = line.match(/\{%[-]?\s*(render|include)\s+['"]([^'"]+)['"]/);
       if (renderMatch) {
-        references.push({
-          fromSymbolName: '<module>', fromSymbolId: `${filePath}:<module>`,
-          referenceName: renderMatch[2], referenceKind: 'imports',
-          line: i + 1, col: 1, filePath, language: lang,
-        });
+        references.push(makeImportReference(filePath, renderMatch[2], i + 1, 1, renderMatch[1]));
         continue;
       }
 
@@ -2286,7 +2553,7 @@ EXTRACTOR_REGISTRY.set('liquid', {
       if (line.match(/\{%[-]?\s*endschema\s*[-]?%\}/)) { inSchema = false; continue; }
     }
 
-    return { symbols, references, edges: [] };
+    return { symbols, references, structuralReferences: [], edges: [] };
   },
 });
 
@@ -2328,11 +2595,7 @@ EXTRACTOR_REGISTRY.set('pascal', {
       if (usesMatch) {
         const units = usesMatch[1].replace(/;$/, '').split(',').map(s => s.trim()).filter(Boolean);
         for (const u of units) {
-          references.push({
-            fromSymbolName: '<module>', fromSymbolId: `${filePath}:<module>`,
-            referenceName: u, referenceKind: 'imports',
-            line: i + 1, col: 1, filePath, language: lang,
-          });
+          references.push(makeImportReference(filePath, u, i + 1, 1, 'unit'));
         }
         continue;
       }
@@ -2422,7 +2685,7 @@ EXTRACTOR_REGISTRY.set('pascal', {
       walkPascal(pascalRoot);
     }
 
-    return { symbols, references, edges: [] };
+    return { symbols, references, structuralReferences: [], edges: [] };
   },
 });
 
@@ -2475,13 +2738,9 @@ EXTRACTOR_REGISTRY.set('scala', {
       // import
       if (type === 'import_declaration') {
         const path = node.namedChildren?.[0];
-        references.push({
-          fromSymbolName: '<module>', fromSymbolId: `${filePath}:<module>`,
-          referenceName: path?.text ?? node.text.replace(/^import\s+/, '').trim(),
-          referenceKind: 'imports',
-          line: (node.startPosition?.row ?? 0) + 1, col: (node.startPosition?.column ?? 0) + 1,
-          filePath, language: lang,
-        });
+        references.push(makeImportReference(filePath,
+          path?.text ?? node.text.replace(/^import\s+/, '').trim(),
+          (node.startPosition?.row ?? 0) + 1, (node.startPosition?.column ?? 0) + 1));
         return;
       }
 
@@ -2589,7 +2848,7 @@ EXTRACTOR_REGISTRY.set('scala', {
     };
 
     walk((tree as AnyNode).rootNode, '');
-    return { symbols, references, edges: [] };
+    return { symbols, references, structuralReferences: [], edges: [] };
   },
 });
 
@@ -2694,13 +2953,10 @@ EXTRACTOR_REGISTRY.set('lua', {
         if (fnName === 'require') {
           const args = findChild(node, 'arguments') ?? findChild(node, 'argument_list');
           const strArg = args?.namedChildren?.[0] ?? findChild(node, 'string');
-          references.push({
-            fromSymbolName: '<module>', fromSymbolId: `${filePath}:<module>`,
-            referenceName: (strArg?.text ?? '').replace(/['"]/g, ''),
-            referenceKind: 'imports',
-            line: (node.startPosition?.row ?? 0) + 1, col: (node.startPosition?.column ?? 0) + 1,
-            filePath, language: lang,
-          });
+          references.push(makeImportReference(filePath,
+            (strArg?.text ?? '').replace(/['"]/g, ''),
+            (node.startPosition?.row ?? 0) + 1, (node.startPosition?.column ?? 0) + 1,
+            'require'));
           return;
         }
       }
@@ -2745,7 +3001,7 @@ EXTRACTOR_REGISTRY.set('lua', {
     };
 
     walk((tree as AnyNode).rootNode, '');
-    return { symbols, references, edges: [] };
+    return { symbols, references, structuralReferences: [], edges: [] };
   },
 });
 
@@ -2829,6 +3085,19 @@ EXTRACTOR_REGISTRY.set('luau', {
         return;
       }
 
+      // require
+      if (type === 'function_call' || type === 'call') {
+        const fnName = nodeName(node) ?? findChild(node, 'identifier')?.text;
+        if (fnName === 'require') {
+          const args = findChild(node, 'arguments') ?? findChild(node, 'argument_list');
+          const strArg = args?.namedChildren?.[0] ?? findChild(node, 'string');
+          references.push(makeImportReference(filePath,
+            (strArg?.text ?? '').replace(/['"]/g, ''),
+            (node.startPosition?.row ?? 0) + 1, (node.startPosition?.column ?? 0) + 1,
+            'require'));
+          return;
+        }
+      }
       // assignment: M.fn = function() or M = {}
       if (type === 'assignment_statement') {
         const lhs = node.namedChildren?.[0];
@@ -2860,7 +3129,7 @@ EXTRACTOR_REGISTRY.set('luau', {
     };
 
     walk((tree as AnyNode).rootNode, '');
-    return { symbols, references, edges: [] };
+    return { symbols, references, structuralReferences: [], edges: [] };
   },
 });
 
@@ -2870,33 +3139,339 @@ EXTRACTOR_REGISTRY.set('luau', {
 
 const OBJC_NODE_MAP: Record<string, string> = {
   'class_interface': 'class', 'class_implementation': 'class',
-  'protocol_declaration': 'interface', 'category_interface': 'class',
-  'category_implementation': 'class',
+  'protocol_declaration': 'protocol',
   'method_declaration': 'method', 'method_definition': 'method',
   'property_declaration': 'property',
 };
+
+interface ObjCCategoryIdentity {
+  isCategory: boolean;
+  name: string;
+  endIndex: number | null;
+}
+
+interface ObjCStructuralCandidate {
+  sourceQualifiedName: string;
+  sourceDeclarationKind: 'class' | 'protocol' | 'category';
+  targetName: string;
+  relationHint: 'extends' | 'implements' | 'decorates';
+  targetKindHints: Array<'class' | 'protocol'>;
+  line: number;
+  col: number;
+  priority: number;
+  compilationCondition?: string;
+}
+
+interface ObjCEdgeCandidate {
+  source: string;
+  target: string;
+  kind: string;
+  line: number;
+  col: number;
+}
+
+function objcDeclarationNameNode(node: AnyNode): AnyNode | null {
+  return (node.namedChildren ?? []).find((child: AnyNode) => child.type === 'identifier') ?? null;
+}
+
+/** 保留 tree-sitter-objc 无法放进 identifier field 的宏 category 原文。 */
+function objcCategoryIdentity(node: AnyNode, nameNode: AnyNode): ObjCCategoryIdentity {
+  const categoryNode = node.childForFieldName?.('category');
+  const text = node.text ?? '';
+  const localNameEnd = Math.max(0, (nameNode.endIndex ?? node.startIndex) - (node.startIndex ?? 0));
+  let cursor = localNameEnd;
+  while (/\s/.test(text[cursor] ?? '')) cursor++;
+  if (text[cursor] !== '(') {
+    return categoryNode?.text
+      ? { isCategory: true, name: categoryNode.text.trim(), endIndex: categoryNode.endIndex }
+      : { isCategory: false, name: '', endIndex: null };
+  }
+
+  const categoryStart = cursor;
+  let depth = 0;
+  for (; cursor < text.length; cursor++) {
+    if (text[cursor] === '(') depth++;
+    if (text[cursor] !== ')') continue;
+    depth--;
+    if (depth !== 0) continue;
+    return {
+      isCategory: true,
+      name: text.slice(categoryStart + 1, cursor).trim(),
+      endIndex: (node.startIndex ?? 0) + cursor + 1,
+    };
+  }
+  return { isCategory: false, name: '', endIndex: null };
+}
+
+function splitObjCTopLevel(value: string): string[] {
+  const parts: string[] = [];
+  let start = 0;
+  let angle = 0;
+  let paren = 0;
+  let bracket = 0;
+  let brace = 0;
+  for (let index = 0; index < value.length; index++) {
+    switch (value[index]) {
+      case '<': angle++; break;
+      case '>': angle = Math.max(0, angle - 1); break;
+      case '(': paren++; break;
+      case ')': paren = Math.max(0, paren - 1); break;
+      case '[': bracket++; break;
+      case ']': bracket = Math.max(0, bracket - 1); break;
+      case '{': brace++; break;
+      case '}': brace = Math.max(0, brace - 1); break;
+      case ',':
+        if (angle === 0 && paren === 0 && bracket === 0 && brace === 0) {
+          parts.push(value.slice(start, index).trim());
+          start = index + 1;
+        }
+        break;
+      default: break;
+    }
+  }
+  parts.push(value.slice(start).trim());
+  return parts.filter(Boolean);
+}
+
+function objcTypeNamesFromList(node: AnyNode): string[] {
+  const text = (node.text ?? '').trim().replace(/^</, '').replace(/>$/, '');
+  return splitObjCTopLevel(text).flatMap(part => {
+    const match = part.match(/^(?:(?:__covariant|__contravariant)\s+)?([A-Za-z_]\w*(?:\.[A-Za-z_]\w*)*)/);
+    return match ? [match[1]] : [];
+  });
+}
+
+function objcProtocolListNodes(
+  node: AnyNode,
+  nameNode: AnyNode,
+  superclassNode: AnyNode | null,
+  category: ObjCCategoryIdentity,
+): AnyNode[] {
+  const directLists = (node.namedChildren ?? []).filter((child: AnyNode) =>
+    child.type === 'protocol_reference_list' || child.type === 'parameterized_arguments');
+  if (node.type === 'protocol_declaration') return directLists;
+
+  const explicitLists = directLists.filter((child: AnyNode) => child.type === 'protocol_reference_list');
+  const parameterized = directLists.filter((child: AnyNode) => child.type === 'parameterized_arguments');
+  if (category.isCategory) {
+    const categoryEnd = category.endIndex ?? nameNode.endIndex ?? node.startIndex ?? 0;
+    return [...explicitLists, ...parameterized.filter((child: AnyNode) =>
+      (child.startIndex ?? 0) >= categoryEnd)];
+  }
+  if (superclassNode) {
+    const afterSuperclass = parameterized.filter((child: AnyNode) =>
+      (child.startIndex ?? 0) >= (superclassNode.endIndex ?? 0));
+    return [...explicitLists, ...(afterSuperclass.length > 1
+      ? [afterSuperclass[afterSuperclass.length - 1]]
+      : afterSuperclass)];
+  }
+  return [...explicitLists, ...parameterized.filter((child: AnyNode) =>
+    (child.startIndex ?? 0) >= (nameNode.endIndex ?? 0))];
+}
+
+const OBJC_DECLARATOR_NODE_TYPES = new Set([
+  'array_declarator',
+  'attributed_declarator',
+  'block_pointer_declarator',
+  'function_declarator',
+  'init_declarator',
+  'parenthesized_declarator',
+  'pointer_declarator',
+]);
+
+/** 沿嵌套 C declarator 找到最终的 property identifier。 */
+function objcDeclaratorIdentifier(node: AnyNode): string | null {
+  if (node.type === 'identifier' || node.type === 'field_identifier') {
+    return /^[A-Za-z_]\w*$/.test(node.text ?? '') ? node.text : null;
+  }
+  const fieldDeclarator = node.childForFieldName?.('declarator');
+  if (fieldDeclarator && fieldDeclarator !== node) {
+    const name = objcDeclaratorIdentifier(fieldDeclarator);
+    if (name) return name;
+  }
+  for (const child of (node.namedChildren ?? [])) {
+    if (!OBJC_DECLARATOR_NODE_TYPES.has(child.type)) continue;
+    const name = objcDeclaratorIdentifier(child);
+    if (name) return name;
+  }
+  for (const child of (node.namedChildren ?? [])) {
+    if (child.type !== 'identifier' && child.type !== 'field_identifier') continue;
+    const name = objcDeclaratorIdentifier(child);
+    if (name) return name;
+  }
+  return null;
+}
+
+function objcFallbackPropertyNames(node: AnyNode): string[] {
+  let declaration = (node.text ?? '').replace(/^\s*@property\b/, '').trim().replace(/;\s*$/, '');
+  if (declaration.startsWith('(')) {
+    let depth = 0;
+    for (let index = 0; index < declaration.length; index++) {
+      if (declaration[index] === '(') depth++;
+      if (declaration[index] !== ')') continue;
+      depth--;
+      if (depth !== 0) continue;
+      declaration = declaration.slice(index + 1).trim();
+      break;
+    }
+  }
+  return splitObjCTopLevel(declaration).flatMap(part => {
+    const block = part.match(/\(\s*\^\s*([A-Za-z_]\w*)/);
+    if (block) return [block[1]];
+    const array = part.match(/([A-Za-z_]\w*)\s*\[/);
+    if (array) return [array[1]];
+    const parenthesized = part.match(/\(\s*([A-Za-z_]\w*)\s*\)\s*$/);
+    if (parenthesized) return [parenthesized[1]];
+    const identifiers = [...part.matchAll(/[A-Za-z_]\w*/g)];
+    return identifiers.length > 0 ? [identifiers[identifiers.length - 1][0]] : [];
+  });
+}
+
+function objcPropertyNames(node: AnyNode): string[] {
+  const names: string[] = [];
+  for (const declaration of (node.namedChildren ?? [])) {
+    if (declaration.type === 'struct_declaration') {
+      for (const declarator of (declaration.namedChildren ?? [])) {
+        if (declarator.type !== 'struct_declarator') continue;
+        const name = objcDeclaratorIdentifier(declarator);
+        if (name) names.push(name);
+      }
+    } else if (declaration.type === 'atomic_declaration') {
+      const name = objcDeclaratorIdentifier(declaration);
+      if (name) names.push(name);
+    }
+  }
+  return [...new Set(names.length > 0 ? names : objcFallbackPropertyNames(node))];
+}
+
+function objcMethodSelector(node: AnyNode): string | null {
+  const parameters = (node.namedChildren ?? [])
+    .filter((child: AnyNode) => child.type === 'method_parameter')
+    .sort((left: AnyNode, right: AnyNode) => (left.startIndex ?? 0) - (right.startIndex ?? 0));
+  if (parameters.length === 0) {
+    return (node.namedChildren ?? []).find((child: AnyNode) => child.type === 'identifier')?.text ?? null;
+  }
+  const text = node.text ?? '';
+  const nodeStart = node.startIndex ?? 0;
+  let previousEnd = nodeStart;
+  const pieces: string[] = [];
+  for (const parameter of parameters) {
+    const gap = text.slice(
+      Math.max(0, previousEnd - nodeStart),
+      Math.max(0, (parameter.startIndex ?? nodeStart) - nodeStart),
+    );
+    const identifiers = [...gap.matchAll(/[A-Za-z_]\w*/g)];
+    const piece = identifiers[identifiers.length - 1]?.[0];
+    if (!piece) return null;
+    pieces.push(`${piece}:`);
+    previousEnd = parameter.endIndex ?? previousEnd;
+  }
+  return pieces.join('');
+}
+
+function objcCompilationConditions(sourceCode: string): Map<number, string> {
+  const conditions = new Map<number, string>();
+  const stack: string[] = [];
+  const lines = sourceCode.split(/\r?\n/);
+  for (let index = 0; index < lines.length; index++) {
+    const directive = lines[index].trim();
+    if (/^#\s*(?:if|ifdef|ifndef)\b/.test(directive)) {
+      stack.push(directive);
+      continue;
+    }
+    if (/^#\s*(?:elif|elifdef|elifndef)\b/.test(directive) || /^#\s*else\b/.test(directive)) {
+      if (stack.length > 0) stack[stack.length - 1] = directive;
+      continue;
+    }
+    if (/^#\s*endif\b/.test(directive)) {
+      stack.pop();
+      continue;
+    }
+    if (stack.length > 0) conditions.set(index + 1, stack.join('\n'));
+  }
+  return conditions;
+}
+
+function objcSwiftRuntimeIdentity(sourceCode: string, node: AnyNode): string | null {
+  const start = Math.max(0, (node.startIndex ?? 0) - 1024);
+  const prefix = sourceCode.slice(start, node.startIndex ?? 0);
+  const matches = [...prefix.matchAll(/SWIFT_CLASS\s*\(\s*"([^"]+)"\s*\)/g)];
+  const match = matches[matches.length - 1];
+  if (!match || match.index === undefined) return null;
+  const trailing = prefix.slice(match.index + match[0].length);
+  if (/@(?:interface|protocol|implementation)\b/.test(trailing)) return null;
+  return match[1];
+}
+
+function extractObjCImportReferences(
+  sourceCode: string,
+  filePath: string,
+): ImportReference[] {
+  const references: ImportReference[] = [];
+  for (const [index, sourceLine] of sourceCode.split(/\r?\n/).entries()) {
+    const line = sourceLine.trim();
+    const header = line.match(/^#\s*(import|include)\s*(?:<([^>]+)>|"([^"]+)"|([A-Za-z_]\w*))/);
+    if (header) {
+      const rawTarget = header[2] ?? header[3] ?? header[4];
+      if (!rawTarget) continue;
+      references.push(makeStrictImportReference(
+        filePath,
+        rawTarget,
+        index + 1,
+        Math.max(1, sourceLine.search(/\S/) + 1),
+        header[1] === 'import' ? 'objc-import' : 'include',
+      ));
+      continue;
+    }
+    const module = line.match(/^@import\s+([A-Za-z_]\w*(?:\.[A-Za-z_]\w*)*)\s*;/);
+    if (module) {
+      references.push(makeStrictImportReference(
+        filePath,
+        module[1],
+        index + 1,
+        Math.max(1, sourceLine.search(/\S/) + 1),
+        'module',
+      ));
+    }
+  }
+  return references;
+}
 
 EXTRACTOR_REGISTRY.set('objc', {
   language: 'objc' as Language, grammarName: 'objc', nodeTypeMap: OBJC_NODE_MAP,
   extract(tree, sourceCode, filePath) {
     const lang = 'objc' as Language;
-    const symbols: import('../tree-sitter-types.js').ExtractedSymbol[] = [];
-    const references: import('../tree-sitter-types.js').ExtractedReference[] = [];
+    type ObjCSymbol = import('../tree-sitter-types.js').ExtractedSymbol;
+    const symbolCandidates = new Map<string, { symbol: ObjCSymbol; priority: number }>();
+    const importReferences = extractObjCImportReferences(sourceCode, filePath);
+    const references: ExtractedReference[] = importReferences.map(reference => ({
+      fromSymbolName: '<file>',
+      fromSymbolId: makeFileNodeId(filePath),
+      referenceName: reference.rawTarget,
+      referenceKind: 'imports',
+      line: reference.line,
+      col: reference.column,
+      filePath,
+      language: lang,
+    }));
     const fileNodeId = makeFileNodeId(filePath);
+    const structuralCandidates = new Map<string, ObjCStructuralCandidate>();
+    const structuralReferences: StructuralTypeReference[] = [];
+    const edgeCandidates: ObjCEdgeCandidate[] = [];
+    const compilationConditions = objcCompilationConditions(sourceCode);
 
-    // #import / @import from source lines (tree-sitter coverage varies)
-    const lines = sourceCode.split('\n');
-    for (let i = 0; i < lines.length; i++) {
-      const line = lines[i].trim();
-      const importMatch = line.match(/^(?:#import|@import|#include)\s+[<"]([^>"]+)[>"]/);
-      if (importMatch) {
-        references.push({
-          fromSymbolName: '<file>', fromSymbolId: fileNodeId,
-          referenceName: importMatch[1], referenceKind: 'imports',
-          line: i + 1, col: 1, filePath, language: lang,
-        });
+    const emitSymbol = (symbol: ObjCSymbol, priority: number): void => {
+      const existing = symbolCandidates.get(symbol.qualifiedName);
+      if (!existing || priority > existing.priority) {
+        symbolCandidates.set(symbol.qualifiedName, { symbol, priority });
       }
-    }
+    };
+
+    const emitStructuralCandidate = (candidate: ObjCStructuralCandidate): void => {
+      const key = [candidate.sourceQualifiedName, candidate.relationHint, candidate.targetName].join('\0');
+      const existing = structuralCandidates.get(key);
+      if (!existing || candidate.priority > existing.priority) structuralCandidates.set(key, candidate);
+    };
 
     const walk = (node: AnyNode, parent: string): void => {
       const type = node.type;
@@ -2937,102 +3512,131 @@ EXTRACTOR_REGISTRY.set('objc', {
           });
         }
       }
-
-      // @interface ClassName (Category) / @interface ClassName / @implementation / @protocol
       if (type === 'class_interface' || type === 'class_implementation' ||
-          type === 'protocol_declaration' || type === 'category_interface' ||
-          type === 'category_implementation') {
-        const name = nodeName(node);
-        if (!name) { walkChildren(node, parent); return; }
+          type === 'protocol_declaration') {
+        const nameNode = objcDeclarationNameNode(node);
+        if (!nameNode?.text) { walkChildren(node, parent); return; }
 
-        // detect category: ClassName (CategoryName)
-        const categoryName = findChild(node, 'category_name')?.text;
-        const displayName = categoryName ? `${name} (${categoryName})` : name;
+        const category: ObjCCategoryIdentity = type === 'protocol_declaration'
+          ? { isCategory: false, name: '', endIndex: null }
+          : objcCategoryIdentity(node, nameNode);
+        const displayName = category.isCategory
+          ? `${nameNode.text} (${category.name})`
+          : nameNode.text;
         const qn = parent ? `${parent}.${displayName}` : displayName;
+        const isProtocol = type === 'protocol_declaration';
+        const isImplementation = type === 'class_implementation';
+        const declarationPriority = isImplementation ? 20 : 30;
+        const decorators = category.isCategory ? ['category'] : [];
+        decorators.push(isImplementation ? 'implementation' : 'interface');
 
-        const kind = type === 'protocol_declaration' ? 'interface' : 'class';
-        const decos: string[] = [];
-        if (categoryName) decos.push('category');
-        if (type === 'class_implementation' || type === 'category_implementation') decos.push('implementation');
+        const swiftRuntimeIdentity = !category.isCategory && !isProtocol
+          ? objcSwiftRuntimeIdentity(sourceCode, node)
+          : null;
+        emitSymbol(sym(isProtocol ? 'protocol' : 'class', displayName, qn, filePath, lang, node, {
+          isExported: true, decorators, signature: firstLine(node),
+          ...(swiftRuntimeIdentity
+            ? { metadata: { swiftRuntimeIdentity } }
+            : {}),
+        }), declarationPriority);
 
-        // 继承/实现引用
-        // @interface B : A <P, Q> — superclass 字段 = extends; 协议列表 = implements
-        if (type === 'class_interface') {
-          const sup = node.childForFieldName?.('superclass');
-          if (sup?.text && sup.text !== name) {
-            references.push({
-              fromSymbolName: '<file>', fromSymbolId: fileNodeId,
-              referenceName: sup.text, referenceKind: 'extends',
-              line: (sup.startPosition?.row ?? 0) + 1, col: (sup.startPosition?.column ?? 0) + 1,
-              filePath, language: lang,
+        const conditionFor = (candidateNode: AnyNode): string | undefined =>
+          compilationConditions.get((candidateNode.startPosition?.row ?? 0) + 1);
+        const superclassNode = isProtocol ? null : node.childForFieldName?.('superclass') ?? null;
+        if (!category.isCategory && superclassNode?.text) {
+          emitStructuralCandidate({
+            sourceQualifiedName: qn,
+            sourceDeclarationKind: 'class',
+            targetName: superclassNode.text,
+            relationHint: 'extends',
+            targetKindHints: ['class'],
+            line: (superclassNode.startPosition?.row ?? 0) + 1,
+            col: (superclassNode.startPosition?.column ?? 0) + 1,
+            priority: declarationPriority,
+            compilationCondition: conditionFor(superclassNode),
+          });
+        }
+        if (category.isCategory) {
+          emitStructuralCandidate({
+            sourceQualifiedName: qn,
+            sourceDeclarationKind: 'category',
+            targetName: nameNode.text,
+            relationHint: 'decorates',
+            targetKindHints: ['class'],
+            line: (nameNode.startPosition?.row ?? 0) + 1,
+            col: (nameNode.startPosition?.column ?? 0) + 1,
+            priority: declarationPriority,
+            compilationCondition: conditionFor(nameNode),
+          });
+        }
+        for (const list of objcProtocolListNodes(node, nameNode, superclassNode, category)) {
+          for (const protocolName of objcTypeNamesFromList(list)) {
+            emitStructuralCandidate({
+              sourceQualifiedName: qn,
+              sourceDeclarationKind: isProtocol ? 'protocol' : category.isCategory ? 'category' : 'class',
+              targetName: protocolName,
+              relationHint: isProtocol ? 'extends' : 'implements',
+              targetKindHints: ['protocol'],
+              line: (list.startPosition?.row ?? 0) + 1,
+              col: (list.startPosition?.column ?? 0) + 1,
+              priority: declarationPriority,
+              compilationCondition: conditionFor(list),
             });
           }
-          const protoArgs = node.namedChildren?.find((c: AnyNode) => c.type === 'parameterized_arguments');
-          for (const tn of (protoArgs?.namedChildren ?? [])) {
-            const tid = tn.namedChildren?.find((c: AnyNode) => c.type === 'type_identifier');
-            const pName = tid?.text ?? tn.text;
-            if (pName && pName !== name) {
-              references.push({
-                fromSymbolName: '<file>', fromSymbolId: fileNodeId,
-                referenceName: pName, referenceKind: 'implements',
-                line: (tn.startPosition?.row ?? 0) + 1, col: (tn.startPosition?.column ?? 0) + 1,
-                filePath, language: lang,
-              });
-            }
-          }
         }
-        // @protocol P <NSObject> — 超协议 → extends
-        if (type === 'protocol_declaration') {
-          const protoRefs = node.namedChildren?.find((c: AnyNode) => c.type === 'protocol_reference_list');
-          for (const idn of (protoRefs?.namedChildren ?? [])) {
-            if (idn.type === 'identifier' && idn.text !== name) {
-              references.push({
-                fromSymbolName: '<file>', fromSymbolId: fileNodeId,
-                referenceName: idn.text, referenceKind: 'extends',
-                line: (idn.startPosition?.row ?? 0) + 1, col: (idn.startPosition?.column ?? 0) + 1,
-                filePath, language: lang,
-              });
-            }
-          }
-        }
-
-        symbols.push(sym(kind, displayName, qn, filePath, lang, node, {
-          isExported: true, decorators: decos, signature: firstLine(node),
-        }));
         walkChildren(node, qn);
         return;
       }
 
-      // method: - (void)instanceMethod or + (void)classMethod
       if (type === 'method_declaration' || type === 'method_definition') {
-        // method name from selector
-        const selector = findChild(node, 'selector') ?? findChild(node, 'keyword_selector');
-        const name = selector?.text ?? nodeName(node) ?? '<method>';
+        const name = objcMethodSelector(node);
+        if (!name) return;
         const qn = parent ? `${parent}.${name}` : name;
-
-        // - or + prefix for instance vs class method
         const text = (node.text ?? '').trimStart();
         const isStatic = text.startsWith('+');
         const isInstance = text.startsWith('-');
 
-        symbols.push(sym('method', name, qn, filePath, lang, node, {
+        emitSymbol(sym('method', name, qn, filePath, lang, node, {
           isStatic, visibility: 'public',
           decorators: isInstance ? ['instance'] : isStatic ? ['class_method'] : [],
           signature: firstLine(node),
-        }));
-        // 继续遍历方法体 — 收集 [self go] 等 message_expression 调用
+        }), type === 'method_declaration' ? 30 : 20);
+        if (parent) {
+          edgeCandidates.push({
+            source: makeCodeNodeId(filePath, parent),
+            target: makeCodeNodeId(filePath, qn),
+            kind: 'contains',
+            line: (node.startPosition?.row ?? 0) + 1,
+            col: (node.startPosition?.column ?? 0) + 1,
+          });
+        }
+        // 方法体继续遍历，收集 message_expression / call_expression。
         walkChildren(node, qn);
         return;
       }
 
-      // @property
       if (type === 'property_declaration') {
-        const name = nodeName(node);
-        if (!name) { walkChildren(node, parent); return; }
-        const qn = parent ? `${parent}.${name}` : name;
-        symbols.push(sym('property', name, qn, filePath, lang, node, {
-          visibility: 'public', signature: firstLine(node),
-        }));
+        const attributes = findChild(node, 'property_attributes_declaration');
+        const isStatic = attributes?.namedChildren?.some((child: AnyNode) =>
+          child.type === 'property_attribute' && child.text === 'class') ?? false;
+        for (const name of objcPropertyNames(node)) {
+          const qn = parent ? `${parent}.${name}` : name;
+          emitSymbol(sym('property', name, qn, filePath, lang, node, {
+            isStatic,
+            visibility: 'public',
+            decorators: isStatic ? ['class_property'] : [],
+            signature: firstLine(node),
+          }), 30);
+          if (parent) {
+            edgeCandidates.push({
+              source: makeCodeNodeId(filePath, parent),
+              target: makeCodeNodeId(filePath, qn),
+              kind: 'contains',
+              line: (node.startPosition?.row ?? 0) + 1,
+              col: (node.startPosition?.column ?? 0) + 1,
+            });
+          }
+        }
         return;
       }
 
@@ -3044,7 +3648,106 @@ EXTRACTOR_REGISTRY.set('objc', {
     };
 
     walk((tree as AnyNode).rootNode, '');
-    return { symbols, references, edges: [] };
+    // Objective-C headers commonly expose C declarations beside classes. Reuse
+    // the compatible C AST surface so content-aware routing does not erase them.
+    if (/\.h$/i.test(filePath)) {
+      const cSurface = EXTRACTOR_REGISTRY.get('c')?.extract(tree, sourceCode, filePath);
+      for (const symbol of cSurface?.symbols ?? []) emitSymbol(symbol, 10);
+    }
+    const symbols = [...symbolCandidates.values()].map(candidate => candidate.symbol);
+    const symbolsByQualifiedName = new Map(symbols.map(symbol => [symbol.qualifiedName, symbol]));
+    const nominalSymbols = symbols.filter(symbol =>
+      (symbol.kind === 'class' || symbol.kind === 'protocol') && !symbol.decorators.includes('category'));
+    const nominalByName = new Map<string, ObjCSymbol[]>();
+    for (const symbol of nominalSymbols) {
+      const candidates = nominalByName.get(symbol.name) ?? [];
+      candidates.push(symbol);
+      nominalByName.set(symbol.name, candidates);
+    }
+
+    const resolveLocalNominal = (candidate: ObjCStructuralCandidate): ObjCSymbol | null => {
+      const exact = symbolsByQualifiedName.get(candidate.targetName);
+      const candidates = exact ? [exact] : candidate.targetName.includes('.')
+        ? []
+        : nominalByName.get(candidate.targetName) ?? [];
+      const matching = candidates.filter(symbol => candidate.targetKindHints.includes(
+        symbol.kind as 'class' | 'protocol'));
+      return matching.length === 1 ? matching[0] : null;
+    };
+
+    const moduleHints = [...new Set(importReferences.flatMap(reference => {
+      if (reference.importKind === 'module') return [reference.rawTarget.split('.')[0]];
+      return reference.rawTarget.includes('/') ? [reference.rawTarget.split('/')[0]] : [];
+    }).filter(Boolean))];
+
+    for (const candidate of structuralCandidates.values()) {
+      const source = symbolsByQualifiedName.get(candidate.sourceQualifiedName);
+      if (!source) continue;
+      const target = resolveLocalNominal(candidate);
+      if (target) {
+        edgeCandidates.push({
+          source: makeCodeNodeId(filePath, source.qualifiedName),
+          target: makeCodeNodeId(filePath, target.qualifiedName),
+          kind: candidate.relationHint,
+          line: candidate.line,
+          col: candidate.col,
+        });
+        continue;
+      }
+
+      const anchorNodeId = makeCodeNodeId(filePath, source.qualifiedName);
+      const keyInput = {
+        normalizedOriginPath: filePath,
+        anchorNodeId,
+        relationHint: candidate.relationHint,
+        edgeOrientation: 'anchor-to-target' as const,
+        rawTargetName: candidate.targetName,
+        line: candidate.line,
+        column: candidate.col,
+      };
+      structuralReferences.push({
+        kind: 'type',
+        refKey: makeStructuralReferenceKey(keyInput),
+        anchorNodeId,
+        anchorQualifiedName: source.qualifiedName,
+        rawTargetName: candidate.targetName,
+        sourceDeclarationKind: candidate.sourceDeclarationKind,
+        relationHint: candidate.relationHint,
+        edgeOrientation: 'anchor-to-target',
+        lookupScope: 'project-and-external',
+        targetKindHints: candidate.targetKindHints,
+        targetLanguageHints: ['objc', 'swift'],
+        moduleHints,
+        targetFileHints: [],
+        origin: { filePath, language: 'objc', line: candidate.line, column: candidate.col },
+        ...(candidate.compilationCondition
+          ? { compilationCondition: candidate.compilationCondition }
+          : {}),
+        evidenceProvenance: 'tree-sitter',
+      });
+    }
+
+    const symbolIds = new Set(symbols.map(symbol => makeCodeNodeId(filePath, symbol.qualifiedName)));
+    const seenEdges = new Set<string>();
+    const edges = edgeCandidates.filter(edge => {
+      if (!symbolIds.has(edge.source) || !symbolIds.has(edge.target)) return false;
+      const key = `${edge.source}\0${edge.target}\0${edge.kind}`;
+      if (seenEdges.has(key)) return false;
+      seenEdges.add(key);
+      return true;
+    });
+    const seenReferences = new Set<string>();
+    return {
+      symbols,
+      references,
+      importReferences,
+      structuralReferences: structuralReferences.filter(reference => {
+        if (seenReferences.has(reference.refKey)) return false;
+        seenReferences.add(reference.refKey);
+        return true;
+      }),
+      edges,
+    };
   },
 });
 
@@ -3064,26 +3767,8 @@ export function getSupportedLanguages(): Language[] {
   return [...EXTRACTOR_REGISTRY.keys()];
 }
 
-// 文件扩展名 → 语言映射
-const EXTENSION_TO_LANGUAGE: Record<string, Language> = {
-  '.ts': 'typescript', '.tsx': 'tsx', '.js': 'javascript', '.jsx': 'jsx',
-  '.mjs': 'javascript', '.cjs': 'javascript', '.mts': 'typescript', '.cts': 'typescript',
-  '.py': 'python', '.pyi': 'python',
-  '.go': 'go', '.rs': 'rust', '.java': 'java',
-  '.c': 'c', '.h': 'c', '.cpp': 'cpp', '.cc': 'cpp', '.cxx': 'cpp', '.hpp': 'cpp', '.hh': 'cpp',
-  '.cs': 'csharp', '.php': 'php', '.rb': 'ruby',
-  '.swift': 'swift', '.kt': 'kotlin', '.kts': 'kotlin', '.dart': 'dart', '.luau': 'luau',
-  '.svelte': 'svelte', '.vue': 'vue', '.liquid': 'liquid',
-  '.pas': 'pascal', '.scala': 'scala', '.sc': 'scala',
-  '.lua': 'lua', '.m': 'objc', '.mm': 'objc',
-  '.yaml': 'yaml', '.yml': 'yaml', '.twig': 'twig',
-  '.xml': 'xml', '.properties': 'properties',
-};
-
 export function detectLanguageFromPath(filePath: string): Language {
-  const normalized = filePath.replace(/\\/g, '/');
-  const ext = normalized.substring(normalized.lastIndexOf('.')).toLowerCase();
-  return EXTENSION_TO_LANGUAGE[ext] ?? 'unknown';
+  return SOURCE_EXTENSION_TO_LANGUAGE[sourceExtension(filePath)] ?? 'unknown';
 }
 
 // file-level-only 语言 (无 tree-sitter grammar, 但仍索引文件级)

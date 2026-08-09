@@ -117,4 +117,35 @@ describe('resolveCodeReferences', () => {
     const count = db.prepare("SELECT COUNT(*) n FROM edges WHERE provenance = 'code-resolution'").get() as { n: number };
     expect(count.n).toBe(second.edgesCreated);
   });
+
+  it('reports only persisted edges and unresolved references', () => {
+    const result = resolveCodeReferences(db, { projectPath: projectRoot });
+    expect(result).toMatchObject({
+      edgesCreated: 3,
+      importsEdges: 1,
+      callsEdges: 2,
+      unresolvedCount: 3,
+    });
+    expect(result.edges).toHaveLength(result.edgesCreated);
+  });
+
+  it('can participate in a caller-owned transaction without nesting BEGIN', () => {
+    const before = db.prepare(
+      "SELECT COUNT(*) n FROM edges WHERE provenance = 'code-resolution'"
+    ).get() as { n: number };
+    db.exec('BEGIN IMMEDIATE');
+    try {
+      const result = resolveCodeReferences(db, {
+        projectPath: projectRoot,
+        transactionMode: 'caller-owned',
+      });
+      expect(result.edgesCreated).toBe(3);
+    } finally {
+      db.exec('ROLLBACK');
+    }
+    const after = db.prepare(
+      "SELECT COUNT(*) n FROM edges WHERE provenance = 'code-resolution'"
+    ).get() as { n: number };
+    expect(after.n).toBe(before.n);
+  });
 });

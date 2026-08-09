@@ -2,8 +2,9 @@
 // TypeScript/JavaScript 语言提取器
 // 参考: codegraph/src/extraction/languages/typescript.ts
 
-import type { LanguageExtractor, LanguageExtractionResult, ExtractedSymbol, ExtractedReference } from '../tree-sitter-types.js';
+import { makeImportReference, type LanguageExtractor, type LanguageExtractionResult, type ExtractedSymbol, type ExtractedReference } from '../tree-sitter-types.js';
 import type { Language } from '../../../db/types.js';
+import type { ImportReference } from '../../../resolution/structural-reference.js';
 import { makeCodeNodeId, makeFileNodeId } from '../tree-sitter-types.js';
 
 // TypeScript tree-sitter 节点类型 → 符号 kind 映射
@@ -273,6 +274,7 @@ function traverse(
   language: Language,
   symbols: ExtractedSymbol[],
   references: ExtractedReference[],
+  importReferences: ImportReference[],
   edges: LanguageExtractionResult['edges'],
   parentQualifiedName: string,
 ): void {
@@ -293,7 +295,7 @@ function traverse(
       if (name) {
         const qualifiedName = pushSymbol(node, 'function', name, filePath, language, parentQualifiedName, symbols, edges);
         if (qualifiedName) {
-          traverseChildren(value, filePath, language, symbols, references, edges, qualifiedName);
+          traverseChildren(value, filePath, language, symbols, references, importReferences, edges, qualifiedName);
         }
       }
     }
@@ -301,7 +303,7 @@ function traverse(
 
   // arrow_function 自身永不建符号 (参数名会被误取)
   if (node.type === 'arrow_function' || node.type === 'function_expression') {
-    traverseChildren(node, filePath, language, symbols, references, edges, parentQualifiedName);
+    traverseChildren(node, filePath, language, symbols, references, importReferences, edges, parentQualifiedName);
     return;
   }
 
@@ -318,11 +320,11 @@ function traverse(
       for (const child of childFields) {
         // body 块内的声明作为子符号
         if (['class_body', 'object', 'block', 'declaration_list', 'statement_block'].includes(child.type)) {
-          traverseChildren(child, filePath, language, symbols, references, edges, qualifiedName);
+          traverseChildren(child, filePath, language, symbols, references, importReferences, edges, qualifiedName);
         } else if (TS_NODE_TYPE_MAP[child.type] || child.type === 'variable_declarator') {
-          traverse(child, filePath, language, symbols, references, edges, qualifiedName);
+          traverse(child, filePath, language, symbols, references, importReferences, edges, qualifiedName);
         } else {
-          traverseChildren(child, filePath, language, symbols, references, edges, qualifiedName);
+          traverseChildren(child, filePath, language, symbols, references, importReferences, edges, qualifiedName);
         }
       }
       return;
@@ -333,20 +335,24 @@ function traverse(
   if (node.type === 'import_statement') {
     const sourceNode = node.childForFieldName?.('source');
     if (sourceNode) {
+      const rawTarget = sourceNode.text.replace(/['"]/g, '');
       references.push({
         fromSymbolName: '<file>',
         fromSymbolId: makeFileNodeId(filePath),
-        referenceName: sourceNode.text.replace(/['"]/g, ''),
+        referenceName: rawTarget,
         referenceKind: 'imports',
         line: startRow,
         col: node.startPosition.column + 1,
         filePath,
         language,
       });
+      importReferences.push(makeImportReference(
+        filePath, rawTarget, startRow, node.startPosition.column + 1,
+      ));
     }
   }
 
-  traverseChildren(node, filePath, language, symbols, references, edges, parentQualifiedName);
+  traverseChildren(node, filePath, language, symbols, references, importReferences, edges, parentQualifiedName);
 }
 
 function traverseChildren(
@@ -355,11 +361,12 @@ function traverseChildren(
   language: Language,
   symbols: ExtractedSymbol[],
   references: ExtractedReference[],
+  importReferences: ImportReference[],
   edges: LanguageExtractionResult['edges'],
   parentQualifiedName: string,
 ): void {
   for (const child of node.namedChildren ?? []) {
-    traverse(child, filePath, language, symbols, references, edges, parentQualifiedName);
+    traverse(child, filePath, language, symbols, references, importReferences, edges, parentQualifiedName);
   }
 }
 
@@ -370,13 +377,14 @@ function extractTypeScriptFamily(
 ): LanguageExtractionResult {
     const symbols: ExtractedSymbol[] = [];
     const references: ExtractedReference[] = [];
+    const importReferences: ImportReference[] = [];
     const edges: LanguageExtractionResult['edges'] = [];
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const rootNode = (tree as any).rootNode;
-    traverse(rootNode, filePath, language, symbols, references, edges, '');
+    traverse(rootNode, filePath, language, symbols, references, importReferences, edges, '');
 
-    return { symbols, references, edges };
+    return { symbols, references, importReferences, structuralReferences: [], edges };
 }
 
 export const typescriptExtractor: LanguageExtractor = {

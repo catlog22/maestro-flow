@@ -34,7 +34,7 @@ export function extractSpec(
   const now = Date.now();
 
   if (!existsSync(specsDir)) {
-    return { nodes, edges, fileRecord: createEmptyFileRecord(specsDir) };
+    return { nodes, edges, fileRecord: createEmptyFileRecord(specsDir), references: [], structuralReferences: [] };
   }
 
   const specFiles = readdirSync(specsDir)
@@ -103,6 +103,8 @@ export function extractSpec(
   return {
     nodes,
     edges,
+    references: [],
+    structuralReferences: [],
     fileRecord: {
       path: specsDir,
       contentHash: '',

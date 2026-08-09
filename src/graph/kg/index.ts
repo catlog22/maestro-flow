@@ -1,6 +1,7 @@
 // src/graph/kg/index.ts — MaestroGraph 模块导出
 
-export { MaestroGraph } from './engine.js';
+export { MaestroGraph, makeNodeResolutionErrorPayload } from './engine.js';
+export type { MaestroGraphHealth, NodeResolution, NodeResolutionErrorPayload } from './engine.js';
 export { KgDatabaseConnection, KgQueryBuilder, getKgDatabasePath, sanitizeFtsQuery, makeNodeId, validateNodeId } from './db/index.js';
 export type {
   UnifiedNode, UnifiedEdge, FileRecord, ExtractionResult,
@@ -14,7 +15,8 @@ export type {
 
 // Extraction
 export { extractCode, forEachCodeExtractionResult } from './extraction/code/code-extractor.js';
-export { syncKnowledgeGraph } from './extraction/orchestrator.js';
+export { CodegraphSyncCommittedError, syncKnowledgeGraph } from './extraction/orchestrator.js';
+export type { CodegraphSyncOptions, SyncKnowledgeGraphOptions } from './extraction/orchestrator.js';
 export { extractDomain } from './extraction/knowledge/domain-extractor.js';
 export { extractSpec } from './extraction/knowledge/spec-extractor.js';
 export { extractWiki } from './extraction/knowledge/wiki-extractor.js';
@@ -30,7 +32,8 @@ export { buildScanScope, MAESTRO_IGNORE_FILE } from './extraction/code/scan-scop
 export { getExtractor, getSupportedLanguages, detectLanguageFromPath } from './extraction/code/languages/index.js';
 
 // Resolution
-export { resolveKnowledgeEdges, expandRelated } from './resolution/index.js';
+export { resolveKnowledgeEdges, resolveCodeStructuralReferences, expandRelated } from './resolution/index.js';
+export type { CodeStructuralResolutionResult } from './resolution/index.js';
 export { matchReference, tokenize } from './resolution/name-matcher.js';
 export { ImportResolver } from './resolution/import-resolver.js';
 export { runCallbackSynthesis } from './resolution/callback-synthesizer.js';
@@ -38,7 +41,27 @@ export { getRegisteredFrameworks, detectFrameworks } from './resolution/framewor
 
 // Query
 export { searchUnified, searchCodeOnly, searchKnowledgeOnly, parseQuery } from './query/search.js';
-export { bfs, traceCallChain, getCallers, getCallees, getImpactRadius, findShortestPath } from './query/traversal.js';
+export {
+  bfs,
+  traceCallChain,
+  getCallers,
+  getCallees,
+  getImpactRadius,
+  getTypeHierarchy,
+  findShortestPath,
+  findShortestPathResult,
+  normalizeTraversalDepth,
+} from './query/traversal.js';
+export type {
+  HierarchyDirection,
+  ImpactDirection,
+  ImpactResult,
+  PathSearchResult,
+  PathStep,
+  TraversalResult,
+  TraversalOptions,
+  TypeHierarchyResult,
+} from './query/traversal.js';
 export { buildContext, getAgentCategories } from './query/context-builder.js';
 export { computeScore, kindBonus, scorePathRelevance, nameMatchBonus } from './query/scoring.js';
 

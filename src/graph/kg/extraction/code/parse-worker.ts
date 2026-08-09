@@ -45,6 +45,16 @@ parentPort?.on('message', async (message: ExtractRequest | { type: 'shutdown' })
 
     try {
       const result = extractor.extract(tree, message.sourceCode, message.filePath);
+      if (
+        message.language === 'objc'
+        && /\.mm$/i.test(message.filePath)
+        && (tree.rootNode as unknown as { hasError?: boolean }).hasError === true
+      ) {
+        result.diagnostics = [
+          ...(result.diagnostics ?? []),
+          'objcxx-partial-parse: tree-sitter Objective-C grammar reported syntax errors',
+        ];
+      }
       parentPort?.postMessage({ type: 'extract-result', id: message.id, ok: true, result });
     } finally {
       tree.delete();

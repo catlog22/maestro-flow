@@ -3,10 +3,18 @@
 
 import { existsSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { KgDatabaseConnection, KgQueryBuilder, getKgDatabasePath, applyMigrations } from './db/index.js';
+import {
+  KgDatabaseConnection,
+  KgQueryBuilder,
+  KG_SCHEMA_VERSION,
+  getKgDatabasePath,
+  applyMigrations,
+} from './db/index.js';
 import type { UnifiedNode, UnifiedEdge, UnifiedGraphStats, UnifiedSearchResult, SyncResult, ResolutionResult, ExtractionResult, SourceType } from './db/types.js';
 import { resolveKnowledgeEdges as resolveKnowledgeEdgesImpl } from './resolution/knowledge-resolver.js';
 import type { KnowledgeResolutionResult } from './resolution/knowledge-resolver.js';
+import { resolveCodeStructuralReferences as resolveCodeStructuralReferencesImpl } from './resolution/code-reference-resolver.js';
+import type { CodeStructuralResolutionResult } from './resolution/code-reference-resolver.js';
 import {
   bfs, dfs as dfsImpl,
   getCallers as getCallersImpl, getCallees as getCalleesImpl,
@@ -19,14 +27,90 @@ import {
   findDeadCode as findDeadCodeImpl,
   getNodeMetrics as getNodeMetricsImpl,
   findShortestPath as findShortestPathImpl,
+  findShortestPathResult as findShortestPathResultImpl,
 } from './query/traversal.js';
-import type { TraversalResult, NodeContext, NodeMetrics, PathStep } from './query/traversal.js';
+import type {
+  HierarchyDirection,
+  ImpactDirection,
+  ImpactResult,
+  TraversalResult,
+  TypeHierarchyResult,
+  NodeContext,
+  NodeMetrics,
+  PathSearchResult,
+  PathStep,
+} from './query/traversal.js';
 import { searchUnified as searchUnifiedImpl, mergeCodeSearchResults } from './query/search.js';
 import type { UnifiedSearchOutput } from './query/search.js';
 import type { CodeEmbeddingIndex } from './embedding/code-embedding.js';
 import { buildCodeEmbeddingIndex, saveCodeEmbeddingIndex } from './embedding/index.js';
 import { buildContext as buildContextImpl } from './query/context-builder.js';
 import type { BuiltContext } from './query/context-builder.js';
+import { prepareExternalSurfaceScan } from './extraction/code/code-extractor.js';
+import { getGitHead, getSyncStateHealth, isSyncStateFresh } from './sync-state.js';
+import type { KgSyncAttempt, KgSyncWatermark } from './sync-state.js';
+
+export type NodeResolution =
+  | {
+    status: 'resolved';
+    query: string;
+    strategy: 'id' | 'qualifiedName' | 'simpleName';
+    node: UnifiedNode;
+    candidates: UnifiedNode[];
+  }
+  | {
+    status: 'ambiguous' | 'not_found';
+    query: string;
+    strategy: 'qualifiedName' | 'simpleName' | 'none';
+    candidates: UnifiedNode[];
+  };
+
+export interface NodeResolutionErrorPayload {
+  code: 'ambiguous_node' | 'node_not_found';
+  query: string;
+  strategy: 'qualifiedName' | 'simpleName' | 'none';
+  candidates: string[];
+}
+
+export function makeNodeResolutionErrorPayload(
+  resolution: Exclude<NodeResolution, { status: 'resolved' }>,
+): NodeResolutionErrorPayload {
+  return {
+    code: resolution.status === 'ambiguous' ? 'ambiguous_node' : 'node_not_found',
+    query: resolution.query,
+    strategy: resolution.strategy,
+    candidates: resolution.candidates.map(node => node.id),
+  };
+}
+
+export interface MaestroGraphHealth {
+  status: 'pass' | 'warn' | 'fail';
+  schemaVersion: number;
+  errors: string[];
+  integrity: { ok: boolean; messages: string[] };
+  foreignKeys: { ok: boolean; violations: Array<Record<string, unknown>> };
+  syncState: {
+    status: 'missing' | 'fresh' | 'stale' | 'error';
+    stale: boolean;
+    error: string | null;
+    lastSuccessful: KgSyncWatermark | null;
+  };
+  lastAttempt: KgSyncAttempt | null;
+  structuralRefs: {
+    total: number;
+    status: Record<string, number>;
+    unresolved: number;
+    unresolvedRatio: number;
+    ambiguousRatio: number;
+    notFoundRatio: number;
+    invariants: {
+      invalidResolved: number;
+      resolvedWithoutTarget: number;
+      resolvedWithoutOriginEdge: number;
+      invalidOriginEdge: number;
+    };
+  };
+}
 
 export class MaestroGraph {
   private conn: KgDatabaseConnection | null = null;
@@ -131,12 +215,23 @@ export class MaestroGraph {
 
   resolveReferences(): ResolutionResult {
     if (!this.conn) throw new Error('MaestroGraph not open');
-    const result = this.resolveKnowledgeEdges();
+    const startedAt = Date.now();
+    const code = this.resolveCodeStructuralReferences();
+    const knowledge = this.resolveKnowledgeEdges();
     return {
-      edgesCreated: result.totalEdgesCreated,
-      edges: result.edges,
-      durationMs: result.durationMs,
+      edgesCreated: code.edgesCreated + knowledge.totalEdgesCreated,
+      codeStructuralEdgesCreated: code.edgesCreated,
+      knowledgeEdgesCreated: knowledge.totalEdgesCreated,
+      edges: [...code.edges, ...knowledge.edges],
+      durationMs: Date.now() - startedAt,
     };
+  }
+
+  resolveCodeStructuralReferences(): CodeStructuralResolutionResult {
+    if (!this.conn || !this.queries) throw new Error('MaestroGraph not open');
+    return this.conn.transaction(() => (
+      resolveCodeStructuralReferencesImpl(this.queries as KgQueryBuilder)
+    ));
   }
 
   resolveKnowledgeEdges(): KnowledgeResolutionResult {
@@ -267,9 +362,151 @@ export class MaestroGraph {
     return this.queries.getNode(id);
   }
 
+  /** Resolve only exact identities; ambiguity is data, never a ranking decision. */
+  resolveNode(query: string): NodeResolution {
+    if (!this.queries) throw new Error('MaestroGraph not open');
+    const direct = this.queries.getNode(query);
+    if (direct) {
+      return { status: 'resolved', query, strategy: 'id', node: direct, candidates: [direct] };
+    }
+
+    const qualified = sortNodesById(this.queries.getNodesByQualifiedName(query));
+    if (qualified.length === 1) {
+      return {
+        status: 'resolved',
+        query,
+        strategy: 'qualifiedName',
+        node: qualified[0],
+        candidates: qualified,
+      };
+    }
+    if (qualified.length > 1) {
+      return { status: 'ambiguous', query, strategy: 'qualifiedName', candidates: qualified };
+    }
+
+    const simple = sortNodesById(this.queries.getNodesByName(query));
+    if (simple.length === 1) {
+      return {
+        status: 'resolved',
+        query,
+        strategy: 'simpleName',
+        node: simple[0],
+        candidates: simple,
+      };
+    }
+    if (simple.length > 1) {
+      return { status: 'ambiguous', query, strategy: 'simpleName', candidates: simple };
+    }
+    return { status: 'not_found', query, strategy: 'none', candidates: [] };
+  }
+
   getStats(): UnifiedGraphStats {
     if (!this.queries || !this.conn) throw new Error('MaestroGraph not open');
     return this.queries.getStats(this.conn.getSize());
+  }
+
+  getHealth(): MaestroGraphHealth {
+    if (!this.queries || !this.conn) throw new Error('MaestroGraph not open');
+    const errors: string[] = [];
+    let schemaVersion = 0;
+    try {
+      schemaVersion = this.conn.getSchemaVersion();
+    } catch (error) {
+      errors.push(`schema: ${errorMessage(error)}`);
+    }
+
+    let integrityMessages: string[] = [];
+    try {
+      const rows = this.conn.raw.prepare('PRAGMA integrity_check').all() as Array<Record<string, unknown>>;
+      integrityMessages = rows.map(row => String(Object.values(row)[0] ?? 'unknown'));
+    } catch (error) {
+      errors.push(`integrity: ${errorMessage(error)}`);
+    }
+
+    let foreignKeyRows: Array<Record<string, unknown>> = [];
+    try {
+      foreignKeyRows = this.conn.raw.prepare('PRAGMA foreign_key_check').all() as Array<Record<string, unknown>>;
+    } catch (error) {
+      errors.push(`foreignKeys: ${errorMessage(error)}`);
+    }
+
+    let stats: UnifiedGraphStats | null = null;
+    let invariants = {
+      invalidResolved: 0,
+      resolvedWithoutTarget: 0,
+      resolvedWithoutOriginEdge: 0,
+      invalidOriginEdge: 0,
+    };
+    try {
+      stats = this.getStats();
+      invariants = this.queries.getStructuralReferenceInvariantCounts();
+    } catch (error) {
+      errors.push(`stats: ${errorMessage(error)}`);
+    }
+
+    let sync = getSyncStateHealth(this.projectRoot);
+    if (sync.status === 'fresh') {
+      try {
+        const external = prepareExternalSurfaceScan(this.projectRoot);
+        const currentFreshness = {
+          head: getGitHead(this.projectRoot),
+          manifestDigest: external.manifest.digest,
+          externalFingerprint: external.externalFingerprint,
+        };
+        if (!isSyncStateFresh(sync.state, currentFreshness)) {
+          sync = { ...sync, status: 'stale', stale: true };
+        }
+      } catch (error) {
+        const message = `freshness: ${errorMessage(error)}`;
+        errors.push(message);
+        sync = { ...sync, status: 'error', stale: true, error: message };
+      }
+    }
+    const structuralStatus = stats?.structuralRefs?.status ?? {};
+    const structuralTotal = stats?.structuralRefs?.total ?? 0;
+    const resolved = structuralStatus.resolved ?? 0;
+    const ambiguous = structuralStatus.ambiguous ?? 0;
+    const notFound = structuralStatus.not_found ?? 0;
+    const unresolved = Math.max(0, structuralTotal - resolved + invariants.invalidResolved);
+    const ratio = (count: number): number => (
+      structuralTotal > 0 ? count / structuralTotal : 0
+    );
+    const integrityOk = integrityMessages.length === 1 && integrityMessages[0] === 'ok';
+    const foreignKeysOk = foreignKeyRows.length === 0 && !errors.some(error => error.startsWith('foreignKeys:'));
+    const failed = errors.length > 0
+      || schemaVersion !== KG_SCHEMA_VERSION
+      || !integrityOk
+      || !foreignKeysOk
+      || invariants.invalidResolved > 0
+      || sync.status === 'error';
+    const warned = sync.stale || unresolved > 0;
+
+    return {
+      status: failed ? 'fail' : warned ? 'warn' : 'pass',
+      schemaVersion,
+      errors,
+      integrity: { ok: integrityOk, messages: integrityMessages },
+      foreignKeys: {
+        ok: foreignKeysOk,
+        violations: foreignKeyRows.map(row => ({ ...row })),
+      },
+      syncState: {
+        status: sync.status,
+        stale: sync.stale,
+        error: sync.error,
+        lastSuccessful: sync.state?.lastSuccessful ?? null,
+      },
+      lastAttempt: sync.state?.lastAttempt ?? null,
+      structuralRefs: {
+        total: structuralTotal,
+        status: structuralStatus,
+        unresolved,
+        unresolvedRatio: ratio(unresolved),
+        ambiguousRatio: ratio(ambiguous),
+        notFoundRatio: ratio(notFound),
+        invariants,
+      },
+    };
   }
 
   getDetectedFrameworks(): string[] {
@@ -288,9 +525,13 @@ export class MaestroGraph {
     return getCalleesImpl(this.queries, nodeId, depth);
   }
 
-  getImpact(nodeId: string, depth: number = 3): TraversalResult {
+  getImpact(
+    nodeId: string,
+    depth: number = 3,
+    direction: ImpactDirection = 'outgoing',
+  ): ImpactResult {
     if (!this.queries) throw new Error('MaestroGraph not open');
-    return getImpactRadius(this.queries, nodeId, depth);
+    return getImpactRadius(this.queries, nodeId, depth, direction);
   }
 
   traverse(startId: string, options?: { maxDepth?: number; edgeKinds?: string[]; direction?: 'outgoing' | 'incoming' | 'both' }): TraversalResult {
@@ -303,9 +544,12 @@ export class MaestroGraph {
     return dfsImpl(this.queries, startId, options);
   }
 
-  getTypeHierarchy(nodeId: string): TraversalResult {
+  getTypeHierarchy(
+    nodeId: string,
+    options: { direction?: HierarchyDirection; depth?: number; maxNodes?: number } = {},
+  ): TypeHierarchyResult {
     if (!this.queries) throw new Error('MaestroGraph not open');
-    return getTypeHierarchyImpl(this.queries, nodeId);
+    return getTypeHierarchyImpl(this.queries, nodeId, options);
   }
 
   findUsages(nodeId: string): Array<{ node: UnifiedNode; edge: UnifiedEdge }> {
@@ -358,6 +602,16 @@ export class MaestroGraph {
     return findShortestPathImpl(this.queries, fromId, toId, maxDepth);
   }
 
+  findShortestPathResult(
+    fromId: string,
+    toId: string,
+    maxDepth?: number,
+    maxNodes?: number,
+  ): PathSearchResult {
+    if (!this.queries) throw new Error('MaestroGraph not open');
+    return findShortestPathResultImpl(this.queries, fromId, toId, maxDepth, maxNodes);
+  }
+
   // ── Context (C8 API) ──────────────────────────────────────────────
 
   buildContext(query: string, options?: { expandDepth?: number; agentType?: string }): BuiltContext {
@@ -382,9 +636,31 @@ export class MaestroGraph {
   insertExtractionResults(result: ExtractionResult): void {
     if (!this.queries) throw new Error('MaestroGraph not open');
     this.conn!.transaction(() => {
+      this.queries!.deleteUnresolvedRefsByFile(result.fileRecord.path);
+      this.queries!.deleteStructuralReferencesByOriginFile(result.fileRecord.path);
       this.queries!.insertNodes(result.nodes);
       this.queries!.insertEdges(result.edges);
+      for (const reference of result.references ?? []) {
+        this.queries!.insertUnresolvedRef({
+          fromNodeId: reference.fromSymbolId,
+          referenceName: reference.referenceName,
+          referenceKind: reference.referenceKind,
+          line: reference.line,
+          col: reference.col,
+          filePath: reference.filePath,
+          language: reference.language,
+        });
+      }
+      this.queries!.stageStructuralReferences(result.structuralReferences ?? []);
       this.queries!.upsertFile(result.fileRecord);
     });
   }
+}
+
+function sortNodesById(nodes: UnifiedNode[]): UnifiedNode[] {
+  return nodes.slice().sort((left, right) => Buffer.from(left.id).compare(Buffer.from(right.id)));
+}
+
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
 }

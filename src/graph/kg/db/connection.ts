@@ -9,6 +9,8 @@ import { existsSync, mkdirSync, statSync } from 'node:fs';
 import type { Language, SourceType } from './types.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
+/** applyMigrations 完成后应达到的最新 schema 版本。 */
+export const KG_SCHEMA_VERSION = 8 as const;
 
 export class KgDatabaseConnection {
   private db: DatabaseSync | null = null;
@@ -39,6 +41,7 @@ export class KgDatabaseConnection {
     this.applyPragmas();
     this.transaction(() => {
       this.loadSchema();
+      // 保留 v2 baseline，让 fresh DB 与历史 DB 统一走可审计的 migration 链。
       this.setSchemaVersion(2, 'MaestroGraph unified schema v2');
     });
   }

@@ -13,6 +13,8 @@ interface LangCase {
   source: string;
   /** 期望的引用 (kind:name 对) */
   expectRefs: Array<[string, string]>;
+  /** Swift/ObjC 等严格结构引用 (relation:name 对)。 */
+  expectStructuralRefs?: Array<[string, string]>;
   /** 期望的符号名 (任意子集匹配) */
   expectSymbols?: string[];
 }
@@ -68,14 +70,14 @@ const CASES: LangCase[] = [
   },
   {
     lang: 'ruby',
-    source: 'class B < A\n  def m\n    helper(1)\n    obj.method(2)\n  end\nend\n',
-    expectRefs: [['calls', 'helper'], ['calls', 'method'], ['extends', 'A']],
+    source: 'class B < A\n  include M\n  extend E\n  require "json"\n  def m\n    helper(1)\n    obj.method(2)\n  end\nend\n',
+    expectRefs: [['calls', 'helper'], ['calls', 'method'], ['extends', 'A'], ['mixes_in', 'M'], ['mixes_in', 'E'], ['imports', 'json']],
     expectSymbols: ['B', 'B.m'],
   },
   {
     lang: 'php',
-    source: '<?php\nclass B extends \\A\\Base implements I1, \\I2 {\n    public function m() { helper($x); $obj->method($y); A::staticCall($z); }\n}\n',
-    expectRefs: [['calls', 'helper'], ['calls', 'method'], ['calls', 'staticCall'], ['extends', 'Base'], ['implements', 'I1'], ['implements', 'I2']],
+    source: '<?php\nclass B extends \\A\\Base implements I1, \\I2 {\n    use SharedTrait;\n    public function m() { helper($x); $obj->method($y); A::staticCall($z); }\n}\n',
+    expectRefs: [['calls', 'helper'], ['calls', 'method'], ['calls', 'staticCall'], ['extends', 'Base'], ['implements', 'I1'], ['implements', 'I2'], ['mixes_in', 'SharedTrait']],
     expectSymbols: ['B'],
   },
   {
@@ -87,7 +89,8 @@ const CASES: LangCase[] = [
   {
     lang: 'objc',
     source: '@interface B : A <P1>\n@end\n\n@implementation B\n- (void)m { [self go]; helper(1); }\n@end\n',
-    expectRefs: [['calls', 'go'], ['calls', 'helper'], ['extends', 'A'], ['implements', 'P1']],
+    expectRefs: [['calls', 'go'], ['calls', 'helper']],
+    expectStructuralRefs: [['extends', 'A'], ['implements', 'P1']],
     expectSymbols: ['B'],
   },
 ];
@@ -106,6 +109,19 @@ describe.skipIf(!isTreeSitterAvailable())('multi-language extractors: calls / ex
         for (const e of (result?.edges ?? [])) pairs.add(`${e.kind}:${e.target}`);
         for (const [kind, name] of c.expectRefs) {
           expect(pairs.has(`${kind}:${name}`), `${c.lang} missing ${kind}:${name} (got: ${[...pairs].join(', ')})`).toBe(true);
+        }
+        const structuralPairs = new Set((result?.structuralReferences ?? [])
+          .map(reference => `${reference.relationHint}:${reference.rawTargetName}`));
+        for (const [kind, name] of c.expectStructuralRefs ?? []) {
+          expect(
+            structuralPairs.has(`${kind}:${name}`),
+            `${c.lang} missing structural ${kind}:${name} (got: ${[...structuralPairs].join(', ')})`,
+          ).toBe(true);
+        }
+        if (c.expectStructuralRefs) {
+          expect(refs.some(reference =>
+            reference.referenceKind === 'extends'
+            || reference.referenceKind === 'implements')).toBe(false);
         }
         if (c.expectSymbols) {
           const symNames = new Set((result?.symbols ?? []).map(s => s.qualifiedName));
@@ -130,6 +146,20 @@ describe.skipIf(!isTreeSitterAvailable())('multi-language extractors: calls / ex
       const qns = (result?.symbols ?? []).map(s => s.qualifiedName);
       expect(qns).toContain('A.B');
       expect(qns).toContain('A.B.m');
+    } finally {
+      runner.dispose();
+    }
+  });
+
+  it('keeps C++ header imports tagged with the selected extractor language', async () => {
+    const runner = new CodeParseRunner();
+    try {
+      const result = await runner.extract('#include "dep.h"\nclass Box {};\n', 'cpp', 'Box.h');
+      expect(result?.references).toContainEqual(expect.objectContaining({
+        referenceKind: 'imports',
+        referenceName: 'dep.h',
+        language: 'cpp',
+      }));
     } finally {
       runner.dispose();
     }

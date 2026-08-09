@@ -36,6 +36,9 @@ const GENERATED_PATTERNS: ReadonlyArray<RegExp> = [
   // Swift — protobuf
   /\.pb\.swift$/,
 
+  // Clang compatibility headers generated from Swift modules
+  /-Swift\.h$/,
+
   // Dart — build_runner / freezed / json_serializable
   /\.g\.dart$/,
   /\.freezed\.dart$/,

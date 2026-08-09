@@ -211,7 +211,7 @@ function resolveConstrainsEdges(db: DatabaseSync): UnifiedEdge[] {
   const codeNodes = db.prepare(
     `SELECT id, name, kind, file_path FROM nodes
      WHERE source_type = 'codegraph'
-       AND kind IN ('function', 'method', 'class', 'interface')`
+       AND kind IN ('function', 'method', 'class', 'interface', 'struct', 'enum', 'protocol')`
   ).all() as unknown as Array<{ id: string; name: string; kind: string; file_path: string }>;
   const nameMatches = new Map<string, Map<string, typeof codeNodes[number]>>();
   const pathMatches = new Map<string, Map<string, typeof codeNodes[number]>>();
