@@ -773,6 +773,7 @@ export async function serverCli(action?: string, opts?: ServerOpts): Promise<voi
     const child = spawn(process.execPath, [fileURLToPath(import.meta.url), ...childArgs], {
       detached: true,
       stdio: 'ignore',
+      windowsHide: true,
       cwd: process.cwd(),
     });
     child.unref();

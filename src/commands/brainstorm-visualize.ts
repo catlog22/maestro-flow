@@ -137,6 +137,7 @@ async function startServer(opts: StartOptions): Promise<void> {
     cwd,
     detached: true,
     stdio: ['ignore', logFd, errFd],
+    windowsHide: true,
     env,
   });
 

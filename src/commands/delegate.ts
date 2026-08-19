@@ -193,6 +193,7 @@ export function launchDetachedDelegateWorker(
       cwd: request.workDir,
       detached: true,
       stdio: 'ignore',
+      windowsHide: true,
       env,
     });
     try {

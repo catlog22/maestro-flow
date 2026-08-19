@@ -396,6 +396,7 @@ function spawnQueuedDelegateWorker(
     cwd: options.workDir,
     detached: true,
     stdio: 'ignore',
+    windowsHide: true,
     env: {
       ...process.env,
       MAESTRO_DISABLE_DASHBOARD_BRIDGE: '1',

@@ -114,7 +114,7 @@ export async function spawnDaemon(workflowRoot: string): Promise<void> {
   const child = spawnProc(
     process.execPath,
     [binPath, 'search-start-daemon'],
-    { cwd: resolvePath(workflowRoot, '..'), detached: true, stdio: 'ignore' },
+    { cwd: resolvePath(workflowRoot, '..'), detached: true, stdio: 'ignore', windowsHide: true },
   );
   child.unref();
 }
