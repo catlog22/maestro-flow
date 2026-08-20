@@ -29,7 +29,7 @@
 
 **自适应编排** — Ralph v2 引擎读取项目状态，将自然语言意图分类到 40+ 种命令链，在关键节点根据实际执行结果动态决策：继续、回退、还是插入修复循环。不写 YAML，不配置管线。
 
-**跨后端调度** — 同一工作流中混用 Claude、Codex、Gemini、Qwen、OpenCode，四种编排模式按需组合：Delegate（异步委派）、Team（角色协作）、Wave（依赖并行）、Swarm（蚁群探索）。
+**跨后端调度** — 同一工作流中混用 Claude、Codex、Gemini、Qwen、OpenCode、Grok，四种编排模式按需组合：Delegate（异步委派）、Team（角色协作）、Wave（依赖并行）、Swarm（蚁群探索）。
 
 **知识自增强** — Agent 执行中发现的模式、陷阱、决策，自动持久化为 Spec 和 Knowhow。Hook 系统将相关知识注入后续 Agent 的提示词 — 项目越用越聪明。
 
@@ -44,7 +44,7 @@ npm install -g maestro-flow
 maestro install          # 交互式选择安装组件
 ```
 
-需要 Node.js ≥ 18 和 [Claude Code CLI](https://docs.anthropic.com/en/docs/claude-code)。多 Agent 工作流可选装 Codex CLI、agy CLI。
+需要 Node.js ≥ 18 和 [Claude Code CLI](https://docs.anthropic.com/en/docs/claude-code)。多 Agent 工作流可选装 Codex CLI、agy CLI、Grok Build CLI。
 
 ---
 

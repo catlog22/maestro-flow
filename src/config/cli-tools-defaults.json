@@ -6,7 +6,8 @@
     { "name": "opencode", "cmd": "opencode", "primaryModel": "",                          "tags": ["fullstack"],            "type": "builtin" },
     { "name": "agy",      "cmd": "agy",      "primaryModel": "",                          "tags": ["fullstack"],            "type": "builtin" },
     { "name": "api-explore", "cmd": "node",  "primaryModel": "",                          "tags": ["explore", "readonly"],  "type": "builtin" },
-    { "name": "pi",        "cmd": "pi",    "primaryModel": "",                          "tags": ["fullstack"],            "type": "builtin" }
+    { "name": "pi",        "cmd": "pi",    "primaryModel": "",                          "tags": ["fullstack"],            "type": "builtin" },
+    { "name": "grok",      "cmd": "grok",  "primaryModel": "grok-4.6",                  "tags": ["fullstack"],            "type": "builtin" }
   ],
   "roleMappings": {
     "analyze":    { "fallbackChain": ["codex", "gemini", "claude"] },

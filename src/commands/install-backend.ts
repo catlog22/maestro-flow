@@ -800,9 +800,9 @@ export const MCP_TOOLS = [
 
 export type ExtraMcpTargetId =
   | 'cursor' | 'qoder' | 'trae' | 'kiro' | 'roo'
-  | 'vscode-copilot' | 'gemini-cli';
+  | 'vscode-copilot' | 'gemini-cli' | 'grok';
 
-export type McpFormat = 'json-mcpServers' | 'json-vscode-servers' | 'json-gemini-merge';
+export type McpFormat = 'json-mcpServers' | 'json-vscode-servers' | 'json-gemini-merge' | 'toml-mcp-servers';
 
 interface ExtraMcpTargetSpec {
   id: ExtraMcpTargetId;
@@ -878,6 +878,14 @@ export const EXTRA_MCP_TARGETS: ExtraMcpTargetSpec[] = [
       ? join(p, '.gemini', 'settings.json')
       : join(homedir(), '.gemini', 'settings.json'),
   },
+  {
+    id: 'grok',
+    label: 'Grok Build (.grok/config.toml)',
+    format: 'toml-mcp-servers',
+    configPath: (scope, p) => scope === 'project'
+      ? join(p, '.grok', 'config.toml')
+      : join(homedir(), '.grok', 'config.toml'),
+  },
 ];
 
 function buildServerConfig(
@@ -907,6 +915,83 @@ export function getExtraMcpTargetSpec(targetId: ExtraMcpTargetId): ExtraMcpTarge
   return EXTRA_MCP_TARGETS.find((t) => t.id === targetId);
 }
 
+// ---------------------------------------------------------------------------
+// TOML MCP writer (Grok Build config.toml)
+//
+// Grok configures MCP servers as `[mcp_servers.<name>]` tables in TOML.
+// No TOML dependency is introduced: the maestro entry is a single flat table,
+// so that one section is replaced/appended/removed as text while all other
+// sections and comments are preserved.
+// ---------------------------------------------------------------------------
+
+/** Escape a value for use inside a TOML basic string */
+function tomlBasicString(value: string): string {
+  return `"${value.replace(/\\/g, '\\\\').replace(/"/g, '\\"')}"`;
+}
+
+/** Render the `[mcp_servers.maestro-tools]` TOML table (trailing newline included) */
+function buildTomlServerSection(enabledTools: string[], projectRoot?: string): string {
+  const isWin = process.platform === 'win32';
+  const args = isWin ? ['/c', 'maestro-mcp'] : [];
+  const envPairs = [`MAESTRO_ENABLED_TOOLS = ${tomlBasicString(enabledTools.join(','))}`];
+  if (projectRoot) envPairs.push(`MAESTRO_PROJECT_ROOT = ${tomlBasicString(projectRoot)}`);
+  return [
+    `[mcp_servers.${MAESTRO_MCP_SERVER_NAME}]`,
+    `command = ${tomlBasicString(isWin ? 'cmd' : 'maestro-mcp')}`,
+    `args = [${args.map(tomlBasicString).join(', ')}]`,
+    `env = { ${envPairs.join(', ')} }`,
+    'enabled = true',
+    '',
+  ].join('\n');
+}
+
+/**
+ * Remove the `[mcp_servers.<name>]` section (header + body) from TOML text.
+ * Returns null when the section is absent.
+ */
+function stripTomlServerSection(content: string, serverName: string): string | null {
+  const header = `[mcp_servers.${serverName}]`;
+  const start = content.indexOf(header);
+  if (start === -1) return null;
+  // The section body runs until the next table header or EOF.
+  const rest = content.slice(start + header.length);
+  const nextHeader = rest.search(/^\[/m);
+  const end = nextHeader === -1 ? content.length : start + header.length + nextHeader;
+  const removed = content.slice(0, start) + content.slice(end);
+  // Collapse 3+ consecutive blank lines left behind by the removal.
+  return removed.replace(/\n{3,}/g, '\n\n');
+}
+
+function addTomlMcpServer(
+  configPath: string,
+  enabledTools: string[],
+  projectRoot?: string,
+): boolean {
+  try {
+    let content = existsSync(configPath) ? readFileSync(configPath, 'utf-8') : '';
+    const stripped = stripTomlServerSection(content, MAESTRO_MCP_SERVER_NAME);
+    if (stripped !== null) content = stripped;
+    const prefix = content.trimEnd().length > 0 ? `${content.trimEnd()}\n\n` : '';
+    writeFileSync(configPath, prefix + buildTomlServerSection(enabledTools, projectRoot), 'utf-8');
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function removeTomlMcpServerAt(configPath: string): boolean {
+  if (!existsSync(configPath)) return false;
+  try {
+    const content = readFileSync(configPath, 'utf-8');
+    const stripped = stripTomlServerSection(content, MAESTRO_MCP_SERVER_NAME);
+    if (stripped === null) return false;
+    writeFileSync(configPath, stripped, 'utf-8');
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 export function addExtraMcpServer(
   targetId: ExtraMcpTargetId,
   scope: 'global' | 'project',
@@ -922,6 +1007,10 @@ export function addExtraMcpServer(
   try {
     const dir = dirname(fp);
     if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
+
+    if (spec.format === 'toml-mcp-servers') {
+      return addTomlMcpServer(fp, enabledTools, projectRoot) ? fp : null;
+    }
 
     const serverConfig = buildServerConfig(enabledTools, projectRoot, spec.format);
     const containerKey = spec.format === 'json-vscode-servers' ? 'servers' : 'mcpServers';
@@ -964,6 +1053,9 @@ export function removeExtraMcpServer(
 
 export function removeExtraMcpServerAt(configPath: string, format: McpFormat): boolean {
   if (!existsSync(configPath)) return false;
+  if (format === 'toml-mcp-servers') {
+    return removeTomlMcpServerAt(configPath);
+  }
   try {
     const data = JSON.parse(readFileSync(configPath, 'utf-8')) as Record<string, unknown>;
     const containerKey = format === 'json-vscode-servers' ? 'servers' : 'mcpServers';

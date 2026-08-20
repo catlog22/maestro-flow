@@ -602,6 +602,7 @@ export const EXTRA_PLATFORMS: PlatformRegistryEntry[] = [
   { id: 'firebender',      label: 'Firebender',         description: 'Firebender Agent',         configDir: '.firebender' },
   { id: 'forgecode',       label: 'ForgeCode',          description: 'ForgeCode Agent',          configDir: '.forge' },
   { id: 'goose',           label: 'Goose',              description: 'Goose Agent',              configDir: '.goose' },
+  { id: 'grok',            label: 'Grok Build',         description: 'xAI Grok Build CLI',       configDir: '.grok' },
   { id: 'hermes-agent',    label: 'Hermes Agent',       description: 'Hermes Agent Agent',       configDir: '.hermes', globalConfigDir: '.hermes' },
   { id: 'inference-sh',    label: 'inference.sh',       description: 'inference.sh Agent',       configDir: '.inferencesh' },
   { id: 'jazz',            label: 'Jazz',               description: 'Jazz Agent',               configDir: '.jazz' },
