@@ -180,6 +180,8 @@ export function resolveAgentType(tool: string | null): AgentType {
       return 'opencode';
     case 'pi':
       return 'pi';
+    case 'grok':
+      return 'grok';
     default:
       return 'claude-code';
   }

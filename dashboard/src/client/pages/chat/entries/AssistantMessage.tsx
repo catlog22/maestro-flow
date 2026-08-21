@@ -21,6 +21,7 @@ export const AVATAR_CONFIG: Record<AgentType, { label: string; color: string; ti
   'agent-sdk':   { label: 'S', color: 'var(--color-accent-purple)', tint: 'var(--color-tint-planning)', className: 'claude' },
   'api-explore': { label: 'Ax', color: 'var(--color-accent-orange)', tint: 'var(--color-tint-verifying)', className: 'qwen' },
   pi:            { label: 'Pi', color: 'var(--color-accent-blue)', tint: 'var(--color-tint-exploring)', className: 'gemini' },
+  grok:          { label: 'Gk', color: 'var(--color-accent-green)', tint: 'var(--color-tint-completed)', className: 'codex' },
 };
 
 function formatMsgTime(iso: string): string {

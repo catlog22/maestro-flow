@@ -10,7 +10,7 @@ import type { TerminalBackend } from './terminal-backend.js';
 // These mirror the canonical types in cli-agent-runner.ts.
 // ---------------------------------------------------------------------------
 
-type AgentType = 'claude-code' | 'codex' | 'gemini' | 'qwen' | 'opencode' | 'pi';
+type AgentType = 'claude-code' | 'codex' | 'gemini' | 'qwen' | 'opencode' | 'pi' | 'grok';
 
 type AgentProcessStatus =
   | 'spawning'

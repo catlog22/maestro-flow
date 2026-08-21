@@ -29,7 +29,7 @@
 
 **Adaptive Orchestration** — The Ralph v2 engine reads project state, classifies natural-language intent into 40+ command chain types, and makes dynamic decisions at checkpoints: proceed, fall back, or insert a fix loop. No YAML. No pipeline config.
 
-**Cross-Backend Dispatch** — Mix Claude, Codex, Gemini, Qwen, and OpenCode in a single workflow through four composable patterns: Delegate (async dispatch), Team (role-based coordination), Wave (dependency parallelism), and Swarm (ACO exploration).
+**Cross-Backend Dispatch** — Mix Claude, Codex, Gemini, Qwen, OpenCode, and Grok in a single workflow through four composable patterns: Delegate (async dispatch), Team (role-based coordination), Wave (dependency parallelism), and Swarm (ACO exploration).
 
 **Self-Reinforcing Knowledge** — Patterns, pitfalls, and decisions discovered during execution are automatically persisted as Specs and Knowhow. Hooks inject relevant knowledge into future agent prompts — the project gets smarter over time.
 
@@ -44,7 +44,7 @@ npm install -g maestro-flow
 maestro install          # interactive component selector
 ```
 
-Requires Node.js ≥ 18 and [Claude Code CLI](https://docs.anthropic.com/en/docs/claude-code). Optionally install Codex CLI or agy CLI for multi-agent workflows.
+Requires Node.js ≥ 18 and [Claude Code CLI](https://docs.anthropic.com/en/docs/claude-code). Optionally install Codex CLI, agy CLI, or Grok Build CLI for multi-agent workflows.
 
 ---
 

@@ -85,6 +85,7 @@ const DEFAULT_AGENTS: Record<AgentType, AgentSettingsEntry> = {
   'agent-sdk': { model: '', approvalMode: 'suggest', baseUrl: '', apiKey: '', settingsFile: '', envFile: '' },
   'api-explore': { model: '', approvalMode: 'suggest', baseUrl: '', apiKey: '', settingsFile: '', envFile: '' },
   pi: { model: '', approvalMode: 'suggest', baseUrl: '', apiKey: '', settingsFile: '', envFile: '' },
+  grok: { model: '', approvalMode: 'suggest', baseUrl: '', apiKey: '', settingsFile: '', envFile: '' },
 };
 
 const DEFAULT_CONFIG: SettingsConfig = {

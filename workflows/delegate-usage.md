@@ -9,7 +9,7 @@ maestro delegate "<PROMPT>" [options]
 
 | Option | Description | Default |
 |--------|-------------|---------|
-| `--to <tool>` | gemini, qwen, codex, claude, opencode | First enabled |
+| `--to <tool>` | gemini, qwen, codex, claude, opencode, grok | First enabled |
 | `--role <role>` | analyze, explore, review, implement, plan, brainstorm, research | — |
 | `--mode <mode>` | `analysis` (read-only) / `write` (modify) | `analysis` |
 | `--model <model>` | Model override | Tool's `primaryModel` |
@@ -64,7 +64,9 @@ Bash({ command: "maestro delegate \"...\" --to gemini --mode analysis", run_in_b
 
 ### Execution ID Prefix
 
-gemini→`gem`, qwen→`qwn`, codex→`cdx`, claude→`cld`, opencode→`opc`
+gemini→`gem`, qwen→`qwn`, codex→`cdx`, claude→`cld`, opencode→`opc`, grok→`grk`
+
+> Grok note: `grok` headless runs are single-turn — `maestro delegate message <id>` `inject` delivery is not supported (same as gemini/qwen); use `--delivery after_complete` for chained tasks. Requires `XAI_API_KEY` or prior `grok login`.
 
 ### Resume
 
