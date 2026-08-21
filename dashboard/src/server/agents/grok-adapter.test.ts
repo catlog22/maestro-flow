@@ -4,9 +4,13 @@ import { PassThrough } from 'node:stream';
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import type { AgentConfig } from '../../shared/agent-types.js';
 
-const spawnMock = vi.fn();
-const killProcessTreeMock = vi.fn();
-const writeFileSpy = vi.fn();
+// Mock state is initialized via vi.hoisted so mock factories (which run
+// during hoisted import evaluation) never hit uninitialized bindings.
+const { spawnMock, killProcessTreeMock, writeFileSpy } = vi.hoisted(() => ({
+  spawnMock: vi.fn(),
+  killProcessTreeMock: vi.fn(),
+  writeFileSpy: vi.fn(),
+}));
 
 vi.mock('node:fs', async (importOriginal) => {
   const mod = await importOriginal<typeof import('node:fs')>();
