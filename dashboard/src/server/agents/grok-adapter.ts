@@ -129,6 +129,10 @@ export class GrokAdapter extends BaseAgentAdapter {
     processId: string,
     config: AgentConfig,
   ): Promise<AgentProcess> {
+    // Validate before any side effects (prompt file creation) so a rejected
+    // config never leaks temp files.
+    this.assertValidModel(config.model);
+
     // Prompt goes through a temp file: grok takes it as a flag value, and
     // delegate prompts can exceed OS command-line limits / break quoting.
     // mode 0o600 — the prompt can contain repo context; keep it owner-only.
@@ -428,12 +432,6 @@ export class GrokAdapter extends BaseAgentAdapter {
   // --- Helpers ---------------------------------------------------------------
 
   protected buildArgs(config: AgentConfig, promptFile: string): string[] {
-    // Model id is config/request data — restrict to safe characters so it can
-    // never inject a second command under the Windows shell spawn.
-    if (config.model && !/^[A-Za-z0-9._:/-]+$/.test(config.model)) {
-      throw new Error(`[grok] Invalid model id: ${JSON.stringify(config.model)}`);
-    }
-
     // Quoting is only needed for the cmd.exe shell parse on Windows.
     const promptArg = process.platform === 'win32' ? `"${promptFile}"` : promptFile;
     const args: string[] = [
@@ -455,6 +453,16 @@ export class GrokAdapter extends BaseAgentAdapter {
     }
 
     return args;
+  }
+
+  /**
+   * Model id is config/request data — restrict to safe characters so it can
+   * never inject a second command under the Windows shell spawn.
+   */
+  private assertValidModel(model: string | undefined): void {
+    if (model && !/^[A-Za-z0-9._:/-]+$/.test(model)) {
+      throw new Error(`[grok] Invalid model id: ${JSON.stringify(model)}`);
+    }
   }
 
   private deletePromptFile(processId: string): void {

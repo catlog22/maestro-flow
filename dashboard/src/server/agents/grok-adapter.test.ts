@@ -1,7 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { EventEmitter } from 'node:events';
 import { PassThrough } from 'node:stream';
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import type { AgentConfig } from '../../shared/agent-types.js';
 
 const spawnMock = vi.fn();
@@ -261,6 +262,15 @@ describe('GrokAdapter', () => {
     expect(spawnMock).not.toHaveBeenCalled();
   });
 
+  it('leaves no prompt file behind when the model id is rejected', async () => {
+    const before = readdirSync(tmpdir()).filter((f) => f.startsWith('maestro-grok-prompt-'));
+    await expect(
+      adapter.spawn({ ...baseConfig(), model: 'safe; printf PWNED' }),
+    ).rejects.toThrow(/Invalid model id/);
+    const after = readdirSync(tmpdir()).filter((f) => f.startsWith('maestro-grok-prompt-'));
+    expect(after).toEqual(before);
+  });
+
   it('keeps tool name mappings isolated across concurrent processes', async () => {
     const first = await adapter.spawn(baseConfig());
     const child2 = createFakeChild();
@@ -282,6 +292,8 @@ describe('GrokAdapter', () => {
 
     // Stopping the first session must not wipe the second's mappings
     await adapter.stop(first.id);
+    child.signalCode = 'SIGTERM';
+    child.emit('exit', null, 'SIGTERM');
     child2.stdout.write(`${JSON.stringify({
       type: 'tool_call_update', toolCallId: 'call-1', status: 'completed', content: [], rawOutput: 'ok', locations: [],
     })}\n`);

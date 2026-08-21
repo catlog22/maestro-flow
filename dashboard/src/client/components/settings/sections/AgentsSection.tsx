@@ -106,6 +106,7 @@ const AGENT_TYPES: { type: AgentType; label: string }[] = [
   { type: 'qwen', label: 'Qwen' },
   { type: 'opencode', label: 'OpenCode' },
   { type: 'pi', label: 'Pi' },
+  { type: 'grok', label: 'Grok' },
 ];
 
 export function AgentsSection() {
