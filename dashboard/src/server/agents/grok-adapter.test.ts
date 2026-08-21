@@ -1,12 +1,23 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { EventEmitter } from 'node:events';
 import { PassThrough } from 'node:stream';
-import { existsSync, readFileSync, readdirSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import type { AgentConfig } from '../../shared/agent-types.js';
 
 const spawnMock = vi.fn();
 const killProcessTreeMock = vi.fn();
+const writeFileSpy = vi.fn();
+
+vi.mock('node:fs', async (importOriginal) => {
+  const mod = await importOriginal<typeof import('node:fs')>();
+  return {
+    ...mod,
+    writeFileSync: (...args: Parameters<typeof writeFileSync>) => {
+      writeFileSpy(...args);
+      return mod.writeFileSync(...args);
+    },
+  };
+});
 
 vi.mock('node:child_process', () => ({
   spawn: (...args: unknown[]) => spawnMock(...args),
@@ -262,13 +273,12 @@ describe('GrokAdapter', () => {
     expect(spawnMock).not.toHaveBeenCalled();
   });
 
-  it('leaves no prompt file behind when the model id is rejected', async () => {
-    const before = readdirSync(tmpdir()).filter((f) => f.startsWith('maestro-grok-prompt-'));
+  it('never writes the prompt file when the model id is rejected', async () => {
+    writeFileSpy.mockClear();
     await expect(
       adapter.spawn({ ...baseConfig(), model: 'safe; printf PWNED' }),
     ).rejects.toThrow(/Invalid model id/);
-    const after = readdirSync(tmpdir()).filter((f) => f.startsWith('maestro-grok-prompt-'));
-    expect(after).toEqual(before);
+    expect(writeFileSpy).not.toHaveBeenCalled();
   });
 
   it('keeps tool name mappings isolated across concurrent processes', async () => {
