@@ -110,7 +110,8 @@ export class GrokAdapter extends BaseAgentAdapter {
   private readonly executable: string;
   private readonly childProcesses = new Map<string, ChildProcess>();
   private readonly readlineInterfaces = new Map<string, ReadlineInterface>();
-  private readonly toolIdNames = new Map<string, string>();
+  /** toolCallId → tool name, scoped per process to avoid cross-session collisions */
+  private readonly toolIdNames = new Map<string, Map<string, string>>();
   private readonly stoppedEmitted = new Set<string>();
   private readonly streamMonitors = new Map<string, StreamMonitor>();
   private readonly promptFiles = new Map<string, string>();
@@ -130,8 +131,9 @@ export class GrokAdapter extends BaseAgentAdapter {
   ): Promise<AgentProcess> {
     // Prompt goes through a temp file: grok takes it as a flag value, and
     // delegate prompts can exceed OS command-line limits / break quoting.
+    // mode 0o600 — the prompt can contain repo context; keep it owner-only.
     const promptFile = join(tmpdir(), `maestro-grok-prompt-${processId}.md`);
-    writeFileSync(promptFile, config.prompt, 'utf-8');
+    writeFileSync(promptFile, config.prompt, { encoding: 'utf-8', mode: 0o600 });
     this.promptFiles.set(processId, promptFile);
 
     const args = this.buildArgs(config, promptFile);
@@ -144,13 +146,17 @@ export class GrokAdapter extends BaseAgentAdapter {
     }
     const childEnv = cleanSpawnEnv(envOverrides);
 
+    // shell is required on Windows to resolve the npm-installed `grok` shim
+    // (grok.cmd); on POSIX the binary is spawned directly, so args are never
+    // shell-interpreted. Model is validated in buildArgs regardless.
+    const useShell = process.platform === 'win32';
     let child: ChildProcess;
     try {
       child = spawn(cmd, [...cmdArgs, ...args], {
         cwd: config.workDir,
         env: childEnv,
         stdio: ['pipe', 'pipe', 'pipe'],
-        shell: true,
+        shell: useShell,
         windowsHide: true,
         // POSIX: own process group so killProcessTree can signal the tree.
         detached: process.platform !== 'win32',
@@ -330,7 +336,12 @@ export class GrokAdapter extends BaseAgentAdapter {
         );
         // Track toolCallId → name mapping for tool_call_update correlation
         if (event.toolCallId) {
-          this.toolIdNames.set(event.toolCallId, name);
+          let names = this.toolIdNames.get(processId);
+          if (!names) {
+            names = new Map();
+            this.toolIdNames.set(processId, names);
+          }
+          names.set(event.toolCallId, name);
         }
         break;
       }
@@ -342,7 +353,7 @@ export class GrokAdapter extends BaseAgentAdapter {
           break;
         }
         const name = event.toolCallId
-          ? (this.toolIdNames.get(event.toolCallId) ?? 'unknown')
+          ? (this.toolIdNames.get(processId)?.get(event.toolCallId) ?? 'unknown')
           : 'unknown';
         const result = this.extractToolResult(event);
         this.emitEntry(
@@ -417,9 +428,17 @@ export class GrokAdapter extends BaseAgentAdapter {
   // --- Helpers ---------------------------------------------------------------
 
   protected buildArgs(config: AgentConfig, promptFile: string): string[] {
+    // Model id is config/request data — restrict to safe characters so it can
+    // never inject a second command under the Windows shell spawn.
+    if (config.model && !/^[A-Za-z0-9._:/-]+$/.test(config.model)) {
+      throw new Error(`[grok] Invalid model id: ${JSON.stringify(config.model)}`);
+    }
+
+    // Quoting is only needed for the cmd.exe shell parse on Windows.
+    const promptArg = process.platform === 'win32' ? `"${promptFile}"` : promptFile;
     const args: string[] = [
       '--output-format', 'streaming-json',
-      '--prompt-file', `"${promptFile}"`,
+      '--prompt-file', promptArg,
     ];
 
     if (config.model) {
@@ -428,6 +447,11 @@ export class GrokAdapter extends BaseAgentAdapter {
 
     if (config.approvalMode === 'auto') {
       args.push('--always-approve');
+    } else {
+      // Headless has no approval channel (stdin is closed). dontAsk keeps
+      // read-only tools working and cleanly denies the rest instead of
+      // blocking on a prompt until the stale timeout kills the session.
+      args.push('--permission-mode', 'dontAsk');
     }
 
     return args;
@@ -507,7 +531,7 @@ export class GrokAdapter extends BaseAgentAdapter {
     }
     this.childProcesses.delete(processId);
     this.thoughtBuffers.delete(processId);
-    this.toolIdNames.clear();
+    this.toolIdNames.delete(processId);
     this.deletePromptFile(processId);
     // Note: stoppedEmitted is intentionally NOT cleared here — it must persist
     // to guard against the readline close fallback timer firing after cleanup.

@@ -246,6 +246,54 @@ describe('GrokAdapter', () => {
     await expect(adapter.sendMessage(process.id, 'follow up')).rejects.toThrow(/not supported/);
   });
 
+  it('passes --permission-mode dontAsk when approvalMode is not auto', async () => {
+    await adapter.spawn(baseConfig());
+
+    const args = spawnMock.mock.calls[0][1] as string[];
+    expect(args[args.indexOf('--permission-mode') + 1]).toBe('dontAsk');
+    expect(args).not.toContain('--always-approve');
+  });
+
+  it('rejects a model id with shell-unsafe characters before spawning', async () => {
+    await expect(
+      adapter.spawn({ ...baseConfig(), model: 'safe; printf PWNED' }),
+    ).rejects.toThrow(/Invalid model id/);
+    expect(spawnMock).not.toHaveBeenCalled();
+  });
+
+  it('keeps tool name mappings isolated across concurrent processes', async () => {
+    const first = await adapter.spawn(baseConfig());
+    const child2 = createFakeChild();
+    child2.pid = 99999;
+    spawnMock.mockReturnValue(child2);
+    const second = await adapter.spawn(baseConfig());
+
+    const entries2: Array<Record<string, unknown>> = [];
+    adapter.onEntry(second.id, (entry) => entries2.push(entry as unknown as Record<string, unknown>));
+
+    // Same toolCallId used by both sessions — names must not collide
+    child.stdout.write(`${JSON.stringify({
+      type: 'tool_call', toolCallId: 'call-1', toolName: 'list_dir', status: 'pending', rawInput: {}, content: [], locations: [],
+    })}\n`);
+    child2.stdout.write(`${JSON.stringify({
+      type: 'tool_call', toolCallId: 'call-1', toolName: 'read_file', status: 'pending', rawInput: {}, content: [], locations: [],
+    })}\n`);
+    await flushLines();
+
+    // Stopping the first session must not wipe the second's mappings
+    await adapter.stop(first.id);
+    child2.stdout.write(`${JSON.stringify({
+      type: 'tool_call_update', toolCallId: 'call-1', status: 'completed', content: [], rawOutput: 'ok', locations: [],
+    })}\n`);
+    await flushLines();
+
+    const tools = entries2.filter((entry) => entry.type === 'tool_use');
+    expect(tools.at(-1)).toMatchObject({ name: 'read_file', status: 'completed', result: 'ok' });
+
+    child2.exitCode = 0;
+    child2.emit('exit', 0, null);
+  });
+
   it('emits stopped status on exit and deletes the prompt file', async () => {
     const process = await adapter.spawn(baseConfig());
     const entries: Array<Record<string, unknown>> = [];

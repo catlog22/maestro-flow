@@ -924,9 +924,9 @@ export function getExtraMcpTargetSpec(targetId: ExtraMcpTargetId): ExtraMcpTarge
 // sections and comments are preserved.
 // ---------------------------------------------------------------------------
 
-/** Escape a value for use inside a TOML basic string */
+/** Escape a value for use inside a TOML basic string (JSON escapes are a valid subset) */
 function tomlBasicString(value: string): string {
-  return `"${value.replace(/\\/g, '\\\\').replace(/"/g, '\\"')}"`;
+  return JSON.stringify(value);
 }
 
 /** Render the `[mcp_servers.maestro-tools]` TOML table (trailing newline included) */
@@ -947,16 +947,19 @@ function buildTomlServerSection(enabledTools: string[], projectRoot?: string): s
 
 /**
  * Remove the `[mcp_servers.<name>]` section (header + body) from TOML text.
- * Returns null when the section is absent.
+ * Matches only a real line-anchored table header — never a comment or string
+ * containing the same text. Returns null when the section is absent.
  */
 function stripTomlServerSection(content: string, serverName: string): string | null {
-  const header = `[mcp_servers.${serverName}]`;
-  const start = content.indexOf(header);
-  if (start === -1) return null;
-  // The section body runs until the next table header or EOF.
-  const rest = content.slice(start + header.length);
+  const escaped = serverName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const headerRe = new RegExp(`^\\[mcp_servers\\.${escaped}\\][ \\t]*$`, 'm');
+  const match = headerRe.exec(content);
+  if (match === null) return null;
+  const start = match.index;
+  // The section body runs until the next line-anchored table header or EOF.
+  const rest = content.slice(start + match[0].length);
   const nextHeader = rest.search(/^\[/m);
-  const end = nextHeader === -1 ? content.length : start + header.length + nextHeader;
+  const end = nextHeader === -1 ? content.length : start + match[0].length + nextHeader;
   const removed = content.slice(0, start) + content.slice(end);
   // Collapse 3+ consecutive blank lines left behind by the removal.
   return removed.replace(/\n{3,}/g, '\n\n');

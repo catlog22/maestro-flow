@@ -128,6 +128,7 @@ export function AgentsSection() {
       qwen: 'settings.agents.qwen_desc',
       opencode: 'settings.agents.opencode_desc',
       pi: 'settings.agents.pi_desc',
+      grok: 'settings.agents.grok_desc',
     };
     return t(keyMap[type] ?? 'settings.agents.claude_code_desc');
   };
