@@ -21,7 +21,7 @@ import { createCliHistoryRoutes } from './cli-history.js';
 import { createMcpRoutes } from './mcp.js';
 import { createInstallRoutes } from './install.js';
 import { createSpecsRoutes } from './specs.js';
-import { createWikiRoutes, createSharedWikiWriter } from './wiki.js';
+import { createSharedWikiWriter } from './wiki.js';
 import { createLinearRoutes } from './linear.js';
 import { createTeamRoutes } from './teams.js';
 import { createCollabRoutes } from './collab.js';
@@ -44,6 +44,8 @@ import type { TaskSchedulerService } from '../supervisor/task-scheduler-service.
 import type { ExtensionManager } from '../supervisor/extension-manager.js';
 import type { PromptRegistry } from '../prompt/prompt-registry.js';
 import type { RoomSessionManager } from '../rooms/room-session-manager.js';
+
+export type DisposableDashboardRoutes = Hono & { dispose: () => void };
 
 /**
  * Aggregate all route modules into a single Hono app.
@@ -71,7 +73,7 @@ export function createRoutes(
     promptRegistry: PromptRegistry;
   },
   roomSessionManager?: RoomSessionManager,
-): Hono {
+): DisposableDashboardRoutes {
   const routes = new Hono();
 
   // Dynamic getter — follows workspace switches
@@ -124,11 +126,11 @@ export function createRoutes(
   routes.route('/', createCliHistoryRoutes());
 
   // Unified wiki endpoint (graph-aware view + scoped writes across .workflow/)
-  const { routes: wikiRoutes, getWriter } = createSharedWikiWriter(getRoot, eventBus);
+  const { routes: wikiRoutes, getContext, dispose: disposeWiki } = createSharedWikiWriter(getRoot, eventBus);
   routes.route('/', wikiRoutes);
 
-  // Specs CRUD routes — delegate writes to shared WikiWriter
-  routes.route('/', createSpecsRoutes(getRoot, getWriter()));
+  // Specs CRUD routes — resolve the shared workspace context per request.
+  routes.route('/', createSpecsRoutes(getRoot, getContext));
 
   // MCP server management routes
   routes.route('/', createMcpRoutes());
@@ -186,6 +188,6 @@ export function createRoutes(
   //   ));
   // }
 
-  return routes;
+  return Object.assign(routes, { dispose: disposeWiki });
 }
 

@@ -43,6 +43,18 @@ export type { ParsedFrontmatter, SpecEntry };
 
 type SpecScope = 'project' | 'global' | 'all';
 
+export interface SpecsWikiContext {
+  workflowRoot: string;
+  writer: WikiWriter;
+}
+
+export type SpecsWikiWriterSource = WikiWriter | (() => WikiWriter | SpecsWikiContext);
+
+function isSpecsWikiContext(value: WikiWriter | SpecsWikiContext): value is SpecsWikiContext {
+  const candidate = value as Partial<SpecsWikiContext>;
+  return typeof candidate.workflowRoot === 'string' && candidate.writer instanceof WikiWriter;
+}
+
 interface SpecFileMeta {
   name: string;
   path: string;
@@ -153,10 +165,18 @@ function withWriteLock<T>(fn: () => Promise<T>): Promise<T> {
  */
 export function createSpecsRoutes(
   workflowRoot: string | (() => string),
-  writer?: WikiWriter,
+  writerSource?: SpecsWikiWriterSource,
 ): Hono {
   const app = new Hono();
   const resolveRoot = () => typeof workflowRoot === 'function' ? workflowRoot() : workflowRoot;
+  const resolveRequestContext = (): { workflowRoot: string; writer?: WikiWriter } => {
+    if (typeof writerSource === 'function') {
+      const resolved = writerSource();
+      if (isSpecsWikiContext(resolved)) return resolved;
+      return { workflowRoot: resolveRoot(), writer: resolved };
+    }
+    return { workflowRoot: resolveRoot(), writer: writerSource };
+  };
 
   // -------------------------------------------------------------------------
   // Helper: load entries from a single specs directory, tagging with scope
@@ -201,7 +221,8 @@ export function createSpecsRoutes(
 
   app.get('/api/specs/scopes', async (c) => {
     try {
-      const projectDir = await getSpecsDir(resolveRoot());
+      const requestContext = resolveRequestContext();
+      const projectDir = await getSpecsDir(requestContext.workflowRoot);
       const globalDir = getGlobalSpecsDir();
 
       const projectFiles = await listSpecFiles(projectDir);
@@ -226,11 +247,12 @@ export function createSpecsRoutes(
 
   app.get('/api/specs', async (c) => {
     try {
+      const requestContext = resolveRequestContext();
       const scope = parseScope(c.req.query('scope'));
       const allEntries: (SpecEntry & { scope: string })[] = [];
 
       if (scope === 'project' || scope === 'all') {
-        const specsDir = await getSpecsDir(resolveRoot());
+        const specsDir = await getSpecsDir(requestContext.workflowRoot);
         allEntries.push(...await loadEntriesFromDir(specsDir, 'project'));
       }
       if (scope === 'global' || scope === 'all') {
@@ -252,11 +274,12 @@ export function createSpecsRoutes(
 
   app.get('/api/specs/files', async (c) => {
     try {
+      const requestContext = resolveRequestContext();
       const scope = parseScope(c.req.query('scope'));
       const allFiles: SpecFileMeta[] = [];
 
       if (scope === 'project' || scope === 'all') {
-        const specsDir = await getSpecsDir(resolveRoot());
+        const specsDir = await getSpecsDir(requestContext.workflowRoot);
         allFiles.push(...await loadFilesFromDir(specsDir, 'project'));
       }
       if (scope === 'global' || scope === 'all') {
@@ -278,6 +301,7 @@ export function createSpecsRoutes(
 
   app.get('/api/specs/file/:name', async (c) => {
     try {
+      const requestContext = resolveRequestContext();
       const name = c.req.param('name');
       if (!/^[\w-]+\.md$/i.test(name)) {
         return c.json({ error: 'Invalid file name' }, 400);
@@ -286,7 +310,7 @@ export function createSpecsRoutes(
       const scope = c.req.query('scope') === 'global' ? 'global' : 'project';
       const specsDir = scope === 'global'
         ? getGlobalSpecsDir()
-        : await getSpecsDir(resolveRoot());
+        : await getSpecsDir(requestContext.workflowRoot);
 
       let raw: string;
       try {
@@ -328,11 +352,12 @@ export function createSpecsRoutes(
       const entryCategory = typeof type === 'string' && ENTRY_TYPES.includes(type as EntryType) ? type : 'learning';
       const stem = basename(fileName, extname(fileName));
       const containerId = `spec-${stem}`;
+      const requestContext = resolveRequestContext();
 
-      // Delegate to WikiWriter when available (unified write path)
-      if (writer) {
+      // Delegate to the writer resolved for this request when available.
+      if (requestContext.writer) {
         try {
-          const entry = await writer.appendEntry({
+          const entry = await requestContext.writer.appendEntry({
             containerId,
             category: entryCategory,
             content: content.trim(),
@@ -363,7 +388,7 @@ export function createSpecsRoutes(
       let newId = '';
 
       await withWriteLock(async () => {
-        const specsDir = await getSpecsDir(resolveRoot());
+        const specsDir = await getSpecsDir(requestContext.workflowRoot);
         let existing = '';
         try {
           existing = await readSpecFile(specsDir, fileName);
@@ -396,13 +421,14 @@ export function createSpecsRoutes(
   app.delete('/api/specs/:id', async (c) => {
     try {
       const targetId = c.req.param('id');
+      const requestContext = resolveRequestContext();
 
-      // Delegate to WikiWriter when available (unified write path).
+      // Delegate to the writer resolved for this request when available.
       // Wiki entry IDs are prefixed: "spec-learnings-003" vs spec API "learnings-003".
-      if (writer) {
+      if (requestContext.writer) {
         const wikiEntryId = targetId.startsWith('spec-') ? targetId : `spec-${targetId}`;
         try {
-          await writer.removeEntry(wikiEntryId);
+          await requestContext.writer.removeEntry(wikiEntryId);
           return c.json({ success: true });
         } catch (err) {
           if (err instanceof WikiWriteError) {
@@ -429,7 +455,7 @@ export function createSpecsRoutes(
       let found = false;
 
       await withWriteLock(async () => {
-        const specsDir = await getSpecsDir(resolveRoot());
+        const specsDir = await getSpecsDir(requestContext.workflowRoot);
         let raw: string;
         try {
           raw = await readSpecFile(specsDir, fileName);

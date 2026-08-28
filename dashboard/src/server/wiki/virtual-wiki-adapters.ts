@@ -4,6 +4,19 @@ import { DatabaseSync } from 'node:sqlite';
 
 import type { GraphNode, GraphEdge, Layer, TourStep, KnowledgeGraph } from '../../../../src/graph/types.js';
 import type { WikiEntry, WikiStatus } from './wiki-types.js';
+import { resolveAllowedDirectSourcePath, resolveAllowedSourcePath } from './source-path.js';
+
+async function readAllowedSourceText(candidate: string, allowedRoot: string): Promise<string> {
+  const realPath = resolveAllowedSourcePath(candidate, allowedRoot, 'file');
+  if (!realPath) throw new Error(`source escapes allowed root: ${candidate}`);
+  return readFile(realPath, 'utf-8');
+}
+
+async function readAllowedSourceDir(candidate: string, allowedRoot: string): Promise<string[]> {
+  const realPath = resolveAllowedSourcePath(candidate, allowedRoot, 'directory');
+  if (!realPath) return [];
+  try { return await readdir(realPath); } catch { return []; }
+}
 
 /**
  * Lightweight YAML-subset parser for report.md frontmatter handoff fields
@@ -956,6 +969,7 @@ async function readRunKnowledge(
   runDir: string,
   run: RunModeRun,
   registry: RunModeRegistry,
+  allowedRoot: string,
 ): Promise<{
   summary: string;
   body: string;
@@ -977,7 +991,7 @@ async function readRunKnowledge(
     const absPath = resolve(sessionDir, artifact.path);
     if (!absPath.startsWith(`${resolve(sessionDir)}${sep}`)) continue;
     try {
-      const raw = await readFile(absPath, 'utf-8');
+      const raw = await readAllowedSourceText(absPath, allowedRoot);
       bodies.push(raw.slice(0, 50_000));
       if (!summary && artifact.path.toLowerCase().endsWith('.json')) {
         try { summary = extractArtifactSummary(JSON.parse(raw)); } catch { /* malformed artifact is ignored */ }
@@ -986,7 +1000,7 @@ async function readRunKnowledge(
   }
 
   let report = '';
-  try { report = await readFile(join(runDir, 'report.md'), 'utf-8'); } catch { /* projection is optional */ }
+  try { report = await readAllowedSourceText(join(runDir, 'report.md'), allowedRoot); } catch { /* projection is optional */ }
   if (!summary) {
     summary = extractReportSummary(report);
   }
@@ -1164,16 +1178,23 @@ function normalizeRunModeRun(raw: Record<string, unknown>, legacyGates: LegacyRu
 }
 
 /** command-run generations keep canonical gate details in session-level gates.json. */
-async function readLegacySessionGates(sessionDir: string): Promise<LegacyRunModeGate[]> {
+async function readLegacySessionGates(
+  sessionDir: string,
+  allowedRoot: string,
+): Promise<LegacyRunModeGate[]> {
   try {
-    const registry = JSON.parse(await readFile(join(sessionDir, 'gates.json'), 'utf-8')) as {
+    const registry = JSON.parse(await readAllowedSourceText(join(sessionDir, 'gates.json'), allowedRoot)) as {
       gates?: Record<string, LegacyRunModeGate>;
     };
     return Object.entries(registry.gates ?? {}).map(([id, gate]) => ({ ...gate, id }));
   } catch { return []; }
 }
 
-async function readPromotedKnowledgeRefs(sessionDir: string, runNames: string[]): Promise<string[]> {
+async function readPromotedKnowledgeRefs(
+  sessionDir: string,
+  runNames: string[],
+  allowedRoot: string,
+): Promise<string[]> {
   const paths = [
     join(sessionDir, 'knowledge-delta.json'),
     ...runNames.map(runName => join(sessionDir, 'runs', runName, 'knowledge-delta.json')),
@@ -1181,7 +1202,7 @@ async function readPromotedKnowledgeRefs(sessionDir: string, runNames: string[])
   const refs: string[] = [];
   for (const path of paths) {
     try {
-      const delta = JSON.parse(await readFile(path, 'utf-8')) as {
+      const delta = JSON.parse(await readAllowedSourceText(path, allowedRoot)) as {
         candidates?: Array<{ status?: string; target?: string; promoted_id?: string | null }>;
       };
       for (const candidate of delta.candidates ?? []) {
@@ -1199,9 +1220,12 @@ async function readPromotedKnowledgeRefs(sessionDir: string, runNames: string[])
 export async function loadRunModeSessionEntries(
   sessionAbsPath: string,
   sessionRelPath: string,
+  allowedRoot = dirname(sessionAbsPath),
 ): Promise<WikiEntry[]> {
+  const realSessionPath = resolveAllowedSourcePath(sessionAbsPath, allowedRoot, 'file');
+  if (!realSessionPath) return [];
   let session: RunModeSession | null;
-  try { session = normalizeRunModeSession(JSON.parse(await readFile(sessionAbsPath, 'utf-8'))); } catch { return []; }
+  try { session = normalizeRunModeSession(JSON.parse(await readAllowedSourceText(realSessionPath, allowedRoot))); } catch { return []; }
   if (!session) {
     if (process.env.MAESTRO_DEBUG === '1') {
       warn(`run-session-schema:${sessionAbsPath}`, `unsupported run-mode session schema at ${sessionAbsPath}`);
@@ -1210,13 +1234,13 @@ export async function loadRunModeSessionEntries(
   }
   if (!isIndexedSessionLifecycle(session)) return [];
 
-  const sessionDir = dirname(sessionAbsPath);
+  const sessionDir = dirname(realSessionPath);
   const sessionId = session.session_id ?? basename(sessionDir);
   const sessionSlug = slugify(sessionId);
   if (!sessionSlug) return [];
 
   let registry: RunModeRegistry | null = null;
-  try { registry = normalizeRunModeRegistry(JSON.parse(await readFile(join(sessionDir, 'artifacts.json'), 'utf-8'))); } catch { /* missing registry → unsupported */ }
+  try { registry = normalizeRunModeRegistry(JSON.parse(await readAllowedSourceText(join(sessionDir, 'artifacts.json'), allowedRoot))); } catch { /* missing registry → unsupported */ }
   if (!registry) {
     if (process.env.MAESTRO_DEBUG === '1') {
       warn(`run-artifacts-schema:${sessionDir}`, `unsupported run-mode artifact registry schema at ${sessionDir}`);
@@ -1224,14 +1248,14 @@ export async function loadRunModeSessionEntries(
     return [];
   }
 
-  const legacyGates = await readLegacySessionGates(sessionDir);
+  const legacyGates = await readLegacySessionGates(sessionDir, allowedRoot);
   const runEntries: WikiEntry[] = [];
   const runsRoot = join(sessionDir, 'runs');
-  const runNames = (await safeReadDirNames(runsRoot)).sort(compareRunDirectories);
+  const runNames = (await readAllowedSourceDir(runsRoot, allowedRoot)).sort(compareRunDirectories);
   for (const runName of runNames) {
     const runDir = join(runsRoot, runName);
     let run: RunModeRun | null;
-    try { run = normalizeRunModeRun(JSON.parse(await readFile(join(runDir, 'run.json'), 'utf-8')), legacyGates); } catch { continue; }
+    try { run = normalizeRunModeRun(JSON.parse(await readAllowedSourceText(join(runDir, 'run.json'), allowedRoot)), legacyGates); } catch { continue; }
     if (!run) {
       if (process.env.MAESTRO_DEBUG === '1') {
         warn(`run-schema:${runDir}`, `unsupported run schema at ${runDir}`);
@@ -1241,7 +1265,7 @@ export async function loadRunModeSessionEntries(
     if (!isIndexedRunLifecycle(run)) continue;
     const runId = run.run_id ?? runName;
     const command = run.command?.trim() || 'run';
-    const knowledge = await readRunKnowledge(sessionDir, runDir, run, registry);
+    const knowledge = await readRunKnowledge(sessionDir, runDir, run, registry, allowedRoot);
     const runRel = `${sessionRelPath.replace(/\/session\.json$/, '')}/runs/${runName}/run.json`;
     const verdictTag = run.handoff?.verdict ? [`verdict:${run.handoff.verdict}`] : [];
     const constraintTag = knowledge.hasLockedConstraints ? ['constraint'] : [];
@@ -1294,7 +1318,7 @@ export async function loadRunModeSessionEntries(
   const summary = latest?.summary || session.lifecycle?.seal_summary || session.intent || '';
   const promotedRefs = [...new Set([
     ...(session.lifecycle?.promoted ?? []).map(ref => ref.trim()).filter(Boolean),
-    ...(await readPromotedKnowledgeRefs(sessionDir, runNames)),
+    ...(await readPromotedKnowledgeRefs(sessionDir, runNames, allowedRoot)),
   ])];
   const sessionEntry: WikiEntry = {
     id: `session-${sessionSlug}`,
@@ -1321,10 +1345,6 @@ export async function loadRunModeSessionEntries(
     parent: null,
   };
   return [sessionEntry, ...runEntries];
-}
-
-async function safeReadDirNames(dir: string): Promise<string[]> {
-  try { return await readdir(dir); } catch { return []; }
 }
 
 // ── Claude Code / Codex session adapters ─────────────────────────────────
@@ -1369,10 +1389,16 @@ function deriveRelatedFromPaths(filePaths: Set<string>, sessionCwd: string): str
   return related.slice(0, 20);
 }
 
-async function readSessionHead(absPath: string, maxBytes = MAX_SESSION_READ_BYTES): Promise<string[]> {
+async function readSessionHead(
+  absPath: string,
+  maxBytes = MAX_SESSION_READ_BYTES,
+  allowedRoot = dirname(absPath),
+): Promise<string[]> {
+  const realPath = resolveAllowedDirectSourcePath(absPath, allowedRoot, 'file');
+  if (!realPath) return [];
   let handle;
   try {
-    handle = await open(absPath, 'r');
+    handle = await open(realPath, 'r');
     const buf = Buffer.alloc(maxBytes);
     const { bytesRead } = await handle.read(buf, 0, buf.length, 0);
     const text = buf.subarray(0, bytesRead).toString('utf-8');
@@ -1386,8 +1412,8 @@ async function readSessionHead(absPath: string, maxBytes = MAX_SESSION_READ_BYTE
   }
 }
 
-async function peekSessionCwd(absPath: string): Promise<string | null> {
-  const lines = await readSessionHead(absPath, MAX_SESSION_PEEK_BYTES);
+async function peekSessionCwd(absPath: string, allowedRoot: string): Promise<string | null> {
+  const lines = await readSessionHead(absPath, MAX_SESSION_PEEK_BYTES, allowedRoot);
   for (const line of lines.slice(0, 10)) {
     try {
       const row = JSON.parse(line) as Record<string, unknown>;
@@ -1621,8 +1647,10 @@ export async function loadClaudeCodeSessions(
   maxAgeDays: number,
   maxFiles: number,
 ): Promise<WikiEntry[]> {
-  const names = await safeReaddirLocal(projectDir);
-  const jsonlFiles = names.filter(n => n.endsWith('.jsonl'));
+  const realProjectDir = resolveAllowedSourcePath(projectDir, projectDir, 'directory');
+  if (!realProjectDir) return [];
+  const names = await readAllowedSourceDir(realProjectDir, realProjectDir);
+  const jsonlFiles = names.filter(n => n.endsWith('.jsonl')).slice(0, maxFiles * 3);
   const cutoff = Date.now() - maxAgeDays * 86400000;
   const { stat: fsStat } = await import('node:fs/promises');
 
@@ -1630,7 +1658,9 @@ export async function loadClaudeCodeSessions(
   const candidates: FileInfo[] = [];
   for (const name of jsonlFiles) {
     try {
-      const s = await fsStat(`${projectDir}/${name}`);
+      const candidate = resolveAllowedDirectSourcePath(join(realProjectDir, name), realProjectDir, 'file');
+      if (!candidate) continue;
+      const s = await fsStat(candidate);
       if (s.mtimeMs >= cutoff && s.size > 200) {
         candidates.push({ name, mtime: s.mtimeMs });
       }
@@ -1640,8 +1670,8 @@ export async function loadClaudeCodeSessions(
 
   const out: WikiEntry[] = [];
   for (const c of candidates.slice(0, maxFiles)) {
-    const absPath = `${projectDir}/${c.name}`;
-    const lines = await readSessionHead(absPath);
+    const absPath = join(realProjectDir, c.name);
+    const lines = await readSessionHead(absPath, MAX_SESSION_READ_BYTES, realProjectDir);
     if (lines.length === 0) continue;
     const entry = adaptClaudeCodeSession(lines, `~/.claude/projects/${projectSlug}/${c.name}`, projectSlug);
     if (entry) out.push(entry);
@@ -1778,10 +1808,10 @@ export interface CodexSessionIndex {
 }
 
 export async function loadCodexSessionIndex(codexRoot: string): Promise<Map<string, string>> {
-  const indexPath = `${codexRoot}/session_index.jsonl`;
+  const indexPath = join(codexRoot, 'session_index.jsonl');
   const titleMap = new Map<string, string>();
   let raw: string;
-  try { raw = await readFile(indexPath, 'utf-8'); } catch { return titleMap; }
+  try { raw = await readAllowedSourceText(indexPath, codexRoot); } catch { return titleMap; }
   for (const line of raw.split(/\r?\n/)) {
     if (!line.trim()) continue;
     try {
@@ -1800,12 +1830,20 @@ export async function loadCodexSessions(
   maxAgeDays: number,
   maxFiles: number,
 ): Promise<WikiEntry[]> {
-  const sessionsDir = `${codexRoot}/sessions`;
-  const titleMap = await loadCodexSessionIndex(codexRoot);
+  const realCodexRoot = resolveAllowedSourcePath(codexRoot, codexRoot, 'directory');
+  if (!realCodexRoot) return [];
+  const sessionsDir = join(realCodexRoot, 'sessions');
+  const titleMap = await loadCodexSessionIndex(realCodexRoot);
   const cutoff = Date.now() - maxAgeDays * 86400000;
   const { stat: fsStat } = await import('node:fs/promises');
 
-  const allFiles = await findJsonlFilesRecursive(sessionsDir, 3);
+  const allFiles = await findJsonlFilesRecursive(
+    sessionsDir,
+    3,
+    0,
+    realCodexRoot,
+    maxFiles * 3,
+  );
   type FileInfo = { absPath: string; relPath: string; mtime: number };
   const candidates: FileInfo[] = [];
   for (const f of allFiles) {
@@ -1825,13 +1863,13 @@ export async function loadCodexSessions(
     if (out.length >= maxFiles) break;
 
     // Phase 1: peek first 8KB to check CWD match (avoids reading 512KB for non-matching sessions)
-    const sessionCwd = await peekSessionCwd(c.absPath);
+    const sessionCwd = await peekSessionCwd(c.absPath, realCodexRoot);
     if (!sessionCwd) continue;
     const normalizedSessionCwd = sessionCwd.replace(/\\/g, '/').toLowerCase();
     if (normalizedSessionCwd !== normalizedProjectCwd) continue;
 
     // Phase 2: full read only for matching sessions
-    const lines = await readSessionHead(c.absPath);
+    const lines = await readSessionHead(c.absPath, MAX_SESSION_READ_BYTES, realCodexRoot);
     if (lines.length === 0) continue;
 
     let sessionId: string | null = null;
@@ -1857,32 +1895,40 @@ async function findJsonlFilesRecursive(
   dir: string,
   maxDepth: number,
   currentDepth = 0,
+  allowedRoot = dir,
+  maxResults = 2_000,
 ): Promise<Array<{ absPath: string; relPath: string }>> {
   if (currentDepth > maxDepth) return [];
+  const realDir = resolveAllowedDirectSourcePath(dir, allowedRoot, 'directory');
+  if (!realDir) return [];
   const out: Array<{ absPath: string; relPath: string }> = [];
-  const names = await safeReaddirLocal(dir);
+  const names = (await readAllowedSourceDir(realDir, allowedRoot)).sort().reverse();
   const { stat: fsStat } = await import('node:fs/promises');
 
   for (const name of names) {
-    const full = `${dir}/${name}`;
+    const full = join(realDir, name);
     try {
-      const s = await fsStat(full);
+      const realChild = resolveAllowedDirectSourcePath(full, allowedRoot, 'any');
+      if (!realChild) continue;
+      const s = await fsStat(realChild);
       if (s.isDirectory()) {
-        const sub = await findJsonlFilesRecursive(full, maxDepth, currentDepth + 1);
+        const sub = await findJsonlFilesRecursive(
+          realChild,
+          maxDepth,
+          currentDepth + 1,
+          allowedRoot,
+          Math.max(0, maxResults - out.length),
+        );
         out.push(...sub);
       } else if (name.endsWith('.jsonl')) {
-        const sessionsIdx = full.replace(/\\/g, '/').indexOf('/sessions/');
-        const relPath = sessionsIdx >= 0 ? `sessions${full.replace(/\\/g, '/').slice(sessionsIdx + '/sessions'.length)}` : name;
-        out.push({ absPath: full, relPath });
+        const sessionsIdx = realChild.replace(/\\/g, '/').indexOf('/sessions/');
+        const relPath = sessionsIdx >= 0 ? `sessions${realChild.replace(/\\/g, '/').slice(sessionsIdx + '/sessions'.length)}` : name;
+        out.push({ absPath: realChild, relPath });
       }
+      if (out.length >= maxResults) break;
     } catch { continue; }
   }
-  return out;
-}
-
-async function safeReaddirLocal(dir: string): Promise<string[]> {
-  const { readdir: fsReaddir } = await import('node:fs/promises');
-  try { return await fsReaddir(dir); } catch { return []; }
+  return out.slice(0, maxResults);
 }
 
 export function cwdToClaudeProjectSlug(cwd: string): string {

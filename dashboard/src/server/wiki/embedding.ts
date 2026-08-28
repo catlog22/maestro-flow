@@ -11,7 +11,8 @@
 import { join } from 'node:path';
 import { homedir } from 'node:os';
 import { createHash } from 'node:crypto';
-import { readFileSync, writeFileSync, existsSync, mkdirSync, unlinkSync, renameSync, readdirSync } from 'node:fs';
+import { closeSync, existsSync, mkdirSync, openSync, readFileSync, readSync, readdirSync, renameSync, rmSync, statSync, unlinkSync, writeFileSync } from 'node:fs';
+import { open, rm, type FileHandle } from 'node:fs/promises';
 
 // ---------------------------------------------------------------------------
 // Lazy zvec import — avoids hard failure when @zvec/zvec is not installed
@@ -78,6 +79,35 @@ export interface EmbeddingApiConfig {
 }
 
 const API_CONFIG_PATH = join(homedir(), '.maestro', 'api-embedding.json');
+const DEFAULT_API_CONCURRENCY = 4;
+const DEFAULT_CONTEXT_LENGTH = 8192;
+const MAX_TEXTS_PER_REQUEST = 256;
+const MAX_API_CONCURRENCY = 64;
+const MAX_EMBEDDING_DIMENSION = 65_536;
+
+function isBoundedPositiveInteger(value: unknown, max: number): value is number {
+  return Number.isSafeInteger(value) && (value as number) > 0 && (value as number) <= max;
+}
+
+/** Validate and narrow the persisted external embedding API configuration. */
+export function validateEmbeddingApiConfig(raw: unknown): EmbeddingApiConfig | null {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null;
+  const candidate = raw as Record<string, unknown>;
+  if (
+    typeof candidate.baseUrl !== 'string' || candidate.baseUrl.length === 0
+    || typeof candidate.apiKey !== 'string' || candidate.apiKey.length === 0
+    || typeof candidate.model !== 'string' || candidate.model.length === 0
+  ) return null;
+  if (candidate.dimensions !== undefined
+    && !isBoundedPositiveInteger(candidate.dimensions, MAX_EMBEDDING_DIMENSION)) return null;
+  if (candidate.batchSize !== undefined
+    && !isBoundedPositiveInteger(candidate.batchSize, MAX_TEXTS_PER_REQUEST)) return null;
+  if (candidate.concurrency !== undefined
+    && !isBoundedPositiveInteger(candidate.concurrency, MAX_API_CONCURRENCY)) return null;
+  if (candidate.contextLength !== undefined
+    && !isBoundedPositiveInteger(candidate.contextLength, 1_000_000)) return null;
+  return candidate as unknown as EmbeddingApiConfig;
+}
 
 // ---------------------------------------------------------------------------
 // Local model path configuration (~/.maestro/local-embedding.json or env)
@@ -137,13 +167,9 @@ export function loadEmbeddingApiConfig(): EmbeddingApiConfig | null {
     return null;
   }
   try {
-    const raw = JSON.parse(readFileSync(API_CONFIG_PATH, 'utf-8')) as EmbeddingApiConfig;
-    if (raw.baseUrl && raw.apiKey && raw.model) {
-      _apiConfig = raw;
-      return raw;
-    }
-    _apiConfig = null;
-    return null;
+    const raw = JSON.parse(readFileSync(API_CONFIG_PATH, 'utf-8')) as unknown;
+    _apiConfig = validateEmbeddingApiConfig(raw);
+    return _apiConfig;
   } catch {
     _apiConfig = null;
     return null;
@@ -189,8 +215,36 @@ async function getFetcher(): Promise<FetchFn> {
 const MAX_RETRIES = 2;
 const RETRY_STATUS = new Set([429, 500, 502, 503, 504]);
 
+function throwIfAborted(signal?: AbortSignal): void {
+  signal?.throwIfAborted();
+}
+
+async function abortableDelay(ms: number, signal?: AbortSignal): Promise<void> {
+  throwIfAborted(signal);
+  if (!signal) {
+    await new Promise(resolve => setTimeout(resolve, ms));
+    return;
+  }
+  await new Promise<void>((resolve, reject) => {
+    const timer = setTimeout(() => {
+      signal.removeEventListener('abort', onAbort);
+      resolve();
+    }, ms);
+    const onAbort = () => {
+      clearTimeout(timer);
+      reject(signal.reason ?? new DOMException('The operation was aborted', 'AbortError'));
+    };
+    signal.addEventListener('abort', onAbort, { once: true });
+  });
+}
+
 async function fetchBatchWithRetry(
-  doFetch: FetchFn, url: string, batch: string[], batchOffset: number, config: EmbeddingApiConfig,
+  doFetch: FetchFn,
+  url: string,
+  batch: string[],
+  batchOffset: number,
+  config: EmbeddingApiConfig,
+  signal?: AbortSignal,
 ): Promise<Float32Array[]> {
   const body: Record<string, unknown> = { model: config.model, input: batch, encoding_format: 'float' };
   if (config.dimensions) body.dimensions = config.dimensions;
@@ -198,11 +252,15 @@ async function fetchBatchWithRetry(
     method: 'POST',
     headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${config.apiKey}` },
     body: JSON.stringify(body),
+    signal,
   };
 
   let lastErr: Error | null = null;
   for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
-    if (attempt > 0) await new Promise(r => setTimeout(r, Math.min(1000 * 2 ** (attempt - 1), 4000)));
+    throwIfAborted(signal);
+    if (attempt > 0) {
+      await abortableDelay(Math.min(1000 * 2 ** (attempt - 1), 4000), signal);
+    }
     try {
       const resp = await doFetch(url, reqInit);
       if (!resp.ok) {
@@ -214,15 +272,35 @@ async function fetchBatchWithRetry(
       if (!Array.isArray(json.data)) throw new Error(`Embedding API returned invalid data: missing "data" array`);
 
       const out = new Array<Float32Array>(batch.length);
+      let responseDimension: number | null = null;
       for (const item of json.data as Array<{ embedding?: number[]; index?: number }>) {
-        if (!Array.isArray(item.embedding) || typeof item.index !== 'number') continue;
-        out[item.index] = new Float32Array(item.embedding);
+        if (!Array.isArray(item.embedding) || !Number.isSafeInteger(item.index)) continue;
+        const index = item.index!;
+        if (index < 0 || index >= batch.length || out[index]) {
+          throw new Error(`Embedding API returned invalid or duplicate input index ${index}`);
+        }
+        const dimension = item.embedding.length;
+        if (!isBoundedPositiveInteger(dimension, MAX_EMBEDDING_DIMENSION)) {
+          throw new Error(`Embedding API returned invalid vector dimension ${dimension}`);
+        }
+        if (config.dimensions !== undefined && dimension !== config.dimensions) {
+          throw new Error(`Embedding API returned dimension ${dimension}; expected ${config.dimensions}`);
+        }
+        if (responseDimension !== null && dimension !== responseDimension) {
+          throw new Error(`Embedding API returned inconsistent vector dimensions ${responseDimension} and ${dimension}`);
+        }
+        if (!item.embedding.every(Number.isFinite)) {
+          throw new Error('Embedding API returned a vector containing a non-finite value');
+        }
+        responseDimension = dimension;
+        out[index] = new Float32Array(item.embedding);
       }
       for (let j = 0; j < batch.length; j++) {
         if (!out[j]) throw new Error(`Embedding API returned no vector for input index ${j} in batch starting at ${batchOffset}`);
       }
       return out;
     } catch (e: unknown) {
+      throwIfAborted(signal);
       lastErr = e instanceof Error ? e : new Error(String(e));
       const isNetwork = lastErr.message.includes('fetch failed') || lastErr.message.includes('ECONNREFUSED') || lastErr.message.includes('Timeout');
       if (isNetwork && attempt < MAX_RETRIES) continue;
@@ -231,10 +309,6 @@ async function fetchBatchWithRetry(
   }
   throw lastErr!;
 }
-
-const DEFAULT_API_CONCURRENCY = 4;
-const DEFAULT_CONTEXT_LENGTH = 8192;
-const MAX_TEXTS_PER_REQUEST = 256;
 
 function estimateTokens(text: string): number {
   let ascii = 0;
@@ -276,8 +350,14 @@ function buildChunks(texts: string[], config: EmbeddingApiConfig): { offset: num
   return chunks;
 }
 
-async function callEmbeddingApi(texts: string[], config: EmbeddingApiConfig): Promise<Float32Array[]> {
+async function callEmbeddingApi(
+  texts: string[],
+  config: EmbeddingApiConfig,
+  signal?: AbortSignal,
+): Promise<Float32Array[]> {
+  throwIfAborted(signal);
   const doFetch = await getFetcher();
+  throwIfAborted(signal);
   const url = config.baseUrl.replace(/\/+$/, '') + '/embeddings';
   const concurrency = config.concurrency ?? DEFAULT_API_CONCURRENCY;
 
@@ -287,9 +367,10 @@ async function callEmbeddingApi(texts: string[], config: EmbeddingApiConfig): Pr
 
   let firstErr: Error | null = null;
   for (let w = 0; w < chunks.length; w += concurrency) {
+    throwIfAborted(signal);
     const window = chunks.slice(w, w + concurrency);
     const settled = await Promise.allSettled(
-      window.map(c => fetchBatchWithRetry(doFetch, url, c.batch, c.offset, config)),
+      window.map(c => fetchBatchWithRetry(doFetch, url, c.batch, c.offset, config, signal)),
     );
     for (let ci = 0; ci < window.length; ci++) {
       const s = settled[ci];
@@ -299,13 +380,14 @@ async function callEmbeddingApi(texts: string[], config: EmbeddingApiConfig): Pr
         firstErr = s.reason instanceof Error ? s.reason : new Error(String(s.reason));
       }
     }
+    if (firstErr) throw firstErr;
   }
 
-  if (firstErr) {
-    const filled = results.filter(Boolean).length;
-    if (filled < texts.length) throw firstErr;
+  throwIfAborted(signal);
+  const dimension = results[0]?.length;
+  if (dimension !== undefined && results.some(vector => vector.length !== dimension)) {
+    throw new Error('Embedding API returned inconsistent vector dimensions across batches');
   }
-
   return results;
 }
 
@@ -567,6 +649,7 @@ export function isModelCached(): boolean {
 const CACHE_FILE = 'embedding-index.json';
 
 let _pipeline: any = null;
+let _pipelineInflight: Promise<any> | null = null;
 let _available: boolean | null = null;
 
 async function configureProxy(): Promise<void> {
@@ -601,24 +684,34 @@ function configureRemoteHost(env: any): void {
 
 async function getPipeline(): Promise<any> {
   if (_pipeline) return _pipeline;
+  if (_pipelineInflight) return _pipelineInflight;
 
-  await configureProxy();
-  await configureOnnxRuntimeLogging();
-  const config = await detectDevice();
-  const modelId = resolveLocalModel();
-  const { pipeline, env } = await loadTransformers();
-  configureRemoteHost(env);
-  const pipelineOpts: Record<string, unknown> = {
-    dtype: config.dtype,
-    device: config.device,
-    progress_callback: _progressCallback ?? undefined,
-  };
-  if (isLocalModelPath()) {
-    pipelineOpts.local_files_only = true;
+  const progressCallback = _progressCallback;
+  const flight = (async () => {
+    await configureProxy();
+    await configureOnnxRuntimeLogging();
+    const config = await detectDevice();
+    const modelId = resolveLocalModel();
+    const { pipeline, env } = await loadTransformers();
+    configureRemoteHost(env);
+    const pipelineOpts: Record<string, unknown> = {
+      dtype: config.dtype,
+      device: config.device,
+      progress_callback: progressCallback ?? undefined,
+    };
+    if (isLocalModelPath()) {
+      pipelineOpts.local_files_only = true;
+    }
+    return pipeline('feature-extraction', modelId, pipelineOpts);
+  })();
+  _pipelineInflight = flight;
+  try {
+    _pipeline = await flight;
+    _progressCallback = null;
+    return _pipeline;
+  } finally {
+    if (_pipelineInflight === flight) _pipelineInflight = null;
   }
-  _pipeline = await pipeline('feature-extraction', modelId, pipelineOpts);
-  _progressCallback = null;
-  return _pipeline;
 }
 
 let _unavailableReason: string | null = null;
@@ -647,15 +740,20 @@ export function getUnavailableReason(): string | null {
 // Batch embedding — processes texts in configurable batch sizes
 // ---------------------------------------------------------------------------
 
-export async function embedTexts(texts: string[]): Promise<Float32Array[]> {
+export async function embedTexts(
+  texts: string[],
+  signal?: AbortSignal,
+): Promise<Float32Array[]> {
+  throwIfAborted(signal);
   if (texts.length === 0) return [];
 
   const apiConf = loadEmbeddingApiConfig();
   if (apiConf) {
-    return callEmbeddingApi(texts.map(t => t.slice(0, 8192)), apiConf);
+    return callEmbeddingApi(texts.map(t => t.slice(0, 8192)), apiConf, signal);
   }
 
   const pipe = await getPipeline();
+  throwIfAborted(signal);
   const config = await detectDevice();
   const batchSize = config.batchSize;
   const results: Float32Array[] = [];
@@ -663,8 +761,10 @@ export async function embedTexts(texts: string[]): Promise<Float32Array[]> {
   const truncated = texts.map(t => t.slice(0, 512));
 
   for (let i = 0; i < truncated.length; i += batchSize) {
+    throwIfAborted(signal);
     const batch = truncated.slice(i, i + batchSize);
     const output = await pipe(batch, { pooling: 'mean', normalize: true });
+    throwIfAborted(signal);
 
     if (batch.length === 1) {
       results.push(new Float32Array(output.data));
@@ -680,15 +780,18 @@ export async function embedTexts(texts: string[]): Promise<Float32Array[]> {
   return results;
 }
 
-export async function embedQuery(query: string): Promise<Float32Array> {
+export async function embedQuery(query: string, signal?: AbortSignal): Promise<Float32Array> {
+  throwIfAborted(signal);
   const apiConf = loadEmbeddingApiConfig();
   if (apiConf) {
-    const [vec] = await callEmbeddingApi([query.slice(0, 8192)], apiConf);
+    const [vec] = await callEmbeddingApi([query.slice(0, 8192)], apiConf, signal);
     return vec;
   }
 
   const pipe = await getPipeline();
+  throwIfAborted(signal);
   const output = await pipe(('query: ' + query).slice(0, 512), { pooling: 'mean', normalize: true });
+  throwIfAborted(signal);
   return new Float32Array(output.data);
 }
 
@@ -789,100 +892,225 @@ const _require = createRequire(import.meta.url);
 
 const BINARY_FILE = 'embedding-index.bin';
 
-export async function saveEmbeddingIndex(index: EmbeddingIndex, dir: string): Promise<void> {
-  mkdirSync(dir, { recursive: true });
+const MAX_EMBEDDING_VECTORS = 10_000_000;
+const MAX_EMBEDDING_METADATA_BYTES = 64 * 1024 * 1024;
+const MAX_EMBEDDING_BINARY_BYTES = 512 * 1024 * 1024;
+let _embeddingSaveTail: Promise<void> = Promise.resolve();
 
-  // --- Binary format (kept for backward compat and feature flag fallback) ---
-  const dim = index.dimension;
-  const n = index.docIds.length;
-  const docIdsJson = JSON.stringify(index.docIds);
-  const docIdsBytes = Buffer.from(docIdsJson, 'utf-8');
-  const metaJson = JSON.stringify({
+function readBoundedFileSync(path: string, maxBytes: number): Buffer {
+  const before = statSync(path);
+  if (!before.isFile() || before.size < 0 || before.size > maxBytes) {
+    throw new Error(`Embedding artifact exceeds ${maxBytes} byte limit`);
+  }
+  const fd = openSync(path, 'r');
+  try {
+    const output = Buffer.alloc(before.size);
+    let offset = 0;
+    while (offset < output.length) {
+      const bytesRead = readSync(fd, output, offset, output.length - offset, offset);
+      if (bytesRead === 0) throw new Error('Embedding artifact changed while being read');
+      offset += bytesRead;
+    }
+    const extra = Buffer.allocUnsafe(1);
+    if (readSync(fd, extra, 0, 1, offset) !== 0) {
+      throw new Error('Embedding artifact grew while being read');
+    }
+    return output;
+  } finally {
+    closeSync(fd);
+  }
+}
+
+function validateStringArray(
+  value: unknown,
+  name: string,
+  expectedLength: number,
+  required: boolean,
+): string[] | undefined {
+  if (value === undefined && !required) return undefined;
+  if (!Array.isArray(value) || value.length !== expectedLength
+    || value.some(item => typeof item !== 'string')) {
+    throw new Error(`Invalid embedding index ${name}`);
+  }
+  return value as string[];
+}
+
+function hasVectorShape(
+  vectors: readonly unknown[],
+  count: number,
+  dimension: number,
+): vectors is Float32Array[] {
+  if (vectors.length !== count) return false;
+  for (let i = 0; i < count; i++) {
+    const vector = vectors[i];
+    if (!(vector instanceof Float32Array) || vector.length !== dimension) return false;
+  }
+  return true;
+}
+
+function validateEmbeddingIndex(index: EmbeddingIndex): void {
+  if (typeof index.modelId !== 'string' || index.modelId.length === 0) {
+    throw new Error('Invalid embedding index modelId');
+  }
+  if (!isBoundedPositiveInteger(index.dimension, MAX_EMBEDDING_DIMENSION)) {
+    throw new Error(`Invalid embedding index dimension ${index.dimension}`);
+  }
+  const count = index.docIds.length;
+  if (!Number.isSafeInteger(count) || count > MAX_EMBEDDING_VECTORS) {
+    throw new Error(`Invalid embedding index count ${count}`);
+  }
+  validateStringArray(index.docIds, 'docIds', count, true);
+  if (!Array.isArray(index.vectors) || !hasVectorShape(index.vectors, count, index.dimension)) {
+    throw new Error('Embedding index contains an invalid vector shape');
+  }
+  validateStringArray(index.contentHashes, 'contentHashes', count, false);
+  validateStringArray(index.chunkDocIds, 'chunkDocIds', count, false);
+  if (!Number.isFinite(index.builtAt)) throw new Error('Invalid embedding index builtAt');
+}
+
+async function writeBuffers(
+  handle: FileHandle,
+  buffers: Buffer[],
+  signal?: AbortSignal,
+): Promise<void> {
+  let bufferIndex = 0;
+  let bufferOffset = 0;
+  while (bufferIndex < buffers.length) {
+    throwIfAborted(signal);
+    const views = buffers.slice(bufferIndex);
+    if (bufferOffset > 0) views[0] = views[0].subarray(bufferOffset);
+    const { bytesWritten } = await handle.writev(views);
+    if (bytesWritten <= 0) throw new Error('Failed to make progress writing embedding index');
+    let remaining = bytesWritten;
+    while (bufferIndex < buffers.length) {
+      const available = buffers[bufferIndex].length - bufferOffset;
+      if (remaining < available) {
+        bufferOffset += remaining;
+        break;
+      }
+      remaining -= available;
+      bufferIndex++;
+      bufferOffset = 0;
+    }
+  }
+}
+
+async function writeBinaryIndexTemp(
+  index: EmbeddingIndex,
+  tmpPath: string,
+  signal?: AbortSignal,
+): Promise<void> {
+  const metaBytes = Buffer.from(JSON.stringify({
     modelId: index.modelId,
-    dimension: dim,
-    count: n,
+    dimension: index.dimension,
+    count: index.docIds.length,
     builtAt: index.builtAt,
     deviceUsed: index.deviceUsed,
     buildTimeMs: index.buildTimeMs,
     contentHashes: index.contentHashes,
     chunkDocIds: index.chunkDocIds,
-  });
-  const metaBytes = Buffer.from(metaJson, 'utf-8');
-
-  // Format: [metaLen:4][meta][docIdsLen:4][docIds][packedVectors:n*dim*4]
-  const vectorBytes = n * dim * 4;
-  const totalSize = 4 + metaBytes.length + 4 + docIdsBytes.length + vectorBytes;
-  const buf = Buffer.alloc(totalSize);
-  let offset = 0;
-
-  buf.writeUInt32LE(metaBytes.length, offset); offset += 4;
-  metaBytes.copy(buf, offset); offset += metaBytes.length;
-  buf.writeUInt32LE(docIdsBytes.length, offset); offset += 4;
-  docIdsBytes.copy(buf, offset); offset += docIdsBytes.length;
-
-  for (let i = 0; i < n; i++) {
-    const v = index.vectors[i];
-    const vBuf = Buffer.from(v.buffer, v.byteOffset, v.byteLength);
-    vBuf.copy(buf, offset);
-    offset += dim * 4;
+  }), 'utf-8');
+  const docIdsBytes = Buffer.from(JSON.stringify(index.docIds), 'utf-8');
+  if (metaBytes.length > MAX_EMBEDDING_METADATA_BYTES
+    || docIdsBytes.length > MAX_EMBEDDING_METADATA_BYTES) {
+    throw new Error('Embedding index metadata is too large');
   }
 
-  const tmpPath = join(dir, BINARY_FILE + '.tmp');
-  writeFileSync(tmpPath, buf);
-  renameSync(tmpPath, join(dir, BINARY_FILE));
-
-  // --- zvec collection save ---
-  await saveZvecIndex(index, dir);
-
-  // Remove legacy files
-  for (const f of [CACHE_FILE, SQLITE_FILE, SQLITE_FILE + '-shm', SQLITE_FILE + '-wal', SQLITE_FILE + '-journal']) {
-    try { if (existsSync(join(dir, f))) unlinkSync(join(dir, f)); } catch { /* ignore */ }
-  }
-}
-
-let _zvecSaving = false;
-
-/**
- * Save embedding index to zvec collection format.
- * Creates/replaces a zvec collection at `dir/embedding.zvec`.
- */
-async function saveZvecIndex(index: EmbeddingIndex, dir: string): Promise<void> {
-  if (_zvecSaving) return;
-  const zvec = await getZvec();
-  if (!zvec) return;
-  _zvecSaving = true;
+  const metaLength = Buffer.allocUnsafe(4);
+  metaLength.writeUInt32LE(metaBytes.length);
+  const docIdsLength = Buffer.allocUnsafe(4);
+  docIdsLength.writeUInt32LE(docIdsBytes.length);
+  const handle = await open(tmpPath, 'w');
   try {
-    await _saveZvecIndexInner(zvec, index, dir);
+    await writeBuffers(handle, [metaLength, metaBytes, docIdsLength, docIdsBytes], signal);
+    // Write bounded vector batches directly from their existing views. writev
+    // avoids both a packed whole-index copy and one syscall per vector.
+    const VECTOR_WRITE_BATCH_SIZE = 256;
+    for (let i = 0; i < index.vectors.length; i += VECTOR_WRITE_BATCH_SIZE) {
+      throwIfAborted(signal);
+      const buffers = index.vectors
+        .slice(i, i + VECTOR_WRITE_BATCH_SIZE)
+        .map(vector => Buffer.from(vector.buffer, vector.byteOffset, vector.byteLength));
+      await writeBuffers(handle, buffers, signal);
+    }
+    await handle.sync();
   } finally {
-    _zvecSaving = false;
+    await handle.close();
   }
 }
 
-async function _saveZvecIndexInner(zvec: ZvecModule, index: EmbeddingIndex, dir: string): Promise<void> {
-
-  const collectionPath = join(dir, ZVEC_DIR);
-  const dim = index.dimension;
-
-  // Remove existing collection directory if present
-  if (existsSync(collectionPath)) {
+export async function saveEmbeddingIndex(
+  index: EmbeddingIndex,
+  dir: string,
+  signal?: AbortSignal,
+): Promise<void> {
+  const previousSave = _embeddingSaveTail;
+  let releaseSave!: () => void;
+  _embeddingSaveTail = new Promise<void>(resolve => { releaseSave = resolve; });
+  await previousSave;
+  try {
+    throwIfAborted(signal);
+    validateEmbeddingIndex(index);
+    mkdirSync(dir, { recursive: true });
+    const token = `${process.pid}-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+    const binaryTmp = join(dir, `${BINARY_FILE}.tmp-${token}`);
+    let preparedZvec: PreparedZvecIndex | null = null;
     try {
-      const existing = zvec.ZVecOpen(collectionPath);
-      existing.destroySync();
-    } catch {
-      // If we can't open it, try to remove the directory manually
+      await writeBinaryIndexTemp(index, binaryTmp, signal);
       try {
-        const { rmSync } = await import('node:fs');
-        rmSync(collectionPath, { recursive: true, force: true });
-      } catch { /* ignore */ }
-    }
-  }
+        preparedZvec = await prepareZvecIndex(index, dir, token, signal);
+      } catch (error) {
+        rmSync(join(dir, `${ZVEC_DIR}.tmp-${token}`), { recursive: true, force: true });
+        try { unlinkSync(join(dir, `${ZVEC_DIR}.meta.json.tmp-${token}`)); } catch { /* absent */ }
+        throwIfAborted(signal);
+        if (process.env.MAESTRO_DEBUG === '1') {
+          console.warn(`[embedding] zvec index save failed, keeping binary fallback: ${error instanceof Error ? error.message : error}`);
+        }
+      }
+      throwIfAborted(signal);
 
+      // Publication is a short synchronous generation boundary: invalidate()
+      // cannot interleave between the final abort check and the atomic renames.
+      renameSync(binaryTmp, join(dir, BINARY_FILE));
+      publishPreparedZvec(preparedZvec, dir);
+
+      for (const f of [CACHE_FILE, SQLITE_FILE, SQLITE_FILE + '-shm', SQLITE_FILE + '-wal', SQLITE_FILE + '-journal']) {
+        try { if (existsSync(join(dir, f))) unlinkSync(join(dir, f)); } catch { /* ignore */ }
+      }
+    } finally {
+      await rm(binaryTmp, { force: true }).catch(() => undefined);
+      cleanupPreparedZvec(preparedZvec);
+    }
+  } finally {
+    releaseSave();
+  }
+}
+
+interface PreparedZvecIndex {
+  collectionPath: string;
+  metaPath: string;
+}
+
+async function prepareZvecIndex(
+  index: EmbeddingIndex,
+  dir: string,
+  token: string,
+  signal?: AbortSignal,
+): Promise<PreparedZvecIndex | null> {
+  throwIfAborted(signal);
+  const zvec = await getZvec();
+  throwIfAborted(signal);
+  if (!zvec) return null;
+
+  const collectionPath = join(dir, `${ZVEC_DIR}.tmp-${token}`);
+  const metaPath = join(dir, `${ZVEC_DIR}.meta.json.tmp-${token}`);
+  rmSync(collectionPath, { recursive: true, force: true });
   const schema = new zvec.ZVecCollectionSchema({
     name: 'embedding',
     vectors: {
       name: 'embedding',
       dataType: zvec.ZVecDataType.VECTOR_FP32,
-      dimension: dim,
+      dimension: index.dimension,
       indexParams: {
         indexType: zvec.ZVecIndexType.FLAT,
         metricType: zvec.ZVecMetricType.COSINE,
@@ -895,9 +1123,9 @@ async function _saveZvecIndexInner(zvec: ZvecModule, index: EmbeddingIndex, dir:
 
   const collection = zvec.ZVecCreateAndOpen(collectionPath, schema);
   try {
-    // Batch upsert all vectors
     const BATCH_SIZE = 500;
     for (let i = 0; i < index.docIds.length; i += BATCH_SIZE) {
+      throwIfAborted(signal);
       const batch = [];
       const end = Math.min(i + BATCH_SIZE, index.docIds.length);
       for (let j = i; j < end; j++) {
@@ -908,14 +1136,19 @@ async function _saveZvecIndexInner(zvec: ZvecModule, index: EmbeddingIndex, dir:
         });
       }
       collection.upsertSync(batch);
-      // Yield to event loop to prevent event loop starvation/blocking
       await new Promise(resolve => setImmediate(resolve));
     }
-
-    // Save metadata as JSON sidecar (zvec doesn't store arbitrary metadata)
-    const metaSidecar = {
+  } catch (error) {
+    collection.closeSync();
+    rmSync(collectionPath, { recursive: true, force: true });
+    throw error;
+  }
+  collection.closeSync();
+  try {
+    throwIfAborted(signal);
+    writeFileSync(metaPath, JSON.stringify({
       modelId: index.modelId,
-      dimension: dim,
+      dimension: index.dimension,
       builtAt: index.builtAt,
       deviceUsed: index.deviceUsed,
       buildTimeMs: index.buildTimeMs,
@@ -923,11 +1156,29 @@ async function _saveZvecIndexInner(zvec: ZvecModule, index: EmbeddingIndex, dir:
       chunkDocIds: index.chunkDocIds,
       docIds: index.docIds,
       zvecIdEncoding: ZVEC_ID_ENCODING,
-    };
-    writeFileSync(join(dir, ZVEC_DIR + '.meta.json'), JSON.stringify(metaSidecar));
-  } finally {
-    collection.closeSync();
+    }));
+    return { collectionPath, metaPath };
+  } catch (error) {
+    rmSync(collectionPath, { recursive: true, force: true });
+    try { unlinkSync(metaPath); } catch { /* not written */ }
+    throw error;
   }
+}
+
+function publishPreparedZvec(prepared: PreparedZvecIndex | null, dir: string): void {
+  const collectionPath = join(dir, ZVEC_DIR);
+  const metaPath = join(dir, `${ZVEC_DIR}.meta.json`);
+  rmSync(collectionPath, { recursive: true, force: true });
+  try { unlinkSync(metaPath); } catch { /* missing sidecar */ }
+  if (!prepared) return;
+  renameSync(prepared.collectionPath, collectionPath);
+  renameSync(prepared.metaPath, metaPath);
+}
+
+function cleanupPreparedZvec(prepared: PreparedZvecIndex | null): void {
+  if (!prepared) return;
+  rmSync(prepared.collectionPath, { recursive: true, force: true });
+  try { unlinkSync(prepared.metaPath); } catch { /* already published or absent */ }
 }
 
 export function loadEmbeddingIndex(dir: string): EmbeddingIndex | null {
@@ -963,7 +1214,7 @@ export function loadEmbeddingIndex(dir: string): EmbeddingIndex | null {
   if (existsSync(dbPath)) {
     try {
       const idx = loadFromSqlite(dir);
-      void saveEmbeddingIndex(idx, dir);
+      persistMigratedEmbeddingIndex(idx, dir);
       return idx;
     } catch { /* fall through */ }
   }
@@ -973,12 +1224,53 @@ export function loadEmbeddingIndex(dir: string): EmbeddingIndex | null {
   if (existsSync(jsonPath)) {
     try {
       const idx = loadFromLegacyJson(jsonPath);
-      void saveEmbeddingIndex(idx, dir);
+      persistMigratedEmbeddingIndex(idx, dir);
       return idx;
     } catch { return null; }
   }
 
   return null;
+}
+
+interface PersistedEmbeddingMeta {
+  modelId: string;
+  dimension: number;
+  count?: number;
+  builtAt: number;
+  deviceUsed?: string;
+  buildTimeMs?: number;
+  contentHashes?: string[];
+  chunkDocIds?: string[];
+  docIds?: string[];
+  zvecIdEncoding?: typeof ZVEC_ID_ENCODING;
+}
+
+function validatePersistedMeta(
+  value: unknown,
+  expectedCount?: number,
+): PersistedEmbeddingMeta {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    throw new Error('Embedding metadata must be an object');
+  }
+  const meta = value as Record<string, unknown>;
+  if (typeof meta.modelId !== 'string' || meta.modelId.length === 0) {
+    throw new Error('Embedding metadata has an invalid modelId');
+  }
+  if (!isBoundedPositiveInteger(meta.dimension, MAX_EMBEDDING_DIMENSION)) {
+    throw new Error(`Embedding metadata has an invalid dimension ${String(meta.dimension)}`);
+  }
+  if (!Number.isFinite(meta.builtAt)) throw new Error('Embedding metadata has an invalid builtAt');
+  if (meta.buildTimeMs !== undefined && !Number.isFinite(meta.buildTimeMs)) {
+    throw new Error('Embedding metadata has an invalid buildTimeMs');
+  }
+  if (meta.zvecIdEncoding !== undefined && meta.zvecIdEncoding !== ZVEC_ID_ENCODING) {
+    throw new Error(`Embedding metadata has an unsupported ID encoding ${String(meta.zvecIdEncoding)}`);
+  }
+  if (expectedCount !== undefined) {
+    validateStringArray(meta.contentHashes, 'contentHashes', expectedCount, false);
+    validateStringArray(meta.chunkDocIds, 'chunkDocIds', expectedCount, false);
+  }
+  return meta as unknown as PersistedEmbeddingMeta;
 }
 
 /**
@@ -987,17 +1279,17 @@ export function loadEmbeddingIndex(dir: string): EmbeddingIndex | null {
  * the actual zvec collection is used for vectorSearchZvec queries.
  */
 function loadFromZvecMeta(metaPath: string, _collectionPath: string): EmbeddingIndex {
-  const meta = JSON.parse(readFileSync(metaPath, 'utf-8')) as {
-    modelId: string;
-    dimension: number;
-    builtAt: number;
-    deviceUsed?: string;
-    buildTimeMs?: number;
-    contentHashes?: string[];
-    chunkDocIds?: string[];
-    docIds: string[];
-    zvecIdEncoding?: typeof ZVEC_ID_ENCODING;
-  };
+  const metaBytes = readBoundedFileSync(metaPath, MAX_EMBEDDING_METADATA_BYTES);
+  const rawMeta = JSON.parse(metaBytes.toString('utf-8')) as unknown;
+  if (!rawMeta || typeof rawMeta !== 'object' || !Array.isArray((rawMeta as Record<string, unknown>).docIds)) {
+    throw new Error('zvec metadata has invalid docIds');
+  }
+  const rawDocIds = (rawMeta as Record<string, unknown>).docIds as unknown[];
+  if (rawDocIds.length > MAX_EMBEDDING_VECTORS) {
+    throw new Error(`zvec metadata count ${rawDocIds.length} exceeds the supported limit`);
+  }
+  const meta = validatePersistedMeta(rawMeta, rawDocIds.length);
+  const docIds = validateStringArray(rawDocIds, 'docIds', rawDocIds.length, true)!;
 
   // Use cached zvec module if available, otherwise try sync require
   let zvec: ZvecModule | null = _zvecModule ?? null;
@@ -1012,14 +1304,14 @@ function loadFromZvecMeta(metaPath: string, _collectionPath: string): EmbeddingI
 
   const collection = zvec.ZVecOpen(_collectionPath, { readOnly: true });
   try {
-    const vectors: Float32Array[] = new Array(meta.docIds.length);
+    const vectors: Float32Array[] = new Array(docIds.length);
     // Fetch vectors in batches by ID
     const BATCH_SIZE = 500;
-    for (let i = 0; i < meta.docIds.length; i += BATCH_SIZE) {
-      const docIds = meta.docIds.slice(i, Math.min(i + BATCH_SIZE, meta.docIds.length));
+    for (let i = 0; i < docIds.length; i += BATCH_SIZE) {
+      const batchDocIds = docIds.slice(i, Math.min(i + BATCH_SIZE, docIds.length));
       const zvecIds = meta.zvecIdEncoding === ZVEC_ID_ENCODING
-        ? docIds.map(toZvecId)
-        : docIds;
+        ? batchDocIds.map(toZvecId)
+        : batchDocIds;
       const fetched = collection.fetchSync({ ids: zvecIds, includeVector: true, outputFields: [] });
       const fetchedMap = Array.isArray(fetched)
         ? Object.fromEntries(fetched.map((d: any) => [d.id, d]))
@@ -1028,6 +1320,17 @@ function loadFromZvecMeta(metaPath: string, _collectionPath: string): EmbeddingI
         const doc = fetchedMap[zvecIds[j]];
         if (doc?.vectors?.embedding) {
           const v = doc.vectors.embedding;
+          if (!(v instanceof Float32Array) && !Array.isArray(v)) {
+            throw new Error(`zvec collection returned an invalid vector for ${zvecIds[j]}`);
+          }
+          if (v.length !== meta.dimension) {
+            throw new Error(`zvec vector dimension ${v.length} does not match metadata ${meta.dimension}`);
+          }
+          for (let k = 0; k < v.length; k++) {
+            if (!Number.isFinite(v[k])) {
+              throw new Error(`zvec collection returned a non-finite vector for ${zvecIds[j]}`);
+            }
+          }
           vectors[i + j] = v instanceof Float32Array ? v : new Float32Array(v as number[]);
         } else {
           throw new Error(`zvec collection is missing document ${zvecIds[j]}`);
@@ -1038,7 +1341,7 @@ function loadFromZvecMeta(metaPath: string, _collectionPath: string): EmbeddingI
     return {
       modelId: meta.modelId,
       dimension: meta.dimension,
-      docIds: meta.docIds,
+      docIds,
       vectors,
       contentHashes: meta.contentHashes,
       chunkDocIds: meta.chunkDocIds,
@@ -1052,24 +1355,48 @@ function loadFromZvecMeta(metaPath: string, _collectionPath: string): EmbeddingI
 }
 
 function loadFromBinary(filePath: string): EmbeddingIndex {
-  const raw = readFileSync(filePath);
+  const raw = readBoundedFileSync(filePath, MAX_EMBEDDING_BINARY_BYTES);
   let offset = 0;
+  if (raw.length < 8) throw new Error('Binary embedding index is shorter than its header');
 
   const metaLen = raw.readUInt32LE(offset); offset += 4;
-  const meta = JSON.parse(raw.subarray(offset, offset + metaLen).toString('utf-8'));
+  if (metaLen > MAX_EMBEDDING_METADATA_BYTES || metaLen > raw.length - offset - 4) {
+    throw new Error(`Binary embedding metadata length ${metaLen} is invalid`);
+  }
+  const rawMeta = JSON.parse(raw.subarray(offset, offset + metaLen).toString('utf-8')) as unknown;
   offset += metaLen;
 
+  if (offset + 4 > raw.length) throw new Error('Binary embedding index is missing docIds length');
   const docIdsLen = raw.readUInt32LE(offset); offset += 4;
-  const docIds: string[] = JSON.parse(raw.subarray(offset, offset + docIdsLen).toString('utf-8'));
+  if (docIdsLen > MAX_EMBEDDING_METADATA_BYTES || docIdsLen > raw.length - offset) {
+    throw new Error(`Binary embedding docIds length ${docIdsLen} is invalid`);
+  }
+  const rawDocIds = JSON.parse(raw.subarray(offset, offset + docIdsLen).toString('utf-8')) as unknown;
   offset += docIdsLen;
 
+  if (!rawMeta || typeof rawMeta !== 'object') throw new Error('Binary embedding metadata is invalid');
+  const rawCount = (rawMeta as Record<string, unknown>).count;
+  if (!Number.isSafeInteger(rawCount) || (rawCount as number) < 0
+    || (rawCount as number) > MAX_EMBEDDING_VECTORS) {
+    throw new Error(`Binary embedding count ${String(rawCount)} is invalid`);
+  }
+  const n = rawCount as number;
+  const meta = validatePersistedMeta(rawMeta, n);
+  const docIds = validateStringArray(rawDocIds, 'docIds', n, true)!;
   const dim = meta.dimension;
-  const n = meta.count;
-  const vecBytes = n * dim * 4;
+  const floatCount = n * dim;
+  const vecBytes = floatCount * Float32Array.BYTES_PER_ELEMENT;
+  if (!Number.isSafeInteger(floatCount) || !Number.isSafeInteger(vecBytes)
+    || offset + vecBytes !== raw.length) {
+    throw new Error(`Binary embedding vector payload length ${raw.length - offset} is invalid`);
+  }
+
+  // Only allocate vector views after every metadata and file-length bound has
+  // been checked. Most files are naturally aligned and stay zero-copy.
   const vecStart = raw.byteOffset + offset;
   const vectors: Float32Array[] = new Array(n);
-  if (vecStart % 4 === 0) {
-    const allFloats = new Float32Array(raw.buffer, vecStart, n * dim);
+  if (vecStart % Float32Array.BYTES_PER_ELEMENT === 0) {
+    const allFloats = new Float32Array(raw.buffer, vecStart, floatCount);
     for (let i = 0; i < n; i++) vectors[i] = allFloats.subarray(i * dim, (i + 1) * dim);
   } else {
     const aligned = new ArrayBuffer(vecBytes);
@@ -1091,9 +1418,19 @@ function loadFromBinary(filePath: string): EmbeddingIndex {
   };
 }
 
+function persistMigratedEmbeddingIndex(index: EmbeddingIndex, dir: string): void {
+  void saveEmbeddingIndex(index, dir).catch(error => {
+    console.warn(`[embedding] legacy index migration save failed: ${error instanceof Error ? error.message : error}`);
+  });
+}
+
 function loadFromSqlite(dir: string): EmbeddingIndex {
   const Database = _require('better-sqlite3');
   const dbPath = join(dir, SQLITE_FILE);
+  const dbStat = statSync(dbPath);
+  if (!dbStat.isFile() || dbStat.size > MAX_EMBEDDING_BINARY_BYTES) {
+    throw new Error(`Legacy SQLite embedding index exceeds ${MAX_EMBEDDING_BINARY_BYTES} byte limit`);
+  }
   const db = new Database(dbPath, { readonly: true });
   try {
     const getMeta = db.prepare('SELECT value FROM meta WHERE key = ?');
@@ -1102,36 +1439,85 @@ function loadFromSqlite(dir: string): EmbeddingIndex {
     const builtAt = parseInt(getMeta.get('builtAt')?.value ?? '0', 10);
     const deviceUsed = getMeta.get('deviceUsed')?.value;
     const buildTimeMs = parseInt(getMeta.get('buildTimeMs')?.value ?? '0', 10) || undefined;
+    if (!isBoundedPositiveInteger(dimension, MAX_EMBEDDING_DIMENSION)) {
+      throw new Error(`Legacy SQLite embedding index has invalid dimension ${dimension}`);
+    }
 
-    const rows = db.prepare('SELECT doc_id, vector FROM vectors ORDER BY rowid').all() as Array<{ doc_id: string; vector: Buffer }>;
+    const countRow = db.prepare('SELECT COUNT(*) AS count FROM vectors').get() as { count?: unknown } | undefined;
+    const count = countRow?.count;
+    if (!Number.isSafeInteger(count) || (count as number) < 0 || (count as number) > MAX_EMBEDDING_VECTORS) {
+      throw new Error(`Legacy SQLite embedding index has invalid count ${String(count)}`);
+    }
     const docIds: string[] = [];
     const vectors: Float32Array[] = [];
+    const rows = db.prepare('SELECT doc_id, vector FROM vectors ORDER BY rowid')
+      .iterate() as Iterable<{ doc_id: unknown; vector: unknown }>;
     for (const row of rows) {
+      if (typeof row.doc_id !== 'string' || !Buffer.isBuffer(row.vector)
+        || row.vector.byteLength !== dimension * Float32Array.BYTES_PER_ELEMENT) {
+        throw new Error('Legacy SQLite embedding index contains an invalid vector row');
+      }
+      const bytes = row.vector as Buffer;
+      const copy = new Uint8Array(bytes.byteLength);
+      copy.set(bytes);
+      const vector = new Float32Array(copy.buffer);
+      for (let i = 0; i < vector.length; i++) {
+        if (!Number.isFinite(vector[i])) {
+          throw new Error('Legacy SQLite embedding index contains a non-finite vector');
+        }
+      }
       docIds.push(row.doc_id);
-      const ab = row.vector.buffer.slice(row.vector.byteOffset, row.vector.byteOffset + row.vector.byteLength);
-      vectors.push(new Float32Array(ab));
+      vectors.push(vector);
     }
-    return { modelId, dimension, docIds, vectors, builtAt, deviceUsed, buildTimeMs };
+    const index = { modelId, dimension, docIds, vectors, builtAt, deviceUsed, buildTimeMs };
+    validateEmbeddingIndex(index);
+    return index;
   } finally {
     db.close();
   }
 }
 
 function loadFromLegacyJson(filePath: string): EmbeddingIndex {
-  const raw = JSON.parse(readFileSync(filePath, 'utf-8'));
-  return {
-    modelId: raw.modelId,
-    dimension: raw.dimension,
-    docIds: raw.docIds,
-    vectors: raw.vectors.map((b64: string) => {
-      const buf = Buffer.from(b64, 'base64');
-      const ab = buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength);
-      return new Float32Array(ab);
-    }),
-    builtAt: raw.builtAt,
-    deviceUsed: raw.deviceUsed,
-    buildTimeMs: raw.buildTimeMs,
+  const parsed = JSON.parse(readBoundedFileSync(filePath, MAX_EMBEDDING_METADATA_BYTES).toString('utf-8')) as unknown;
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+    throw new Error('Legacy JSON embedding index must be an object');
+  }
+  const raw = parsed as Record<string, unknown>;
+  if (!Array.isArray(raw.docIds) || !Array.isArray(raw.vectors)
+    || raw.docIds.length !== raw.vectors.length || raw.docIds.length > MAX_EMBEDDING_VECTORS
+    || !isBoundedPositiveInteger(raw.dimension, MAX_EMBEDDING_DIMENSION)) {
+    throw new Error('Legacy JSON embedding index has invalid dimensions or vector count');
+  }
+  const dimension = raw.dimension;
+  const vectors = raw.vectors.map(value => {
+    if (typeof value !== 'string' || value.length > Math.ceil(dimension * Float32Array.BYTES_PER_ELEMENT / 3) * 4 + 4) {
+      throw new Error('Legacy JSON embedding index contains an invalid vector');
+    }
+    const bytes = Buffer.from(value, 'base64');
+    if (bytes.byteLength !== dimension * Float32Array.BYTES_PER_ELEMENT) {
+      throw new Error('Legacy JSON embedding index contains an invalid vector payload');
+    }
+    const copy = new Uint8Array(bytes.byteLength);
+    copy.set(bytes);
+    const vector = new Float32Array(copy.buffer);
+    for (let i = 0; i < vector.length; i++) {
+      if (!Number.isFinite(vector[i])) {
+        throw new Error('Legacy JSON embedding index contains a non-finite vector');
+      }
+    }
+    return vector;
+  });
+  const index: EmbeddingIndex = {
+    modelId: raw.modelId as string,
+    dimension,
+    docIds: raw.docIds as string[],
+    vectors,
+    builtAt: raw.builtAt as number,
+    deviceUsed: typeof raw.deviceUsed === 'string' ? raw.deviceUsed : undefined,
+    buildTimeMs: typeof raw.buildTimeMs === 'number' ? raw.buildTimeMs : undefined,
   };
+  validateEmbeddingIndex(index);
+  return index;
 }
 
 // ---------------------------------------------------------------------------
@@ -1242,12 +1628,17 @@ export async function buildEmbeddingIndex(
   docs: DocForEmbedding[],
   existingIndex?: EmbeddingIndex | null,
   precomputedHashes?: string[],
+  signal?: AbortSignal,
 ): Promise<EmbeddingIndex> {
+  throwIfAborted(signal);
   const apiMode = isApiMode();
   const config = apiMode ? null : await detectDevice();
   const t0 = Date.now();
 
   const currentHashes = precomputedHashes ?? docs.map(d => hashDocContent(d));
+  if (currentHashes.length !== docs.length) {
+    throw new Error('Precomputed embedding hashes do not match the document count');
+  }
 
   // Split all docs into chunks (1:N doc-to-chunk mapping)
   const allChunkIds: string[] = [];
@@ -1257,6 +1648,7 @@ export async function buildEmbeddingIndex(
   const docChunkRanges: Array<{ docIndex: number; startSlot: number; count: number }> = [];
 
   for (let i = 0; i < docs.length; i++) {
+    throwIfAborted(signal);
     const chunks = splitDocToChunks(docs[i]);
     const startSlot = allChunkIds.length;
     for (const chunk of chunks) {
@@ -1272,9 +1664,12 @@ export async function buildEmbeddingIndex(
   const activeModel = getModelId();
   const activeDim = apiMode ? (loadEmbeddingApiConfig()?.dimensions ?? 0) : 384;
   // Model, dimensions, or mode changed → discard all cached vectors, force full rebuild
-  const modelMatch = existingIndex
-    && existingIndex.modelId === activeModel
-    && (activeDim === 0 || existingIndex.dimension === activeDim);
+  const existingShapeValid = existingIndex
+    && isBoundedPositiveInteger(existingIndex.dimension, MAX_EMBEDDING_DIMENSION)
+    && hasVectorShape(existingIndex.vectors, existingIndex.docIds.length, existingIndex.dimension);
+  const modelMatch = existingShapeValid
+    && existingIndex!.modelId === activeModel
+    && (activeDim === 0 || existingIndex!.dimension === activeDim);
   if (modelMatch && existingIndex!.docIds.length > 0) {
     const existingChunkMap = new Map<string, Float32Array>();
     if (existingIndex!.chunkDocIds && existingIndex!.contentHashes) {
@@ -1314,6 +1709,7 @@ export async function buildEmbeddingIndex(
     const chunksToEmbed: Array<{ slot: number; text: string }> = [];
 
     for (const range of docChunkRanges) {
+      throwIfAborted(signal);
       const docId = docs[range.docIndex].id;
       const cachedHash = existingPerDocHash.get(docId);
       const currentHash = currentHashes[range.docIndex];
@@ -1346,14 +1742,29 @@ export async function buildEmbeddingIndex(
 
     if (chunksToEmbed.length > 0) {
       const texts = chunksToEmbed.map(c => c.text);
-      const newVectors = await embedTexts(texts);
+      const newVectors = await embedTexts(texts, signal);
       for (let j = 0; j < chunksToEmbed.length; j++) {
         vectors[chunksToEmbed[j].slot] = newVectors[j];
       }
     }
   } else {
     // Full rebuild
-    vectors = await embedTexts(allChunkTexts);
+    vectors = await embedTexts(allChunkTexts, signal);
+  }
+
+  throwIfAborted(signal);
+  let dimension = vectors[0]?.length ?? (activeDim || existingIndex?.dimension || 384);
+  if ((!isBoundedPositiveInteger(dimension, MAX_EMBEDDING_DIMENSION)
+    || !hasVectorShape(vectors, allChunkIds.length, dimension)) && modelMatch) {
+    // An API may change its default dimension when dimensions is omitted.
+    // Discard mixed incremental reuse and rebuild once with the current shape.
+    vectors = await embedTexts(allChunkTexts, signal);
+    throwIfAborted(signal);
+    dimension = vectors[0]?.length ?? (activeDim || existingIndex?.dimension || 384);
+  }
+  if (!isBoundedPositiveInteger(dimension, MAX_EMBEDDING_DIMENSION)
+    || !hasVectorShape(vectors, allChunkIds.length, dimension)) {
+    throw new Error('Embedding build returned an invalid or inconsistent vector shape');
   }
 
   // Build per-chunk contentHashes (each chunk gets its parent doc's hash)
@@ -1367,7 +1778,7 @@ export async function buildEmbeddingIndex(
 
   return {
     modelId: activeModel,
-    dimension: vectors[0]?.length ?? 384,
+    dimension,
     docIds: allChunkIds,
     vectors,
     contentHashes: chunkContentHashes,

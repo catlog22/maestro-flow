@@ -1,6 +1,7 @@
-import { readFile, readdir, stat, lstat, writeFile, mkdir } from 'node:fs/promises';
+import { open, readFile, readdir, stat, lstat, writeFile, mkdir, rm } from 'node:fs/promises';
+import { once } from 'node:events';
+import { finished } from 'node:stream/promises';
 import { basename, dirname, extname, join, relative, resolve, sep } from 'node:path';
-
 import { toForwardSlash } from '../../shared/utils.js';
 import { parseFrontmatter } from './frontmatter-util.js';
 import { parseSpecEntries, parseKnowhowEntries } from './spec-entry-parser.js';
@@ -18,7 +19,8 @@ import {
   cwdToClaudeProjectSlug,
 } from './virtual-wiki-adapters.js';
 import { homedir } from 'node:os';
-import { existsSync, readdirSync, statSync, createWriteStream, renameSync as renameSyncFs } from 'node:fs';
+import { closeSync, createWriteStream, existsSync, openSync, readFileSync, readdirSync, renameSync, statSync, unlinkSync, writeFileSync } from 'node:fs';
+import { createHash, randomUUID } from 'node:crypto';
 import { buildGraph, type WikiGraph } from './graph-analysis.js';
 import { buildInvertedIndex, searchBM25, searchBM25Planned, rerankByPhraseProximity, type InvertedIndex } from './search.js';
 import { applyTimeDecay } from './time-decay.js';
@@ -35,10 +37,21 @@ import type {
   PersistedEntry,
 } from './wiki-types.js';
 import { recallSnapshotSchema, type RecallSnapshot } from './wiki-types.js';
+import { resolveAllowedDirectSourcePath, resolveAllowedSourcePath } from './source-path.js';
 
 // v6: session/3.0 + run/3.0 terminal history is projected into Wiki entries.
 const SEARCH_CACHE_VERSION = 6;
 const SEARCH_PARENT_CAP = 2;
+const MAX_SEARCH_CACHE_BYTES = 128 * 1024 * 1024;
+const MAX_SEARCH_CACHE_ENTRIES = 1_000_000;
+const PUBLICATION_LOCK_FILE = 'wiki-index-publication.lock';
+const PUBLICATION_LOCK_WAIT_MS = 2_000;
+const CLI_SESSION_CACHE_TTL_MS = 5 * 60_000;
+const cliSessionScanCache = new Map<string, {
+  fingerprint: string;
+  cachedAt: number;
+  entries: WikiEntry[];
+}>();
 
 export interface WikiSearchOptions {
   skipEmbedding?: boolean;
@@ -83,6 +96,8 @@ export interface WikiIndexerConfig {
   workflowRoot: string;
   linkedWorkspaces?: LinkedWorkspaceConfig[];
   persistence?: 'filesystem' | 'memory-only';
+  /** Disable user-level Claude/Codex transcript sources for hermetic callers. */
+  includeCliSessions?: boolean;
   evidenceRecorder?: (event: WikiEvidenceEvent) => void;
 }
 
@@ -173,6 +188,7 @@ export class WikiIndexer {
   private readonly workflowRoot: string;
   private readonly persistence: 'filesystem' | 'memory-only';
   private readonly evidenceRecorder: ((event: WikiEvidenceEvent) => void) | undefined;
+  private readonly includeCliSessions: boolean;
   private readonly linkedWorkspaces: Array<{
     name: string;
     workflowRoot: string;
@@ -186,12 +202,21 @@ export class WikiIndexer {
   private embeddingGeneration = 0;
   private embeddingAbort: AbortController | null = null;
   private inflight: Promise<WikiIndex> | null = null;
-  private mtimeSnapshot: Map<string, number> = new Map();
+  private rebuildGeneration = 0;
+  private persistenceInflight: Promise<void> | null = null;
+  private pendingPersistence: {
+    index: WikiIndex;
+    snapshot: Map<string, string>;
+    generation: number;
+  } | null = null;
+  private mtimeSnapshot: Map<string, string> = new Map();
+  private closing = false;
 
   constructor(config: WikiIndexerConfig) {
     this.workflowRoot = resolve(config.workflowRoot);
     this.persistence = config.persistence ?? 'filesystem';
     this.evidenceRecorder = config.evidenceRecorder;
+    this.includeCliSessions = config.includeCliSessions ?? true;
     this.linkedWorkspaces = (config.linkedWorkspaces ?? []).map(lw => ({
       name: lw.name,
       workflowRoot: resolve(lw.workflowRoot),
@@ -210,168 +235,198 @@ export class WikiIndexer {
   async get(): Promise<WikiIndex> {
     if (this.cache) {
       if (!await this.hasSourceChanges()) return this.cache;
-      this.cache = null;
-      this.graphCache = null;
-      this.searchCache = null;
-      this.embeddingCache = null;
+      this.invalidate();
     }
+    if (this.inflight) return this.inflight;
     if (this.persistence === 'filesystem' && await this.tryLoadSearchCache()) {
       return this.cache!;
     }
     return this.rebuild();
   }
 
-  private getSourcePaths(): { singletons: string[]; dirs: string[] } {
-    const dirs = [
-      join(this.workflowRoot, 'specs'),
-      join(this.workflowRoot, 'knowhow'),
-      join(this.workflowRoot, 'issues'),
-      join(this.workflowRoot, 'domain'),
-      join(this.workflowRoot, 'sessions'),
-    ];
-    for (const lw of this.linkedWorkspaces) {
-      if (lw.shareTypes.has('spec')) dirs.push(join(lw.workflowRoot, 'specs'));
-      if (lw.shareTypes.has('knowhow')) dirs.push(join(lw.workflowRoot, 'knowhow'));
-      if (lw.shareTypes.has('domain')) dirs.push(join(lw.workflowRoot, 'domain'));
-      if (lw.shareTypes.has('codebase')) dirs.push(join(lw.workflowRoot, 'codebase'));
+  private async hasSourceChanges(snapshot = this.mtimeSnapshot): Promise<boolean> {
+    if (snapshot.size === 0) return true;
+    return !snapshotsEqual(snapshot, await this.captureSourceSnapshot());
+  }
+
+  /** Capture every source family the indexer can read, after realpath fencing. */
+  private async captureSourceSnapshot(): Promise<Map<string, string>> {
+    const snapshot = new Map<string, string>();
+    const record = (path: string, sourceStat: Awaited<ReturnType<typeof stat>>): void => {
+      snapshot.set(path, [
+        sourceStat.isDirectory() ? 'd' : 'f',
+        sourceStat.size,
+        sourceStat.mtimeMs,
+        sourceStat.ctimeMs,
+      ].join(':'));
+    };
+    const add = async (
+      candidate: string,
+      allowedRoot: string,
+      kind: 'file' | 'directory' | 'any' = 'file',
+    ): Promise<string | null> => {
+      const realPath = resolveAllowedSourcePath(candidate, allowedRoot, kind);
+      if (!realPath) return null;
+      try {
+        record(realPath, await stat(realPath));
+        return realPath;
+      } catch {
+        return null;
+      }
+    };
+    const scan = async (
+      candidate: string,
+      allowedRoot: string,
+      accept: (name: string, path: string) => boolean,
+      recurse: boolean,
+      maxDepth = 32,
+      depth = 0,
+      skipDir?: (name: string) => boolean,
+      budget?: { remaining: number },
+      newestFirst = false,
+    ): Promise<void> => {
+      if (depth > maxDepth || budget?.remaining === 0) return;
+      const realDir = depth === 0
+        ? await add(candidate, allowedRoot, 'directory')
+        : candidate;
+      if (!realDir) return;
+      let names: string[];
+      try { names = await readdir(realDir); } catch { return; }
+      names.sort((left, right) => newestFirst
+        ? right.localeCompare(left)
+        : left.localeCompare(right));
+      for (const name of names) {
+        const child = resolveAllowedDirectSourcePath(join(realDir, name), realDir, 'any');
+        if (!child) continue;
+        let childStat: Awaited<ReturnType<typeof stat>>;
+        try { childStat = await stat(child); } catch { continue; }
+        if (childStat.isDirectory()) {
+          record(child, childStat);
+          if (recurse && !skipDir?.(name)) {
+            await scan(
+              child,
+              allowedRoot,
+              accept,
+              true,
+              maxDepth,
+              depth + 1,
+              skipDir,
+              budget,
+              newestFirst,
+            );
+          }
+        } else if (childStat.isFile() && accept(name, child)) {
+          record(child, childStat);
+          if (budget && --budget.remaining === 0) return;
+        }
+      }
+    };
+
+    await Promise.all([
+      add(join(this.workflowRoot, 'project.md'), this.workflowRoot),
+      add(join(this.workflowRoot, 'roadmap.md'), this.workflowRoot),
+      scan(join(this.workflowRoot, 'knowhow'), this.workflowRoot, name => name.toLowerCase().endsWith('.md'), true),
+      scan(join(this.workflowRoot, 'issues'), this.workflowRoot, name => name.toLowerCase().endsWith('.jsonl'), false),
+      add(join(this.workflowRoot, 'domain', 'glossary.json'), this.workflowRoot),
+      add(join(this.workflowRoot, 'codebase', 'doc-index.json'), this.workflowRoot),
+      add(join(this.workflowRoot, 'codebase', 'knowledge-graph.json'), this.workflowRoot),
+      add(join(this.workflowRoot, 'kg', 'maestro.db'), this.workflowRoot),
+      add(join(this.workflowRoot, 'kg', 'maestro.db-wal'), this.workflowRoot),
+      add(join(this.workflowRoot, 'kg', 'maestro.db-shm'), this.workflowRoot),
+      scan(
+        join(this.workflowRoot, 'sessions'),
+        this.workflowRoot,
+        name => name === 'session.json' || name === 'artifacts.json' || name === 'gates.json'
+          || name === 'run.json' || name === 'report.md' || name === 'knowledge-delta.json'
+          || name.endsWith('.json'),
+        true,
+        16,
+        0,
+        name => name === 'work' || name === 'tmp',
+      ),
+    ]);
+
+    for (const scope of this.resolveSpecScopes()) {
+      await scan(scope.dir, scope.allowedRoot, name => name.toLowerCase().endsWith('.md'), false);
     }
 
-    // Monitor CLI session directories for new session detection
-    if (this.persistence === 'filesystem') {
+    for (const lw of this.linkedWorkspaces) {
+      if (lw.shareTypes.has('spec')) {
+        await scan(join(lw.workflowRoot, 'specs'), lw.workflowRoot, name => name.toLowerCase().endsWith('.md'), false);
+      }
+      if (lw.shareTypes.has('knowhow')) {
+        await scan(join(lw.workflowRoot, 'knowhow'), lw.workflowRoot, name => name.toLowerCase().endsWith('.md'), true);
+      }
+      if (lw.shareTypes.has('domain')) {
+        await add(join(lw.workflowRoot, 'domain', 'glossary.json'), lw.workflowRoot);
+      }
+      if (lw.shareTypes.has('codebase')) {
+        await add(join(lw.workflowRoot, 'codebase', 'doc-index.json'), lw.workflowRoot);
+        await add(join(lw.workflowRoot, 'codebase', 'knowledge-graph.json'), lw.workflowRoot);
+        await add(join(lw.workflowRoot, 'kg', 'maestro.db'), lw.workflowRoot);
+        await add(join(lw.workflowRoot, 'kg', 'maestro.db-wal'), lw.workflowRoot);
+        await add(join(lw.workflowRoot, 'kg', 'maestro.db-shm'), lw.workflowRoot);
+      }
+      if (lw.shareTypes.has('session')) {
+        await scan(join(lw.workflowRoot, 'sessions'), lw.workflowRoot, name =>
+          name === 'session.json' || name === 'artifacts.json' || name === 'gates.json'
+          || name === 'run.json' || name === 'report.md' || name === 'knowledge-delta.json'
+          || name.endsWith('.json'), true, 16, 0, name => name === 'work' || name === 'tmp');
+      }
+    }
+
+    if (this.persistence === 'filesystem' && this.includeCliSessions) {
       const home = homedir();
       const projectCwd = dirname(this.workflowRoot);
       const projectSlug = cwdToClaudeProjectSlug(projectCwd);
       const claudeProjectDir = join(home, '.claude', 'projects', projectSlug);
-      if (existsSync(claudeProjectDir)) dirs.push(claudeProjectDir);
-      const codexSessionsDir = join(home, '.codex', 'sessions');
-      if (existsSync(codexSessionsDir)) dirs.push(codexSessionsDir);
+      const codexRoot = join(home, '.codex');
+      // The transcript loaders independently bound and fence their selected
+      // files. Directory fingerprints detect membership changes without a
+      // second recursive walk over user-level history for every cache check.
+      await add(claudeProjectDir, claudeProjectDir, 'directory');
+      await add(join(codexRoot, 'session_index.jsonl'), codexRoot);
+      await add(join(codexRoot, 'sessions'), codexRoot, 'directory');
     }
 
-    const singletons = [
-      join(this.workflowRoot, 'project.md'),
-      join(this.workflowRoot, 'roadmap.md'),
-    ];
-    return { singletons, dirs };
-  }
-
-  private async hasSourceChanges(): Promise<boolean> {
-    if (this.mtimeSnapshot.size === 0) return true;
-    const { singletons, dirs } = this.getSourcePaths();
-    const allPaths = [...singletons, ...dirs];
-    const results = await Promise.allSettled(allPaths.map(p => stat(p)));
-    for (let i = 0; i < allPaths.length; i++) {
-      const p = allPaths[i];
-      const result = results[i];
-      if (result.status === 'fulfilled') {
-        const prev = this.mtimeSnapshot.get(p);
-        if (prev === undefined || result.value.mtimeMs !== prev) return true;
-      } else {
-        if (this.mtimeSnapshot.has(p)) return true;
-      }
-    }
-    // Dir mtime only bumps on add/remove, not in-place edits. For spec/knowhow
-    // dirs, also check max file mtime to detect content edits.
-    const contentDirs = [
-      join(this.workflowRoot, 'specs'),
-      join(this.workflowRoot, 'knowhow'),
-    ];
-    for (const dir of contentDirs) {
-      try {
-        const files = readdirSync(dir).filter(f => f.endsWith('.md'));
-        for (const f of files) {
-          const fp = join(dir, f);
-          const st = statSync(fp);
-          const prev = this.mtimeSnapshot.get(fp);
-          if (prev === undefined || st.mtimeMs !== prev) return true;
-        }
-      } catch { /* dir missing is fine */ }
-    }
-    const sessionFiles = this.collectRunModeSourceMtimes();
-    const sessionsRoot = `${join(this.workflowRoot, 'sessions')}${sep}`;
-    const previousSessionFiles = [...this.mtimeSnapshot.keys()].filter(p => p.startsWith(sessionsRoot));
-    if (sessionFiles.size !== previousSessionFiles.length) return true;
-    for (const [path, mtime] of sessionFiles) {
-      if (this.mtimeSnapshot.get(path) !== mtime) return true;
-    }
-    return false;
-  }
-
-  private async captureMtimeSnapshot(): Promise<Map<string, number>> {
-    const snap = new Map<string, number>();
-    const { singletons, dirs } = this.getSourcePaths();
-    const allPaths = [...singletons, ...dirs];
-    const results = await Promise.allSettled(allPaths.map(p => stat(p)));
-    for (let i = 0; i < allPaths.length; i++) {
-      if (results[i].status === 'fulfilled') {
-        const st = (results[i] as PromiseFulfilledResult<Awaited<ReturnType<typeof stat>>>).value;
-        snap.set(allPaths[i], Number(st.mtimeMs));
-      }
-    }
-    // Capture file-level mtime for spec/knowhow to detect in-place edits
-    for (const sub of ['specs', 'knowhow']) {
-      const dir = join(this.workflowRoot, sub);
-      try {
-        for (const f of readdirSync(dir).filter(n => n.endsWith('.md'))) {
-          const fp = join(dir, f);
-          snap.set(fp, Number(statSync(fp).mtimeMs));
-        }
-      } catch { /* dir missing */ }
-    }
-    for (const [path, mtime] of this.collectRunModeSourceMtimes()) snap.set(path, mtime);
-    return snap;
-  }
-
-  private collectRunModeSourceMtimes(): Map<string, number> {
-    const out = new Map<string, number>();
-    const root = join(this.workflowRoot, 'sessions');
-    const visit = (dir: string): void => {
-      let names: string[];
-      try { names = readdirSync(dir); } catch { return; }
-      for (const name of names) {
-        if (name === 'work' || name === 'tmp' || name === 'diagnostics.ndjson' || name === 'events.ndjson') continue;
-        const path = join(dir, name);
-        let st;
-        try { st = statSync(path); } catch { continue; }
-        if (st.isDirectory()) { visit(path); continue; }
-        if (name === 'session.json' || name === 'artifacts.json' || name === 'gates.json' || name === 'run.json' || name === 'report.md' || name === 'knowledge-delta.json' || dir.includes(`${sep}outputs`)) {
-          out.set(path, Number(st.mtimeMs));
-        }
-      }
-    };
-    visit(root);
-    return out;
+    return snapshot;
   }
 
   private async tryLoadSearchCache(): Promise<boolean> {
-    const cachePath = join(this.workflowRoot, 'search-cache.json');
-    if (!existsSync(cachePath)) return false;
+    const cachePath = resolveAllowedSourcePath(
+      join(this.workflowRoot, 'search-cache.json'),
+      this.workflowRoot,
+      'file',
+    );
+    if (!cachePath) return false;
+    const generation = this.rebuildGeneration;
 
     try {
       this.recordEvidence('filesystem-cache-read', 'WikiIndexer.tryLoadSearchCache.readFile');
-      const raw = await readFile(cachePath, 'utf-8');
-      const cached = JSON.parse(raw);
-      if (cached.version !== SEARCH_CACHE_VERSION || !Array.isArray(cached.entries)) return false;
+      const raw = await readBoundedUtf8(cachePath, MAX_SEARCH_CACHE_BYTES);
+      const cached = validateSearchCache(JSON.parse(raw));
+      if (!cached) return false;
 
-      const snapshot = new Map<string, number>(cached.mtimeSnapshot);
-      this.mtimeSnapshot = snapshot;
-      if (await this.hasSourceChanges()) {
-        this.mtimeSnapshot = new Map();
-        return false;
-      }
+      const snapshot = new Map<string, string>(cached.mtimeSnapshot);
+      if (sourceFingerprint(snapshot) !== cached.sourceFingerprint
+        || await this.hasSourceChanges(snapshot)
+        || generation !== this.rebuildGeneration) return false;
 
-      const entries: WikiEntry[] = cached.entries;
-      const byId: Record<string, WikiEntry> = {};
+      const entries = cached.entries;
+      const byId = Object.create(null) as Record<string, WikiEntry>;
       const byType = {
         project: [], roadmap: [], spec: [], issue: [],
         knowhow: [], note: [], domain: [],
       } as Record<WikiNodeType, WikiEntry[]>;
 
-      for (const d of entries) {
-        byId[d.id] = d;
-        byType[d.type].push(d);
+      for (const entry of entries) {
+        byId[entry.id] = entry;
+        byType[entry.type].push(entry);
       }
 
       const backlinks = this.buildBacklinks(entries, byId);
+      if (generation !== this.rebuildGeneration) return false;
+      this.mtimeSnapshot = snapshot;
       this.cache = { entries, byId, byType, backlinks, generatedAt: cached.generatedAt };
       return true;
     } catch {
@@ -379,56 +434,64 @@ export class WikiIndexer {
     }
   }
 
-  private persistSearchCache(index: WikiIndex): void {
-    let stream: ReturnType<typeof createWriteStream> | null = null;
+  private async prepareSearchCache(
+    index: WikiIndex,
+    snapshot: ReadonlyMap<string, string>,
+  ): Promise<string> {
     const target = join(this.workflowRoot, 'search-cache.json');
-    const tmpTarget = target + '.tmp';
+    const tmpTarget = `${target}.tmp-${process.pid}-${randomUUID()}`;
+    let stream: ReturnType<typeof createWriteStream> | null = null;
     try {
       this.recordEvidence(
         'filesystem-cache-write',
         'WikiIndexer.persistSearchCache.createWriteStream',
       );
-      stream = createWriteStream(tmpTarget, { encoding: 'utf-8' });
-      
-      stream.on('error', (e) => {
-        if (process.env.MAESTRO_DEBUG === '1') {
-          console.warn('[wiki-indexer] search-cache write failed:', e?.message);
-        }
-        try { stream?.destroy(); } catch { /* ignore */ }
-      });
-
-      stream.write(`{"version":${SEARCH_CACHE_VERSION},"generatedAt":`);
-      stream.write(String(index.generatedAt));
-      stream.write(',"mtimeSnapshot":');
-      stream.write(JSON.stringify([...this.mtimeSnapshot.entries()]));
-      stream.write(',"entries":[');
+      stream = createWriteStream(tmpTarget, { encoding: 'utf-8', flags: 'wx' });
+      const writeChunk = async (chunk: string): Promise<void> => {
+        if (!stream!.write(chunk)) await once(stream!, 'drain');
+      };
+      await writeChunk(`{"version":${SEARCH_CACHE_VERSION},"generatedAt":${index.generatedAt}`);
+      await writeChunk(`,"sourceFingerprint":${JSON.stringify(sourceFingerprint(snapshot))}`);
+      await writeChunk(',"mtimeSnapshot":');
+      await writeChunk(JSON.stringify([...snapshot.entries()]));
+      await writeChunk(',"entries":[');
       for (let i = 0; i < index.entries.length; i++) {
-        if (i > 0) stream.write(',');
-        const e = index.entries[i];
-        stream.write(JSON.stringify({
-          id: e.id, type: e.type, title: e.title, summary: e.summary,
-          tags: e.tags, status: e.status, created: e.created, updated: e.updated,
-          related: e.related, source: e.source, body: e.body, ext: e.ext,
-          scope: e.scope, category: e.category, specCategory: e.specCategory,
-          createdBy: e.createdBy, sourceRef: e.sourceRef, parent: e.parent,
+        if (i > 0) await writeChunk(',');
+        const entry = index.entries[i];
+        await writeChunk(JSON.stringify({
+          id: entry.id, type: entry.type, title: entry.title, summary: entry.summary,
+          tags: entry.tags, status: entry.status, created: entry.created, updated: entry.updated,
+          related: entry.related, source: entry.source, body: entry.body, ext: entry.ext,
+          scope: entry.scope, category: entry.category, specCategory: entry.specCategory,
+          createdBy: entry.createdBy, sourceRef: entry.sourceRef, parent: entry.parent,
         }));
       }
-      stream.end(']}', () => {
-        try { renameSyncFs(tmpTarget, target); } catch { /* best effort */ }
-      });
-    } catch (e) {
-      if (process.env.MAESTRO_DEBUG === '1') {
-        console.warn('[wiki-indexer] persistSearchCache error:', (e as Error)?.message);
-      }
-      if (stream) {
-        try { stream.destroy(); } catch { /* ignore */ }
-      }
+      stream.end(']}');
+      await finished(stream);
+      stream = null;
+      return tmpTarget;
+    } catch (error) {
+      stream?.destroy();
+      await rm(tmpTarget, { force: true }).catch(() => undefined);
+      throw error;
     }
   }
 
   async rebuild(): Promise<WikiIndex> {
     if (this.inflight) return this.inflight;
-    this.inflight = (async () => {
+    // An explicit rebuild is itself a new generation. Once a flight exists,
+    // later invalidations only mark it dirty; they never start a second scan.
+    this.invalidate();
+    const flight = this.rebuildUntilCurrent();
+    this.inflight = flight;
+    try {
+      return await flight;
+    } finally {
+      if (this.inflight === flight) this.inflight = null;
+    }
+  }
+
+  private async buildIndexCandidate(): Promise<WikiIndex> {
       // Parallel: file scan + virtual entries + linked workspaces
       const [fileEntries, virtualEntries, linkedEntries] = await Promise.all([
         this.scanFiles(),
@@ -579,42 +642,131 @@ export class WikiIndexer {
         backlinks,
         generatedAt: Date.now(),
       };
+      return index;
+  }
+
+  private async rebuildUntilCurrent(): Promise<WikiIndex> {
+    for (;;) {
+      if (this.closing) throw new Error('wiki indexer is closing');
+      const generation = this.rebuildGeneration;
+      const before = await this.captureSourceSnapshot();
+      const index = await this.buildIndexCandidate();
+      const snapshot = await this.captureSourceSnapshot();
+      if (this.closing) throw new Error('wiki indexer is closing');
+      if (generation !== this.rebuildGeneration || !snapshotsEqual(before, snapshot)) continue;
+
+      this.mtimeSnapshot = snapshot;
       this.cache = index;
       this.graphCache = null;
       this.searchCache = null;
-
-      // Snapshot mtimes of source directories for incremental staleness check
-      this.mtimeSnapshot = await this.captureMtimeSnapshot();
-
       if (this.persistence === 'filesystem') {
-        // Persist lightweight index to disk (fire-and-forget).
-        this.persistIndex(index).catch((e) => {
-          if (process.env.MAESTRO_DEBUG === '1') console.warn('[wiki-indexer] persistIndex failed:', e?.message);
-        });
-        this.persistSearchCache(index);
+        this.schedulePersistence(index, snapshot, generation);
       }
-
       return index;
-    })();
+    }
+  }
 
-    try {
-      return await this.inflight;
-    } finally {
-      this.inflight = null;
+  private schedulePersistence(
+    index: WikiIndex,
+    snapshot: Map<string, string>,
+    generation: number,
+  ): void {
+    if (this.closing) return;
+    // Keep at most one writer and one coalesced latest candidate. Slow disk I/O
+    // never blocks readers or permits an older generation to publish afterward.
+    this.pendingPersistence = { index, snapshot, generation };
+    this.ensurePersistenceDrain();
+  }
+
+  private ensurePersistenceDrain(): void {
+    if (this.persistenceInflight) return;
+    const flight = this.drainPersistence();
+    this.persistenceInflight = flight;
+    const settle = () => {
+      if (this.persistenceInflight === flight) this.persistenceInflight = null;
+      if (this.pendingPersistence) this.ensurePersistenceDrain();
+    };
+    void flight.then(settle, settle);
+  }
+
+  private async drainPersistence(): Promise<void> {
+    while (this.pendingPersistence && !this.closing) {
+      const pending = this.pendingPersistence;
+      this.pendingPersistence = null;
+      if (pending.generation !== this.rebuildGeneration) continue;
+
+      let indexTemp: string | null = null;
+      let cacheTemp: string | null = null;
+      let publicationLock: PublicationLock | null = null;
+      try {
+        [indexTemp, cacheTemp] = await Promise.all([
+          this.prepareIndex(pending.index),
+          this.prepareSearchCache(pending.index, pending.snapshot),
+        ]);
+        publicationLock = await acquirePublicationLock(this.workflowRoot);
+        if (!publicationLock || pending.generation !== this.rebuildGeneration || this.closing) continue;
+
+        const currentSnapshot = await this.captureSourceSnapshot();
+        if (!snapshotsEqual(currentSnapshot, pending.snapshot)) {
+          if (process.env.MAESTRO_DEBUG === '1') {
+            const changed = [...new Set([
+              ...[...pending.snapshot.keys()].filter(path => currentSnapshot.get(path) !== pending.snapshot.get(path)),
+              ...[...currentSnapshot.keys()].filter(path => pending.snapshot.get(path) !== currentSnapshot.get(path)),
+            ])];
+            console.warn('[wiki-indexer] source changed before protected publication:', changed.slice(0, 10));
+          }
+          if (pending.generation === this.rebuildGeneration && existsSync(this.workflowRoot)) {
+            this.invalidate();
+            setImmediate(() => {
+              if (existsSync(this.workflowRoot)) void this.rebuild().catch(() => undefined);
+            });
+          }
+          continue;
+        }
+
+        renameSync(indexTemp, join(this.workflowRoot, 'wiki-index.json'));
+        indexTemp = null;
+        renameSync(cacheTemp, join(this.workflowRoot, 'search-cache.json'));
+        cacheTemp = null;
+      } catch (error) {
+        if (process.env.MAESTRO_DEBUG === '1') {
+          console.warn('[wiki-indexer] protected publication failed:', (error as Error)?.message);
+        }
+      } finally {
+        releasePublicationLock(this.workflowRoot, publicationLock);
+        if (indexTemp) await rm(indexTemp, { force: true }).catch(() => undefined);
+        if (cacheTemp) await rm(cacheTemp, { force: true }).catch(() => undefined);
+      }
     }
   }
 
   invalidate(_changedAbsPath?: string): void {
+    this.rebuildGeneration++;
     this.cache = null;
     this.graphCache = null;
     this.searchCache = null;
     this.embeddingCache = null;
-    if (this.embeddingAbort) {
-      this.embeddingAbort.abort();
-      this.embeddingAbort = null;
-    }
-    this.embeddingInflight = null;
     this.embeddingGeneration++;
+    this.embeddingAbort?.abort();
+  }
+
+  /** Abort and join background index work before a daemon releases ownership. */
+  async close(): Promise<void> {
+    if (this.closing) {
+      await Promise.allSettled([
+        this.embeddingInflight ?? Promise.resolve(null),
+        this.persistenceInflight ?? Promise.resolve(),
+      ]);
+      return;
+    }
+    this.closing = true;
+    this.pendingPersistence = null;
+    this.embeddingGeneration++;
+    this.embeddingAbort?.abort();
+    await Promise.allSettled([
+      this.embeddingInflight ?? Promise.resolve(null),
+      this.persistenceInflight ?? Promise.resolve(),
+    ]);
   }
 
   async query(filters: WikiFilters): Promise<WikiEntry[]> {
@@ -810,21 +962,32 @@ export class WikiIndexer {
   }
 
   async getEmbeddingIndex(): Promise<EmbeddingIndex | null> {
-    if (this.persistence === 'memory-only') return null;
+    if (this.persistence === 'memory-only' || this.closing) return null;
     if (this.embeddingCache) return this.embeddingCache;
     if (this.embeddingInflight) return this.embeddingInflight;
 
-    const gen = this.embeddingGeneration;
-    const abort = new AbortController();
-    this.embeddingAbort = abort;
-    this.embeddingInflight = this.loadOrBuildEmbeddings(abort.signal);
-    const result = await this.embeddingInflight;
-    if (this.embeddingGeneration === gen) {
-      this.embeddingInflight = null;
-      this.embeddingAbort = null;
-      this.embeddingCache = result;
+    const flight = this.buildEmbeddingsUntilCurrent();
+    this.embeddingInflight = flight;
+    try {
+      return await flight;
+    } finally {
+      if (this.embeddingInflight === flight) this.embeddingInflight = null;
     }
-    return result;
+  }
+
+  private async buildEmbeddingsUntilCurrent(): Promise<EmbeddingIndex | null> {
+    while (!this.closing) {
+      const generation = this.embeddingGeneration;
+      const abort = new AbortController();
+      this.embeddingAbort = abort;
+      const result = await this.loadOrBuildEmbeddings(abort.signal);
+      if (this.embeddingAbort === abort) this.embeddingAbort = null;
+      if (this.closing) return null;
+      if (abort.signal.aborted || generation !== this.embeddingGeneration) continue;
+      this.embeddingCache = result;
+      return result;
+    }
+    return null;
   }
 
   private async loadOrBuildEmbeddings(signal?: AbortSignal): Promise<EmbeddingIndex | null> {
@@ -846,27 +1009,32 @@ export class WikiIndexer {
       const cached = loadEmbeddingIndex(this.workflowRoot);
       if (signal?.aborted) return null;
       const index = await this.get();
+      if (signal?.aborted) return null;
 
       // KG nodes: include high/medium semantic density types, skip low-density bulk
       const KG_EMBED_NODE_TYPES = new Set(['module', 'class', 'kg-layer', 'kg-tour-step']);
       const KG_SKIP_NODE_TYPES = new Set(['file', 'function', 'interface', 'type', 'const', 'enum']);
 
-      const docs = index.entries
-        .filter(e => {
-          const vk = e.ext?.virtualKind as string | undefined;
-          if (vk !== 'kg-node' && vk !== 'kg-layer' && vk !== 'kg-tour-step') return true;
-          if (vk === 'kg-layer' || vk === 'kg-tour-step') return true;
+      const docs: Array<{
+        id: string;
+        title: string;
+        summary: string;
+        tags: string[];
+        body: string;
+      }> = [];
+      for (let i = 0; i < index.entries.length; i++) {
+        if (i % 256 === 0 && signal?.aborted) return null;
+        const e = index.entries[i];
+        const vk = e.ext?.virtualKind as string | undefined;
+        if (vk === 'kg-node') {
           const nt = e.ext?.nodeType as string | undefined;
-          if (nt && KG_SKIP_NODE_TYPES.has(nt)) return false;
-          return nt ? KG_EMBED_NODE_TYPES.has(nt) : false;
-        })
-        .map(e => {
-          const vk = e.ext?.virtualKind as string | undefined;
-          if (vk === 'kg-node' || vk === 'kg-layer' || vk === 'kg-tour-step') {
-            return this.enrichKgDocForEmbedding(e, index);
-          }
-          return { id: e.id, title: e.title, summary: e.summary, tags: e.tags, body: e.body };
-        });
+          if (nt && KG_SKIP_NODE_TYPES.has(nt)) continue;
+          if (!nt || !KG_EMBED_NODE_TYPES.has(nt)) continue;
+        }
+        docs.push(vk === 'kg-node' || vk === 'kg-layer' || vk === 'kg-tour-step'
+          ? this.enrichKgDocForEmbedding(e, index)
+          : { id: e.id, title: e.title, summary: e.summary, tags: e.tags, body: e.body });
+      }
 
       const { getModelId, hashDocContent } = await import('./embedding.js');
       const activeModel = getModelId();
@@ -909,13 +1077,13 @@ export class WikiIndexer {
           'embedding-build',
           'WikiIndexer.loadOrBuildEmbeddings.buildEmbeddingIndex',
         );
-        const embIdx = await buildEmbeddingIndex(docs, cached, currentHashes);
+        const embIdx = await buildEmbeddingIndex(docs, cached, currentHashes, signal);
         if (signal?.aborted) return null;
         this.recordEvidence(
           'embedding-save',
           'WikiIndexer.loadOrBuildEmbeddings.saveEmbeddingIndex',
         );
-        await saveEmbeddingIndex(embIdx, this.workflowRoot);
+        await saveEmbeddingIndex(embIdx, this.workflowRoot, signal);
         return embIdx;
       } catch (buildErr: unknown) {
         if (process.env.MAESTRO_DEBUG === '1') {
@@ -990,11 +1158,11 @@ export class WikiIndexer {
 
     // specs — scan all scope directories (global, project, team, personal)
     const specScopes = this.resolveSpecScopes();
-    for (const { dir, scope, idPrefix, sourcePrefix } of specScopes) {
+    for (const { dir, allowedRoot, scope, idPrefix, sourcePrefix } of specScopes) {
       for (const name of await safeReaddir(dir)) {
         if (extname(name).toLowerCase() !== '.md') continue;
         const absPath = join(dir, name);
-        const container = await this.parseFileEntry(absPath, 'spec');
+        const container = await this.parseFileEntry(absPath, 'spec', allowedRoot);
         if (!container) continue;
 
         // Scoped ID: spec:{scope}:{stem} to prevent cross-scope collisions
@@ -1113,10 +1281,17 @@ export class WikiIndexer {
    */
   private async scanKnowhowDir(dir: string): Promise<Array<{ name: string; absPath: string; entry: WikiEntry | null }>> {
     const results: Array<{ name: string; absPath: string; entry: WikiEntry | null }> = [];
+    try {
+      const rootStats = await lstat(dir);
+      if (rootStats.isSymbolicLink() || !rootStats.isDirectory()) return results;
+    } catch {
+      return results;
+    }
     for (const name of await safeReaddir(dir)) {
       const fullPath = join(dir, name);
-      let stats: Awaited<ReturnType<typeof stat>> | null = null;
-      try { stats = await stat(fullPath); } catch { continue; }
+      let stats: Awaited<ReturnType<typeof lstat>> | null = null;
+      try { stats = await lstat(fullPath); } catch { continue; }
+      if (stats.isSymbolicLink()) continue;
 
       if (stats.isDirectory()) {
         const nested = await this.scanKnowhowDir(fullPath);
@@ -1133,7 +1308,12 @@ export class WikiIndexer {
    * Scan .workflow/domain/glossary.json and produce WikiEntry[] for each term.
    */
   private async scanDomain(): Promise<WikiEntry[]> {
-    const glossaryPath = join(this.workflowRoot, 'domain', 'glossary.json');
+    const glossaryPath = resolveAllowedSourcePath(
+      join(this.workflowRoot, 'domain', 'glossary.json'),
+      this.workflowRoot,
+      'file',
+    );
+    if (!glossaryPath) return [];
     try {
       const raw = await readFile(glossaryPath, 'utf-8');
       const glossary = JSON.parse(raw);
@@ -1192,6 +1372,7 @@ export class WikiIndexer {
    */
   private resolveSpecScopes(): Array<{
     dir: string;
+    allowedRoot: string;
     scope: WikiScope;
     idPrefix: string;
     sourcePrefix: string;
@@ -1199,6 +1380,7 @@ export class WikiIndexer {
     const maestroHome = process.env.MAESTRO_HOME ?? join(homedir(), '.maestro');
     const scopes: Array<{
       dir: string;
+      allowedRoot: string;
       scope: WikiScope;
       idPrefix: string;
       sourcePrefix: string;
@@ -1209,6 +1391,7 @@ export class WikiIndexer {
     if (existsSync(globalDir)) {
       scopes.push({
         dir: globalDir,
+        allowedRoot: globalDir,
         scope: 'global',
         idPrefix: 'spec:global:',
         sourcePrefix: '~/.maestro/specs/',
@@ -1220,6 +1403,7 @@ export class WikiIndexer {
     if (existsSync(projectDir)) {
       scopes.push({
         dir: projectDir,
+        allowedRoot: this.workflowRoot,
         scope: 'project',
         idPrefix: 'spec:project:',
         sourcePrefix: 'specs/',
@@ -1232,6 +1416,7 @@ export class WikiIndexer {
       // Only add the team root, not uid subdirs
       scopes.push({
         dir: teamDir,
+        allowedRoot: this.workflowRoot,
         scope: 'team',
         idPrefix: 'spec:team:',
         sourcePrefix: 'collab/specs/',
@@ -1246,6 +1431,7 @@ export class WikiIndexer {
           const personalDir = join(teamDir, d.name);
           scopes.push({
             dir: personalDir,
+            allowedRoot: this.workflowRoot,
             scope: 'personal',
             idPrefix: `spec:personal:${d.name}:`,
             sourcePrefix: `collab/specs/${d.name}/`,
@@ -1269,8 +1455,12 @@ export class WikiIndexer {
     const allIssues: WikiEntry[] = [];
     for (const name of await safeReaddir(join(this.workflowRoot, 'issues'))) {
       if (extname(name).toLowerCase() !== '.jsonl') continue;
-      const abs = join(this.workflowRoot, 'issues', name);
-      if (!this.isInsideRoot(abs)) continue;
+      const abs = resolveAllowedSourcePath(
+        join(this.workflowRoot, 'issues', name),
+        this.workflowRoot,
+        'file',
+      );
+      if (!abs) continue;
       const rel = toForwardSlash(relative(this.workflowRoot, abs));
       allIssues.push(...(await loadVirtualEntries(abs, adaptIssueRow, rel)));
     }
@@ -1284,22 +1474,30 @@ export class WikiIndexer {
     out.push(...issueBest.values());
 
     // Codebase: .workflow/codebase/doc-index.json → component/feature/req/ADR
-    const codebaseIndex = join(this.workflowRoot, 'codebase', 'doc-index.json');
-    if (existsSync(codebaseIndex) && this.isInsideRoot(codebaseIndex)) {
+    const codebaseIndex = resolveAllowedSourcePath(
+      join(this.workflowRoot, 'codebase', 'doc-index.json'),
+      this.workflowRoot,
+      'file',
+    );
+    if (codebaseIndex) {
       const rel = toForwardSlash(relative(this.workflowRoot, codebaseIndex));
       out.push(...(await loadVirtualJsonEntries(codebaseIndex, adaptCodebaseDocIndex, rel)));
     }
 
     // Knowledge Graph: canonical MaestroGraph SQLite, with legacy JSON fallback.
     // Loaded after doc-index so cross-referencing can link kg-* ↔ codebase-comp-*.
-    const maestroDbPath = join(this.workflowRoot, 'kg', 'maestro.db');
-    const legacyKgPath = join(this.workflowRoot, 'codebase', 'knowledge-graph.json');
-    if (existsSync(maestroDbPath) && this.isInsideRoot(maestroDbPath)) {
+    const maestroDbPath = resolveAllowedSourcePath(
+      join(this.workflowRoot, 'kg', 'maestro.db'), this.workflowRoot, 'file',
+    );
+    const legacyKgPath = resolveAllowedSourcePath(
+      join(this.workflowRoot, 'codebase', 'knowledge-graph.json'), this.workflowRoot, 'file',
+    );
+    if (maestroDbPath) {
       const kgRel = toForwardSlash(relative(this.workflowRoot, maestroDbPath));
       const kgEntries = adaptKnowledgeGraphFromDb(maestroDbPath, kgRel);
       crossReferenceKgWithDocIndex(kgEntries, out);
       out.push(...kgEntries);
-    } else if (existsSync(legacyKgPath) && this.isInsideRoot(legacyKgPath)) {
+    } else if (legacyKgPath) {
       const kgRel = toForwardSlash(relative(this.workflowRoot, legacyKgPath));
       const kgEntries = await loadVirtualJsonEntries(legacyKgPath, adaptKnowledgeGraph, kgRel);
       crossReferenceKgWithDocIndex(kgEntries, out);
@@ -1310,7 +1508,7 @@ export class WikiIndexer {
     out.push(...(await this.scanRunModeSessions()));
 
     // Memory-only probes are hermetic and never inspect user-level CLI session stores.
-    if (this.persistence === 'filesystem') {
+    if (this.persistence === 'filesystem' && this.includeCliSessions) {
       out.push(...(await this.scanCliSessions()));
     }
 
@@ -1323,10 +1521,18 @@ export class WikiIndexer {
     const maxAgeDays = 90;
     const maxFiles = 100;
 
-    // Parallel: Claude Code + Codex session loading
+    // Parallel: Claude Code + Codex session loading. Reuse the bounded scan in
+    // process while its store-level fingerprint is stable; many short-lived
+    // WikiIndexer instances otherwise repeat the same user-history walk.
     const projectSlug = cwdToClaudeProjectSlug(projectCwd);
     const claudeProjectDir = join(home, '.claude', 'projects', projectSlug);
     const codexRoot = join(home, '.codex');
+    const fingerprint = cliSessionStoreFingerprint(claudeProjectDir, codexRoot);
+    const cached = cliSessionScanCache.get(projectCwd);
+    if (cached && cached.fingerprint === fingerprint
+      && Date.now() - cached.cachedAt < CLI_SESSION_CACHE_TTL_MS) {
+      return structuredClone(cached.entries);
+    }
 
     const [claudeEntries, codexEntries] = await Promise.all([
       existsSync(claudeProjectDir)
@@ -1337,7 +1543,13 @@ export class WikiIndexer {
         : [] as WikiEntry[],
     ]);
 
-    return [...claudeEntries, ...codexEntries];
+    const entries = [...claudeEntries, ...codexEntries];
+    cliSessionScanCache.set(projectCwd, {
+      fingerprint,
+      cachedAt: Date.now(),
+      entries: structuredClone(entries),
+    });
+    return entries;
   }
 
   private async scanRunModeSessions(): Promise<WikiEntry[]> {
@@ -1346,10 +1558,14 @@ export class WikiIndexer {
     const out: WikiEntry[] = [];
     for (const name of await safeReaddir(root)) {
       if (name === 'index.json') continue;
-      const sessionPath = join(root, name, 'session.json');
-      if (!existsSync(sessionPath) || !this.isInsideRoot(sessionPath)) continue;
+      const sessionPath = resolveAllowedSourcePath(
+        join(root, name, 'session.json'),
+        this.workflowRoot,
+        'file',
+      );
+      if (!sessionPath) continue;
       const rel = toForwardSlash(relative(this.workflowRoot, sessionPath));
-      out.push(...(await loadRunModeSessionEntries(sessionPath, rel)));
+      out.push(...(await loadRunModeSessionEntries(sessionPath, rel, this.workflowRoot)));
     }
     return out;
   }
@@ -1444,8 +1660,10 @@ export class WikiIndexer {
     }
 
     if (lw.shareTypes.has('codebase')) {
-      const codebaseIndex = join(lw.workflowRoot, 'codebase', 'doc-index.json');
-      if (existsSync(codebaseIndex)) {
+      const codebaseIndex = resolveAllowedSourcePath(
+        join(lw.workflowRoot, 'codebase', 'doc-index.json'), lw.workflowRoot, 'file',
+      );
+      if (codebaseIndex) {
         const rel = `codebase/doc-index.json`;
         const entries = await loadVirtualJsonEntries(codebaseIndex, adaptCodebaseDocIndex, rel);
         for (const e of entries) {
@@ -1456,12 +1674,16 @@ export class WikiIndexer {
         }
       }
 
-      const maestroDbPath = join(lw.workflowRoot, 'kg', 'maestro.db');
-      const legacyKgPath = join(lw.workflowRoot, 'codebase', 'knowledge-graph.json');
+      const maestroDbPath = resolveAllowedSourcePath(
+        join(lw.workflowRoot, 'kg', 'maestro.db'), lw.workflowRoot, 'file',
+      );
+      const legacyKgPath = resolveAllowedSourcePath(
+        join(lw.workflowRoot, 'codebase', 'knowledge-graph.json'), lw.workflowRoot, 'file',
+      );
       let kgEntries: WikiEntry[] = [];
-      if (existsSync(maestroDbPath)) {
+      if (maestroDbPath) {
         kgEntries = adaptKnowledgeGraphFromDb(maestroDbPath, 'kg/maestro.db');
-      } else if (existsSync(legacyKgPath)) {
+      } else if (legacyKgPath) {
         kgEntries = await loadVirtualJsonEntries(legacyKgPath, adaptKnowledgeGraph, 'codebase/knowledge-graph.json');
       }
       if (kgEntries.length > 0) {
@@ -1473,9 +1695,15 @@ export class WikiIndexer {
     if (lw.shareTypes.has('session')) {
       const sessionsRoot = join(lw.workflowRoot, 'sessions');
       for (const sessionName of await safeReaddir(sessionsRoot)) {
-        const sessionPath = join(sessionsRoot, sessionName, 'session.json');
-        if (!existsSync(sessionPath)) continue;
-        const entries = await loadRunModeSessionEntries(sessionPath, `sessions/${sessionName}/session.json`);
+        const sessionPath = resolveAllowedSourcePath(
+          join(sessionsRoot, sessionName, 'session.json'), lw.workflowRoot, 'file',
+        );
+        if (!sessionPath) continue;
+        const entries = await loadRunModeSessionEntries(
+          sessionPath,
+          `sessions/${sessionName}/session.json`,
+          lw.workflowRoot,
+        );
         prefixLinkedEntries(entries, idPrefix, lw.name);
         for (const entry of entries) {
           entry.ext = {
@@ -1500,28 +1728,20 @@ export class WikiIndexer {
     wsName: string,
     wsWorkflowRoot: string,
   ): Promise<WikiEntry | null> {
-    const requested = resolve(absPath);
-    const root = resolve(wsWorkflowRoot);
-    if (!requested.startsWith(root + sep) && requested !== root) return null;
-
-    try {
-      const ls = await lstat(absPath);
-      if (ls.isSymbolicLink() || !ls.isFile()) return null;
-    } catch {
-      return null;
-    }
+    const realPath = resolveAllowedSourcePath(absPath, wsWorkflowRoot, 'file');
+    if (!realPath) return null;
 
     let raw: string;
     let stats;
     try {
-      raw = await readFile(absPath, 'utf-8');
-      stats = await stat(absPath);
+      raw = await readFile(realPath, 'utf-8');
+      stats = await stat(realPath);
     } catch {
       return null;
     }
 
     const { data, content } = parseFrontmatter(raw);
-    const fileName = basename(absPath);
+    const fileName = basename(realPath);
     const stem = basename(fileName, extname(fileName));
 
     const title = asString(data.title) || firstHeading(content) || stem;
@@ -1540,7 +1760,7 @@ export class WikiIndexer {
     const sourceRef = asString(data.sourceRef) || null;
     const parent = asString(data.parent) || null;
 
-    const rel = toForwardSlash(relative(wsWorkflowRoot, absPath));
+    const rel = toForwardSlash(relative(wsWorkflowRoot, realPath));
     const id = `${type}-${slugify(stem)}`;
 
     return {
@@ -1571,10 +1791,17 @@ export class WikiIndexer {
     wsWorkflowRoot: string,
   ): Promise<Array<{ entry: WikiEntry | null }>> {
     const results: Array<{ entry: WikiEntry | null }> = [];
+    try {
+      const rootStats = await lstat(dir);
+      if (rootStats.isSymbolicLink() || !rootStats.isDirectory()) return results;
+    } catch {
+      return results;
+    }
     for (const name of await safeReaddir(dir)) {
       const fullPath = join(dir, name);
-      let stats: Awaited<ReturnType<typeof stat>> | null = null;
-      try { stats = await stat(fullPath); } catch { continue; }
+      let stats: Awaited<ReturnType<typeof lstat>> | null = null;
+      try { stats = await lstat(fullPath); } catch { continue; }
+      if (stats.isSymbolicLink()) continue;
 
       if (stats.isDirectory()) {
         const nested = await this.scanLinkedKnowhowDir(fullPath, wsName, wsWorkflowRoot);
@@ -1602,7 +1829,10 @@ export class WikiIndexer {
   }
 
   private async scanLinkedDomain(wsWorkflowRoot: string, wsName: string): Promise<WikiEntry[]> {
-    const glossaryPath = join(wsWorkflowRoot, 'domain', 'glossary.json');
+    const glossaryPath = resolveAllowedSourcePath(
+      join(wsWorkflowRoot, 'domain', 'glossary.json'), wsWorkflowRoot, 'file',
+    );
+    if (!glossaryPath) return [];
     try {
       const raw = await readFile(glossaryPath, 'utf-8');
       const glossary = JSON.parse(raw);
@@ -1662,26 +1892,22 @@ export class WikiIndexer {
   private async parseFileEntry(
     absPath: string,
     type: WikiNodeType,
+    allowedRoot = this.workflowRoot,
   ): Promise<WikiEntry | null> {
-    if (!this.isInsideRoot(absPath)) return null;
-    let ls;
-    try {
-      ls = await lstat(absPath);
-      if (ls.isSymbolicLink() || !ls.isFile()) return null;
-    } catch {
-      return null;
-    }
+    const realPath = resolveAllowedSourcePath(absPath, allowedRoot, 'file');
+    if (!realPath) return null;
 
     let raw: string;
+    let stats: Awaited<ReturnType<typeof stat>>;
     try {
-      raw = await readFile(absPath, 'utf-8');
+      raw = await readFile(realPath, 'utf-8');
+      stats = await stat(realPath);
     } catch {
       return null;
     }
-    const stats = ls;
 
     const { data, content } = parseFrontmatter(raw);
-    const fileName = basename(absPath);
+    const fileName = basename(realPath);
     const stem = basename(fileName, extname(fileName));
 
     const title = asString(data.title) || firstHeading(content) || stem;
@@ -1701,7 +1927,7 @@ export class WikiIndexer {
     const sourceRef = asString(data.sourceRef) || null;
     const parent = asString(data.parent) || null;
 
-    const rel = toForwardSlash(relative(this.workflowRoot, absPath));
+    const rel = toForwardSlash(relative(this.workflowRoot, realPath));
     // Knowhow files use prefix-<slug>.md naming (KNW-, TIP-, TPL-, etc.).
     // Keep the full stem (including prefix) to avoid collisions when multiple
     // prefixed files share the same timestamp slug (e.g. KNW-20260427-1912 vs
@@ -1764,7 +1990,7 @@ export class WikiIndexer {
    * Strips body/raw/ext to keep the file small and fast to parse externally.
    * KG virtual entries get additional truncation to prevent file bloat.
    */
-  private async persistIndex(index: WikiIndex): Promise<void> {
+  private async prepareIndex(index: WikiIndex): Promise<string> {
     const persisted: PersistedWikiIndex = {
       version: 2,
       generatedAt: index.generatedAt,
@@ -1792,15 +2018,219 @@ export class WikiIndexer {
       }),
     };
     const target = join(this.workflowRoot, 'wiki-index.json');
+    const tmpTarget = `${target}.tmp-${process.pid}-${randomUUID()}`;
     await mkdir(dirname(target), { recursive: true });
     this.recordEvidence('filesystem-index-write', 'WikiIndexer.persistIndex.writeFile');
-    await writeFile(target, JSON.stringify(persisted, null, 2), 'utf-8');
+    try {
+      await writeFile(tmpTarget, JSON.stringify(persisted, null, 2), { encoding: 'utf-8', flag: 'wx' });
+      return tmpTarget;
+    } catch (error) {
+      await rm(tmpTarget, { force: true }).catch(() => undefined);
+      throw error;
+    }
   }
 
   isInsideRoot(absPath: string): boolean {
-    const requested = resolve(absPath);
-    return requested === this.workflowRoot || requested.startsWith(this.workflowRoot + sep);
+    return resolveAllowedSourcePath(absPath, this.workflowRoot, 'any') !== null;
   }
+}
+
+function cliSessionStoreFingerprint(claudeProjectDir: string, codexRoot: string): string {
+  return [
+    claudeProjectDir,
+    join(codexRoot, 'sessions'),
+    join(codexRoot, 'session_index.jsonl'),
+  ].map(path => {
+    try {
+      const info = statSync(path);
+      return `${path}:${info.size}:${info.mtimeMs}:${info.ctimeMs}`;
+    } catch {
+      return `${path}:missing`;
+    }
+  }).join('|');
+}
+
+interface PublicationLock {
+  token: string;
+  serialized: string;
+}
+
+function snapshotsEqual(
+  left: ReadonlyMap<string, string>,
+  right: ReadonlyMap<string, string>,
+): boolean {
+  if (left.size !== right.size) return false;
+  for (const [path, fingerprint] of left) {
+    if (right.get(path) !== fingerprint) return false;
+  }
+  return true;
+}
+
+function sourceFingerprint(snapshot: ReadonlyMap<string, string>): string {
+  const hash = createHash('sha256');
+  const entries = [...snapshot.entries()].sort(([left], [right]) => left.localeCompare(right));
+  for (const [path, value] of entries) hash.update(path).update('\0').update(value).update('\0');
+  return hash.digest('hex');
+}
+
+async function readBoundedUtf8(path: string, maxBytes: number): Promise<string> {
+  const handle = await open(path, 'r');
+  try {
+    const info = await handle.stat();
+    if (!info.isFile() || info.size < 0 || info.size > maxBytes) {
+      throw new Error(`file exceeds ${maxBytes} byte limit`);
+    }
+    const buffer = Buffer.alloc(info.size);
+    let offset = 0;
+    while (offset < buffer.length) {
+      const { bytesRead } = await handle.read(buffer, offset, buffer.length - offset, offset);
+      if (bytesRead === 0) throw new Error('file changed while being read');
+      offset += bytesRead;
+    }
+    const extra = Buffer.allocUnsafe(1);
+    if ((await handle.read(extra, 0, 1, offset)).bytesRead !== 0) {
+      throw new Error('file grew while being read');
+    }
+    return buffer.toString('utf-8');
+  } finally {
+    await handle.close();
+  }
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+const WIKI_TYPES = new Set<WikiNodeType>([
+  'project', 'roadmap', 'spec', 'issue', 'knowhow', 'note', 'domain',
+]);
+const WIKI_STATUSES = new Set<WikiStatus>([
+  'draft', 'active', 'completed', 'blocked', 'archived', 'deprecated',
+]);
+const WIKI_SCOPES = new Set<WikiScope>(['project', 'global', 'team', 'personal', 'linked']);
+
+function isStringArray(value: unknown, maxItems = 100_000): value is string[] {
+  return Array.isArray(value) && value.length <= maxItems
+    && value.every(item => typeof item === 'string');
+}
+
+function isNullableString(value: unknown): value is string | null {
+  return value === null || typeof value === 'string';
+}
+
+function isRuntimeWikiEntry(value: unknown): value is WikiEntry {
+  if (!isRecord(value)
+    || typeof value.id !== 'string' || value.id.length === 0 || value.id.length > 32_768
+    || value.id === '__proto__' || value.id === 'prototype' || value.id === 'constructor'
+    || !WIKI_TYPES.has(value.type as WikiNodeType)
+    || typeof value.title !== 'string'
+    || typeof value.summary !== 'string'
+    || typeof value.body !== 'string'
+    || !WIKI_STATUSES.has(value.status as WikiStatus)
+    || typeof value.created !== 'string'
+    || typeof value.updated !== 'string'
+    || !isStringArray(value.tags)
+    || !isStringArray(value.related)
+    || !isRecord(value.ext)
+    || !isRecord(value.source)) return false;
+  const source = value.source;
+  if ((source.kind !== 'file' && source.kind !== 'virtual')
+    || typeof source.path !== 'string'
+    || (source.line !== undefined && (!Number.isSafeInteger(source.line) || (source.line as number) < 1))
+    || (source.workspace !== undefined && typeof source.workspace !== 'string')) return false;
+  return (value.scope === null || WIKI_SCOPES.has(value.scope as WikiScope))
+    && isNullableString(value.category)
+    && isNullableString(value.specCategory)
+    && isNullableString(value.createdBy)
+    && isNullableString(value.sourceRef)
+    && isNullableString(value.parent);
+}
+
+interface ValidatedSearchCache {
+  version: number;
+  generatedAt: number;
+  sourceFingerprint: string;
+  mtimeSnapshot: Array<[string, string]>;
+  entries: WikiEntry[];
+}
+
+function validateSearchCache(value: unknown): ValidatedSearchCache | null {
+  if (!isRecord(value)
+    || value.version !== SEARCH_CACHE_VERSION
+    || !Number.isFinite(value.generatedAt)
+    || typeof value.sourceFingerprint !== 'string'
+    || !/^[0-9a-f]{64}$/.test(value.sourceFingerprint)
+    || !Array.isArray(value.mtimeSnapshot)
+    || value.mtimeSnapshot.length > MAX_SEARCH_CACHE_ENTRIES
+    || !Array.isArray(value.entries)
+    || value.entries.length > MAX_SEARCH_CACHE_ENTRIES) return null;
+
+  const snapshot: Array<[string, string]> = [];
+  const snapshotPaths = new Set<string>();
+  for (const item of value.mtimeSnapshot) {
+    if (!Array.isArray(item) || item.length !== 2
+      || typeof item[0] !== 'string' || item[0].length === 0 || item[0].length > 32_768
+      || typeof item[1] !== 'string' || item[1].length > 512
+      || snapshotPaths.has(item[0])) return null;
+    snapshotPaths.add(item[0]);
+    snapshot.push([item[0], item[1]]);
+  }
+
+  const entries: WikiEntry[] = [];
+  const ids = new Set<string>();
+  for (const entry of value.entries) {
+    if (!isRuntimeWikiEntry(entry) || ids.has(entry.id)) return null;
+    ids.add(entry.id);
+    entries.push(entry);
+  }
+  return {
+    version: SEARCH_CACHE_VERSION,
+    generatedAt: value.generatedAt as number,
+    sourceFingerprint: value.sourceFingerprint,
+    mtimeSnapshot: snapshot,
+    entries,
+  };
+}
+
+function processIsAlive(pid: number): boolean {
+  if (!Number.isSafeInteger(pid) || pid <= 0) return false;
+  try { process.kill(pid, 0); return true; } catch { return false; }
+}
+
+async function acquirePublicationLock(workflowRoot: string): Promise<PublicationLock | null> {
+  const path = join(workflowRoot, PUBLICATION_LOCK_FILE);
+  const deadline = Date.now() + PUBLICATION_LOCK_WAIT_MS;
+  while (Date.now() <= deadline) {
+    const token = randomUUID();
+    const serialized = JSON.stringify({ pid: process.pid, token });
+    try {
+      const fd = openSync(path, 'wx', 0o600);
+      try { writeFileSync(fd, serialized); } finally { closeSync(fd); }
+      return { token, serialized };
+    } catch {
+      try {
+        const observed = readFileSync(path, 'utf-8');
+        const owner = JSON.parse(observed) as { pid?: unknown; token?: unknown };
+        if (typeof owner.token === 'string'
+          && Number.isSafeInteger(owner.pid)
+          && !processIsAlive(owner.pid as number)
+          && readFileSync(path, 'utf-8') === observed) {
+          unlinkSync(path);
+          continue;
+        }
+      } catch { /* unreadable or concurrently released: retry until bounded deadline */ }
+    }
+    await new Promise(resolveDelay => setTimeout(resolveDelay, 10));
+  }
+  return null;
+}
+
+function releasePublicationLock(workflowRoot: string, lock: PublicationLock | null): void {
+  if (!lock) return;
+  const path = join(workflowRoot, PUBLICATION_LOCK_FILE);
+  try {
+    if (readFileSync(path, 'utf-8') === lock.serialized) unlinkSync(path);
+  } catch { /* already released */ }
 }
 
 // ---------------------------------------------------------------------------

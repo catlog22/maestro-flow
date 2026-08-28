@@ -29,7 +29,16 @@ import type {
 } from '#maestro-dashboard/wiki/wiki-types.js';
 import { loadWorkspaceConfig, resolveWorkspaceLinks } from '../config/index.js';
 import { searchArchKb, tokenize as tokenizeArchKb, type ScoredArchKbEntry } from '../arch-kb/index.js';
-import { tryDaemonSearch, stopDaemon, spawnDaemon, readDaemonInfo, isDaemonAlive, getDaemonPath } from '../search/daemon-client.js';
+import {
+  healthDaemon,
+  isDaemonAlive,
+  isDaemonInfoV2,
+  isDaemonReadyResponse,
+  readDaemonInfo,
+  spawnDaemon,
+  stopDaemon,
+  tryDaemonSearch,
+} from '../search/daemon-client.js';
 
 // Valid type filter values — matches WikiNodeType + virtual aliases.
 const VALID_TYPES = ['project', 'roadmap', 'spec', 'issue', 'knowhow', 'note', 'domain', 'session', 'scratch', 'template'] as const;
@@ -405,7 +414,7 @@ export async function runUnifiedSearch(q: string, opts: UnifiedSearchOptions & {
   const searchFilters = hasFacet ? filters : undefined;
   // Filters are applied inside BM25/vector candidate generation. Keep a
   // bounded oversample only for family caps and diversity selection.
-  const candidateLimit = Math.max(limit * 2, 40);
+  const candidateLimit = Math.min(500, Math.max(limit * 2, 40));
 
   // Try daemon first (warm ONNX model, no cold-start penalty)
   const workflowRoot = resolve('.workflow');
@@ -1434,8 +1443,21 @@ export function registerSearchCommand(program: Command): void {
 
       if (action === 'start' || action === 'start-daemon') {
         const info = readDaemonInfo(workflowRoot);
+        if (info && isDaemonInfoV2(info, workflowRoot)) {
+          const health = await healthDaemon(workflowRoot, { timeoutMs: 1000 });
+          if (isDaemonReadyResponse(health)) {
+            console.log(`Search daemon already running (pid=${info.pid}, port=${info.port})`);
+            return;
+          }
+          if (health?.ok && (health.state === 'starting' || health.state === 'draining')) {
+            console.error(`Search daemon is ${health.state} (pid=${info.pid}); wait for that lifecycle transition before starting.`);
+            process.exitCode = 1;
+            return;
+          }
+        }
         if (info && isDaemonAlive(info)) {
-          console.log(`Search daemon already running (pid=${info.pid}, port=${info.port})`);
+          console.error(`Search daemon descriptor is stale/unverified (pid=${info.pid}); refusing to replace or kill it.`);
+          process.exitCode = 1;
           return;
         }
         console.log('Starting search daemon...');
@@ -1445,25 +1467,43 @@ export function registerSearchCommand(program: Command): void {
         const linkedWorkspaces = resolved
           .filter(lw => lw.valid)
           .map(lw => ({ name: lw.name, workflowRoot: lw.workflowRoot, shareTypes: lw.share }));
-        const { startDaemon } = await import('../search/daemon.js');
-        const { port } = await startDaemon(workflowRoot, { workflowRoot, linkedWorkspaces });
-        console.log(`Search daemon started (pid=${process.pid}, port=${port})`);
-        // Keep process alive
+        try {
+          const { startDaemon } = await import('../search/daemon.js');
+          const { port } = await startDaemon(workflowRoot, { workflowRoot, linkedWorkspaces });
+          console.log(`Search daemon started (pid=${process.pid}, port=${port})`);
+        } catch (error: unknown) {
+          console.error(`Search daemon failed to start: ${error instanceof Error ? error.message : error}`);
+          process.exitCode = 1;
+        }
+        // The listening server keeps a successful foreground start alive.
         return;
       }
 
       if (action === 'stop') {
-        const stopped = stopDaemon(workflowRoot);
-        console.log(stopped ? 'Search daemon stopped.' : 'No daemon running.');
+        const info = readDaemonInfo(workflowRoot);
+        const stopped = await stopDaemon(workflowRoot);
+        if (stopped) console.log('Search daemon stopped.');
+        else if (info && !isDaemonInfoV2(info, workflowRoot)) {
+          console.log('No verified daemon running (descriptor is stale/unverified).');
+        } else console.log('No daemon running.');
         return;
       }
 
       if (action === 'status') {
         const info = readDaemonInfo(workflowRoot);
         if (!info) { console.log('Search daemon: not running'); return; }
-        const alive = isDaemonAlive(info);
-        console.log(`Search daemon: ${alive ? 'running' : 'stale (pid dead)'}  pid=${info.pid}  port=${info.port}  started=${info.startedAt}`);
-        if (!alive) try { const { unlinkSync } = await import('node:fs'); unlinkSync(getDaemonPath(workflowRoot)); } catch {}
+        if (!isDaemonInfoV2(info, workflowRoot)) {
+          console.log(`Search daemon: stale (unverified descriptor)  pid=${info.pid}  port=${info.port}  started=${info.startedAt}`);
+          return;
+        }
+        const health = await healthDaemon(workflowRoot, { timeoutMs: 1000 });
+        if (health?.ok) {
+          const stateTag = health.state && health.state !== 'ready' ? ` (${health.state})` : '';
+          console.log(`Search daemon: running${stateTag}  pid=${info.pid}  port=${info.port}  started=${info.startedAt}`);
+        } else {
+          const staleReason = isDaemonAlive(info) ? 'unreachable/unverified' : 'pid dead';
+          console.log(`Search daemon: stale (${staleReason})  pid=${info.pid}  port=${info.port}  started=${info.startedAt}`);
+        }
         return;
       }
 
@@ -1484,7 +1524,10 @@ export function registerSearchCommand(program: Command): void {
       try {
         const { startDaemon } = await import('../search/daemon.js');
         await startDaemon(workflowRoot, { workflowRoot, linkedWorkspaces });
-      } catch { process.exit(0); }
+      } catch (error: unknown) {
+        console.error(`Search daemon failed to start: ${error instanceof Error ? error.message : error}`);
+        process.exitCode = 1;
+      }
     });
 
   program
