@@ -11,7 +11,7 @@
 import { join } from 'node:path';
 import { homedir } from 'node:os';
 import { createHash } from 'node:crypto';
-import { closeSync, existsSync, mkdirSync, openSync, readFileSync, readSync, readdirSync, renameSync, rmSync, statSync, unlinkSync, writeFileSync } from 'node:fs';
+import { closeSync, existsSync, lstatSync, mkdirSync, openSync, readFileSync, readSync, readdirSync, renameSync, rmSync, statSync, unlinkSync, writeFileSync } from 'node:fs';
 import { open, rm, type FileHandle } from 'node:fs/promises';
 
 // ---------------------------------------------------------------------------
@@ -1424,17 +1424,40 @@ function persistMigratedEmbeddingIndex(index: EmbeddingIndex, dir: string): void
   });
 }
 
-function loadFromSqlite(dir: string): EmbeddingIndex {
-  const Database = _require('better-sqlite3');
+function assertBoundedLegacySqliteArtifactFamily(dir: string): void {
   const dbPath = join(dir, SQLITE_FILE);
-  const dbStat = statSync(dbPath);
-  if (!dbStat.isFile() || dbStat.size > MAX_EMBEDDING_BINARY_BYTES) {
-    throw new Error(`Legacy SQLite embedding index exceeds ${MAX_EMBEDDING_BINARY_BYTES} byte limit`);
+  const artifactPaths = [dbPath, `${dbPath}-wal`, `${dbPath}-shm`, `${dbPath}-journal`];
+  let totalBytes = 0;
+  for (let i = 0; i < artifactPaths.length; i++) {
+    let artifactStat;
+    try {
+      artifactStat = lstatSync(artifactPaths[i]);
+    } catch (error) {
+      if (i > 0 && typeof error === 'object' && error !== null
+        && 'code' in error && error.code === 'ENOENT') continue;
+      throw error;
+    }
+    if (artifactStat.isSymbolicLink() || !artifactStat.isFile() || artifactStat.size < 0) {
+      throw new Error(`Legacy SQLite embedding artifact family exceeds ${MAX_EMBEDDING_BINARY_BYTES} byte limit`);
+    }
+    totalBytes += artifactStat.size;
+    if (!Number.isSafeInteger(totalBytes) || totalBytes > MAX_EMBEDDING_BINARY_BYTES) {
+      throw new Error(`Legacy SQLite embedding artifact family exceeds ${MAX_EMBEDDING_BINARY_BYTES} byte limit`);
+    }
   }
+}
+
+function loadFromSqlite(dir: string): EmbeddingIndex {
+  const dbPath = join(dir, SQLITE_FILE);
+  assertBoundedLegacySqliteArtifactFamily(dir);
+
+  const Database = _require('better-sqlite3');
   const db = new Database(dbPath, { readonly: true });
   try {
+    db.exec('BEGIN');
     const getMeta = db.prepare('SELECT value FROM meta WHERE key = ?');
     const modelId = getMeta.get('modelId')?.value ?? 'unknown';
+    assertBoundedLegacySqliteArtifactFamily(dir);
     const dimension = parseInt(getMeta.get('dimension')?.value ?? '384', 10);
     const builtAt = parseInt(getMeta.get('builtAt')?.value ?? '0', 10);
     const deviceUsed = getMeta.get('deviceUsed')?.value;

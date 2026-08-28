@@ -3,7 +3,7 @@ import { closeSync, ftruncateSync, mkdirSync, mkdtempSync, openSync, readFileSyn
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   buildEmbeddingIndex,
   loadEmbeddingIndex,
@@ -12,6 +12,24 @@ import {
   vectorSearchZvec,
   type EmbeddingIndex,
 } from './embedding.js';
+
+const requireCalls = vi.hoisted(() => ({ betterSqlite: 0 }));
+vi.mock('node:module', async importOriginal => {
+  const actual = await importOriginal<typeof import('node:module')>();
+  return {
+    ...actual,
+    createRequire: (filename: string | URL) => {
+      const realRequire = actual.createRequire(filename);
+      return ((id: string) => {
+        if (id === 'better-sqlite3') {
+          requireCalls.betterSqlite++;
+          throw new Error('better-sqlite3 is unavailable in this test');
+        }
+        return realRequire(id);
+      }) as ReturnType<typeof actual.createRequire>;
+    },
+  };
+});
 
 const zvec = await import('@zvec/zvec').catch(() => null);
 const tempDirs: string[] = [];
@@ -130,6 +148,29 @@ describe('Embedding persistence validation', () => {
       db.close();
     }
     expect(loadEmbeddingIndex(dir)).toBeNull();
+  });
+
+  it('rejects an oversized active SQLite WAL before legacy migration opens it', () => {
+    const dir = makeTempDir();
+    const dbPath = join(dir, 'embedding-index.db');
+    const db = new DatabaseSync(dbPath);
+    try {
+      db.exec('PRAGMA journal_mode=WAL; PRAGMA wal_autocheckpoint=0; CREATE TABLE meta (key TEXT PRIMARY KEY, value TEXT); CREATE TABLE vectors (doc_id TEXT, vector BLOB)');
+      db.prepare('INSERT INTO meta (key, value) VALUES (?, ?)').run('modelId', 'wal-model');
+      db.prepare('INSERT INTO meta (key, value) VALUES (?, ?)').run('dimension', '2');
+      db.prepare('INSERT INTO meta (key, value) VALUES (?, ?)').run('builtAt', '1');
+      db.prepare('INSERT INTO vectors (doc_id, vector) VALUES (?, ?)')
+        .run('wal-doc', new Uint8Array(new Float32Array([1, 2]).buffer));
+
+      const walDescriptor = openSync(`${dbPath}-wal`, 'r+');
+      try { ftruncateSync(walDescriptor, 512 * 1024 * 1024 + 1); } finally { closeSync(walDescriptor); }
+
+      requireCalls.betterSqlite = 0;
+      expect(loadEmbeddingIndex(dir)).toBeNull();
+      expect(requireCalls.betterSqlite).toBe(0);
+    } finally {
+      db.close();
+    }
   });
 
   it('rejects impossible binary metadata and truncated vector payloads', () => {
