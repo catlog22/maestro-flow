@@ -1,8 +1,8 @@
 ---
 name: maestro-impeccable
 disable-model-invocation: true
-description: Use when designing, auditing, polishing, improving, or codifying frontend UI — websites, dashboards, landing pages, components, design systems
-argument-hint: "build|redesign|improve|enhance|launch|harden|foundation|live [target] [--codify <path>]"
+description: Use when designing, reviewing, refining, fixing, or codifying frontend UI through the installed Impeccable skill
+argument-hint: "[command] [target] | hooks <action> | doctor | pin|unpin <command> | --codify <path>"
 allowed-tools:
   - Read
   - Write
@@ -25,410 +25,276 @@ contract:
 @~/.maestro/workflows/run-mode.md
 </required_reading>
 
+If required reading was not expanded by the host, or is no longer in context, Read it explicitly before execution.
+
 <deferred_reading>
-Codify mode only (read when `--codify` and the corresponding phase starts):
-- [ui-codify.md](~/.maestro/workflows/ui-codify.md) — read always in codify mode (main workflow orchestrator)
-- [ui-codify-extract.md](~/.maestro/workflows/ui-codify-extract.md) — read when Codify Phase 2 starts (style extraction with 3 agents)
-- [ui-codify-package.md](~/.maestro/workflows/ui-codify-package.md) — read when Codify Phase 3 starts (reference package generation)
-- [ui-codify-knowhow.md](~/.maestro/workflows/ui-codify-knowhow.md) — read when Codify Phase 4 starts (knowledge asset generation)
+Maestro Codify extension only — do not read these files for normal Impeccable work:
+- [ui-codify.md](~/.maestro/workflows/ui-codify.md) — load when `--codify` starts
+- [ui-codify-extract.md](~/.maestro/workflows/ui-codify-extract.md) — load only when extraction starts
+- [ui-codify-package.md](~/.maestro/workflows/ui-codify-package.md) — load only when packaging starts
+- [ui-codify-knowhow.md](~/.maestro/workflows/ui-codify-knowhow.md) — load only after the knowhow confirmation gate passes
 </deferred_reading>
 
 <purpose>
-UI design command: direct single-command, chain multi-step with quality gates, codify a design system from existing code, or search design knowledge.
-Parse input → prerequisites → read workflow file → execute → track.
+Maestro adapter for the current installed `impeccable` skill. Impeccable owns design semantics, setup, routing, references, detector behavior, and bounded verification. Maestro adds the canonical Session/Run lifecycle, progress tracking, consistent status presentation, and the optional `--codify` extension.
 </purpose>
 
-## Input
+<upstream_contract>
+The installed Impeccable skill is the canonical template. First resolve and invoke it through the `Skill` tool with name `impeccable`; its loaded base directory owns `SKILL.md`, `reference/`, and `scripts/`.
 
-$ARGUMENTS first word determines mode:
+If Skill resolution is unavailable, try these fallbacks in order and Read the first existing `SKILL.md`; its parent directory becomes the skill base directory:
+1. Project-local `.claude/skills/impeccable/SKILL.md`
+2. User-level `~/.claude/skills/impeccable/SKILL.md`
 
-| First Word | Mode |
-|------------|------|
-| `--codify` / `codify` | Codify — extract design system from existing code (see `<codify_mode>`) |
-| Known command (see routing table) | Direct |
+Rules:
+1. Never use the retired copied templates under `~/.maestro/workflows/impeccable/{command}.md` for normal execution.
+2. Never copy `skill/SKILL.src.md` directly: it is a build source with unresolved provider placeholders.
+3. Load the installed `SKILL.md`, then only the single command/reference file it routes to. Respect its deferred-reading rules.
+4. Run the skill's context setup once per session from the loaded skill base directory. Do not rerun it after `init`.
+5. Preserve upstream platform routing: `audit.native.md` / `adapt.native.md` for native projects; `live` and the HTML detector are web-only.
+6. Preserve upstream bounded verification: one batched inspection/fix pass and at most one confirmation pass. Do not recreate the retired open-ended refine loop.
+7. Only when Skill resolution and both fallback paths fail, stop with E001. Recommend `npx impeccable install` (or Maestro's Impeccable add-on installer). Do not silently install or vendor it.
+8. If the user explicitly asks to update the installed skill, use `npx impeccable update`; do not update it as a side effect of design work.
 
-> Disambiguation for overlapping names (`harden`, `live`): bare keyword without target → Chain; keyword + explicit target/path → Direct. Override: `--chain` forces Chain, `--direct` forces Direct.
+Baseline checked against upstream Impeccable Skill 4.1.2. The installed skill remains authoritative when newer.
+</upstream_contract>
 
-| Chain name: build, redesign, improve, enhance, launch, harden, foundation, live | Chain |
-| continue / next / -c | Resume |
-| search | Search: `maestro impeccable search "$REST"` |
-| Free text (any) | Free Text Routing (3-layer system below) |
-| (empty) | Menu: show commands by category |
+## Maestro Symbol Style
 
-## Command Routing
+Use these symbols consistently in Maestro-owned displays. Do not substitute colorful success/failure emoji.
 
-All workflows at `~/.maestro/workflows/impeccable/{command}.md`:
+| Meaning | Display |
+|---|---|
+| Current step / transition | `→` |
+| Completed prerequisite or step | `✓` |
+| Quality or confirmation gate | `◆` |
+| Bounded re-check | `↺` |
+| Warning / degraded mode | `⚠` |
+| Failure | `FAIL` |
+| Terminal success | `Status: DONE` |
+| Terminal failure | `Status: FAILED` |
 
-| Command | Category | Description |
-|---------|----------|-------------|
-| craft | Build | Shape then build end-to-end — full page/component implementation |
-| shape | Build | Plan UX/UI before code — information architecture, wireframe, visual direction |
-| teach | Build | Set up PRODUCT.md — users, brand, tone, anti-references, principles |
-| document | Build | Generate DESIGN.md from existing code — extract tokens, typography, colors |
-| extract | Build | Pull tokens/components into reusable design system |
-| explore | Build | Multi-style comparison — generate variants, render prototypes, visual compare, select/mix |
-| critique | Evaluate | UX heuristic review with Nielsen scoring (/40) + P0/P1 findings |
-| audit | Evaluate | Technical quality checks — a11y, performance, responsive, code quality (/20) |
-| polish | Refine | Final quality pass — micro-adjustments, pixel perfection |
-| bolder | Refine | Amplify bland/safe designs — stronger personality, more contrast |
-| quieter | Refine | Tone down aggressive/overwhelming designs — reduce visual noise |
-| distill | Refine | Strip to essence — remove clutter, reduce cognitive load |
-| harden | Refine | Production-ready — error states, i18n, edge cases, overflow, empty states |
-| onboard | Refine | First-run flows, empty states, activation paths, progressive disclosure |
-| animate | Enhance | Add purposeful motion — transitions, micro-interactions, scroll effects |
-| colorize | Enhance | Add strategic color — OKLCH palette, contrast, color strategy |
-| typeset | Enhance | Improve typography — scale, hierarchy, font pairing, line length |
-| layout | Enhance | Fix spacing, rhythm, visual hierarchy, alignment, grid |
-| delight | Enhance | Add personality — memorable details, joy, surprise moments |
-| overdrive | Enhance | Push past conventional limits — ambitious visual effects |
-| clarify | Fix | Improve UX copy — labels, error messages, microcopy, CTAs |
-| adapt | Fix | Adapt for devices/screens — responsive, touch targets, breakpoints |
-| optimize | Fix | Fix UI performance — loading, rendering, bundle, paint/layout jank |
-| live | Iterate | Browser-based variant iteration — real-time design in DevTools |
+Upstream machine values and required report fields remain unchanged. For an upstream degraded critique banner, normalize only the symbol presentation to `⚠ DEGRADED: single-context (<reason>)`; do not weaken or omit the degraded disclosure.
 
-Reference files (loaded by workflow as needed, not standalone commands):
-brand.md, product.md, design.md, codex.md, heuristics-scoring.md, cognitive-load.md,
-color-and-contrast.md, interaction-design.md, motion-design.md, personas.md,
-responsive-design.md, spatial-design.md, typography.md, ux-writing.md
+## Input Routing
 
-## Chains
+Parse `$ARGUMENTS` without inventing a static workflow chain.
 
-Chain step names below reuse Command Routing names but resolve through the chain runner. To avoid ambiguity with Direct command invocation, internal display, todo items, and session status records always tag chain steps with the `impeccable:` prefix (e.g. `impeccable:craft`, `impeccable:critique`). The bare names in this table refer to the workflow file at `~/.maestro/workflows/impeccable/{name}.md` that the chain step reads.
+Apply this table top-to-bottom; specific routes override the generic command route.
 
-| Chain | Steps | Scenario |
-|-------|-------|----------|
-| build | teach? → explore? → shape → craft → critique → [refine] → audit → polish | New from scratch |
-| redesign | document → explore → shape → craft → critique → [refine] → audit → polish | Redesign existing code |
-| improve | critique → [refine] → polish → audit | Iterative improvement |
-| enhance | {cmd...} → critique → [refine] → polish | Targeted enhancement (multi-command) |
-| launch | harden → adapt → optimize → audit → polish | Full production readiness |
-| harden | harden → audit → polish | Edge case hardening |
-| foundation | teach? → explore → document → extract | Design system setup |
-| live | live | Real-time iteration |
+| Input | Route |
+|---|---|
+| `--codify <source-path> ...` / `codify <source-path> ...` | Maestro Codify extension |
+| `hooks <action>` | Invoke Impeccable hooks control; load `reference/hooks.md` |
+| `doctor` | Invoke Impeccable doctor; load `reference/doctor.md` |
+| `pin <command>` / `unpin <command>` | Invoke the installed skill's pin script |
+| `teach ...` | Compatibility alias for `init`; no deprecation warning |
+| `craft ...` | Deprecated upstream alias for ordinary new-work; display W001 once |
+| Legacy Maestro preset (`build`, `redesign`, `improve`, `enhance`, `launch`, `foundation`) | Treat the full text as a general design request and let current upstream routing resolve it; display W002 once; never reconstruct the retired chain |
+| One of the remaining commands below | Invoke Impeccable with the arguments unchanged |
+| No arguments | Invoke current `reference/routing.md`; show 2–3 context-aware recommendations, then the full menu; never auto-run |
+| Other UI design text | Pass as general Impeccable work; follow current upstream routing |
 
-- `?` = conditional: teach if PRODUCT.md missing; explore if DESIGN.md missing and --skip-design not set
-- `[refine]` = quality gate loop: gate fails → auto-select fix commands from findings → re-gate
-- `{cmd...}` = enhance supports multiple commands, comma-separated: `enhance colorize,typeset landing-page`
+`continue`, `next`, and `-c` are not Impeccable resume commands. Run/session continuation belongs to the canonical Maestro Session/Run lifecycle in `run-mode.md`.
 
-Chain flags: --threshold <N> (default 26/40), --max-loops <N> (default 3), --skip-design, --styles <N>, -y (skip Layer 2 ambiguity AskUserQuestion — select first matching chain; skip chain session confirmation; skip quality gate refine confirmations. Does NOT skip prerequisite checks.)
+## Current Impeccable Commands
 
-## Free Text Routing
+This table is a routing index only. The installed Skill and its references own the full instructions.
 
-Three-layer priority matching. Stop on first match — do not continue to lower layers.
+| Command | Category | Current meaning |
+|---|---|---|
+| `craft [feature]` | Build | Deprecated alias for ordinary new-work |
+| `shape [feature]` | Build | Plan UX/UI before writing code |
+| `init` | Build | Capture durable product context in PRODUCT.md |
+| `document` | Build | Generate DESIGN.md from existing project code |
+| `extract [target]` | Build | Pull reusable tokens and components into a design system |
+| `critique [target]` | Evaluate | UX design review with applicable heuristic scoring |
+| `audit [target]` | Evaluate | Technical a11y, performance, and responsive checks |
+| `polish [target]` | Refine | Final bounded quality pass before shipping |
+| `bolder [target]` | Refine | Amplify a safe or bland design |
+| `quieter [target]` | Refine | Reduce aggressive or overstimulating design |
+| `distill [target]` | Refine | Remove complexity and strip to essence |
+| `harden [target]` | Refine | Cover errors, i18n, edge cases, and production states |
+| `onboard [target]` | Refine | Improve first-run, empty-state, and activation flows |
+| `animate [target]` | Enhance | Add purposeful motion |
+| `colorize [target]` | Enhance | Add strategic color |
+| `typeset [target]` | Enhance | Improve typography hierarchy and fonts |
+| `layout [target]` | Enhance | Fix spacing, rhythm, alignment, and hierarchy |
+| `delight [target]` | Enhance | Add personality and memorable details |
+| `overdrive [target]` | Enhance | Push past conventional visual limits |
+| `clarify [target]` | Fix | Improve UX copy, labels, and error messages |
+| `adapt [target]` | Fix | Adapt across devices and screen sizes |
+| `optimize [target]` | Fix | Diagnose and fix UI performance |
+| `live` | Iterate | Web-only browser variant mode |
 
-### Layer 1: Single command intent → Direct
+## Normal Execution
 
-Semantically match user description against the Command Routing table's Description column. Match the closest **single** command.
+1. **Attach the canonical Run**
+   - Follow `run-mode.md` before design work. If a birth packet says `run_already_created: true`, consume its exact locator, task, continuation, `run_dir`, and revisions; never create a duplicate Run.
+   - For a self-started invocation, negotiate capabilities and execute the receipt-chained Session open → chain insert → run next flow from `run-mode.md`.
+   - Retain whether this executor has mutation authority. An executor without it may write outputs/report and run read-only checks, but must return completion to the coordinator instead of advancing the Run itself.
 
-**Skip condition**: If the prompt matches a Layer 2 chain keyword AND matches MORE THAN ONE row in the Layer 1 intent signal table, skip this layer.
-Example: `enhance colors and typography` — "enhance" is a chain keyword + multiple design dimensions → skip to Layer 2.
+2. **Resolve template**
+   - Invoke Skill `impeccable`; if unavailable, Read the first available fallback defined in `<upstream_contract>` and retain its base directory.
+   - Emit E001 only if all three resolution paths fail.
 
-| Intent signal | Command |
-|---------------|---------|
-| review, check UX, score, heuristic, evaluate usability | critique |
-| audit, a11y, accessibility, technical check, performance audit, code quality | audit |
-| add animation, motion, transitions, micro-interactions | animate |
-| color, palette, OKLCH, contrast, color scheme | colorize |
-| font, typography, type scale, line height, font pairing | typeset |
-| layout, spacing, grid, alignment, visual hierarchy | layout |
-| too loud, tone down, visual noise, make it simpler, too busy | quieter |
-| too bland, bolder, more personality, stronger, more contrast | bolder |
-| too complex, simplify, strip, remove clutter, cognitive load | distill |
-| polish, fine-tune, pixel perfect, final pass, refine details | polish |
-| copy, labels, error messages, UX writing, microcopy, CTAs | clarify |
-| responsive, mobile, adapt, breakpoints, touch targets | adapt |
-| performance, loading, bundle, jank, speed, rendering | optimize |
-| edge cases, error states, i18n, overflow, empty state hardening | harden |
-| onboarding, first-run, empty state, activation, progressive disclosure | onboard |
-| fun, surprise, personality, memorable, joy, delight | delight |
-| extraordinary, push limits, ambitious effects, cutting-edge | overdrive |
-| plan UX, wireframe, information architecture, visual direction | shape |
-| multi-style, variants, compare styles, style comparison | explore |
-| brand definition, PRODUCT.md, product context | teach |
-| extract design, DESIGN.md, document design system | document |
-| pull tokens, extract components, design system extraction | extract |
-| real-time, browser iteration, live editing | live |
+3. **Run upstream setup**
+   - Follow the loaded Skill's Setup exactly.
+   - Inspect the target and at least one representative source of incumbent visual truth before editing.
+   - A missing PRODUCT.md blocks only new-surface or replacement-world work as upstream specifies; it does not block narrow refinement.
+   - Report `CONTEXT_STALE`; never repair drift unless requested or marked `auto` by upstream.
 
-### Layer 2: Project intent → Chain
+4. **Resolve route**
+   - Explicit or clearly implied command → load its one owning reference.
+   - Two plausible commands → [@ask] AskUserQuestion once.
+   - New surface or replacement visual world → current `reference/new-work.md`.
+   - No arguments → current `reference/routing.md`; recommendations require confirmation.
 
-Override: if the user explicitly uses a chain name as the primary verb (improve, enhance, redesign, build, launch), prefer Layer 2 chain even if Layer 1 matched a single command.
+5. **Display Maestro execution panel**
 
-Layer 1 did not match. Check for chain-level keywords — even if the prompt also contains a specific target/path, chain matching takes priority.
-
-| Pattern | Chain |
-|---------|-------|
-| new, create, build, from scratch, start fresh | build |
-| redo, redesign, rethink, restyle, overhaul, revamp | redesign |
-| improve, iterate, better, refine overall | improve |
-| enhance, visual upgrade, level up | enhance |
-| launch, deploy, ship, production-ready, go live | launch |
-| harden, production-harden, edge cases | harden |
-| design system, tokens, design foundation, design infrastructure | foundation |
-| real-time, live, browser | live |
-
-Ambiguous + no `-y`:
-
-[@ask] AskUserQuestion (single-select, header: "意图确认"):
-- Options: top 2-3 matched chains from Layer 2 table, each with label = chain name, description = matched keywords
-- Last option: **"直接构建"** — skip chain, route to Layer 3 craft
-
-### Layer 3: Concrete build task → Direct craft
-
-Layer 1+2 both did not match, but intent is to build/create a specific thing:
-- Contains a specific file path or target (`d:\path`, `src/pages/`, `index.html`)
-- Contains ≥2 specific visual attributes (e.g., exact color values, font names, spacing numbers, layout structure description)
-- Contains reference material (`based on...`, `like...`, `similar to...`)
-
-→ Route to **craft** (Direct)
-
-If all three layers produce no match → E001 (No command or intent resolved). Before raising E001, attempt [@ask] AskUserQuestion with top 2-3 closest matches from Layer 1+2 tables.
-
-## Prerequisites
-
-Before reading any command workflow:
-
-1. **Context**: `maestro load --type spec --category ui` → if empty → `maestro impeccable load-context`
-2. **PRODUCT.md**: missing/placeholder (<200 chars / `[TODO]`) → execute teach first, then resume original task
-3. **Register**: identify brand/product → Read `~/.maestro/workflows/impeccable/{brand|product}.md`
-
-## Direct Execution
-
-1. Prerequisites ✓
-2. **Display execution info**:
+   ```text
+   ── Impeccable: {command|general} ──────────────
+   Target: {target|project context}
+   Mode: {Persuade|Operate|Read|Experience}
+   Platform: {web|ios|android|adaptive|unknown}
+   Reference: {relative reference path}
+   ──────────────────────────────────────────────
+   → Setup
    ```
-   ── Command: {command} ────────────────────
-   Category: {category} | Target: {target}
-   ─────────────────────────────────────────
-   ```
-3. Read `~/.maestro/workflows/impeccable/{command}.md`
-4. **TodoWrite tracking**: create todo items for each major phase in the workflow file
-   - Format: `[{command}] {phase description}`
-   - Mark each phase completed immediately upon finishing
-5. Follow workflow file instructions
-6. Post: suggest logical next command (teach→shape, shape→craft, craft→critique, etc.)
 
-## Chain Execution
+   If platform is `unknown`, do not default to web. Resolve platform from project evidence or run `init` before platform-sensitive routing; never run `live` or the HTML detector on an unconfirmed native target.
 
-1. Prerequisites ✓
-2. **Display chain preview**: parse chain definition, output full step preview (chain steps prefixed `impeccable:` to disambiguate from Direct commands):
-   ```
-   ── Chain: build ──────────────────────────
-    1. impeccable:teach        (conditional: PRODUCT.md missing)
-    2. impeccable:explore      (conditional: DESIGN.md missing)
-    3. impeccable:shape
-    4. impeccable:craft
-    5. impeccable:critique     ◆ quality gate (threshold: 26/40)
-    6. impeccable:[refine]     ↺ auto-fix loop (max: 3)
-    7. impeccable:audit        ◆ quality gate (threshold: 14/20)
-    8. impeccable:polish
-   ─────────────────────────────────────────
+6. **Track major phases**
+   - Create TodoWrite items from the loaded reference's major phases; do not invent a generic chain.
+   - Format: `[impeccable:{command}] {phase}`.
+   - Mark each phase complete immediately when its verifiable outcome is complete.
+   - User-facing progress:
+
+     ```text
+     → [impeccable:{command}] {phase}
+     ✓ [impeccable:{command}] {phase}
+     ⚠ [impeccable:{command}] {phase} — W###: {reason}
+     FAIL [impeccable:{command}] {phase} — E###: {reason}
+     ```
+
+7. **Execute upstream reference**
+   - Follow all current MUST rules, platform variants, output schemas, provenance, and safety boundaries.
+   - Load `reference/craft-floor.md` immediately before UI edits, never for planning-only work.
+   - For critique, preserve dual independent assessment and explicit degraded disclosure. Persist snapshots and report trends only when upstream resolves a non-null slug; otherwise follow its documented skip path.
+   - Never assume critique is scored out of 40: excluded heuristics are `n/a`, and the applicable maximum may vary.
+
+8. **Bounded verification**
+   - Show a gate only when the loaded reference defines one:
+
+     ```text
+     ◆ {gate}: {actual evidence} — PASS|FAIL
+     ↺ confirmation pass 1/1
+     ```
+
+   - Do not fabricate a numeric threshold or score.
+   - Do not report PASS without actual evidence from the executed check.
+
+9. **Finish the Run**
+   - Write the human-readable synthesis to `{run_dir}/report.md` using the exact frontmatter vocabulary and whitelist from `run-mode.md`; put every caveat in `concerns`.
+   - Run `maestro run check {run_id} --session {session_id} --json` and repair blocking gates.
+   - With mutation authority, complete using the exact fenced `maestro run complete ... --verdict done|done_with_concerns --advance --json` continuation from `run-mode.md`; parse and retain the returned revisions. Without mutation authority, return the report and check result to the coordinator and do not complete or advance.
+   - Follow the completion receipt: dispatch a remaining pending step only when authorized, or complete the Session when the chain is terminal. Never treat the display status below as a substitute for Run completion.
+
+   ```text
+   === IMPECCABLE RESULT ===
+   Command: {command|general}
    Target: {target}
+   Evidence: {checks, snapshots, detector output, or files}
+   Warnings: {none|<warning-code> ...}
+   --- STATUS ---
+   Status: DONE | FAILED
    ```
-   - `◆` marks quality gate steps with threshold
-   - `↺` marks refine loop with max iteration count
-   - Conditional steps show trigger condition
-   - Skipped conditional steps marked `(skipped)`
-3. **Confirm chain session**: [@ask] AskUserQuestion "Create chain session for '{chain_type}' targeting '{target}'?" — proceed only if user confirms. On decline, abort chain.
-   Create session: `.workflow/.maestro/ui-craft-{YYYYMMDD-HHmmss}/status.json`
-   ```json
-   { "chain_type": "...", "target": "...", "steps": [...], "current_step": 0,
-     "gate_history": [], "loop_count": 0, "status": "running" }
-   ```
-4. **TodoWrite init**: create todo items for all chain steps
-   - One item per step, format: `[chain] step N: impeccable:{command} — {description}` (use `impeccable:` prefix to disambiguate from Direct command items)
-   - If conditional step is skipped, immediately mark completed
-   - Quality gate steps include threshold: `[chain] step 5: impeccable:critique ◆ gate ≥26/40`
-5. For each step:
-   - Read `~/.maestro/workflows/impeccable/{command}.md` → execute
-   - **Step start**: TodoWrite marks current step in_progress
-   - **Step done**: TodoWrite marks completed + update status.json (`current_step`, step `status`)
-   - **Step failed**: TodoWrite marks completed (with note) + record reason
-   - **Failure classification**:
-     - **Blocking** (chain stops): craft, shape, teach (if PRODUCT.md required)
-     - **Non-blocking** (chain continues with W003): polish, delight, animate, colorize, typeset, layout, clarify, adapt, optimize, bolder, quieter, distill, harden, onboard
-     - **Gate steps** (critique/audit): gate failure triggers refine loop, not step failure
-6. **Quality gate** (critique/audit steps):
-   - Parse score: critique `**Total** | | **N/40**`, audit `**Total** | | **N/20**`
-   - Count `[P0]` / `[P1]` tags
-   - Pass: score ≥ threshold AND P0 == 0 → advance
-   - Fail: collect suggested commands from findings → execute → re-gate
-   - Max loops exceeded → force advance with warning
-   - TodoWrite: record gate result in current step notes (score, P0/P1 count, pass/fail)
-7. Final report: scores + trend + commands executed
 
-## Codify Execution
+   Suggest only the next step supported by the loaded upstream reference or current findings.
+
+## Maestro Codify Extension
 
 <codify_mode>
-Extract a design system from existing source code into tokens, a reference package, and knowledge assets. 4-phase pipeline: validate → extract → package → knowhow.
+Codify remains a Maestro-owned extension; it is not an upstream Impeccable command. Load `ui-codify.md` for its phase algorithm; the normal Impeccable Skill/reference route does not apply inside this mode. The Run-governance rules in this section override stale persistence wording or incomplete command examples in the referenced Codify workflows.
 
-**Trigger**: first word is `--codify` or `codify`. Also reachable when the `foundation` chain reaches its `document`/`extract` steps and the user wants full reverse-extraction with knowhow persistence.
+Arguments:
+`--codify <source-path> [--package-name <name>] [--output-dir <path>] [--overwrite]`
 
-**Arguments**: `--codify <source-path> [--package-name <name>] [--output-dir <path>] [--overwrite]`
-- `<source-path>` (required): Directory containing CSS/SCSS/JS/TS/HTML source files
-- `--package-name <name>`: Package name for reference output (default: auto-generated from source directory)
-- `--output-dir <path>`: Output directory for reference package (default: `.workflow/reference_style`)
-- `--overwrite`: Allow overwriting existing package directory
+Boundaries:
+1. Discovered source inputs are strictly read-only. Canonicalize and snapshot the source file list before creating workspaces; exclude `--output-dir`, `.workflow/codify-temp-*`, `{run_dir}`, and other generated directories from discovery, even when they are nested beneath `source_path`. Never edit a discovered source file.
+2. User-facing package writes stay under `--output-dir` (default `.workflow/reference_style/`). Maestro runtime writes may also use the exact `{run_dir}/report.md`, `{run_dir}/outputs|evidence|work`, and the phase-scoped `.workflow/codify-temp-*` directory required by the referenced workflows.
+3. Governed knowledge/spec corpus files are never written directly. Phase 4 may create the manifest and stage candidates with explicit `--run {run_id}`; review/promotion occurs after sealing under `run-mode.md`.
+4. Load each deferred workflow only when its phase starts.
+5. Never overwrite an existing package without `--overwrite`. With `--overwrite`, clear the validated target package before generation or build in a fresh temporary package and replace it; artifact checks must prove current-Run provenance and must not pass on stale files.
+6. Phase 2 runs Style, Animation, and Layout extraction in parallel as `ui-codify.md` specifies; do not invent a token-first dependency.
+7. Ask the user before knowhow candidate generation.
+8. Verify the requested artifact scope and candidate stage receipts before terminal status.
+9. Always clean the phase temporary directory on success, failure, or preview-only exit.
 
-**Output boundary**: ALL file writes MUST target the `--output-dir` path (default: `.workflow/reference_style/`) for reference packages, and `.workflow/knowhow/` for knowledge assets (manifest-driven direct writes per ui-codify-knowhow). NEVER modify the source directory being analyzed.
+Display:
 
-### Codify Invariants
-1. **Source read-only** — the source path being analyzed MUST NOT be modified; extraction is purely read-only
-2. **Phase-sequential loading** — workflow files (ui-codify-extract, ui-codify-package, ui-codify-knowhow) MUST be read only when their phase starts; NEVER load all phases eagerly
-3. **User confirmation before knowhow** — Phase 3→4 gate MUST present [@ask] AskUserQuestion before generating knowledge assets; NEVER auto-proceed to knowhow generation
-4. **Overwrite protection** — existing package directory MUST NOT be overwritten without `--overwrite` flag (E102)
-5. **Artifact completeness** — all 5 required artifacts MUST exist before reporting completion; NEVER skip artifact verification
-6. **Token-first extraction** — design-tokens.json MUST be generated before layout-templates.json; layout extraction depends on token foundation
-
-### Step 1: Load UI Specs
-```bash
-maestro load --type spec --category ui
+```text
+── Impeccable: codify ─────────────────────
+Source: {source-path}
+Output: {output-dir}
+───────────────────────────────────────────
+→ Phase 1: Validate + workspace setup
+◆ GATE 1: source and output policy valid
+→ Phase 2: Parallel extraction (Style + Animation + Layout)
+◆ GATE 2: extraction artifacts satisfy ui-codify.md
+→ Phase 3: Reference package
+◆ GATE 3: current-Run preview and required token/layout artifacts exist
+→ Phase 4: Manifest + governed candidate staging (confirmation required)
+◆ GATE 4: knowhow-manifest.json + stage receipts recorded
 ```
 
-### Step 2: Execute Workflow
-Route to `~/.maestro/workflows/ui-codify.md` and follow completely. The workflow orchestrates 4 phases with deferred loading of phase-specific workflow files (see `<deferred_reading>`). Each phase reads its workflow file only when execution reaches that phase.
+At the Phase 3 → 4 gate, [@ask] AskUserQuestion:
+- `继续生成 knowhow` — generate the manifest and stage governed candidates with `--run {run_id}`; promotion remains post-seal
+- `仅保留 preview，跳过 knowhow` — clean the temporary directory, verify preview-only artifacts, and finish with an explicit preview-only scope report
 
-### Codify Phase Gates (MANDATORY, BLOCKING)
+Codify diagnostics originate in the referenced workflows. Translate them for Maestro-owned output so they do not collide with normal-mode codes:
+- workflow E001 → C001 (source argument missing)
+- workflow E002 → C002 (source missing/not a directory)
+- workflow E003 → C003 (package exists without `--overwrite`)
+- workflow W001 → CW001 (optional animation tokens missing; continue without animation tokens)
 
-**GATE Phase 1 → Phase 2: Validation → Extraction**
-- REQUIRED: Source path validated and file discovery completed.
-- REQUIRED: design-tokens.json generated with color, typography, spacing tokens.
-- BLOCKED if missing: source path invalid (E101) or design-tokens.json not generated — extraction cannot proceed without token foundation.
-
-**GATE Phase 2 → Phase 3: Extraction → Package**
-- REQUIRED: layout-templates.json generated with component patterns.
-- BLOCKED if missing: layout-templates.json absent — package generation requires component patterns as input.
-
-**GATE Phase 3 → Phase 4: Package → Knowhow**
-- REQUIRED: preview.html + preview.css generated as interactive showcase.
-- BLOCKED if missing: preview artifacts not generated — knowhow phase needs rendered reference for validation.
-- REQUIRED: [@ask] AskUserQuestion confirmation before proceeding to knowhow generation:
-  ```
-  question: "Preview 生成完成。是否继续将设计系统持久化为 knowhow 知识资产？"
-  options:
-    - label: "继续生成 knowhow"
-      description: "按 knowhow-manifest.json 写入 AST/DCS assets 和 spec entries"
-    - label: "仅保留 preview，跳过 knowhow"
-      description: "保留 preview.html + preview.css，不写入知识库"
-  ```
-
-**GATE Phase 4 → Completion: Knowhow → Done**
-- REQUIRED: knowhow-manifest.json created with AST/DCS assets and spec entries.
-- REQUIRED: knowledge assets persisted — knowhow files + spec entries written to `.workflow/knowhow/` and `.workflow/specs/` per ui-codify-knowhow Step 4.4 (after user confirmation at Phase 3→4 gate).
-- BLOCKED if missing: knowhow-manifest.json absent or knowledge assets not persisted.
-
-### Artifact Verification (before completion)
-```
-REQUIRED_ARTIFACTS = [
-  "design-tokens.json",      // Phase 1
-  "layout-templates.json",   // Phase 2
-  "preview.html",            // Phase 3
-  "preview.css",             // Phase 3
-  "knowhow-manifest.json"    // Phase 4
-]
-```
-If any artifact is missing: DO NOT report completion.
+Follow the referenced workflows for all other phase instructions and recovery. For every Phase 4 stage command, this adapter additionally requires explicit `--run {run_id}`, a defined valid `--category` (never `undefined`), and a captured candidate receipt. Stage only; never write or promote governed corpus files during the active Run.
 </codify_mode>
-
-## Resume
-
-Scan `.workflow/.maestro/ui-craft-*/status.json` for `status == "running" || status == "paused"` → most recent → resume from `current_step`.
-
-## Quality Gate — Finding → Command Fallback
-
-When findings lack explicit suggested command:
-
-| Finding Category | Command |
-|-----------------|---------|
-| Layout, spacing, hierarchy, alignment | layout |
-| Color, contrast, palette | colorize |
-| Typography, font, readability | typeset |
-| Animation, motion, transitions | animate |
-| Copy, labels, UX writing | clarify |
-| Responsive, mobile, breakpoints | adapt |
-| Performance, loading, speed | optimize |
-| Complexity, overload, clutter | distill |
-| Bland, safe, generic | bolder |
-| Aggressive, overwhelming | quieter |
-| Onboarding, empty state | onboard |
-| Edge cases, i18n, error handling | harden |
-| Personality, memorability | delight |
-
-Never auto-select: teach, shape, craft, live, document, extract, overdrive, critique, audit.
-
-## Chain Phase Gates (MANDATORY for chain mode)
-
-**GATE: Quality Gate Step → Next Step**
-- REQUIRED: Score parsed from critique/audit output (not assumed or estimated).
-- REQUIRED: P0 count extracted from findings — P0 == 0 required for pass.
-- REQUIRED: If gate fails, refine commands executed and re-gate attempted.
-- BLOCKED if: score not parsed from actual output, or P0 > 0 and max refine loops not exhausted — do not advance past gate.
-- Do NOT skip quality gate steps or mark as "passed" without parsing actual score.
-- If score unparseable from output: retry the gate step once. If still unparseable → treat as gate fail (enter refine loop). Emit W005.
-
-**GATE: Chain → Completion**
-- REQUIRED: All non-skipped steps executed (TodoWrite all completed).
-- REQUIRED: status.json updated with `status: "completed"` and final scores.
-- REQUIRED: If any step failed: documented in status.json with reason.
-- BLOCKED if missing: steps not all completed or status.json not updated — chain is incomplete.
 
 <error_codes>
 | Code | Severity | Condition | Recovery |
-|------|----------|-----------|----------|
-| E001 | error | No command or intent resolved from input | Provide a known command, chain name, or descriptive intent |
-| E002 | error | Source/target path not found | Verify path exists |
-| E003 | error | PRODUCT.md missing and teach step failed | Run `maestro impeccable teach` manually first |
-| E004 | error | Chain quality gate failed after max loops | Review findings manually, fix critical issues, then resume |
-| W001 | warning | UI specs not found via `maestro load --type spec --category ui` | Continuing without specs — output may miss project conventions |
-| W002 | warning | Quality gate score below threshold but P0 == 0 | Auto-refine loop triggered |
-| W003 | warning | Chain step failed but non-blocking | Step failure documented, chain continues |
-| E101 | error | Codify: source path not found or not a directory | Verify `--codify <source-path>` exists |
-| E102 | error | Codify: package directory exists without `--overwrite` | Re-run with `--overwrite` or a new `--output-dir` |
-| W004 | warning | Codify: animation-tokens.json not found (optional) | Extraction continues without animation tokens |
-| W005 | warning | Quality gate score unparseable from output | Retry gate step; if still fails, treat as gate fail |
+|---|---|---|---|
+| E001 | error | Skill resolution and both installed-template fallbacks failed | Run `npx impeccable install` or install the Maestro Impeccable add-on |
+| E002 | error | Explicit normal-mode target/path does not exist | Correct the target and retry |
+| E003 | error | Required upstream reference/script is missing | Run `npx impeccable update`, then retry |
+| C001 | error | Codify source argument is missing | Provide `--codify <source-path>` |
+| C002 | error | Codify source is missing or not a directory | Correct the source path |
+| C003 | error | Codify package exists without `--overwrite` | Use a new package/output path or explicitly pass `--overwrite` |
+| CW001 | warning | Optional Codify animation tokens are missing | Continue without animation tokens and report reduced motion coverage |
+| W001 | warning | Deprecated `craft` alias used | Route as ordinary new-work and suggest a general request next time |
+| W002 | warning | Retired Maestro chain preset used | Route the full request through current upstream semantics; do not recreate the old chain |
+| W003 | warning | Upstream execution is degraded | Preserve the required degraded disclosure and evidence limitations |
 </error_codes>
 
 <success_criteria>
-Direct mode:
-- [ ] Command resolved from input (routing table or free text matching)
-- [ ] Prerequisites satisfied (UI specs loaded, PRODUCT.md present)
-- [ ] Workflow file read and executed completely
-- [ ] TodoWrite tracking created and all phases marked completed
-- [ ] Next-step suggestion provided
-
-Chain mode:
-- [ ] Chain steps resolved and preview displayed
-- [ ] Session status.json created in `.workflow/.maestro/ui-craft-*/`
-- [ ] TodoWrite items created for all chain steps
-- [ ] Each step executed with workflow file read
-- [ ] Quality gates parsed with actual scores (not estimated)
-- [ ] Refine loops executed when gate fails (up to max-loops)
-- [ ] status.json updated with `status: "completed"` and final scores
-- [ ] Final report with scores, trend, and commands executed
+Normal mode:
+- [ ] Canonical Run attached/created exactly once; exact locator and revisions retained
+- [ ] Installed Impeccable Skill or an explicit fallback resolved; retired copied Maestro workflows were not used
+- [ ] Context setup ran once from the loaded skill base directory
+- [ ] Exactly one owning command/reference was loaded, plus only its required deferred references
+- [ ] Platform and surface mode routing followed current upstream rules; unknown platform never defaulted to web
+- [ ] Target and incumbent visual truth were inspected before editing
+- [ ] TodoWrite tracked the loaded reference's major phases
+- [ ] Verification stayed within the upstream bounded-pass ceiling
+- [ ] Actual evidence supports every reported gate result
+- [ ] `{run_dir}/report.md`, `run check`, fenced completion/return-to-coordinator, and terminal Session handling followed `run-mode.md`
+- [ ] Maestro-owned display uses `→`, `✓`, `◆`, `↺`, `⚠`, `FAIL`, and textual terminal status consistently
 
 Codify mode:
-- [ ] UI specs loaded via `maestro load --type spec --category ui` (if available)
-- [ ] Source path validated and file discovery completed
-- [ ] design-tokens.json generated with color, typography, spacing tokens
-- [ ] layout-templates.json generated with component patterns (universal/specialized)
-- [ ] animation-tokens.json generated (optional, W004 if missing)
-- [ ] preview.html + preview.css generated as interactive showcase
-- [ ] knowhow-manifest.json created with AST/DCS assets and spec entries
-- [ ] knowledge assets persisted (knowhow + spec entries written per ui-codify-knowhow Step 4.4, after Phase 3→4 confirmation)
-- [ ] Temporary workspace cleaned up
+- [ ] Source remained read-only; package, temporary, and Run writes stayed within declared boundaries
+- [ ] Deferred workflows were phase-loaded and parallel extraction semantics were preserved
+- [ ] Overwrite/current-Run provenance prevented stale artifacts from passing gates
+- [ ] Knowhow candidate generation required explicit user confirmation and used `--run {run_id}`
+- [ ] Requested artifact scope and stage receipts were verified before terminal status
+- [ ] Temporary workspace was cleaned on every exit path
 </success_criteria>
-
-<completion>
-### Next-step routing
-
-| Condition | Suggestion |
-|-----------|-----------|
-| Direct teach complete | `maestro impeccable shape` |
-| Direct shape complete | `maestro impeccable craft` |
-| Direct craft complete | `maestro impeccable critique` |
-| Direct critique findings | `maestro impeccable polish` or targeted fix command |
-| Chain complete | Review final scores, consider `maestro impeccable improve` for iteration |
-| Chain paused/interrupted | `maestro impeccable continue` to resume |
-| Codify complete | Use extracted tokens in `maestro impeccable craft` for new builds |
-| Codify design system needs refinement | `maestro impeccable document` to regenerate DESIGN.md |
-| Codify knowledge assets persisted | `maestro search --type knowhow "design system"` to verify |
-</completion>
