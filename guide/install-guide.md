@@ -89,7 +89,7 @@ maestro install
 | `jazz` | Jazz | 技能、Agent → 复制到 `.jazz/` |
 | `junie` | Junie | 技能、Agent → 复制到 `.junie/` |
 | `iflow-cli` | iFlow CLI | 技能、Agent → 复制到 `.iflow/` |
-| `kimi-code-cli` | Kimi Code CLI | 技能、Agent → 复制到 `.kimi-code-cli/` |
+| `kimi-code-cli` | Kimi Code CLI | 技能、Agent → 复制到 `.kimi-code/` |
 | `kode` | Kode | 技能、Agent → 复制到 `.kode/` |
 | `lingma` | Lingma | 技能、Agent → 复制到 `.lingma/` |
 | `loaf` | Loaf | 技能、Agent → 复制到 `.loaf/` |

@@ -607,7 +607,7 @@ export const EXTRA_PLATFORMS: PlatformRegistryEntry[] = [
   { id: 'jazz',            label: 'Jazz',               description: 'Jazz Agent',               configDir: '.jazz' },
   { id: 'junie',           label: 'Junie',              description: 'Junie Agent',              configDir: '.junie' },
   { id: 'iflow-cli',       label: 'iFlow CLI',          description: 'iFlow CLI Agent',          configDir: '.iflow' },
-  { id: 'kimi-code-cli',   label: 'Kimi Code CLI',      description: 'Kimi Code CLI Agent',      configDir: '.kimi-code-cli' },
+  { id: 'kimi-code-cli',   label: 'Kimi Code CLI',      description: 'Kimi Code CLI Agent',      configDir: '.kimi-code' },
   { id: 'kode',            label: 'Kode',               description: 'Kode Agent',               configDir: '.kode' },
   { id: 'lingma',          label: 'Lingma',             description: 'Lingma Agent',             configDir: '.lingma' },
   { id: 'loaf',            label: 'Loaf',               description: 'Loaf Agent',               configDir: '.loaf' },

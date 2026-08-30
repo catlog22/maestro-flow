@@ -153,7 +153,7 @@ export function useInstallFlowState(opts: UseInstallFlowStateOptions) {
       ['eve', 'agent'], ['firebender', '.firebender'], ['forgecode', '.forge'],
       ['goose', '.goose'], ['hermes-agent', '.hermes'], ['inference-sh', '.inferencesh'],
       ['jazz', '.jazz'], ['junie', '.junie'], ['iflow-cli', '.iflow'],
-      ['kimi-code-cli', '.kimi-code-cli'], ['kode', '.kode'], ['lingma', '.lingma'],
+      ['kimi-code-cli', '.kimi-code'], ['kode', '.kode'], ['lingma', '.lingma'],
       ['loaf', '.loaf'], ['mcpjam', '.mcpjam'], ['mistral-vibe', '.vibe'],
       ['moxby', '.moxby'], ['mux', '.mux'], ['openhands', '.openhands'],
       ['ona', '.ona'], ['qwen-code', '.qwen'],
@@ -174,6 +174,10 @@ export function useInstallFlowState(opts: UseInstallFlowStateOptions) {
         const hasLocal = existsSync(join(base, '.qoder', 'skills')) || existsSync(join(base, '.qoder', 'agents'));
         const hasGlobalCN = scope === 'global' && (existsSync(join(base, '.qoder-cn', 'skills')) || existsSync(join(base, '.qoder-cn', 'agents')));
         if (hasLocal || hasGlobalCN) plats.add(id);
+      } else if (id === 'kimi-code-cli') {
+        const hasCurrent = existsSync(join(base, dir, 'skills')) || existsSync(join(base, dir, 'agents'));
+        const hasLegacy = existsSync(join(base, '.kimi-code-cli', 'skills')) || existsSync(join(base, '.kimi-code-cli', 'agents'));
+        if (hasCurrent || hasLegacy) plats.add(id);
       } else {
         if (existsSync(join(base, dir, 'skills')) || existsSync(join(base, dir, 'agents'))) plats.add(id);
       }

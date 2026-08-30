@@ -320,7 +320,7 @@ const PLATFORM_DEFS = [
   { id: 'jazz',            label: 'Jazz',               desc: 'Skills, agents → .jazz/' },
   { id: 'junie',           label: 'Junie',              desc: 'Skills, agents → .junie/' },
   { id: 'iflow-cli',       label: 'iFlow CLI',          desc: 'Skills, agents → .iflow/' },
-  { id: 'kimi-code-cli',   label: 'Kimi Code CLI',      desc: 'Skills, agents → .kimi-code-cli/' },
+  { id: 'kimi-code-cli',   label: 'Kimi Code CLI',      desc: 'Skills, agents → .kimi-code/' },
   { id: 'kode',            label: 'Kode',               desc: 'Skills, agents → .kode/' },
   { id: 'lingma',          label: 'Lingma',             desc: 'Skills, agents → .lingma/' },
   { id: 'loaf',            label: 'Loaf',               desc: 'Skills, agents → .loaf/' },

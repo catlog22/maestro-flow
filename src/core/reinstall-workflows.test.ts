@@ -2,10 +2,11 @@
 // reinstall-workflows.test.ts — test profile generation and merge logic
 // ---------------------------------------------------------------------------
 
+import { join } from 'node:path';
 import { describe, it, expect } from 'vitest';
 import { createManifest, recordClaudeHooks, recordCodexHooks, recordGenericHooks, recordStatusline, recordClaudeMcp, recordExtraMcp } from '../core/manifest.js';
 import { manifestToProfile } from '../core/install-profile.js';
-import { mergeNewDefaults, migrateComponentIds, partitionRequestedComponentIds, COMPONENT_DEFS } from '../core/component-defs.js';
+import { mergeNewDefaults, migrateComponentIds, partitionRequestedComponentIds, COMPONENT_DEFS, EXTRA_PLATFORMS } from '../core/component-defs.js';
 
 // ---------------------------------------------------------------------------
 // manifestToProfile
@@ -283,5 +284,23 @@ describe('partitionRequestedComponentIds', () => {
     // commands-odyssey migrates to commands; duplicates collapse
     expect(requested.filter((id) => id === 'commands')).toHaveLength(1);
     expect(requested).toContain('workflows');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Extra platform install targets
+// ---------------------------------------------------------------------------
+
+describe('Kimi Code CLI install target', () => {
+  it('uses the current .kimi-code config directory', () => {
+    const platform = EXTRA_PLATFORMS.find((entry) => entry.id === 'kimi-code-cli');
+    expect(platform?.configDir).toBe('.kimi-code');
+
+    const projectPath = join('workspace', 'project');
+    const skills = COMPONENT_DEFS.find((def) => def.id === 'kimi-code-cli-skills');
+    const agents = COMPONENT_DEFS.find((def) => def.id === 'kimi-code-cli-agents');
+
+    expect(skills?.target('project', projectPath)).toBe(join(projectPath, '.kimi-code', 'skills'));
+    expect(agents?.target('project', projectPath)).toBe(join(projectPath, '.kimi-code', 'agents'));
   });
 });
