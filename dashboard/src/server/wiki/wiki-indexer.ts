@@ -295,11 +295,18 @@ export class WikiIndexer {
       names.sort((left, right) => newestFirst
         ? right.localeCompare(left)
         : left.localeCompare(right));
-      for (const name of names) {
-        const child = resolveAllowedDirectSourcePath(join(realDir, name), realDir, 'any');
-        if (!child) continue;
-        let childStat: Awaited<ReturnType<typeof stat>>;
-        try { childStat = await stat(child); } catch { continue; }
+      // Stat every child in one parallel batch: sequential per-entry awaits
+      // serialize libuv round-trips and dominate cold-build latency on
+      // Windows (each await costs ~1-2ms there). Order does not matter — the
+      // snapshot is a set of path→fingerprint records.
+      const children = names.map(name => join(realDir, name));
+      const childStats = await Promise.all(children.map(child =>
+        stat(child).catch(() => null)));
+      for (let i = 0; i < children.length; i++) {
+        const name = names[i];
+        const child = resolveAllowedDirectSourcePath(children[i], realDir, 'any');
+        const childStat = childStats[i];
+        if (!child || !childStat) continue;
         if (childStat.isDirectory()) {
           record(child, childStat);
           if (recurse && !skipDir?.(name)) {
@@ -331,8 +338,12 @@ export class WikiIndexer {
       add(join(this.workflowRoot, 'codebase', 'doc-index.json'), this.workflowRoot),
       add(join(this.workflowRoot, 'codebase', 'knowledge-graph.json'), this.workflowRoot),
       add(join(this.workflowRoot, 'kg', 'maestro.db'), this.workflowRoot),
+      // WAL is tracked because commits in WAL mode touch the WAL (and only the
+      // WAL); the SHM file is deliberately excluded — it is pure connection
+      // state that the indexer's own read-only graph probes churn on every
+      // open, so including it makes the snapshot unstable across a build and
+      // forces the rebuild loop to spin.
       add(join(this.workflowRoot, 'kg', 'maestro.db-wal'), this.workflowRoot),
-      add(join(this.workflowRoot, 'kg', 'maestro.db-shm'), this.workflowRoot),
       scan(
         join(this.workflowRoot, 'sessions'),
         this.workflowRoot,
@@ -365,7 +376,6 @@ export class WikiIndexer {
         await add(join(lw.workflowRoot, 'codebase', 'knowledge-graph.json'), lw.workflowRoot);
         await add(join(lw.workflowRoot, 'kg', 'maestro.db'), lw.workflowRoot);
         await add(join(lw.workflowRoot, 'kg', 'maestro.db-wal'), lw.workflowRoot);
-        await add(join(lw.workflowRoot, 'kg', 'maestro.db-shm'), lw.workflowRoot);
       }
       if (lw.shareTypes.has('session')) {
         await scan(join(lw.workflowRoot, 'sessions'), lw.workflowRoot, name =>
@@ -1151,63 +1161,73 @@ export class WikiIndexer {
       { rel: 'project.md', type: 'project' },
       { rel: 'roadmap.md', type: 'roadmap' },
     ];
-    for (const s of singletons) {
-      const entry = await this.parseFileEntry(join(this.workflowRoot, s.rel), s.type);
+    // Parallel: singleton parses are independent and order does not matter
+    // (buildIndexCandidate sorts by id + source priority afterwards).
+    const singletonEntries = await Promise.all(singletons.map(s =>
+      this.parseFileEntry(join(this.workflowRoot, s.rel), s.type)));
+    for (const entry of singletonEntries) {
       if (entry) out.push(entry);
     }
 
-    // specs — scan all scope directories (global, project, team, personal)
+    // specs — scan all scope directories (global, project, team, personal).
+    // All files within a scope are parsed in one parallel batch; per-file
+    // container → spec-entry grouping is preserved per file.
     const specScopes = this.resolveSpecScopes();
     for (const { dir, allowedRoot, scope, idPrefix, sourcePrefix } of specScopes) {
-      for (const name of await safeReaddir(dir)) {
-        if (extname(name).toLowerCase() !== '.md') continue;
-        const absPath = join(dir, name);
-        const container = await this.parseFileEntry(absPath, 'spec', allowedRoot);
-        if (!container) continue;
+      const names = await safeReaddir(dir);
+      const parsed = await Promise.all(names
+        .filter(name => extname(name).toLowerCase() === '.md')
+        .map(async (name) => {
+          const absPath = join(dir, name);
+          const container = await this.parseFileEntry(absPath, 'spec', allowedRoot);
+          if (!container) return [] as WikiEntry[];
 
-        // Scoped ID: spec:{scope}:{stem} to prevent cross-scope collisions
-        const stem = basename(name, extname(name));
-        container.id = `${idPrefix}${slugify(stem)}`;
-        container.scope = scope;
-        container.source = { kind: 'file', path: `${sourcePrefix}${name}` };
-        out.push(container);
+          // Scoped ID: spec:{scope}:{stem} to prevent cross-scope collisions
+          const stem = basename(name, extname(name));
+          container.id = `${idPrefix}${slugify(stem)}`;
+          container.scope = scope;
+          container.source = { kind: 'file', path: `${sourcePrefix}${name}` };
 
-        // Parse <spec-entry> blocks into sub-node WikiEntries
-        const specEntries = parseSpecEntries(container.body, name, {
-          category: container.category ?? undefined,
-          keywords: container.tags,
-        });
-        for (const se of specEntries) {
-          const related: string[] = [];
-          if (se.ref) {
-            const refStem = se.ref.replace(/^knowhow\//, '').replace(/\.md$/, '');
-            // Derive ref target the same way as the knowhow container id (parseFileEntry
-            // uses `knowhow-${slugify(stem)}`, which keeps the type prefix). Stripping the
-            // prefix here produced target ≠ id → broken links for RCP/REF/DCS/etc.
-            const refSlug = slugify(refStem);
-            related.push(`knowhow-${refSlug}`);
-          }
-          out.push({
-            id: `${idPrefix}${se.id}`,
-            type: 'spec',
-            title: se.title,
-            summary: se.description || se.content.slice(0, 240).replace(/\s+/g, ' '),
-            tags: se.keywords,
-            status: 'active',
-            created: container.created,
-            updated: container.updated,
-            related,
-            source: container.source,
-            body: se.content,
-            ext: { entryType: se.type, timestamp: se.timestamp, ...(se.ref ? { ref: se.ref } : {}), ...(se.confidence ? { confidence: se.confidence } : {}), ...(se.conflictNote ? { conflictNote: se.conflictNote } : {}), ...(se.status ? { status: se.status } : {}), ...(se.supersededBy ? { supersededBy: se.supersededBy } : {}), ...(se.sid ? { sid: se.sid } : {}), ...(se.supersedes ? { supersedes: se.supersedes } : {}) },
-            scope,
-            category: se.category || container.category,
-            specCategory: container.specCategory,
-            createdBy: container.createdBy,
-            sourceRef: container.sourceRef,
-            parent: container.id,
+          // Parse <spec-entry> blocks into sub-node WikiEntries
+          const specEntries = parseSpecEntries(container.body, name, {
+            category: container.category ?? undefined,
+            keywords: container.tags,
           });
-        }
+          const sub = specEntries.map(se => {
+            const related: string[] = [];
+            if (se.ref) {
+              const refStem = se.ref.replace(/^knowhow\//, '').replace(/\.md$/, '');
+              // Derive ref target the same way as the knowhow container id (parseFileEntry
+              // uses `knowhow-${slugify(stem)}`, which keeps the type prefix). Stripping the
+              // prefix here produced target ≠ id → broken links for RCP/REF/DCS/etc.
+              const refSlug = slugify(refStem);
+              related.push(`knowhow-${refSlug}`);
+            }
+            return {
+              id: `${idPrefix}${se.id}`,
+              type: 'spec',
+              title: se.title,
+              summary: se.description || se.content.slice(0, 240).replace(/\s+/g, ' '),
+              tags: se.keywords,
+              status: 'active',
+              created: container.created,
+              updated: container.updated,
+              related,
+              source: container.source,
+              body: se.content,
+              ext: { entryType: se.type, timestamp: se.timestamp, ...(se.ref ? { ref: se.ref } : {}), ...(se.confidence ? { confidence: se.confidence } : {}), ...(se.conflictNote ? { conflictNote: se.conflictNote } : {}), ...(se.status ? { status: se.status } : {}), ...(se.supersededBy ? { supersededBy: se.supersededBy } : {}), ...(se.sid ? { sid: se.sid } : {}), ...(se.supersedes ? { supersedes: se.supersedes } : {}) },
+              scope,
+              category: se.category || container.category,
+              specCategory: container.specCategory,
+              createdBy: container.createdBy,
+              sourceRef: container.sourceRef,
+              parent: container.id,
+            };
+          });
+          return [container, ...sub] as WikiEntry[];
+        }));
+      for (const entries of parsed) {
+        out.push(...entries);
       }
     }
 
@@ -1287,20 +1307,26 @@ export class WikiIndexer {
     } catch {
       return results;
     }
-    for (const name of await safeReaddir(dir)) {
+    const names = await safeReaddir(dir);
+    // Parallel: lstat and parse are independent per entry; recursion results
+    // are flattened in place afterwards (order is not significant — the
+    // caller sorts by id).
+    const nested = await Promise.all(names.map(async (name) => {
       const fullPath = join(dir, name);
       let stats: Awaited<ReturnType<typeof lstat>> | null = null;
-      try { stats = await lstat(fullPath); } catch { continue; }
-      if (stats.isSymbolicLink()) continue;
+      try { stats = await lstat(fullPath); } catch { return []; }
+      if (stats.isSymbolicLink()) return [];
 
       if (stats.isDirectory()) {
-        const nested = await this.scanKnowhowDir(fullPath);
-        results.push(...nested);
-      } else if (stats.isFile() && extname(name).toLowerCase() === '.md') {
-        const entry = await this.parseFileEntry(fullPath, 'knowhow');
-        results.push({ name, absPath: fullPath, entry });
+        return this.scanKnowhowDir(fullPath);
       }
-    }
+      if (stats.isFile() && extname(name).toLowerCase() === '.md') {
+        const entry = await this.parseFileEntry(fullPath, 'knowhow');
+        return [{ name, absPath: fullPath, entry }];
+      }
+      return [];
+    }));
+    for (const batch of nested) results.push(...batch);
     return results;
   }
 
@@ -1386,9 +1412,13 @@ export class WikiIndexer {
       sourcePrefix: string;
     }> = [];
 
-    // Global: ~/.maestro/specs/
+    // Global: ~/.maestro/specs/ — user-level store, included only for
+    // filesystem-backed indexers. Memory-only probes must stay hermetic:
+    // like the CLI session stores (see scanCliSessions), user-level spec
+    // content is never part of a probe, which keeps the search-ranking gate
+    // deterministic across machines.
     const globalDir = join(maestroHome, 'specs');
-    if (existsSync(globalDir)) {
+    if (this.persistence === 'filesystem' && existsSync(globalDir)) {
       scopes.push({
         dir: globalDir,
         allowedRoot: globalDir,
