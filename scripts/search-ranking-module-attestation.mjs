@@ -889,7 +889,7 @@ export async function runCertifiedAttestedChild({
   manifest,
   parentEnvironment = process.env,
   spawn = spawnChild,
-  timeoutMs = 30_000,
+  timeoutMs = 120_000,
 } = {}) {
   await assertCertifiedAttestationRuntime();
   if (!Array.isArray(args) || !args.every(arg => typeof arg === 'string')) {

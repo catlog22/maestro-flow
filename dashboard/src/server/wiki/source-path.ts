@@ -18,23 +18,47 @@ export type AllowedSourceKind = 'file' | 'directory' | 'any';
  * inode stays stable when the link is repointed, so only a fresh resolution
  * can stay correct; they are rare in the indexer's hot paths.
  */
-const realpathCache = new Map<string, { real: string; dev: number; ino: number }>();
+type RealpathCacheEntry = { real: string; dev: number; ino: number } | typeof MISSING;
+const realpathCache = new Map<string, RealpathCacheEntry>();
 const REALPATH_CACHE_MAX = 4096;
+const MISSING = Symbol('realpath-missing');
 
-function cachedRealpath(path: string): string {
+function cachedRealpath(path: string): string | null {
   const cached = realpathCache.get(path);
-  if (cached !== undefined) {
+  if (cached === MISSING) {
+    // Negative entry: only re-resolve once the path actually appears.
+    try {
+      lstatSync(path);
+      realpathCache.delete(path);
+    } catch {
+      return null;
+    }
+  } else if (cached !== undefined) {
     try {
       const current = lstatSync(path);
       if (current.dev === cached.dev && current.ino === cached.ino) {
         return cached.real;
       }
+      // Identity changed (replacement/symlink swap): fall through to a fresh
+      // resolution.
     } catch {
       // Path disappeared — fall through to a fresh resolution which will
       // surface the failure through realpathSync.native.
     }
+    realpathCache.delete(path);
   }
-  const real = realpathSync.native(path);
+  let real: string;
+  try {
+    real = realpathSync.native(path);
+  } catch {
+    // Negative cache: the indexer probes many optional paths (e.g. a
+    // workflow without a roadmap or glossary); realpathSync.native is ~1-3ms
+    // per ENOENT attempt on Windows, which dominates the warm change-check
+    // when repeated per query.
+    if (realpathCache.size >= REALPATH_CACHE_MAX) realpathCache.clear();
+    realpathCache.set(path, MISSING);
+    return null;
+  }
   if (realpathCache.size >= REALPATH_CACHE_MAX) {
     // Pathological breadth (e.g. a huge generated tree): drop everything
     // rather than keeping a lopsided cache. Re-population is just slow,
@@ -67,7 +91,9 @@ export function resolveAllowedSourcePath(
 ): string | null {
   try {
     const realRoot = cachedRealpath(resolve(allowedRoot));
+    if (realRoot === null) return null;
     const realCandidate = cachedRealpath(resolve(candidate));
+    if (realCandidate === null) return null;
     const comparedRoot = normalizeForComparison(realRoot);
     const comparedCandidate = normalizeForComparison(realCandidate);
     if (comparedCandidate !== comparedRoot

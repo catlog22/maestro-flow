@@ -2687,10 +2687,33 @@ export async function runBuiltPhase({
       ],
     };
   } finally {
-    rmSync(workspaceRoot, { recursive: true, force: true });
+    removeWorkspaceWithRetry(workspaceRoot);
   }
   } finally {
     ownedCertificateContext?.close();
+  }
+}
+
+/**
+ * Windows keeps a handle on a directory while a child that used it as its
+ * cwd is still winding down; a single rmSync then fails with EBUSY and
+ * masks the real gate verdict. Retry with a short backoff so a transient
+ * handle release does not turn a passing phase into a cleanup failure.
+ */
+function removeWorkspaceWithRetry(root, attempts = 5) {
+  for (let attempt = 1; attempt <= attempts; attempt += 1) {
+    try {
+      rmSync(root, { recursive: true, force: true });
+      return;
+    } catch (error) {
+      if (attempt === attempts) throw error;
+      const busy = typeof error === 'object' && error !== null
+        && (error.code === 'EBUSY' || error.code === 'EPERM');
+      if (!busy) throw error;
+      const delay = 200 * attempt;
+      const until = Date.now() + delay;
+      while (Date.now() < until) { /* synchronous backoff */ }
+    }
   }
 }
 

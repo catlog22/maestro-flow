@@ -19,7 +19,7 @@ import {
   cwdToClaudeProjectSlug,
 } from './virtual-wiki-adapters.js';
 import { homedir } from 'node:os';
-import { closeSync, createWriteStream, existsSync, openSync, readFileSync, readdirSync, renameSync, statSync, unlinkSync, writeFileSync } from 'node:fs';
+import { closeSync, createWriteStream, existsSync, lstatSync, openSync, readFileSync, readdirSync, renameSync, statSync, unlinkSync, writeFileSync } from 'node:fs';
 import { createHash, randomUUID } from 'node:crypto';
 import { buildGraph, type WikiGraph } from './graph-analysis.js';
 import { buildInvertedIndex, searchBM25, searchBM25Planned, rerankByPhraseProximity, type InvertedIndex } from './search.js';
@@ -210,6 +210,8 @@ export class WikiIndexer {
     generation: number;
   } | null = null;
   private mtimeSnapshot: Map<string, string> = new Map();
+  /** Paths recorded in mtimeSnapshot, for the warm-path re-stat change check. */
+  private lastSnapshotPaths: readonly string[] | null = null;
   private closing = false;
 
   constructor(config: WikiIndexerConfig) {
@@ -246,13 +248,47 @@ export class WikiIndexer {
 
   private async hasSourceChanges(snapshot = this.mtimeSnapshot): Promise<boolean> {
     if (snapshot.size === 0) return true;
-    return !snapshotsEqual(snapshot, await this.captureSourceSnapshot());
+    // Warm-path fast check: re-stat only the paths recorded in the last
+    // snapshot instead of re-running the full recursive scan. Every source
+    // family the indexer can read is already represented — additions and
+    // removals bump the containing directory's mtime (recorded as its own
+    // entry), in-place edits bump the file's own mtime, and the WAL entry
+    // tracks WAL-mode graph commits. readdirSync is disproportionately
+    // expensive on some Windows setups (~1.5ms per call), which made the
+    // full scan dominate warm query latency.
+    const recordedPaths = this.lastSnapshotPaths;
+    if (recordedPaths === null) {
+      return !snapshotsEqual(snapshot, await this.captureSourceSnapshot());
+    }
+    for (const path of recordedPaths) {
+      const previous = snapshot.get(path);
+      if (previous === undefined) return true;
+      if (previous === 'm') {
+        try {
+          lstatSync(path);
+          return true;
+        } catch {
+          continue;
+        }
+      }
+      let current: ReturnType<typeof statSync>;
+      try {
+        current = statSync(path);
+      } catch {
+        return true;
+      }
+      if ([current.isDirectory() ? 'd' : 'f', current.size, current.mtimeMs, current.ctimeMs]
+        .join(':') !== previous) {
+        return true;
+      }
+    }
+    return false;
   }
 
   /** Capture every source family the indexer can read, after realpath fencing. */
   private async captureSourceSnapshot(): Promise<Map<string, string>> {
     const snapshot = new Map<string, string>();
-    const record = (path: string, sourceStat: Awaited<ReturnType<typeof stat>>): void => {
+    const record = (path: string, sourceStat: NonNullable<ReturnType<typeof statSync>>): void => {
       snapshot.set(path, [
         sourceStat.isDirectory() ? 'd' : 'f',
         sourceStat.size,
@@ -260,21 +296,39 @@ export class WikiIndexer {
         sourceStat.ctimeMs,
       ].join(':'));
     };
-    const add = async (
+    // Synchronous syscalls throughout: the snapshot is a small, bounded
+    // fingerprint set (budget + maxDepth guards below), and per-entry async
+    // awaits serialize libuv round-trips — each costs ~1-2ms on Windows and
+    // dominates both the warm hasSourceChanges path and the cold rebuild
+    // race check. Sync stats measure ~10x faster here.
+    const add = (
       candidate: string,
       allowedRoot: string,
       kind: 'file' | 'directory' | 'any' = 'file',
-    ): Promise<string | null> => {
+    ): string | null => {
       const realPath = resolveAllowedSourcePath(candidate, allowedRoot, kind);
-      if (!realPath) return null;
+      if (!realPath) {
+        // Keep a bounded negative sentinel for optional source paths. Without
+        // it, creating project.md (or an initially absent source directory)
+        // after a warm build is invisible because none of the recorded paths
+        // changes. Existing but fenced paths are deliberately not recorded:
+        // they must stay unreadable and must not force perpetual rebuilds.
+        const resolvedCandidate = resolve(candidate);
+        try {
+          lstatSync(resolvedCandidate);
+        } catch {
+          snapshot.set(resolvedCandidate, 'm');
+        }
+        return null;
+      }
       try {
-        record(realPath, await stat(realPath));
+        record(realPath, statSync(realPath));
         return realPath;
       } catch {
         return null;
       }
     };
-    const scan = async (
+    const scan = (
       candidate: string,
       allowedRoot: string,
       accept: (name: string, path: string) => boolean,
@@ -284,33 +338,26 @@ export class WikiIndexer {
       skipDir?: (name: string) => boolean,
       budget?: { remaining: number },
       newestFirst = false,
-    ): Promise<void> => {
+    ): void => {
       if (depth > maxDepth || budget?.remaining === 0) return;
       const realDir = depth === 0
-        ? await add(candidate, allowedRoot, 'directory')
+        ? add(candidate, allowedRoot, 'directory')
         : candidate;
       if (!realDir) return;
       let names: string[];
-      try { names = await readdir(realDir); } catch { return; }
+      try { names = readdirSync(realDir); } catch { return; }
       names.sort((left, right) => newestFirst
         ? right.localeCompare(left)
         : left.localeCompare(right));
-      // Stat every child in one parallel batch: sequential per-entry awaits
-      // serialize libuv round-trips and dominate cold-build latency on
-      // Windows (each await costs ~1-2ms there). Order does not matter — the
-      // snapshot is a set of path→fingerprint records.
-      const children = names.map(name => join(realDir, name));
-      const childStats = await Promise.all(children.map(child =>
-        stat(child).catch(() => null)));
-      for (let i = 0; i < children.length; i++) {
-        const name = names[i];
-        const child = resolveAllowedDirectSourcePath(children[i], realDir, 'any');
-        const childStat = childStats[i];
-        if (!child || !childStat) continue;
+      for (const name of names) {
+        const child = resolveAllowedDirectSourcePath(join(realDir, name), realDir, 'any');
+        if (!child) continue;
+        let childStat: NonNullable<ReturnType<typeof statSync>> | null = null;
+        try { childStat = statSync(child); } catch { continue; }
         if (childStat.isDirectory()) {
           record(child, childStat);
           if (recurse && !skipDir?.(name)) {
-            await scan(
+            scan(
               child,
               allowedRoot,
               accept,
@@ -329,56 +376,54 @@ export class WikiIndexer {
       }
     };
 
-    await Promise.all([
-      add(join(this.workflowRoot, 'project.md'), this.workflowRoot),
-      add(join(this.workflowRoot, 'roadmap.md'), this.workflowRoot),
-      scan(join(this.workflowRoot, 'knowhow'), this.workflowRoot, name => name.toLowerCase().endsWith('.md'), true),
-      scan(join(this.workflowRoot, 'issues'), this.workflowRoot, name => name.toLowerCase().endsWith('.jsonl'), false),
-      add(join(this.workflowRoot, 'domain', 'glossary.json'), this.workflowRoot),
-      add(join(this.workflowRoot, 'codebase', 'doc-index.json'), this.workflowRoot),
-      add(join(this.workflowRoot, 'codebase', 'knowledge-graph.json'), this.workflowRoot),
-      add(join(this.workflowRoot, 'kg', 'maestro.db'), this.workflowRoot),
-      // WAL is tracked because commits in WAL mode touch the WAL (and only the
-      // WAL); the SHM file is deliberately excluded — it is pure connection
-      // state that the indexer's own read-only graph probes churn on every
-      // open, so including it makes the snapshot unstable across a build and
-      // forces the rebuild loop to spin.
-      add(join(this.workflowRoot, 'kg', 'maestro.db-wal'), this.workflowRoot),
-      scan(
-        join(this.workflowRoot, 'sessions'),
-        this.workflowRoot,
-        name => name === 'session.json' || name === 'artifacts.json' || name === 'gates.json'
-          || name === 'run.json' || name === 'report.md' || name === 'knowledge-delta.json'
-          || name.endsWith('.json'),
-        true,
-        16,
-        0,
-        name => name === 'work' || name === 'tmp',
-      ),
-    ]);
+    add(join(this.workflowRoot, 'project.md'), this.workflowRoot);
+    add(join(this.workflowRoot, 'roadmap.md'), this.workflowRoot);
+    scan(join(this.workflowRoot, 'knowhow'), this.workflowRoot, name => name.toLowerCase().endsWith('.md'), true);
+    scan(join(this.workflowRoot, 'issues'), this.workflowRoot, name => name.toLowerCase().endsWith('.jsonl'), false);
+    add(join(this.workflowRoot, 'domain', 'glossary.json'), this.workflowRoot);
+    add(join(this.workflowRoot, 'codebase', 'doc-index.json'), this.workflowRoot);
+    add(join(this.workflowRoot, 'codebase', 'knowledge-graph.json'), this.workflowRoot);
+    add(join(this.workflowRoot, 'kg', 'maestro.db'), this.workflowRoot);
+    // WAL is tracked because commits in WAL mode touch the WAL (and only the
+    // WAL); the SHM file is deliberately excluded — it is pure connection
+    // state that the indexer's own read-only graph probes churn on every
+    // open, so including it makes the snapshot unstable across a build and
+    // forces the rebuild loop to spin.
+    add(join(this.workflowRoot, 'kg', 'maestro.db-wal'), this.workflowRoot);
+    scan(
+      join(this.workflowRoot, 'sessions'),
+      this.workflowRoot,
+      name => name === 'session.json' || name === 'artifacts.json' || name === 'gates.json'
+        || name === 'run.json' || name === 'report.md' || name === 'knowledge-delta.json'
+        || name.endsWith('.json'),
+      true,
+      16,
+      0,
+      name => name === 'work' || name === 'tmp',
+    );
 
     for (const scope of this.resolveSpecScopes()) {
-      await scan(scope.dir, scope.allowedRoot, name => name.toLowerCase().endsWith('.md'), false);
+      scan(scope.dir, scope.allowedRoot, name => name.toLowerCase().endsWith('.md'), false);
     }
 
     for (const lw of this.linkedWorkspaces) {
       if (lw.shareTypes.has('spec')) {
-        await scan(join(lw.workflowRoot, 'specs'), lw.workflowRoot, name => name.toLowerCase().endsWith('.md'), false);
+        scan(join(lw.workflowRoot, 'specs'), lw.workflowRoot, name => name.toLowerCase().endsWith('.md'), false);
       }
       if (lw.shareTypes.has('knowhow')) {
-        await scan(join(lw.workflowRoot, 'knowhow'), lw.workflowRoot, name => name.toLowerCase().endsWith('.md'), true);
+        scan(join(lw.workflowRoot, 'knowhow'), lw.workflowRoot, name => name.toLowerCase().endsWith('.md'), true);
       }
       if (lw.shareTypes.has('domain')) {
-        await add(join(lw.workflowRoot, 'domain', 'glossary.json'), lw.workflowRoot);
+        add(join(lw.workflowRoot, 'domain', 'glossary.json'), lw.workflowRoot);
       }
       if (lw.shareTypes.has('codebase')) {
-        await add(join(lw.workflowRoot, 'codebase', 'doc-index.json'), lw.workflowRoot);
-        await add(join(lw.workflowRoot, 'codebase', 'knowledge-graph.json'), lw.workflowRoot);
-        await add(join(lw.workflowRoot, 'kg', 'maestro.db'), lw.workflowRoot);
-        await add(join(lw.workflowRoot, 'kg', 'maestro.db-wal'), lw.workflowRoot);
+        add(join(lw.workflowRoot, 'codebase', 'doc-index.json'), lw.workflowRoot);
+        add(join(lw.workflowRoot, 'codebase', 'knowledge-graph.json'), lw.workflowRoot);
+        add(join(lw.workflowRoot, 'kg', 'maestro.db'), lw.workflowRoot);
+        add(join(lw.workflowRoot, 'kg', 'maestro.db-wal'), lw.workflowRoot);
       }
       if (lw.shareTypes.has('session')) {
-        await scan(join(lw.workflowRoot, 'sessions'), lw.workflowRoot, name =>
+        scan(join(lw.workflowRoot, 'sessions'), lw.workflowRoot, name =>
           name === 'session.json' || name === 'artifacts.json' || name === 'gates.json'
           || name === 'run.json' || name === 'report.md' || name === 'knowledge-delta.json'
           || name.endsWith('.json'), true, 16, 0, name => name === 'work' || name === 'tmp');
@@ -394,9 +439,9 @@ export class WikiIndexer {
       // The transcript loaders independently bound and fence their selected
       // files. Directory fingerprints detect membership changes without a
       // second recursive walk over user-level history for every cache check.
-      await add(claudeProjectDir, claudeProjectDir, 'directory');
-      await add(join(codexRoot, 'session_index.jsonl'), codexRoot);
-      await add(join(codexRoot, 'sessions'), codexRoot, 'directory');
+      add(claudeProjectDir, claudeProjectDir, 'directory');
+      add(join(codexRoot, 'session_index.jsonl'), codexRoot);
+      add(join(codexRoot, 'sessions'), codexRoot, 'directory');
     }
 
     return snapshot;
@@ -437,6 +482,7 @@ export class WikiIndexer {
       const backlinks = this.buildBacklinks(entries, byId);
       if (generation !== this.rebuildGeneration) return false;
       this.mtimeSnapshot = snapshot;
+      this.lastSnapshotPaths = [...snapshot.keys()];
       this.cache = { entries, byId, byType, backlinks, generatedAt: cached.generatedAt };
       return true;
     } catch {
@@ -666,6 +712,7 @@ export class WikiIndexer {
       if (generation !== this.rebuildGeneration || !snapshotsEqual(before, snapshot)) continue;
 
       this.mtimeSnapshot = snapshot;
+      this.lastSnapshotPaths = [...snapshot.keys()];
       this.cache = index;
       this.graphCache = null;
       this.searchCache = null;

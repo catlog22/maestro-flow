@@ -63,6 +63,26 @@ describe('WikiIndexer', () => {
     expect(index.backlinks['spec:project:two']).toContain('spec:project:one');
   });
 
+  it('invalidates a warm index when an optional source path appears', async () => {
+    await write('specs/existing.md', '---\ntitle: Existing\n---\n# Existing');
+    const indexer = withoutCliSessions(new WikiIndexer({
+      workflowRoot: tmpRoot,
+      persistence: 'memory-only',
+    }));
+
+    const first = await indexer.get();
+    expect(first.entries.some(entry => entry.type === 'project')).toBe(false);
+
+    await write('project.md', '---\ntitle: New project\n---\n# New project\nWarm invalidation sentinel.');
+    const afterProject = await indexer.get();
+    expect(afterProject.entries.some(entry => entry.type === 'project'
+      && entry.title === 'New project')).toBe(true);
+
+    await write('knowhow/new.md', '---\ntitle: New knowhow\n---\n# New knowhow');
+    const afterDirectory = await indexer.get();
+    expect(afterDirectory.entries.some(entry => entry.title === 'New knowhow')).toBe(true);
+  });
+
   it('filters by type and tag', async () => {
     await write('specs/a.md', `---\ntitle: A\ntags:\n  - x\n---\n# A`);
     await write('specs/b.md', `---\ntitle: B\ntags:\n  - y\n---\n# B`);

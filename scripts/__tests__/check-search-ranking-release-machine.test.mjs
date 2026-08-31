@@ -1168,7 +1168,7 @@ test('rejects omitted or dynamic current package controls', () => {
     )],
     ['second inline source', value => value.replace(
       "'src/graph/db/schema.sql'",
-      "'package.json'",
+      "'docs/knowledge-system-architecture.md'",
     )],
     ['second inline output', value => value.replace(
       "'dist/src/graph/kg/schema.sql'",
