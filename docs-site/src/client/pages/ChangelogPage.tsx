@@ -17,6 +17,17 @@ interface ChangelogEntry {
 
 const changelog: ChangelogEntry[] = [
   {
+    version: '0.5.83',
+    date: '2026-08',
+    changes: [
+      { type: 'feat', text_en: 'Search daemon moves to an authenticated protocol v2: the daemon descriptor becomes a per-process identity (instanceId + protocol tag) instead of a bare PID, so stale or foreign descriptors are never trusted for search or shutdown and only the owning process may delete its descriptor; requests/responses are bounded (64 KiB in / 16 MiB out, 4096-char queries, 500 results) and the daemon drains gracefully instead of dying mid-request. Wiki indexer and embedding stores are hardened with ownership-checked cleanup, spawn locking, and a much wider test surface across dashboard workspace and search', text_zh: '搜索守护进程升级为带认证的 protocol v2：守护进程描述符从裸 PID 变为逐进程身份（instanceId + 协议标签），陈旧或外来描述符不再被信任用于搜索或关闭，且只有属主进程可删除其描述符；请求/响应有界（入 64 KiB / 出 16 MiB、4096 字符查询、500 条结果），守护进程优雅排空而非请求中猝死。Wiki 索引器与 embedding 存储加固：所有权校验清理、spawn 锁、dashboard workspace 与 search 测试面大幅扩展' },
+      { type: 'fix', text_en: 'Legacy SQLite artifact family is bounded: an oversized active WAL is refused before the legacy migration path opens the database, and better-sqlite3 unavailability is guarded in tests so the migration path degrades predictably instead of reading a corrupted artifact', text_zh: '遗留 SQLite 产物族被约束：legacy 迁移路径打开数据库前先拒绝过大的活动 WAL，并在测试中防护 better-sqlite3 不可用，使迁移路径可预测地降级而非读取损坏产物' },
+      { type: 'fix', text_en: 'Wiki index refreshes regain cold-build speed and hermetic release probes while preserving warm-cache correctness: bounded synchronous snapshots reduce Windows latency, negative source sentinels detect newly created optional files/directories, and transient gate cleanup handles are retried', text_zh: 'Wiki 索引刷新同时恢复冷构建性能、发布探针隔离性与暖缓存正确性：有界同步快照降低 Windows 延迟，缺失源哨兵可检测后创建的可选文件/目录，门禁清理中的瞬时句柄占用会安全重试' },
+      { type: 'fix', text_en: 'Kimi Code CLI installs now target the current .kimi-code config directory instead of the outdated .kimi-code-cli, across component definitions, the interactive install UI, the install guide, and reinstall tests', text_zh: 'Kimi Code CLI 安装现指向当前 .kimi-code 配置目录而非过时的 .kimi-code-cli，覆盖组件定义、交互式安装 UI、安装指南与重装测试' },
+      { type: 'refactor', text_en: 'maestro-impeccable is rewritten as a thin Maestro adapter over the installed Impeccable skill: Impeccable owns design semantics, setup, routing, references, detector behavior and bounded verification, while Maestro adds the canonical Session/Run lifecycle, progress tracking, consistent status presentation, and the optional --codify extension loaded phase-wise; the copied command routing/chain tables are retired', text_zh: 'maestro-impeccable 重写为基于已安装 Impeccable skill 的薄适配器：Impeccable 负责设计语义、设置、路由、引用、检测器行为与有界验证，Maestro 提供规范 Session/Run 生命周期、进度跟踪、一致的状态呈现与按阶段加载的可选 --codify 扩展；复制的命令路由/链表退役' },
+    ],
+  },
+  {
     version: '0.5.82',
     date: '2026-08',
     changes: [
