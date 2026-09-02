@@ -25,6 +25,8 @@ import {
 import { join } from 'node:path';
 import { createDefaultDelegateBroker } from '../async/delegate-broker.js';
 import { resolveTeamWorkDir } from './team-run-paths.js';
+import type { AgentRepositoryContext } from '../../shared/agent-types.js';
+import { getActiveRepositoryExecution } from '../repository/context.js';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -37,6 +39,9 @@ export interface TeamMember {
   job_id: string;
   exec_id: string;
   spawned_at: string;
+  repository_context?: AgentRepositoryContext;
+  target_repo_id?: string | null;
+  work_dir?: string;
 }
 
 interface TeamConfig {
@@ -105,12 +110,20 @@ function opSpawnAgent(params: {
 }): CcwToolResult {
   const { session_id, role, prompt } = params;
   const tool = params.tool || 'gemini';
+  const repositoryExecution = getActiveRepositoryExecution();
+  const repositoryContext = repositoryExecution?.actor;
+  const targetRepository = repositoryExecution?.target;
+  const repositoryMetadata = repositoryContext as unknown as Record<string, import('../async/index.js').JsonValue> | undefined;
 
   // Ensure session is registered with broker
   const broker = getBroker();
   broker.registerSession({
     sessionId: session_id,
-    metadata: { source: 'team-agents', role },
+    metadata: {
+      source: 'team-agents',
+      role,
+      ...(repositoryMetadata ? { repositoryContext: repositoryMetadata } : {}),
+    },
   });
 
   // Derive deterministic job ID
@@ -129,6 +142,14 @@ function opSpawnAgent(params: {
       role,
       tool,
       sessionId: session_id,
+      ...(repositoryContext && repositoryMetadata ? {
+        repositoryContext: repositoryMetadata,
+        repoId: repositoryContext.currentRepoId,
+        repoName: repositoryContext.currentRepoName,
+        projectRoot: repositoryContext.currentProjectRoot,
+        targetRepoId: targetRepository?.repoId ?? repositoryContext.currentRepoId,
+        workDir: targetRepository?.projectRoot ?? repositoryContext.currentProjectRoot,
+      } : {}),
     },
   });
 
@@ -151,6 +172,11 @@ function opSpawnAgent(params: {
     job_id: jobId,
     exec_id: execId,
     spawned_at: nowISO(),
+    ...(repositoryContext ? { repository_context: repositoryContext } : {}),
+    ...(targetRepository ? {
+      target_repo_id: targetRepository.repoId,
+      work_dir: targetRepository.projectRoot,
+    } : {}),
   };
   members.push(member);
   writeMembers(session_id, members);

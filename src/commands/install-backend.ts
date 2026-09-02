@@ -20,6 +20,7 @@ import {
   rmSync,
 } from 'node:fs';
 import { paths } from '../config/paths.js';
+import { resolveAgentRepositoryContext } from '../repository/context.js';
 import {
   addFile,
   addDir,
@@ -172,6 +173,15 @@ export function getClaudeMcpConfigPath(scope: 'global' | 'project', projectPath:
     : join(homedir(), '.claude.json');
 }
 
+export function buildMcpRepositoryEnv(projectRoot: string | undefined): Record<string, string> {
+  if (!projectRoot) return {};
+  const context = resolveAgentRepositoryContext(projectRoot, { allowLegacyReadFallback: true });
+  return {
+    MAESTRO_PROJECT_ROOT: context.currentProjectRoot,
+    ...(context.currentRepoId ? { MAESTRO_REPO_ID: context.currentRepoId } : {}),
+  };
+}
+
 /**
  * Register the maestro MCP server in Claude's config. Returns the path that
  * was written on success, or null on failure.
@@ -183,10 +193,11 @@ export function addMcpServer(
   projectRoot?: string,
 ): string | null {
   const isWin = process.platform === 'win32';
+  const bindingRoot = projectRoot ?? (scope === 'project' ? projectPath : undefined);
   const env: Record<string, string> = {
     MAESTRO_ENABLED_TOOLS: enabledTools.join(','),
+    ...buildMcpRepositoryEnv(bindingRoot),
   };
-  if (projectRoot) env.MAESTRO_PROJECT_ROOT = projectRoot;
 
   // Use the maestro-mcp binary exposed by the globally installed maestro-flow package.
   // On Windows, npm generates maestro-mcp.cmd shim resolved via cmd.exe; on Unix, it's
@@ -438,9 +449,11 @@ export function addCodexMcpServer(
     // Build TOML block
     const command = isWin ? 'cmd' : 'maestro-mcp';
     const args = isWin ? '["/c", "maestro-mcp"]' : '[]';
+    const bindingRoot = projectRoot ?? (scope === 'project' ? projectPath : undefined);
+    const repositoryEnv = buildMcpRepositoryEnv(bindingRoot);
     const envLines = [`MAESTRO_ENABLED_TOOLS = "${enabledTools.join(',')}"`];
-    if (projectRoot) {
-      envLines.push(`MAESTRO_PROJECT_ROOT = "${projectRoot.replace(/\\/g, '\\\\').replace(/"/g, '\\"')}"`);
+    for (const [name, value] of Object.entries(repositoryEnv)) {
+      envLines.push(`${name} = "${value.replace(/\\/g, '\\\\').replace(/"/g, '\\"')}"`);
     }
 
     const block = [
@@ -888,8 +901,8 @@ function buildServerConfig(
   const isWin = process.platform === 'win32';
   const env: Record<string, string> = {
     MAESTRO_ENABLED_TOOLS: enabledTools.join(','),
+    ...buildMcpRepositoryEnv(projectRoot),
   };
-  if (projectRoot) env.MAESTRO_PROJECT_ROOT = projectRoot;
 
   const base: Record<string, unknown> = {
     command: isWin ? 'cmd' : 'maestro-mcp',
@@ -923,7 +936,8 @@ export function addExtraMcpServer(
     const dir = dirname(fp);
     if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
 
-    const serverConfig = buildServerConfig(enabledTools, projectRoot, spec.format);
+    const bindingRoot = projectRoot ?? (scope === 'project' ? projectPath : undefined);
+    const serverConfig = buildServerConfig(enabledTools, bindingRoot, spec.format);
     const containerKey = spec.format === 'json-vscode-servers' ? 'servers' : 'mcpServers';
 
     let data: Record<string, unknown> = {};

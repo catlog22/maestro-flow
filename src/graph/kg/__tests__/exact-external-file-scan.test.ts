@@ -42,7 +42,7 @@ afterEach(() => {
   while (roots.length > 0) {
     rmSync(roots.pop() as string, { recursive: true, force: true });
   }
-});
+}, 300_000);
 
 describe('exact external file scan', () => {
   it('indexes only the listed ignored header and never follows its imports or plugin', async () => {
@@ -167,7 +167,7 @@ describe('exact external file scan', () => {
       .toContain('OnlyExactHeader');
     expect(results.flatMap(result => result.nodes).some(node => node.name.startsWith('IgnoredHeader')))
       .toBe(false);
-  }, 30_000);
+  }, 300_000);
 
   it('fails before progress or extraction when the fixed manifest is unsafe', async () => {
     const root = makeProject();

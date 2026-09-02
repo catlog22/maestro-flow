@@ -152,10 +152,25 @@ export class MaestroGraph {
       throw new Error(`MaestroGraph not initialized. Run "maestro kg init" first. Expected: ${dbPath}`);
     }
     mg.conn = new KgDatabaseConnection();
-    mg.conn.open(dbPath);
-    applyMigrations(mg.conn);
-    mg.queries = new KgQueryBuilder(mg.conn);
-    return mg;
+    try {
+      mg.conn.open(dbPath);
+      applyMigrations(mg.conn);
+      mg.queries = new KgQueryBuilder(mg.conn);
+      return mg;
+    } catch (error) {
+      // DatabaseSync keeps the file locked on Windows even when opening or
+      // migrating fails. Close the partially opened connection so workers can
+      // delete a broken fixture/database and retry deterministically.
+      try {
+        mg.close();
+      } catch (closeError) {
+        throw new AggregateError(
+          [error, closeError],
+          'MaestroGraph open failed and its database handle could not be closed',
+        );
+      }
+      throw error;
+    }
   }
 
   /**

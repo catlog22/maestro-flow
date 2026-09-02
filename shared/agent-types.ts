@@ -21,6 +21,35 @@ export type AgentProcessStatus =
 // Agent configuration & process
 // ---------------------------------------------------------------------------
 
+export type AgentRepositoryCorpus = 'spec' | 'knowhow' | 'domain' | 'codebase' | 'session';
+
+/** One host-resolved repository visible to an agent. */
+export interface AgentRepositoryBinding {
+  repoId: string | null;
+  repoName: string;
+  projectRoot: string;
+  relation: 'current' | 'linked';
+  alias: string;
+  identityPersisted: boolean;
+  readCapabilities: AgentRepositoryCorpus[];
+  writeCapabilities: AgentRepositoryCorpus[];
+}
+
+/**
+ * Host-owned repository authority carried alongside prompts. Models may select
+ * a targetRepoId, but may not supply or replace this actor binding.
+ */
+export interface AgentRepositoryContext {
+  currentRepoId: string | null;
+  currentRepoName: string;
+  /** Canonical root (preferred repository-specific name). */
+  currentRepoRoot?: string;
+  /** Backward-compatible project-root spelling used by process environments. */
+  currentProjectRoot: string;
+  identityPersisted: boolean;
+  linkedRepositories: AgentRepositoryBinding[];
+}
+
 /** Configuration for spawning an agent process */
 export interface AgentConfig {
   type: AgentType;
@@ -40,6 +69,8 @@ export interface AgentConfig {
   interactive?: boolean;
   /** Path to MCP config JSON file for CLI agents (claude-code --mcp-config) */
   mcpConfigPath?: string;
+  /** Host-owned repository authority for this process. */
+  repositoryContext?: AgentRepositoryContext;
   /** Opaque metadata bag — used to pass team session context through the spawn pipeline */
   metadata?: Record<string, unknown>;
   /** Reasoning effort level (undefined = tool default) */

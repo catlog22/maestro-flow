@@ -2,35 +2,43 @@
  * Workspace Command — Cross-workspace knowledge sharing management.
  *
  * Subcommands:
- *   maestro workspace link   <path> [--name <n>] [--share spec,knowhow,domain]
+ *   maestro workspace link   <path> [--name <n>] [--share spec,knowhow,domain] [--write spec]
  *   maestro workspace unlink <name>
  *   maestro workspace list   [--json]
  *   maestro workspace status [--json]
+ *   maestro workspace identity <init|show|reseed>
  */
 
 import type { Command } from 'commander';
 import { basename, resolve } from 'node:path';
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { acquireFileLocksSync } from '../utils/atomic-write.js';
 
 import {
   loadWorkspaceConfig,
   saveWorkspaceConfig,
   resolveWorkspaceLinks,
 } from '../config/index.js';
-import type { WorkspaceShareType } from '../types/index.js';
+import type { WorkspaceCorpus } from '../types/index.js';
+import {
+  CURRENT_REPOSITORY_ALIAS,
+  canonicalizeRepositoryRoot,
+  initializeRepositoryIdentity,
+  readRepositoryIdentity,
+  reseedRepositoryIdentity,
+} from '../repository/context.js';
 
-type ExplicitWorkspaceShareType = WorkspaceShareType | 'session';
-const VALID_SHARE_TYPES: ExplicitWorkspaceShareType[] = ['spec', 'knowhow', 'domain', 'codebase', 'session'];
+const VALID_SHARE_TYPES: WorkspaceCorpus[] = ['spec', 'knowhow', 'domain', 'codebase', 'session'];
 
 // ---------------------------------------------------------------------------
 // link
 // ---------------------------------------------------------------------------
 
-function runLink(targetPath: string, opts: { name?: string; share?: string }): void {
-  const projectPath = process.cwd();
-  const resolvedTarget = resolve(projectPath, targetPath);
-  const resolvedSelf = resolve(projectPath);
+function runLink(targetPath: string, opts: { name?: string; share?: string; write?: string }): void {
+  const projectPath = canonicalizeRepositoryRoot(process.cwd());
+  const resolvedTarget = canonicalizeRepositoryRoot(resolve(projectPath, targetPath));
+  const resolvedSelf = projectPath;
 
   if (resolvedTarget === resolvedSelf) {
     console.error('Error: cannot link a workspace to itself.');
@@ -45,10 +53,35 @@ function runLink(targetPath: string, opts: { name?: string; share?: string }): v
   }
 
   const shareTypes = parseShareTypes(opts.share ?? 'spec,knowhow,domain');
+  const writeTypes = opts.write ? parseShareTypes(opts.write) : [];
   const name = opts.name ?? basename(resolvedTarget);
 
+  if (name === CURRENT_REPOSITORY_ALIAS) {
+    console.error('Error: workspace alias "current" is reserved.');
+    process.exit(1);
+  }
   if (!name || /[^a-zA-Z0-9_-]/.test(name)) {
     console.error(`Error: workspace name must be alphanumeric with hyphens/underscores (got "${name}")`);
+    process.exit(1);
+  }
+
+  for (const corpus of writeTypes) {
+    if (!shareTypes.includes(corpus)) {
+      console.error(`Error: write capability "${corpus}" also requires read sharing for that corpus.`);
+      process.exit(1);
+    }
+  }
+
+  const targetIdentity = readRepositoryIdentity(resolvedTarget);
+  if (writeTypes.length > 0 && !targetIdentity) {
+    console.error('Error: linked writes require a persisted target repository identity.');
+    console.error(`Run 'maestro workspace identity init' in ${resolvedTarget} first.`);
+    process.exit(1);
+  }
+  const currentIdentity = readRepositoryIdentity(projectPath);
+  if (currentIdentity && targetIdentity?.repo_id === currentIdentity.repo_id) {
+    console.error('Error: target has the same stable repository identity as the current repository.');
+    console.error('If this is an intentional fork, explicitly reseed one copy first.');
     process.exit(1);
   }
 
@@ -58,12 +91,20 @@ function runLink(targetPath: string, opts: { name?: string; share?: string }): v
     process.exit(1);
   }
 
-  config.linked.push({ name, path: targetPath, share: shareTypes as WorkspaceShareType[] });
+  config.linked.push({
+    name,
+    path: targetPath,
+    share: shareTypes,
+    write: writeTypes,
+    ...(targetIdentity ? { repo_id: targetIdentity.repo_id } : {}),
+  });
   saveWorkspaceConfig(projectPath, config);
 
   console.log(`Linked workspace "${name}"`);
   console.log(`  Path:  ${targetPath} → ${resolvedTarget}`);
-  console.log(`  Share: ${shareTypes.join(', ')}`);
+  console.log(`  Read:  ${shareTypes.join(', ')}`);
+  console.log(`  Write: ${writeTypes.length > 0 ? writeTypes.join(', ') : '(none)'}`);
+  console.log(`  Repo:  ${targetIdentity?.repo_id ?? '(legacy identity not persisted)'}`);
 }
 
 // ---------------------------------------------------------------------------
@@ -90,6 +131,86 @@ function runUnlink(name: string): void {
 }
 
 // ---------------------------------------------------------------------------
+// explicit linked write authorization
+// ---------------------------------------------------------------------------
+
+function mutateWriteCapabilities(
+  name: string,
+  typesInput: string,
+  operation: 'grant' | 'revoke',
+): void {
+  const projectPath = canonicalizeRepositoryRoot(process.cwd());
+  const configPath = join(projectPath, '.workflow', 'config.json');
+  const release = acquireFileLocksSync([configPath]);
+  try {
+    const config = loadWorkspaceConfig(projectPath);
+    const link = config.linked.find(item => item.name === name || item.repo_id === name);
+    if (!link) throw new Error(`Linked repository not found: ${name}`);
+    const types = parseShareTypes(typesInput);
+    if (operation === 'grant') {
+      const inspected = resolveWorkspaceLinks(projectPath, { linked: [link] })[0];
+      if (!inspected.valid || !inspected.identityPersisted || !inspected.repoId) {
+        throw new Error(inspected.error ?? 'Linked writes require a valid persisted target identity');
+      }
+      for (const corpus of types) {
+        if (!link.share.includes(corpus)) {
+          throw new Error(`Write capability "${corpus}" also requires read sharing for that corpus`);
+        }
+      }
+      link.repo_id = inspected.repoId;
+      link.write = [...new Set([...(link.write ?? []), ...types])];
+    } else {
+      const revoked = new Set(types);
+      link.write = (link.write ?? []).filter(corpus => !revoked.has(corpus));
+    }
+    saveWorkspaceConfig(projectPath, config);
+    console.log(`${operation === 'grant' ? 'Granted' : 'Revoked'} linked write capability for "${link.name}".`);
+    console.log(`  Write: ${(link.write ?? []).length > 0 ? (link.write ?? []).join(', ') : '(none)'}`);
+  } finally {
+    release();
+  }
+}
+
+function runWriteStatus(name: string | undefined, opts: { json?: boolean }): void {
+  const projectPath = canonicalizeRepositoryRoot(process.cwd());
+  const resolved = resolveWorkspaceLinks(projectPath, loadWorkspaceConfig(projectPath))
+    .filter(link => !name || link.name === name || link.repoId === name)
+    .map(link => ({
+      name: link.name,
+      repo_id: link.repoId,
+      valid: link.valid,
+      shared: link.share,
+      write: link.write ?? [],
+      identity_persisted: link.identityPersisted,
+      ...(link.error ? { error: link.error } : {}),
+    }));
+  if (name && resolved.length === 0) throw new Error(`Linked repository not found: ${name}`);
+  if (opts.json) {
+    console.log(JSON.stringify(resolved, null, 2));
+    return;
+  }
+  if (resolved.length === 0) {
+    console.log('No linked workspaces.');
+    return;
+  }
+  for (const entry of resolved) {
+    console.log(`${entry.name} (${entry.repo_id ?? 'legacy identity not persisted'})`);
+    console.log(`  Shared: ${entry.shared.length > 0 ? entry.shared.join(', ') : '(none)'}`);
+    console.log(`  Write:  ${entry.write.length > 0 ? entry.write.join(', ') : '(none)'}`);
+    console.log(`  Status: ${entry.valid ? 'valid' : `invalid${entry.error ? ` — ${entry.error}` : ''}`}`);
+  }
+}
+
+function reportWorkspaceAction(action: () => void): void {
+  try {
+    action();
+  } catch (error) {
+    console.error(`Error: ${error instanceof Error ? error.message : String(error)}`);
+    process.exitCode = 1;
+  }
+}
+
+// ---------------------------------------------------------------------------
 // list
 // ---------------------------------------------------------------------------
 
@@ -113,7 +234,10 @@ function runList(opts: { json?: boolean }): void {
     const status = lw.valid ? '\x1b[32m✓\x1b[0m' : '\x1b[31m✗ missing\x1b[0m';
     console.log(`  ${status}  ${lw.name}`);
     console.log(`       Path:  ${lw.path} → ${lw.resolvedPath}`);
-    console.log(`       Share: ${lw.share.join(', ')}`);
+    console.log(`       Read:  ${lw.share.join(', ')}`);
+    console.log(`       Write: ${(lw.write ?? []).length > 0 ? (lw.write ?? []).join(', ') : '(none)'}`);
+    console.log(`       Repo:  ${lw.repoId ?? '(legacy identity not persisted)'}`);
+    if (lw.error) console.log(`       Error: ${lw.error}`);
   }
 }
 
@@ -123,6 +247,7 @@ function runList(opts: { json?: boolean }): void {
 
 async function runStatus(opts: { json?: boolean }): Promise<void> {
   const projectPath = process.cwd();
+  const currentIdentity = readRepositoryIdentity(projectPath);
   const config = loadWorkspaceConfig(projectPath);
   const resolved = resolveWorkspaceLinks(projectPath, config);
 
@@ -134,6 +259,11 @@ async function runStatus(opts: { json?: boolean }): Promise<void> {
       path: lw.resolvedPath,
       valid: lw.valid,
       share: lw.share,
+      write: lw.write ?? [],
+      repo_id: lw.repoId,
+      repo_name: lw.repoName,
+      identity_persisted: lw.identityPersisted,
+      ...(lw.error ? { error: lw.error } : {}),
     };
 
     if (lw.valid) {
@@ -152,6 +282,8 @@ async function runStatus(opts: { json?: boolean }): Promise<void> {
     return;
   }
 
+  console.log(`Current repository: ${currentIdentity?.repo_name ?? basename(resolve(projectPath))}`);
+  console.log(`  Repo ID: ${currentIdentity?.repo_id ?? '(legacy identity not persisted)'}`);
   if (statuses.length === 0) {
     console.log('No linked workspaces.');
     return;
@@ -173,15 +305,15 @@ async function runStatus(opts: { json?: boolean }): Promise<void> {
 // Helpers
 // ---------------------------------------------------------------------------
 
-function parseShareTypes(input: string): ExplicitWorkspaceShareType[] {
+function parseShareTypes(input: string): WorkspaceCorpus[] {
   const parts = input.split(',').map(s => s.trim()).filter(Boolean);
-  const result: ExplicitWorkspaceShareType[] = [];
+  const result: WorkspaceCorpus[] = [];
   for (const p of parts) {
-    if (!VALID_SHARE_TYPES.includes(p as ExplicitWorkspaceShareType)) {
+    if (!VALID_SHARE_TYPES.includes(p as WorkspaceCorpus)) {
       console.error(`Error: invalid share type "${p}". Valid: ${VALID_SHARE_TYPES.join(', ')}`);
       process.exit(1);
     }
-    result.push(p as ExplicitWorkspaceShareType);
+    if (!result.includes(p as WorkspaceCorpus)) result.push(p as WorkspaceCorpus);
   }
   if (result.length === 0) {
     console.error('Error: at least one share type is required.');
@@ -251,6 +383,53 @@ function countMdRecursive(dir: string): number {
 }
 
 // ---------------------------------------------------------------------------
+// identity
+// ---------------------------------------------------------------------------
+
+function runIdentityInit(opts: { name?: string; json?: boolean }): void {
+  const manifest = initializeRepositoryIdentity(process.cwd(), { repoName: opts.name });
+  if (opts.json) console.log(JSON.stringify(manifest, null, 2));
+  else {
+    console.log('Repository identity initialized.');
+    console.log(`  ID:      ${manifest.repo_id}`);
+    console.log(`  Name:    ${manifest.repo_name}`);
+    console.log(`  Created: ${manifest.created_at}`);
+  }
+}
+
+function runIdentityShow(opts: { json?: boolean }): void {
+  const identity = readRepositoryIdentity(process.cwd());
+  if (!identity) {
+    console.error('Error: repository identity is not initialized.');
+    console.error("Run 'maestro workspace identity init' first.");
+    process.exit(1);
+  }
+  if (opts.json) console.log(JSON.stringify(identity, null, 2));
+  else {
+    console.log('Repository identity:');
+    console.log(`  ID:      ${identity.repo_id}`);
+    console.log(`  Name:    ${identity.repo_name}`);
+    console.log(`  Created: ${identity.created_at}`);
+  }
+}
+
+function runIdentityReseed(opts: { name?: string; force?: boolean; json?: boolean }): void {
+  if (!opts.force) {
+    console.error('Error: reseeding changes stable repository identity and can invalidate every cached link.');
+    console.error('Re-run with --force only for an intentional fork.');
+    process.exit(1);
+  }
+  const result = reseedRepositoryIdentity(process.cwd(), { repoName: opts.name });
+  if (opts.json) console.log(JSON.stringify(result, null, 2));
+  else {
+    console.log('Repository identity reseeded (high-impact operation).');
+    console.log(`  Previous: ${result.previous?.repo_id ?? '(none)'}`);
+    console.log(`  Current:  ${result.current.repo_id}`);
+    console.log('  Diagnostic: linked repositories caching the previous ID will now fail closed.');
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Registration
 // ---------------------------------------------------------------------------
 
@@ -263,12 +442,45 @@ export function registerWorkspaceCommand(program: Command): void {
   ws.command('link <path>')
     .description('Link another Maestro workspace for knowledge sharing')
     .option('--name <name>', 'Workspace name (defaults to directory basename)')
-    .option('--share <types>', 'Comma-separated share types: spec,knowhow,domain,codebase,session', 'spec,knowhow,domain')
+    .option('--share <types>', 'Comma-separated read capabilities: spec,knowhow,domain,codebase,session', 'spec,knowhow,domain')
+    .option('--write <types>', 'Comma-separated write capabilities (must also be shared for reads)')
     .action((path: string, opts) => runLink(path, opts));
 
   ws.command('unlink <name>')
     .description('Remove a linked workspace')
     .action((name: string) => runUnlink(name));
+
+  ws.command('grant <name>')
+    .description('Explicitly grant linked write capability per corpus type')
+    .requiredOption('--write <types>', 'Comma-separated corpus types to grant')
+    .action((name: string, opts: { write: string }) => reportWorkspaceAction(
+      () => mutateWriteCapabilities(name, opts.write, 'grant'),
+    ));
+
+  ws.command('revoke <name>')
+    .description('Immediately revoke linked write capability per corpus type')
+    .requiredOption('--write <types>', 'Comma-separated corpus types to revoke')
+    .action((name: string, opts: { write: string }) => reportWorkspaceAction(
+      () => mutateWriteCapabilities(name, opts.write, 'revoke'),
+    ));
+
+  const write = ws.command('write').description('Manage explicit linked write authorization');
+  write.command('grant <name> <types>')
+    .description('Grant comma-separated corpus write capabilities')
+    .action((name: string, types: string) => reportWorkspaceAction(
+      () => mutateWriteCapabilities(name, types, 'grant'),
+    ));
+  write.command('revoke <name> <types>')
+    .description('Revoke comma-separated corpus write capabilities')
+    .action((name: string, types: string) => reportWorkspaceAction(
+      () => mutateWriteCapabilities(name, types, 'revoke'),
+    ));
+  write.command('status [name]')
+    .description('Show effective linked write capabilities')
+    .option('--json', 'Output as JSON')
+    .action((name: string | undefined, opts: { json?: boolean }) => reportWorkspaceAction(
+      () => runWriteStatus(name, opts),
+    ));
 
   ws.command('list')
     .alias('ls')
@@ -280,4 +492,21 @@ export function registerWorkspaceCommand(program: Command): void {
     .description('Show detailed status of linked workspaces')
     .option('--json', 'Output as JSON')
     .action(async (opts) => runStatus(opts));
+
+  const identity = ws.command('identity').description('Manage stable repository identity');
+  identity.command('init')
+    .description('Persist a random stable identity for this repository')
+    .option('--name <name>', 'Repository display name')
+    .option('--json', 'Output as JSON')
+    .action((opts) => runIdentityInit(opts));
+  identity.command('show')
+    .description('Show the persisted repository identity')
+    .option('--json', 'Output as JSON')
+    .action((opts) => runIdentityShow(opts));
+  identity.command('reseed')
+    .description('Explicitly assign a new identity to an intentional fork')
+    .option('--name <name>', 'Repository display name')
+    .option('--force', 'Acknowledge that cached links will be invalidated')
+    .option('--json', 'Output as JSON')
+    .action((opts) => runIdentityReseed(opts));
 }

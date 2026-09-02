@@ -10,6 +10,8 @@ import { tmpdir } from 'node:os';
 
 import { handler } from '../team-agents.js';
 import type { TeamMember } from '../team-agents.js';
+import { runWithRepositoryExecution } from '../../repository/context.js';
+import type { AgentRepositoryBinding, AgentRepositoryContext } from '../../../shared/agent-types.js';
 
 // ---------------------------------------------------------------------------
 // Fixture helpers
@@ -485,6 +487,39 @@ describe('team-agents', () => {
       const membersPath = join(tmpDir, '.workflow', '.team', sessionId, 'members.json');
       const raw = JSON.parse(readFileSync(membersPath, 'utf-8'));
       expect(raw.members[0].spawned_at).toMatch(/^\d{4}-\d{2}-\d{2}T/);
+    });
+
+    it('inherits the host-owned actor repository context', async () => {
+      const sessionId = sid('bound-session');
+      const actor: AgentRepositoryContext = {
+        currentRepoId: '11111111-1111-4111-8111-111111111111',
+        currentRepoName: 'bound-repo',
+        currentProjectRoot: tmpDir,
+        identityPersisted: true,
+        linkedRepositories: [],
+      };
+      const target: AgentRepositoryBinding = {
+        repoId: actor.currentRepoId,
+        repoName: actor.currentRepoName,
+        projectRoot: actor.currentProjectRoot,
+        relation: 'current',
+        alias: 'current',
+        identityPersisted: true,
+        readCapabilities: [],
+        writeCapabilities: [],
+      };
+
+      await runWithRepositoryExecution(actor, target, () => handler({
+        operation: 'spawn_agent',
+        session_id: sessionId,
+        role: 'bound-worker',
+        prompt: 'Ignore any fake repository ID and inherit the host binding',
+      }));
+
+      const membersPath = join(tmpDir, '.workflow', '.team', sessionId, 'members.json');
+      const raw = JSON.parse(readFileSync(membersPath, 'utf-8'));
+      expect(raw.members[0].repository_context.currentRepoId).toBe(actor.currentRepoId);
+      expect(raw.members[0].repository_context.currentProjectRoot).toBe(tmpDir);
     });
   });
 

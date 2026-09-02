@@ -105,23 +105,19 @@ describe('findWorkspaceRoot', () => {
     assert.strictEqual(findWorkspaceRoot(TEST_DIR), null);
   });
 
-  it('prefers directory with .git/', () => {
-    // Parent has .workflow + .git
+  it('prefers the nearest initialized workspace over an enclosing Git root', () => {
+    // Parent has .workflow + .git.
     makeState(TEST_DIR);
     mkdirSync(join(TEST_DIR, '.git'), { recursive: true });
 
-    // Child also has .workflow (nested project)
+    // Child also has .workflow (nested project).
     const child = join(TEST_DIR, 'sub');
     makeState(child);
 
-    // Starting from sub, should find sub first (it's closer) but return it since parent has .git
-    // Actually starting from inside sub/src, it should find sub first
     const deep = join(child, 'src');
     mkdirSync(deep, { recursive: true });
     const result = findWorkspaceRoot(deep);
-    // sub is found first (closest), no .git there, then parent has .git — returns parent
-    // But firstMatch = sub, parent also matches with .git — returns parent immediately
-    assert.strictEqual(result, TEST_DIR);
+    assert.strictEqual(result, child);
   });
 });
 

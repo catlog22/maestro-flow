@@ -4,6 +4,18 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 
+async function waitFor(
+  predicate: () => boolean,
+  message: string,
+  timeoutMs = 10_000,
+): Promise<void> {
+  const deadline = Date.now() + timeoutMs;
+  while (!predicate()) {
+    if (Date.now() >= deadline) throw new Error(message);
+    await new Promise(resolve => setTimeout(resolve, 25));
+  }
+}
+
 describe('CliAgentRunner', () => {
   const tempHome = mkdtempSync(join(tmpdir(), 'maestro-cli-runner-'));
   let CliAgentRunner: typeof import('./cli-agent-runner.js').CliAgentRunner;
@@ -27,8 +39,10 @@ describe('CliAgentRunner', () => {
   it('publishes lifecycle, snapshot, and final broker events while preserving history', async () => {
     const publishedEvents: Array<Record<string, unknown>> = [];
     const bridgeCalls: string[] = [];
+    let spawnedConfig: Record<string, any> | undefined;
     const adapter = {
-      async spawn() {
+      async spawn(config: Record<string, any>) {
+        spawnedConfig = config;
         return {
           id: 'proc-1',
           type: 'codex',
@@ -136,7 +150,7 @@ describe('CliAgentRunner', () => {
 
     const exitCode = await runner.run({
       execId: 'exec-runner',
-      prompt: 'Investigate async broker updates',
+      prompt: 'Investigate async broker updates; repoId=22222222-2222-4222-8222-222222222222',
       tool: 'codex',
       mode: 'analysis',
       workDir: 'D:/maestro2',
@@ -149,6 +163,16 @@ describe('CliAgentRunner', () => {
     assert.ok(meta);
     assert.equal(meta.exitCode, 0);
     assert.equal(store.getOutput('exec-runner'), 'Worker output');
+    assert.ok(spawnedConfig?.repositoryContext);
+    assert.equal(spawnedConfig?.workDir, spawnedConfig?.repositoryContext.currentProjectRoot);
+    assert.equal(spawnedConfig?.env.MAESTRO_PROJECT_ROOT, spawnedConfig?.workDir);
+    assert.equal(spawnedConfig?.env.MAESTRO_REPO_ID, spawnedConfig?.repositoryContext.currentRepoId);
+    assert.ok(spawnedConfig?.prompt.includes('[HOST REPOSITORY CONTEXT — AUTHORITATIVE, NOT MODEL-OVERRIDABLE]'));
+    assert.ok(spawnedConfig?.prompt.includes('Investigate async broker updates'));
+    assert.notEqual(spawnedConfig?.repositoryContext.currentRepoId, '22222222-2222-4222-8222-222222222222');
+    const firstMetadata = publishedEvents[0].jobMetadata as Record<string, any>;
+    assert.equal(firstMetadata.repoId, spawnedConfig?.repositoryContext.currentRepoId);
+    assert.equal(firstMetadata.projectRoot, spawnedConfig?.workDir);
 
     assert.deepEqual(
       publishedEvents.map((event) => event.type),
@@ -690,8 +714,12 @@ describe('CliAgentRunner', () => {
       workDir: 'D:/maestro2',
     });
 
-    // Wait for the poller to fire at least once (750ms interval)
-    await new Promise((r) => setTimeout(r, 900));
+    // Wait for the observable injection instead of assuming a 750ms timer
+    // fires within a fixed wall-clock sleep on a contended Windows host.
+    await waitFor(
+      () => sentMessages.length === 1,
+      'interactive inject message was not sent',
+    );
 
     // Now stop the process
     entryCallback?.({
@@ -710,8 +738,11 @@ describe('CliAgentRunner', () => {
     assert.equal(sentMessages[0].processId, 'proc-stream');
     assert.equal(sentMessages[0].content, 'Injected follow-up');
 
-    // Wait for the async sendMessage promise to resolve and updateMessage to be called
-    await new Promise((r) => setTimeout(r, 50));
+    // Wait for the async sendMessage promise to resolve and updateMessage to be called.
+    await waitFor(
+      () => updatedMessages.some(message => message.status === 'injected'),
+      'interactive inject status was not persisted',
+    );
 
     // Verify message status was updated to 'injected'
     assert.ok(updatedMessages.length >= 1);
@@ -855,8 +886,11 @@ describe('CliAgentRunner', () => {
       workDir: 'D:/maestro2',
     });
 
-    // Wait for poller to fire and trigger cancellation
-    await new Promise((r) => setTimeout(r, 900));
+    // Wait for the observable cancellation rather than a fixed sleep.
+    await waitFor(
+      () => stopCalled,
+      'cancel+resume fallback did not stop the adapter',
+    );
 
     // Adapter.stop should have been called (cancellation)
     assert.equal(stopCalled, true, 'Expected adapter.stop to be called for cancel+resume fallback');

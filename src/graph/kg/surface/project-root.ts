@@ -1,14 +1,15 @@
 /**
  * Canonical project-root resolution for KG CLI commands.
  *
- * Hooks already resolve a Maestro workspace before touching KG state. The CLI
- * must use the same boundary so invoking it from a nested source directory
- * cannot create or query a shadow `.workflow/kg` directory.
+ * KG uses an explicit project-root override or the containing Git worktree as
+ * its implicit boundary, so invoking it from a nested source directory cannot
+ * create or query a shadow `.workflow/kg` directory. Outside Git, it follows
+ * the shared nearest-workspace resolver used by hooks.
  */
 
 import { execFileSync } from 'node:child_process';
 import { existsSync, realpathSync } from 'node:fs';
-import { dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
 import { resolveWorkspace } from '../../../hooks/workspace.js';
 
 function canonicalPath(path: string): string {
@@ -34,12 +35,6 @@ function findGitRoot(startDir: string): string | null {
   }
 }
 
-function isWithinRoot(candidate: string, root: string): boolean {
-  const relativePath = relative(root, candidate);
-  return relativePath === ''
-    || (!isAbsolute(relativePath) && relativePath !== '..' && !relativePath.startsWith(`..${sep}`));
-}
-
 function findExternalManifestRoot(startDir: string): string | null {
   let dir = startDir;
   while (true) {
@@ -55,23 +50,24 @@ function findExternalManifestRoot(startDir: string): string | null {
 /**
  * Resolve the repository root for a KG CLI command.
  *
- * An initialized Maestro workspace wins because it is the same resolver used
- * by hooks. Before a workspace exists, `kg init` and other CLI actions use
- * the containing Git worktree; non-Git callers retain the historical cwd
- * fallback.
+ * `MAESTRO_PROJECT_ROOT` is an explicit, hard boundary. Without an override,
+ * KG state follows the containing Git worktree so nested source directories
+ * cannot create or query a shadow database. Outside Git, use the nearest
+ * initialized Maestro workspace, then the external-surface manifest or cwd
+ * fallback for an uninitialized project.
  */
 export function resolveKgCliProjectRoot(startDir = process.cwd()): string {
-  const cwd = canonicalPath(startDir);
-  const workspace = resolveWorkspace({ cwd });
-  const gitRoot = findGitRoot(cwd);
-  if (workspace) {
-    const canonicalWorkspace = canonicalPath(workspace);
-    if (!gitRoot || isWithinRoot(canonicalWorkspace, gitRoot)) {
-      return canonicalWorkspace;
-    }
-  }
+  const explicitRoot = process.env.MAESTRO_PROJECT_ROOT;
+  if (explicitRoot) return canonicalPath(explicitRoot);
 
-  return gitRoot ?? findExternalManifestRoot(cwd) ?? cwd;
+  const cwd = canonicalPath(startDir);
+  const gitRoot = findGitRoot(cwd);
+  if (gitRoot) return gitRoot;
+
+  const workspace = resolveWorkspace({ cwd });
+  if (workspace) return canonicalPath(workspace);
+
+  return findExternalManifestRoot(cwd) ?? cwd;
 }
 
 /**

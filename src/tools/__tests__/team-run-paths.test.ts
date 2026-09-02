@@ -1,4 +1,4 @@
-import { existsSync, mkdtempSync, rmSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
@@ -9,6 +9,17 @@ import { resolveTeamWorkPath } from '../team-run-paths.js';
 
 const roots: string[] = [];
 let previousProjectRoot: string | undefined;
+
+function v2Workspace(root: string): void {
+  mkdirSync(join(root, '.workflow'), { recursive: true });
+  writeFileSync(join(root, '.workflow', 'config.json'), JSON.stringify({
+    session_schema: {
+      schema_version: 'session-schema-selection/1.0',
+      writer: 'session/1.3',
+      features: { session_statusless: false },
+    },
+  }));
+}
 
 afterEach(() => {
   if (previousProjectRoot === undefined) delete process.env.MAESTRO_PROJECT_ROOT;
@@ -23,6 +34,7 @@ describe('team Run path resolver', () => {
   it('binds a canonical Run ID to run_dir/work/team', () => {
     const projectRoot = mkdtempSync(join(tmpdir(), 'team-run-paths-'));
     roots.push(projectRoot);
+    v2Workspace(projectRoot);
     const created = createRun({
       projectRoot,
       command: 'team-test',
@@ -50,6 +62,7 @@ describe('team Run path resolver', () => {
   it('persists team messages under the Run work directory', async () => {
     const projectRoot = mkdtempSync(join(tmpdir(), 'team-run-paths-'));
     roots.push(projectRoot);
+    v2Workspace(projectRoot);
     previousProjectRoot = process.env.MAESTRO_PROJECT_ROOT;
     process.env.MAESTRO_PROJECT_ROOT = projectRoot;
     const created = createRun({

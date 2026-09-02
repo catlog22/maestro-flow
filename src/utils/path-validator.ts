@@ -8,6 +8,7 @@
 import { resolve, isAbsolute, normalize, relative, sep } from 'path';
 import { realpath, access } from 'fs/promises';
 import { constants } from 'fs';
+import { findRepositoryRoot, getActiveRepositoryExecution } from '../repository/context.js';
 
 // Environment variable configuration
 const ENV_PROJECT_ROOT = 'MAESTRO_PROJECT_ROOT';
@@ -24,11 +25,15 @@ export function isSandboxEnabled(): boolean {
 }
 
 /**
- * Get project root directory
- * Priority: MAESTRO_PROJECT_ROOT > process.cwd()
+ * Get the canonical repository boundary.
+ * Priority remains MAESTRO_PROJECT_ROOT > process.cwd(), but nested cwd/env
+ * values now converge on the same realpath-resolved `.workflow` carrier.
  */
 export function getProjectRoot(): string {
-  return process.env[ENV_PROJECT_ROOT] || process.cwd();
+  const activeRoot = getActiveRepositoryExecution()?.target.projectRoot;
+  if (activeRoot) return activeRoot;
+  const start = process.env[ENV_PROJECT_ROOT] || process.cwd();
+  return findRepositoryRoot(start) ?? resolve(start);
 }
 
 /**

@@ -9,6 +9,8 @@ import {
   launchDetachedDelegateWorker,
   type DelegateExecutionRequest,
 } from '../commands/delegate.js';
+import type { AgentRepositoryContext } from '../../shared/agent-types.js';
+import { resolveAgentRepositoryContext } from '../repository/context.js';
 import {
   deriveExecutionStatus,
   deriveDelegateStatus,
@@ -90,9 +92,23 @@ export function buildDelegateRequestFromState(
     : null;
   const mode: 'analysis' | 'write' | null = metaMode ?? metadataMode;
   const workDir = meta?.workDir ?? (typeof metadata?.workDir === 'string' ? metadata.workDir : null);
-  if (!tool || !mode || !workDir) {
-    return null;
+  const rawRepositoryContext = metadata?.repositoryContext;
+  let repositoryContext = rawRepositoryContext
+    && typeof rawRepositoryContext === 'object'
+    && typeof (rawRepositoryContext as Partial<AgentRepositoryContext>).currentProjectRoot === 'string'
+    ? rawRepositoryContext as unknown as AgentRepositoryContext
+    : null;
+  if (!tool || !mode || !workDir) return null;
+  if (!repositoryContext) {
+    try {
+      repositoryContext = resolveAgentRepositoryContext(workDir, {
+        allowLegacyReadFallback: mode === 'analysis',
+      });
+    } catch {
+      return null;
+    }
   }
+  if (mode === 'write' && (!repositoryContext.currentRepoId || !repositoryContext.identityPersisted)) return null;
 
   return {
     prompt: message,
@@ -106,6 +122,7 @@ export function buildDelegateRequestFromState(
     includeDirs: readStringArray(metadata?.includeDirs),
     sessionId: typeof metadata?.sessionId === 'string' ? metadata.sessionId : undefined,
     backend: metadata?.backend === 'terminal' ? 'terminal' : 'direct',
+    repositoryContext,
   };
 }
 

@@ -106,7 +106,14 @@ describe('DelegateBrokerMonitor', () => {
         metadata: {
           tool: 'pi',
           prompt: 'Inspect async delegate',
-          workDir: 'D:/maestro2',
+          workDir: 'D:/untrusted-broker-cwd',
+          repositoryContext: {
+            currentRepoId: '11111111-1111-4111-8111-111111111111',
+            currentRepoName: 'maestro2',
+            currentProjectRoot: 'D:/maestro2',
+            identityPersisted: true,
+            linkedRepositories: [],
+          },
           queuedMessages: [
             {
               messageId: 'msg-2',
@@ -136,10 +143,16 @@ describe('DelegateBrokerMonitor', () => {
     const spawned = eventBus
       .getRecentEvents(10, 'agent:spawned')
       .find((event) => (event.data as { id?: string }).id === 'cli-history-job-1')
-      ?.data as { type?: string; interactive?: boolean } | undefined;
+      ?.data as {
+        type?: string;
+        interactive?: boolean;
+        config?: { workDir?: string; repositoryContext?: { currentRepoId?: string } };
+      } | undefined;
     expect(spawned).toBeTruthy();
     expect(spawned?.type).toBe('pi');
     expect(spawned?.interactive).toBe(true);
+    expect(spawned?.config?.workDir).toBe('D:/maestro2');
+    expect(spawned?.config?.repositoryContext?.currentRepoId).toBe('11111111-1111-4111-8111-111111111111');
 
     const entries = agentManager.getEntries('cli-history-job-1');
     expect(entries.some((entry) => entry.type === 'user_message' && 'content' in entry && entry.content === 'Inspect async delegate')).toBe(true);

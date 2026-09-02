@@ -1,7 +1,13 @@
 import type { AgentManager } from './agent-manager.js';
 import { EntryNormalizer } from './entry-normalizer.js';
 import type { DashboardEventBus } from '../state/event-bus.js';
-import type { AgentProcess, AgentType, AgentProcessStatus, NormalizedEntry } from '../../shared/agent-types.js';
+import type {
+  AgentProcess,
+  AgentType,
+  AgentProcessStatus,
+  NormalizedEntry,
+  AgentRepositoryContext,
+} from '../../shared/agent-types.js';
 import {
   DelegateBrokerClient,
   type DelegateBrokerApi,
@@ -135,11 +141,23 @@ function buildFollowUpReason(prefix: string, queuedMessage: DelegateQueuedMessag
   return `${prefix} (${queuedMessage.delivery})`;
 }
 
+function readRepositoryContext(value: unknown): AgentRepositoryContext | undefined {
+  if (!value || typeof value !== 'object') return undefined;
+  const context = value as Partial<AgentRepositoryContext>;
+  if (typeof context.currentRepoName !== 'string'
+    || typeof context.currentProjectRoot !== 'string'
+    || !Array.isArray(context.linkedRepositories)) return undefined;
+  if (context.currentRepoId !== null && typeof context.currentRepoId !== 'string') return undefined;
+  return context as AgentRepositoryContext;
+}
+
 function buildProcess(jobId: string, job: DelegateJobRecord | null, event: DelegateJobEvent): AgentProcess {
   const metadata = job?.metadata ?? event.metadata ?? {};
   const tool = readString(metadata.tool);
   const prompt = readString(metadata.prompt) ?? `Delegated job ${jobId}`;
-  const workDir = readString(metadata.workDir) ?? process.cwd();
+  const repositoryContext = readRepositoryContext(metadata.repositoryContext);
+  // Compatibility display may use recorded workDir, but never unrelated monitor cwd.
+  const workDir = repositoryContext?.currentProjectRoot ?? readString(metadata.workDir) ?? '';
   const model = readString(metadata.model);
   const processId = buildProcessId(jobId);
   const processStatus = mapStatus(job, event);
@@ -153,6 +171,10 @@ function buildProcess(jobId: string, job: DelegateJobRecord | null, event: Deleg
       prompt,
       workDir,
       ...(model ? { model } : {}),
+      ...(repositoryContext ? {
+        repositoryContext,
+        metadata: { repositoryContext },
+      } : {}),
     },
     startedAt: job?.createdAt ?? event.createdAt,
     interactive: true,

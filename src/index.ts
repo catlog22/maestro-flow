@@ -35,6 +35,7 @@ export type { DisabledItem } from './commands/install-backend.js';
 export { ADDON_REGISTRY, HARNESS_DIRS } from './core/addon-registry.js';
 export type { AddonDef, AddonTarget, HarnessType } from './core/addon-registry.js';
 export type * from './types/index.js';
+export * from './repository/context.js';
 
 // KG public API
 export { MaestroGraph } from './graph/kg/engine.js';

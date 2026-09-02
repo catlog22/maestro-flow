@@ -1,7 +1,9 @@
 import { readFileSync, existsSync, writeFileSync } from 'node:fs';
-import { join, resolve } from 'node:path';
+import { join } from 'node:path';
 import { paths } from './paths.js';
 import type { MaestroConfig, HooksConfig, SpecInjectionConfig, SpecAnalyticsConfig, WorkspaceConfig, WorkspaceLink } from '../types/index.js';
+import { inspectWorkspaceLink } from '../repository/context.js';
+import { updateFileAtomic } from '../utils/atomic-write.js';
 
 const DEFAULT_CONFIG: MaestroConfig = {
   version: '0.1.0',
@@ -85,6 +87,10 @@ export interface ResolvedWorkspaceLink extends WorkspaceLink {
   resolvedPath: string;
   workflowRoot: string;
   valid: boolean;
+  identityPersisted: boolean;
+  repoId: string | null;
+  repoName: string;
+  error?: string;
 }
 
 export function loadWorkspaceConfig(projectPath: string): WorkspaceConfig {
@@ -93,7 +99,15 @@ export function loadWorkspaceConfig(projectPath: string): WorkspaceConfig {
   try {
     const raw = JSON.parse(readFileSync(configPath, 'utf-8'));
     const ws = raw.workspaces as WorkspaceConfig | undefined;
-    return ws && Array.isArray(ws.linked) ? ws : { linked: [] };
+    if (!ws || !Array.isArray(ws.linked)) return { linked: [] };
+    return {
+      linked: ws.linked.map(link => ({
+        ...link,
+        share: Array.isArray(link.share) ? link.share : [],
+        // Legacy links remain readable but never acquire write authority.
+        write: Array.isArray(link.write) ? link.write : [],
+      })),
+    };
   } catch {
     return { linked: [] };
   }
@@ -101,23 +115,33 @@ export function loadWorkspaceConfig(projectPath: string): WorkspaceConfig {
 
 export function saveWorkspaceConfig(projectPath: string, config: WorkspaceConfig): void {
   const configPath = join(projectPath, '.workflow', 'config.json');
-  let existing: Record<string, unknown> = {};
-  try {
-    existing = JSON.parse(readFileSync(configPath, 'utf-8'));
-  } catch {
-    // Start fresh
-  }
-  existing['workspaces'] = config;
   paths.ensure(join(projectPath, '.workflow'));
-  writeFileSync(configPath, JSON.stringify(existing, null, 2), 'utf-8');
+  updateFileAtomic(configPath, current => {
+    let existing: Record<string, unknown> = {};
+    try {
+      existing = current ? JSON.parse(current) : {};
+    } catch {
+      // Preserve historical recovery behavior for malformed project config.
+    }
+    existing['workspaces'] = config;
+    return JSON.stringify(existing, null, 2);
+  });
 }
 
 export function resolveWorkspaceLinks(projectPath: string, config: WorkspaceConfig): ResolvedWorkspaceLink[] {
+  const aliasCounts = new Map<string, number>();
+  for (const link of config.linked) aliasCounts.set(link.name, (aliasCounts.get(link.name) ?? 0) + 1);
   return config.linked.map(link => {
-    const resolvedPath = resolve(projectPath, link.path);
-    const workflowRoot = join(resolvedPath, '.workflow');
-    const valid = existsSync(workflowRoot);
-    return { ...link, resolvedPath, workflowRoot, valid };
+    const inspected = inspectWorkspaceLink(projectPath, link);
+    if ((aliasCounts.get(link.name) ?? 0) > 1) {
+      inspected.valid = false;
+      inspected.error = `Ambiguous linked repository alias: ${link.name}`;
+    }
+    return {
+      ...link,
+      write: link.write ?? [],
+      ...inspected,
+    };
   });
 }
 

@@ -8,8 +8,14 @@
  * regardless of the working directory Claude Code reports.
  */
 
-import { existsSync, readFileSync } from 'node:fs';
-import { join, dirname } from 'node:path';
+import { existsSync, readFileSync, realpathSync } from 'node:fs';
+import { join } from 'node:path';
+import {
+  canonicalizeRepositoryRoot,
+  findRepositoryRoot,
+  isPathContained,
+  readRepositoryIdentity,
+} from '../repository/context.js';
 
 /**
  * Check if a `.workflow/` directory is a Maestro workspace by verifying
@@ -19,6 +25,18 @@ import { join, dirname } from 'node:path';
  * state init.
  */
 export function isMaestroWorkspace(dir: string): boolean {
+  try {
+    const root = canonicalizeRepositoryRoot(dir);
+    const workflowPath = join(root, '.workflow');
+    if (!existsSync(workflowPath) || !isPathContained(realpathSync(workflowPath), root)) return false;
+    if (existsSync(join(workflowPath, 'repository.json'))) {
+      // Parsing here makes malformed identities fail closed at the root boundary.
+      return readRepositoryIdentity(root) !== null;
+    }
+  } catch {
+    return false;
+  }
+
   if (existsSync(join(dir, '.workflow', 'kg', 'maestro.db'))) return true;
 
   const statePath = join(dir, '.workflow', 'state.json');
@@ -43,22 +61,7 @@ export function isMaestroWorkspace(dir: string): boolean {
  * Walks up at most 10 levels.
  */
 export function findWorkspaceRoot(startDir: string): string | null {
-  let dir = startDir;
-  let firstMatch: string | null = null;
-
-  for (let i = 0; i < 10; i++) {
-    if (isMaestroWorkspace(dir)) {
-      // Prefer git root match — if .git/ is here too, return immediately
-      if (existsSync(join(dir, '.git'))) return dir;
-      // Otherwise remember first match and keep looking
-      if (!firstMatch) firstMatch = dir;
-    }
-    const parent = dirname(dir);
-    if (parent === dir) break; // reached filesystem root
-    dir = parent;
-  }
-
-  return firstMatch;
+  return findRepositoryRoot(startDir);
 }
 
 /**

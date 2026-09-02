@@ -158,6 +158,39 @@ describe('KG CLI project root resolution', () => {
     expect(existsSync(getKgDatabasePath(syncNested))).toBe(false);
   });
 
+  it('uses the nearest initialized workspace when a nested cwd is outside Git', async () => {
+    const root = makeRoot('maestro-kg-cli-no-git-root-');
+    const nested = join(root, 'Packages', 'Feature');
+    mkdirSync(nested, { recursive: true });
+    await seedGraph(root, 'OuterNode');
+    await seedGraph(nested, 'NearestNode');
+
+    expect(resolveKgCliProjectRoot(join(nested, 'src'))).toBe(nested);
+  });
+
+  it('honors an explicit nested project-root override inside a Git worktree', async () => {
+    const root = makeRoot('maestro-kg-cli-explicit-root-');
+    const nested = join(root, 'Packages', 'Feature');
+    mkdirSync(nested, { recursive: true });
+    execFileSync('git', ['init', '--quiet', root]);
+    await seedGraph(root, 'CanonicalNode');
+    await seedGraph(nested, 'NestedNode');
+
+    const previousProjectRoot = process.env.MAESTRO_PROJECT_ROOT;
+    process.env.MAESTRO_PROJECT_ROOT = nested;
+    try {
+      expect(resolveKgCliProjectRoot(root)).toBe(nested);
+      const health = await runCli(root, ['kg', 'health', '--json']);
+      expect(health.exitCode).not.toBe(1);
+      expect(JSON.parse(health.stdout)).toMatchObject({
+        database: getKgDatabasePath(nested),
+      });
+    } finally {
+      if (previousProjectRoot === undefined) delete process.env.MAESTRO_PROJECT_ROOT;
+      else process.env.MAESTRO_PROJECT_ROOT = previousProjectRoot;
+    }
+  });
+
   it('finds a root external-surfaces manifest from a nested cwd before DB initialization', async () => {
     const root = makeRoot('maestro-kg-cli-external-surface-');
     const nested = join(root, 'Sources', 'Feature');

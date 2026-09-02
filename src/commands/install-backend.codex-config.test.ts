@@ -3,6 +3,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { addCodexMcpServer, configureCodexMultiAgentV2, removeCodexMcpServer } from './install-backend.js';
+import { initializeRepositoryIdentity } from '../repository/context.js';
 
 const roots: string[] = [];
 
@@ -72,6 +73,16 @@ describe('configureCodexMultiAgentV2', () => {
     expect(content).toContain('[features.multi_agent_v2]');
     expect(content).toContain('hide_spawn_agent_metadata = false');
     expect(content).toContain('tool_namespace = "maestro"');
+  });
+
+  it('binds project MCP configuration to the canonical manifest identity', () => {
+    const { root, configPath } = project();
+    const identity = initializeRepositoryIdentity(root, { repoName: 'install-bound' });
+
+    expect(addCodexMcpServer('project', root, ['write_file'])).toBe(configPath);
+    const content = readFileSync(configPath, 'utf8');
+    expect(content).toContain(`MAESTRO_REPO_ID = "${identity.repo_id}"`);
+    expect(content).toContain('MAESTRO_PROJECT_ROOT = ');
   });
 
   it('preserves Multi-Agent V2 preferences when Maestro MCP is removed', () => {

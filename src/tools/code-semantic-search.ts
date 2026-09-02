@@ -6,6 +6,7 @@
  */
 
 import type { ToolSchema, CcwToolResult } from '../types/tool-schema.js';
+import { getProjectRoot } from '../utils/path-validator.js';
 
 // --- Tool Schema ---
 
@@ -52,7 +53,7 @@ export async function handler(params: Record<string, unknown>): Promise<CcwToolR
 
   try {
     const { MaestroGraph } = await import('../graph/kg/engine.js');
-    const projectPath = process.cwd();
+    const projectPath = getProjectRoot();
 
     if (!MaestroGraph.isInitialized(projectPath)) {
       return {

@@ -67,12 +67,20 @@ export interface SpecAnalyticsConfig {
 // Cross-Workspace Sharing Types
 // ---------------------------------------------------------------------------
 
-export type WorkspaceShareType = 'spec' | 'knowhow' | 'domain' | 'codebase';
+export type WorkspaceCorpus = 'spec' | 'knowhow' | 'domain' | 'codebase' | 'session';
+/** Backward-compatible name for linked repository read capabilities. */
+export type WorkspaceShareType = WorkspaceCorpus;
 
 export interface WorkspaceLink {
+  /** Linked alias. The alias "current" is reserved for the host repository. */
   name: string;
   path: string;
-  share: WorkspaceShareType[];
+  /** Read capabilities. Historical `share` remains read-only. */
+  share: WorkspaceCorpus[];
+  /** Explicit write capabilities. Missing in legacy config means no writes. */
+  write?: WorkspaceCorpus[];
+  /** Cached stable identity, revalidated against the target manifest on use. */
+  repo_id?: string;
 }
 
 export interface WorkspaceConfig {

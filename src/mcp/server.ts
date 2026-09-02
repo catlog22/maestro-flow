@@ -11,7 +11,8 @@ import { loadConfig } from '../config/index.js';
 import { paths } from '../config/paths.js';
 import { registerBuiltinTools } from '../tools/index.js';
 import { DelegateChannelRelay } from './delegate-channel-relay.js';
-import { createMcpToolRequestHandlers } from './tool-access.js';
+import { createMcpToolRequestHandlers, type McpRepositoryAccessOptions } from './tool-access.js';
+import { resolveAgentRepositoryContext } from '../repository/context.js';
 
 // Exported for use by CliAgentRunner to push delegate-completion notifications
 let _server: Server | null = null;
@@ -25,6 +26,28 @@ export function getDelegateRelay(): DelegateChannelRelay | null {
   return _delegateRelay;
 }
 
+/** Bind the MCP process to the installed manifest identity without cwd fallback. */
+export function resolveMcpRepositoryAccess(
+  env: NodeJS.ProcessEnv = process.env,
+): McpRepositoryAccessOptions {
+  const projectRoot = env.MAESTRO_PROJECT_ROOT;
+  const installedRepoId = env.MAESTRO_REPO_ID;
+  if (!projectRoot || !installedRepoId) {
+    return { repositoryBindingError: 'MCP server is not installed with MAESTRO_PROJECT_ROOT and MAESTRO_REPO_ID' };
+  }
+  try {
+    const repositoryContext = resolveAgentRepositoryContext(projectRoot);
+    if (repositoryContext.currentRepoId !== installedRepoId) {
+      return {
+        repositoryBindingError: `installed repository identity mismatch: expected ${installedRepoId}, found ${repositoryContext.currentRepoId ?? 'none'}`,
+      };
+    }
+    return { repositoryContext };
+  } catch (error) {
+    return { repositoryBindingError: error instanceof Error ? error.message : String(error) };
+  }
+}
+
 export async function startMcpServer(): Promise<void> {
   const config = loadConfig();
   const registry = new ToolRegistry();
@@ -33,6 +56,7 @@ export async function startMcpServer(): Promise<void> {
     registry,
     config.mcp.enabledTools,
     process.env.MAESTRO_ENABLED_TOOLS,
+    resolveMcpRepositoryAccess(),
   );
 
   const server = new Server(
