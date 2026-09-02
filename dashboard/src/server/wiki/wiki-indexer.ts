@@ -95,7 +95,12 @@ export interface LinkedWorkspaceConfig {
 export interface WikiIndexerConfig {
   workflowRoot: string;
   linkedWorkspaces?: LinkedWorkspaceConfig[];
-  persistence?: 'filesystem' | 'memory-only';
+  /**
+   * filesystem: read and publish persistent caches;
+   * read-only: read caches and user-level sources without publishing;
+   * memory-only: hermetic project-only rebuild with no persistent cache access.
+   */
+  persistence?: 'filesystem' | 'read-only' | 'memory-only';
   /** Disable user-level Claude/Codex transcript sources for hermetic callers. */
   includeCliSessions?: boolean;
   evidenceRecorder?: (event: WikiEvidenceEvent) => void;
@@ -186,7 +191,7 @@ function finalizeSearchResults(
  */
 export class WikiIndexer {
   private readonly workflowRoot: string;
-  private readonly persistence: 'filesystem' | 'memory-only';
+  private readonly persistence: 'filesystem' | 'read-only' | 'memory-only';
   private readonly evidenceRecorder: ((event: WikiEvidenceEvent) => void) | undefined;
   private readonly includeCliSessions: boolean;
   private readonly linkedWorkspaces: Array<{
@@ -240,7 +245,7 @@ export class WikiIndexer {
       this.invalidate();
     }
     if (this.inflight) return this.inflight;
-    if (this.persistence === 'filesystem' && await this.tryLoadSearchCache()) {
+    if (this.persistence !== 'memory-only' && await this.tryLoadSearchCache()) {
       return this.cache!;
     }
     return this.rebuild();
@@ -430,7 +435,7 @@ export class WikiIndexer {
       }
     }
 
-    if (this.persistence === 'filesystem' && this.includeCliSessions) {
+    if (this.persistence !== 'memory-only' && this.includeCliSessions) {
       const home = homedir();
       const projectCwd = dirname(this.workflowRoot);
       const projectSlug = cwdToClaudeProjectSlug(projectCwd);
@@ -939,7 +944,7 @@ export class WikiIndexer {
     // Parallel: BM25 index build + embedding index load
     const [bm25, embIdx] = await Promise.all([
       this.getSearchIndex(),
-      options?.skipEmbedding || this.persistence === 'memory-only'
+      options?.skipEmbedding || this.persistence !== 'filesystem'
         ? null
         : this.getEmbeddingIndex(),
     ]);
@@ -1019,7 +1024,7 @@ export class WikiIndexer {
   }
 
   async getEmbeddingIndex(): Promise<EmbeddingIndex | null> {
-    if (this.persistence === 'memory-only' || this.closing) return null;
+    if (this.persistence !== 'filesystem' || this.closing) return null;
     if (this.embeddingCache) return this.embeddingCache;
     if (this.embeddingInflight) return this.embeddingInflight;
 
@@ -1459,13 +1464,13 @@ export class WikiIndexer {
       sourcePrefix: string;
     }> = [];
 
-    // Global: ~/.maestro/specs/ — user-level store, included only for
-    // filesystem-backed indexers. Memory-only probes must stay hermetic:
+    // Global: ~/.maestro/specs/ — user-level store, included for persistent
+    // and read-only indexers. Memory-only probes must stay hermetic:
     // like the CLI session stores (see scanCliSessions), user-level spec
     // content is never part of a probe, which keeps the search-ranking gate
     // deterministic across machines.
     const globalDir = join(maestroHome, 'specs');
-    if (this.persistence === 'filesystem' && existsSync(globalDir)) {
+    if (this.persistence !== 'memory-only' && existsSync(globalDir)) {
       scopes.push({
         dir: globalDir,
         allowedRoot: globalDir,
@@ -1585,7 +1590,7 @@ export class WikiIndexer {
     out.push(...(await this.scanRunModeSessions()));
 
     // Memory-only probes are hermetic and never inspect user-level CLI session stores.
-    if (this.persistence === 'filesystem' && this.includeCliSessions) {
+    if (this.persistence !== 'memory-only' && this.includeCliSessions) {
       out.push(...(await this.scanCliSessions()));
     }
 

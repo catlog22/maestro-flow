@@ -200,7 +200,13 @@ async function getIndexer(executionMode: SearchExecutionMode = 'default'): Promi
     const linkedWorkspaces = resolved
       .filter(lw => lw.valid)
       .map(lw => ({ name: lw.name, workflowRoot: lw.workflowRoot, shareTypes: lw.share }));
-    _indexer = { workflowRoot, indexer: new Cls({ workflowRoot, linkedWorkspaces }) };
+    // The resident daemon is the sole persistent-cache publisher. A
+    // short-lived fallback may consume an existing cache and preserve the
+    // full source corpus, but must not keep the CLI alive to republish it.
+    _indexer = {
+      workflowRoot,
+      indexer: new Cls({ workflowRoot, linkedWorkspaces, persistence: 'read-only' }),
+    };
   }
   return _indexer.indexer;
 }

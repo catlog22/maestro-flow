@@ -256,6 +256,43 @@ Facet ranking legacy target.
     expect(evidenceEvents).toEqual([]);
   });
 
+  it('lets read-only consumers reuse filesystem caches without publishing', async () => {
+    await write(
+      'specs/read-only.md',
+      '---\ntitle: Read-only sentinel\n---\n# Read-only sentinel\nCache reuse without publication.',
+    );
+    const writer = withoutCliSessions(new WikiIndexer({ workflowRoot: tmpRoot }));
+    await writer.get();
+    const artifacts = ['search-cache.json', 'wiki-index.json'];
+    await expect.poll(async () => Promise.all(artifacts.map(path => stat(join(tmpRoot, path))
+      .then(() => true, () => false)))).toEqual([true, true]);
+    await writer.close();
+
+    const before = Object.fromEntries(await Promise.all(artifacts.map(async path => {
+      const info = await stat(join(tmpRoot, path));
+      return [path, { bytes: await readFile(join(tmpRoot, path)), mtimeMs: info.mtimeMs }];
+    })));
+    const evidenceEvents: Array<{ event: string; site: string; queryId: null }> = [];
+    const reader = new WikiIndexer({
+      workflowRoot: tmpRoot,
+      persistence: 'read-only',
+      includeCliSessions: false,
+      evidenceRecorder: event => evidenceEvents.push(event),
+    });
+    const result = await reader.searchWithMeta('read-only sentinel', 5, { skipEmbedding: true });
+    await reader.close();
+
+    expect(result.results.map(item => item.entry.id)).toContain('spec:project:read-only');
+    expect(evidenceEvents.map(event => event.event)).toContain('filesystem-cache-read');
+    expect(evidenceEvents).not.toContainEqual(expect.objectContaining({ event: 'filesystem-cache-write' }));
+    expect(evidenceEvents).not.toContainEqual(expect.objectContaining({ event: 'filesystem-index-write' }));
+    for (const path of artifacts) {
+      const info = await stat(join(tmpRoot, path));
+      expect(await readFile(join(tmpRoot, path))).toEqual(before[path].bytes);
+      expect(info.mtimeMs).toBe(before[path].mtimeMs);
+    }
+  });
+
   it('coalesces invalidation during rebuild and only publishes the latest generation', async () => {
     await write('specs/old.md', '---\ntitle: Old generation\n---\n# Old generation');
     const indexer = new WikiIndexer({ workflowRoot: tmpRoot, persistence: 'memory-only' });
