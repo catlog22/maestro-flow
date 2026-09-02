@@ -359,11 +359,15 @@ export async function runSourcePhase({ npmCliOverride, spawn = spawnChild, tempR
   const dashboardReport = join(ownedTempRoot, 'dashboard-vitest.json');
   try {
     const rootArgs = [
-      'test',
+      'exec',
       '--',
+      'vitest',
+      'run',
+      '--config',
+      'vitest.config.ts',
       '--reporter=json',
-      '--maxWorkers=6',
-      '--testTimeout=15000',
+      '--maxWorkers=2',
+      '--testTimeout=60000',
       '--outputFile',
       rootReport,
       ...ROOT_TEST_PATHS,
@@ -373,7 +377,7 @@ export async function runSourcePhase({ npmCliOverride, spawn = spawnChild, tempR
       '--',
       '--reporter=json',
       '--maxWorkers=2',
-      '--testTimeout=15000',
+      '--testTimeout=60000',
       '--outputFile',
       dashboardReport,
       ...DASHBOARD_TEST_PATHS,

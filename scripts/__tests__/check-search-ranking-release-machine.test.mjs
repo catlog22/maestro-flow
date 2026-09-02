@@ -662,8 +662,13 @@ test('source phase owns exact root/dashboard suites with shell false and explici
   }
   assert.equal(calls[0].options.cwd, repoRoot);
   assert.equal(calls[1].options.cwd, dashboardRoot);
-  assert.notEqual(calls[0].args.indexOf('--maxWorkers=6'), -1);
+  assert.deepEqual(calls[0].args.slice(1, 7), [
+    'exec', '--', 'vitest', 'run', '--config', 'vitest.config.ts',
+  ]);
+  assert.notEqual(calls[0].args.indexOf('--maxWorkers=2'), -1);
   assert.notEqual(calls[1].args.indexOf('--maxWorkers=2'), -1);
+  assert.notEqual(calls[0].args.indexOf('--testTimeout=60000'), -1);
+  assert.notEqual(calls[1].args.indexOf('--testTimeout=60000'), -1);
   assert.deepEqual(
     calls[1].args.slice(calls[1].args.indexOf('--outputFile') + 2),
     DASHBOARD_TEST_PATHS,
