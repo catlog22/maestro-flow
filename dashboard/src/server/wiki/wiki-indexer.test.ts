@@ -293,6 +293,37 @@ Facet ranking legacy target.
     }
   });
 
+  it('rejects a search cache whose companion wiki index is missing', async () => {
+    await write(
+      'specs/paired-cache.md',
+      '---\ntitle: Paired cache sentinel\n---\n# Paired cache sentinel',
+    );
+    const writer = withoutCliSessions(new WikiIndexer({ workflowRoot: tmpRoot }));
+    await writer.get();
+    await expect.poll(() => stat(join(tmpRoot, 'wiki-index.json'))
+      .then(() => true, () => false)).toBe(true);
+    await writer.close();
+    await rm(join(tmpRoot, 'wiki-index.json'));
+
+    const reader = new WikiIndexer({
+      workflowRoot: tmpRoot,
+      persistence: 'read-only',
+      includeCliSessions: false,
+    });
+    const subject = reader as unknown as { buildIndexCandidate: () => Promise<unknown> };
+    const originalBuild = subject.buildIndexCandidate.bind(reader);
+    let builds = 0;
+    subject.buildIndexCandidate = async () => {
+      builds++;
+      return originalBuild();
+    };
+
+    const index = await reader.get();
+    await reader.close();
+    expect(builds).toBe(1);
+    expect(index.byId['spec:project:paired-cache']).toBeDefined();
+  });
+
   it('coalesces invalidation during rebuild and only publishes the latest generation', async () => {
     await write('specs/old.md', '---\ntitle: Old generation\n---\n# Old generation');
     const indexer = new WikiIndexer({ workflowRoot: tmpRoot, persistence: 'memory-only' });

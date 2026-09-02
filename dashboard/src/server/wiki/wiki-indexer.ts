@@ -459,13 +459,30 @@ export class WikiIndexer {
       'file',
     );
     if (!cachePath) return false;
+    const indexPath = resolveAllowedSourcePath(
+      join(this.workflowRoot, 'wiki-index.json'),
+      this.workflowRoot,
+      'file',
+    );
+    if (!indexPath) return false;
     const generation = this.rebuildGeneration;
 
     try {
       this.recordEvidence('filesystem-cache-read', 'WikiIndexer.tryLoadSearchCache.readFile');
-      const raw = await readBoundedUtf8(cachePath, MAX_SEARCH_CACHE_BYTES);
+      const [raw, indexRaw] = await Promise.all([
+        readBoundedUtf8(cachePath, MAX_SEARCH_CACHE_BYTES),
+        readBoundedUtf8(indexPath, MAX_SEARCH_CACHE_BYTES),
+      ]);
       const cached = validateSearchCache(JSON.parse(raw));
       if (!cached) return false;
+      const persistedIndex = JSON.parse(indexRaw);
+      if (!persistedIndex || typeof persistedIndex !== 'object' || Array.isArray(persistedIndex)) return false;
+      const persistedRecord = persistedIndex;
+      // Both files are one logical publication. Refuse a torn/stale companion
+      // so the filesystem owner rebuilds and repairs the pair before ready.
+      if (persistedRecord.version !== 3
+        || persistedRecord.generatedAt !== cached.generatedAt
+        || !Array.isArray(persistedRecord.entries)) return false;
 
       const snapshot = new Map<string, string>(cached.mtimeSnapshot);
       if (sourceFingerprint(snapshot) !== cached.sourceFingerprint
