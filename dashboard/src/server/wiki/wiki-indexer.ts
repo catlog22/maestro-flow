@@ -1633,16 +1633,25 @@ export class WikiIndexer {
     const root = join(this.workflowRoot, 'sessions');
     if (!existsSync(root)) return [];
     const out: WikiEntry[] = [];
-    for (const name of await safeReaddir(root)) {
-      if (name === 'index.json') continue;
-      const sessionPath = resolveAllowedSourcePath(
-        join(root, name, 'session.json'),
-        this.workflowRoot,
-        'file',
-      );
-      if (!sessionPath) continue;
-      const rel = toForwardSlash(relative(this.workflowRoot, sessionPath));
-      out.push(...(await loadRunModeSessionEntries(sessionPath, rel, this.workflowRoot)));
+    const names = (await safeReaddir(root)).filter(name => name !== 'index.json');
+    // Session projections are independent, but each terminal Session may read
+    // several Run artifacts. Use bounded batches to overlap Windows filesystem
+    // latency without opening the entire history tree at once. Promise.all
+    // preserves input order, so the final deterministic index ordering is
+    // unchanged even before buildIndexCandidate performs its stable sort.
+    const concurrency = 8;
+    for (let offset = 0; offset < names.length; offset += concurrency) {
+      const batch = await Promise.all(names.slice(offset, offset + concurrency).map(async name => {
+        const sessionPath = resolveAllowedSourcePath(
+          join(root, name, 'session.json'),
+          this.workflowRoot,
+          'file',
+        );
+        if (!sessionPath) return [] as WikiEntry[];
+        const rel = toForwardSlash(relative(this.workflowRoot, sessionPath));
+        return loadRunModeSessionEntries(sessionPath, rel, this.workflowRoot);
+      }));
+      for (const entries of batch) out.push(...entries);
     }
     return out;
   }
