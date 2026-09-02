@@ -1873,16 +1873,14 @@ export async function loadCodexSessions(
         return normalizedSessionCwd === normalizedProjectCwd ? candidate : null;
       }),
     );
-    for (const match of matches) {
-      if (match) matchingCandidates.push(match);
-      if (matchingCandidates.length >= maxFiles) break;
-    }
-    if (matchingCandidates.length >= maxFiles) break;
+    for (const match of matches) if (match) matchingCandidates.push(match);
   }
 
   const out: WikiEntry[] = [];
   const readConcurrency = 8;
-  for (let offset = 0; offset < matchingCandidates.length; offset += readConcurrency) {
+  for (let offset = 0;
+    offset < matchingCandidates.length && out.length < maxFiles;
+    offset += readConcurrency) {
     const entries = await Promise.all(
       matchingCandidates.slice(offset, offset + readConcurrency).map(async candidate => {
         // Phase 2: full bounded read only for project-matching sessions.
@@ -1905,7 +1903,10 @@ export async function loadCodexSessions(
         return adaptCodexSession(lines, `~/.codex/${candidate.relPath}`, threadName);
       }),
     );
-    for (const entry of entries) if (entry) out.push(entry);
+    for (const entry of entries) {
+      if (entry) out.push(entry);
+      if (out.length >= maxFiles) break;
+    }
   }
   return out;
 }
