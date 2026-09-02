@@ -13,11 +13,16 @@ import {
   readFileSync,
   existsSync,
   readdirSync,
+  writeFileSync,
 } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 
-import { appendSpecEntry, MAX_SPEC_ENTRY_SIZE } from '../spec-writer.js';
+import {
+  initializeRepositoryIdentity,
+  resolveRepositoryContext,
+} from '../../repository/context.js';
+import { appendSpecEntry, MAX_SPEC_ENTRY_SIZE, writeSpecEntry } from '../spec-writer.js';
 
 // ---------------------------------------------------------------------------
 // Temp directory lifecycle
@@ -174,15 +179,69 @@ describe('appendSpecEntry — content over size limit', () => {
     const specContent = readFileSync(result.file, 'utf-8');
     expect(specContent).toContain('keywords="api,design,rest"');
 
-    // Check knowhow file has tags
+    // Check the canonical Knowhow keyword field preserves every value
     const knowhowDir = join(testDir, '.workflow', 'knowhow');
     const files = readdirSync(knowhowDir);
     const knowhowContent = readFileSync(join(knowhowDir, files[0]), 'utf-8');
-    expect(knowhowContent).toContain('  - api');
-    expect(knowhowContent).toContain('  - design');
-    expect(knowhowContent).toContain('  - rest');
+    expect(knowhowContent).toContain('keywords:\n  - api\n  - design\n  - rest');
+    expect(knowhowContent).not.toMatch(/^tags:/m);
 
     consoleSpy.mockRestore();
+  });
+
+  it('externalizes canonical fields into the resolved linked repository', () => {
+    const linkedRoot = mkdtempSync(join(tmpdir(), 'maestro-test-spec-size-linked-'));
+    try {
+      initializeRepositoryIdentity(testDir, { repoName: 'Actor' });
+      const linkedId = initializeRepositoryIdentity(linkedRoot, { repoName: 'Library' }).repo_id;
+      writeFileSync(join(testDir, '.workflow', 'config.json'), JSON.stringify({
+        workspaces: { linked: [{
+          name: 'library',
+          path: linkedRoot,
+          repo_id: linkedId,
+          share: ['spec', 'knowhow'],
+          write: ['spec', 'knowhow'],
+        }] },
+      }));
+      const context = resolveRepositoryContext(linkedId, {
+        projectRoot: testDir,
+        require: { mode: 'write', corpus: 'spec' },
+      });
+
+      const result = writeSpecEntry(context, {
+        category: 'arch',
+        title: 'Linked Oversized Contract',
+        content: 'Linked canonical content. '.repeat(120),
+        keywords: ['api', 'design'],
+        sourceRef: 'issue:42',
+        relatedPaths: ['src\\linked.ts'],
+        appliesToRepoIds: [linkedId],
+        targetRepoId: linkedId,
+      });
+
+      expect(result.file.startsWith(linkedRoot)).toBe(true);
+      expect(result.knowhowRef).toMatch(/^knowhow\/DOC-/);
+      expect(existsSync(join(testDir, '.workflow', 'knowhow'))).toBe(false);
+
+      const specContent = readFileSync(result.file, 'utf8');
+      expect(specContent).toContain('keywords="api,design"');
+      expect(specContent).toContain('sourceRef="issue:42"');
+      expect(specContent).toContain('relatedPaths="src/linked.ts"');
+      expect(specContent).toContain(`appliesToRepoIds="${linkedId}"`);
+
+      const knowhowDir = join(linkedRoot, '.workflow', 'knowhow');
+      const [knowhowFile] = readdirSync(knowhowDir);
+      const knowhowContent = readFileSync(join(knowhowDir, knowhowFile), 'utf8');
+      expect(knowhowContent).toContain('type: document');
+      expect(knowhowContent).toContain('category: arch');
+      expect(knowhowContent).toContain('keywords:\n  - api\n  - design');
+      expect(knowhowContent).toContain('sourceRef: "issue:42"');
+      expect(knowhowContent).toContain('relatedPaths:\n  - src/linked.ts');
+      expect(knowhowContent).toContain(`appliesToRepoIds:\n  - ${linkedId}`);
+      expect(knowhowContent).not.toMatch(/^tags:/m);
+    } finally {
+      rmSync(linkedRoot, { recursive: true, force: true });
+    }
   });
 
   it('preserves source in redirected spec entry', () => {
@@ -194,7 +253,7 @@ describe('appendSpecEntry — content over size limit', () => {
     );
 
     const specContent = readFileSync(result.file, 'utf-8');
-    expect(specContent).toContain('source="agent:ANL-001"');
+    expect(specContent).toContain('sourceRef="agent:ANL-001"');
 
     consoleSpy.mockRestore();
   });

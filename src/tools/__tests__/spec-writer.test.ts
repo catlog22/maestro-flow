@@ -5,11 +5,17 @@ import {
   rmSync,
   readFileSync,
   existsSync,
+  readdirSync,
+  writeFileSync,
 } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 
-import { appendSpecEntry, type SpecAddResult } from '../spec-writer.js';
+import {
+  initializeRepositoryIdentity,
+  resolveRepositoryContext,
+} from '../../repository/context.js';
+import { appendSpecEntry, writeSpecEntry, type SpecAddResult } from '../spec-writer.js';
 
 // ---------------------------------------------------------------------------
 // Temp directory lifecycle
@@ -55,6 +61,54 @@ describe('appendSpecEntry - basic add', () => {
     expect(content).toContain('Always use camelCase for variables.');
     expect(content).toContain('<spec-entry');
     expect(content).toContain('</spec-entry>');
+  });
+});
+
+describe('appendSpecEntry - authorized linked target', () => {
+  it('writes only with current share + write authority and persists ID-only applicability', () => {
+    const linkedRoot = mkdtempSync(join(tmpdir(), 'maestro-test-spec-linked-'));
+    mkdirSync(join(linkedRoot, '.workflow'), { recursive: true });
+    try {
+      initializeRepositoryIdentity(testDir, { repoName: 'Actor' });
+      const linkedId = initializeRepositoryIdentity(linkedRoot, { repoName: 'Library' }).repo_id;
+      const configPath = join(testDir, '.workflow', 'config.json');
+      const setAuthority = (write: string[], name = 'library') => writeFileSync(configPath, JSON.stringify({
+        workspaces: { linked: [{
+          name, path: linkedRoot, repo_id: linkedId,
+          share: ['spec'], write,
+        }] },
+      }));
+      setAuthority(['spec']);
+      const context = resolveRepositoryContext(linkedId, {
+        projectRoot: testDir,
+        require: { mode: 'write', corpus: 'spec' },
+      });
+      const result = writeSpecEntry(context, {
+        category: 'coding', title: 'Linked rule', content: 'Canonical linked content.',
+        appliesToRepoIds: [linkedId], targetRepoId: linkedId,
+      });
+      const document = readFileSync(result.file, 'utf8');
+      expect(result.file.startsWith(linkedRoot)).toBe(true);
+      expect(document).toContain(`appliesToRepoIds="${linkedId}"`);
+      expect(document).not.toContain('library');
+
+      const before = readdirSync(join(linkedRoot, '.workflow', 'specs'));
+      setAuthority(['spec'], 'renamed-library');
+      expect(() => writeSpecEntry(context, {
+        category: 'debug', title: 'Drifted alias', content: 'Must not appear.',
+        targetRepoId: linkedId,
+      })).toThrow(/authority changed/);
+      expect(readdirSync(join(linkedRoot, '.workflow', 'specs'))).toEqual(before);
+
+      setAuthority([]);
+      expect(() => writeSpecEntry(context, {
+        category: 'debug', title: 'Revoked rule', content: 'Must not appear.',
+        targetRepoId: linkedId,
+      })).toThrow(/does not grant write capability/);
+      expect(readdirSync(join(linkedRoot, '.workflow', 'specs'))).toEqual(before);
+    } finally {
+      rmSync(linkedRoot, { recursive: true, force: true });
+    }
   });
 });
 
@@ -229,7 +283,7 @@ describe('appendSpecEntry - source attribute', () => {
 
     expect(result.ok).toBe(true);
     const content = readFileSync(result.file, 'utf-8');
-    expect(content).toContain('source="agent"');
+    expect(content).toContain('sourceRef="agent"');
   });
 
   it('omits source when not provided', () => {
@@ -243,7 +297,7 @@ describe('appendSpecEntry - source attribute', () => {
 
     expect(result.ok).toBe(true);
     const content = readFileSync(result.file, 'utf-8');
-    expect(content).not.toContain('source=');
+    expect(content).not.toContain('sourceRef=');
   });
 });
 
@@ -264,6 +318,72 @@ describe('appendSpecEntry - keywords', () => {
     expect(result.ok).toBe(true);
     const content = readFileSync(result.file, 'utf-8');
     expect(content).toContain('keywords="auth,token,security"');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Canonical object contract and replay
+// ---------------------------------------------------------------------------
+
+describe('writeSpecEntry - canonical contract', () => {
+  it('round-trips related paths, applicability IDs, and sourceRef', () => {
+    const repoId = '11111111-1111-4111-8111-111111111111';
+    const context = { projectRoot: testDir, repoId, relation: 'current' as const };
+    const result = writeSpecEntry(context, {
+      category: 'coding',
+      title: 'Canonical entry',
+      content: 'Use the canonical writer.',
+      keywords: ['canonical'],
+      sourceRef: 'issue:42',
+      relatedPaths: ['src\\index.ts'],
+      appliesToRepoIds: [repoId],
+      sid: 'S-20260901-canon',
+    });
+
+    expect(result.ok).toBe(true);
+    const document = readFileSync(result.file, 'utf8');
+    expect(document).toContain('sourceRef="issue:42"');
+    expect(document).toContain('relatedPaths="src/index.ts"');
+    expect(document).toContain(`appliesToRepoIds="${repoId}"`);
+
+    const replay = writeSpecEntry(context, {
+      category: 'coding', title: 'Canonical entry', content: 'Use the canonical writer.',
+      keywords: ['canonical'], sourceRef: 'issue:42', relatedPaths: ['src/index.ts'],
+      appliesToRepoIds: [repoId], sid: 'S-20260901-canon',
+    });
+    expect(replay.replayed).toBe(true);
+
+    expect(() => writeSpecEntry(context, {
+      category: 'coding', title: 'Canonical entry', content: 'Changed.',
+      keywords: ['canonical'], sourceRef: 'issue:42', relatedPaths: ['src/index.ts'],
+      appliesToRepoIds: [repoId], sid: 'S-20260901-canon',
+    })).toThrow(/CALLER_PAYLOAD_CONFLICT/);
+  });
+
+  it('rejects non-ID applicability values without mutation', () => {
+    const fresh = mkdtempSync(join(tmpdir(), 'maestro-test-applicability-id-'));
+    try {
+      expect(() => writeSpecEntry(
+        { projectRoot: fresh, repoId: null, relation: 'current' },
+        { category: 'coding', title: 'Alias leak', content: 'No.', appliesToRepoIds: ['current'] },
+      )).toThrow(/exact persisted repository IDs/);
+      expect(existsSync(join(fresh, '.workflow'))).toBe(false);
+    } finally {
+      rmSync(fresh, { recursive: true, force: true });
+    }
+  });
+
+  it('rejects linked repository context for non-project scopes without mutation', () => {
+    const linked = mkdtempSync(join(tmpdir(), 'maestro-test-linked-scope-'));
+    try {
+      expect(() => writeSpecEntry(
+        { projectRoot: linked, repoId: 'repo-linked', relation: 'linked' },
+        { category: 'coding', title: 'Global linked', content: 'No.', scope: 'global' },
+      )).toThrow(/cannot use a repository selector/);
+      expect(existsSync(join(linked, '.workflow'))).toBe(false);
+    } finally {
+      rmSync(linked, { recursive: true, force: true });
+    }
   });
 });
 

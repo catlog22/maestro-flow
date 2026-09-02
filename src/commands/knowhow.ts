@@ -19,6 +19,10 @@ import {
   knowhowFileToWikiId,
 } from '../utils/frontmatter.js';
 import { getProjectRoot } from '../utils/path-validator.js';
+import {
+  resolveRepositoryContext,
+  resolveRepositorySelectorIds,
+} from '../repository/context.js';
 import { handler as storeKnowhow } from '../tools/store-knowhow.js';
 import {
   createKnowhowLifecycleSnapshot,
@@ -28,6 +32,10 @@ import {
   sealKnowhowLifecycleSnapshot,
   supersedeKnowhowEntry,
 } from '../tools/knowhow-lifecycle.js';
+
+function collectOption(value: string, previous: string[]): string[] {
+  return [...previous, value];
+}
 
 export function registerKnowhowCommand(program: Command): void {
   const knowhow = program
@@ -39,19 +47,31 @@ export function registerKnowhowCommand(program: Command): void {
   knowhow
     .command('add')
     .description('Create a new knowhow entry')
-    .requiredOption('--type <type>', 'session|tip|template|recipe|reference|decision|document')
+    .requiredOption('--type <type>', 'session|tip|template|recipe|reference|decision|asset|blueprint|document')
     .requiredOption('--title <title>', 'Entry title')
-    .option('--body <text>', 'Entry body (markdown)')
-    .option('--body-file <path>', 'Read body from file')
+    .option('--content <text>', 'Canonical entry content (markdown)')
+    .option('--content-file <path>', 'Read canonical content from file')
+    .option('--body <text>', '[deprecated] Alias for --content')
+    .option('--body-file <path>', '[deprecated] Alias for --content-file')
+    .option('--keywords <words>', 'Comma-separated keywords')
+    .option('--source-ref <ref>', 'Source URL or document identifier')
+    .option('--related-path <path>', 'Project-relative related path (repeatable)', collectOption, [])
+    .option('--repo <selector>', 'Physical repository selector (current, ID, alias, or unique name)')
+    .option('--applies-to-repo <selector>', 'Applicability repository selector (repeatable)', collectOption, [])
+    .option('--language <language>', 'Optional content/programming language')
+    .option('--decision-state <state>', 'proposed|accepted|superseded (decision only)')
     .option('--id <stable-stem>', 'Stable explicit id (<prefix>-YYYYMMDD-<kebab-slug>)')
     .option('--tool', 'Mark this knowhow entry as a tool')
     .action(async (opts) => {
-      const hasBody = opts.body !== undefined;
-      const hasBodyFile = opts.bodyFile !== undefined;
-      if (hasBody === hasBodyFile) {
-        console.error('Exactly one of --body or --body-file is required');
+      const providedContent = [opts.content, opts.contentFile, opts.body, opts.bodyFile]
+        .filter(value => value !== undefined);
+      if (providedContent.length !== 1) {
+        console.error('Exactly one of --content, --content-file, --body, or --body-file is required');
         process.exitCode = 1;
         return;
+      }
+      if (opts.body !== undefined || opts.bodyFile !== undefined) {
+        console.warn('[deprecated] Use --content or --content-file instead of --body/--body-file');
       }
 
       const type = opts.type as string;
@@ -61,24 +81,49 @@ export function registerKnowhowCommand(program: Command): void {
         return;
       }
 
-      const body = opts.bodyFile ? readFileSync(opts.bodyFile, 'utf-8') : opts.body;
-      const response = await storeKnowhow({
-        operation: 'add',
-        id: opts.id,
-        type,
-        title: opts.title,
-        body,
-        tool: opts.tool,
-      });
-      if (!response.success) {
-        console.error(response.error);
+      const contentFile = opts.contentFile ?? opts.bodyFile;
+      const content = contentFile
+        ? readFileSync(contentFile, 'utf-8')
+        : (opts.content ?? opts.body);
+      try {
+        const projectRoot = getProjectRoot();
+        const context = opts.repo
+          ? resolveRepositoryContext(opts.repo, {
+            projectRoot,
+            require: { mode: 'write', corpus: 'knowhow' },
+          })
+          : undefined;
+        const appliesToRepoIds = resolveRepositorySelectorIds(opts.appliesToRepo ?? [], { projectRoot });
+        const response = await storeKnowhow({
+          operation: 'add',
+          explicitId: opts.id,
+          type,
+          title: opts.title,
+          content,
+          keywords: typeof opts.keywords === 'string'
+            ? opts.keywords.split(',').map((keyword: string) => keyword.trim()).filter(Boolean)
+            : undefined,
+          sourceRef: opts.sourceRef,
+          relatedPaths: opts.relatedPath,
+          appliesToRepoIds,
+          language: opts.language,
+          decisionState: opts.decisionState,
+          targetRepoId: context?.repoId ?? undefined,
+          tool: opts.tool,
+        }, context);
+        if (!response.success) {
+          console.error(response.error);
+          process.exitCode = 1;
+          return;
+        }
+        const result = response.result as Record<string, unknown>;
+        console.log(`${result.replayed ? 'Replayed' : 'Created'}: ${result.id}`);
+        console.log(`  Type: ${result.type}`);
+        console.log(`  File: ${result.path}`);
+      } catch (error) {
+        console.error((error as Error).message);
         process.exitCode = 1;
-        return;
       }
-      const result = response.result as Record<string, unknown>;
-      console.log(`${result.replayed ? 'Replayed' : 'Created'}: ${result.id}`);
-      console.log(`  Type: ${result.type}`);
-      console.log(`  File: ${result.path}`);
     });
 
   // ── supersede ───────────────────────────────────────────────────────
@@ -86,9 +131,19 @@ export function registerKnowhowCommand(program: Command): void {
     .command('supersede <oldId>')
     .description('Deprecate a knowhow entry in favor of its successor')
     .requiredOption('--by <newId>', 'Replacement knowhow id')
+    .option('--repo <selector>', 'Physical repository selector (current, ID, alias, or unique name)')
     .option('--json', 'Output as JSON')
     .action((oldId: string, opts) => {
-      const result = supersedeKnowhowEntry(getProjectRoot(), oldId, opts.by);
+      const context = opts.repo
+        ? resolveRepositoryContext(opts.repo, {
+          projectRoot: getProjectRoot(),
+          require: { mode: 'write', corpus: 'knowhow' },
+        })
+        : undefined;
+      const root = context?.projectRoot ?? getProjectRoot();
+      const result = supersedeKnowhowEntry(root, oldId, opts.by, {
+        repositoryContext: context,
+      });
       if (!result.success) {
         console.error(result.error);
         process.exitCode = 1;
@@ -102,10 +157,17 @@ export function registerKnowhowCommand(program: Command): void {
   knowhow
     .command('history <id>')
     .description('Show the evolution chain containing a knowhow entry')
+    .option('--repo <selector>', 'Physical repository selector (current, ID, alias, or unique name)')
     .option('--json', 'Output as JSON')
     .action((id: string, opts) => {
       try {
-        const entries = getKnowhowEvolutionChain(getProjectRoot(), id);
+        const root = opts.repo
+          ? resolveRepositoryContext(opts.repo, {
+            projectRoot: getProjectRoot(),
+            require: { mode: 'read', corpus: 'knowhow' },
+          }).projectRoot
+          : getProjectRoot();
+        const entries = getKnowhowEvolutionChain(root, id);
         const result = {
           schema_version: 'knowhow-history-result/1.0',
           operation: 'history',
@@ -129,9 +191,19 @@ export function registerKnowhowCommand(program: Command): void {
   knowhow
     .command('recover')
     .description('Explicitly recover a pending knowhow lifecycle intent')
+    .option('--repo <selector>', 'Physical repository selector (current, ID, alias, or unique name)')
     .option('--json', 'Output as JSON')
     .action((opts) => {
-      const result = recoverKnowhowLifecycleIntent(getProjectRoot());
+      const context = opts.repo
+        ? resolveRepositoryContext(opts.repo, {
+          projectRoot: getProjectRoot(),
+          require: { mode: 'write', corpus: 'knowhow' },
+        })
+        : undefined;
+      const root = context?.projectRoot ?? getProjectRoot();
+      const result = recoverKnowhowLifecycleIntent(root, {
+        repositoryContext: context,
+      });
       if (opts.json) console.log(JSON.stringify(result, null, 2));
       else if (result.success) {
         console.log(result.replayed

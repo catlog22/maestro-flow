@@ -19,8 +19,10 @@ import {
   reportKnowledgeCandidateDrafts,
   runKnowledgeDeltaPath,
   runKnowledgeDeltaSchema,
+  upgradeKnowledgeLedgerForStaging,
   type RunKnowledgeDelta,
 } from '../knowledge.js';
+import { CURRENT_REPOSITORY_ALIAS, resolveRepositoryContext } from '../../repository/context.js';
 import {
   artifactRegistrySchema,
   type ArtifactRegistry,
@@ -1069,6 +1071,11 @@ function stageV3RunKnowledgeCandidates(input: {
   const { store, tx, sessionId, runId, frontmatter } = input;
   const now = new Date().toISOString();
   const delta = readRunKnowledgeDelta(store, sessionId, runId, true);
+  upgradeKnowledgeLedgerForStaging(
+    delta,
+    resolveRepositoryContext(CURRENT_REPOSITORY_ALIAS, { projectRoot: store.projectRoot }),
+    'run',
+  );
   const evidence = [`run:${runId}`];
   let staged = false;
   for (const [index, decision] of frontmatter.decisions.entries()) {

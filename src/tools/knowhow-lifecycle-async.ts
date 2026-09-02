@@ -11,6 +11,7 @@ import {
   withVerifiedLifecycleFsHelper,
 } from '../utils/lifecycle-fs-helper.js';
 import type { BoundLock } from '../utils/lifecycle-fs-wire.js';
+import type { RepositoryMutationContext } from '../repository/context.js';
 import type {
   KnowhowEvolutionLink,
   KnowhowLifecycleResult,
@@ -28,6 +29,7 @@ export type KnowhowLifecycleRequest =
     projectRoot: string;
     oldId: string;
     newId: string;
+    repositoryContext?: RepositoryMutationContext;
   }
   | {
     operation: 'history';
@@ -37,6 +39,7 @@ export type KnowhowLifecycleRequest =
   | {
     operation: 'recover';
     projectRoot: string;
+    repositoryContext?: RepositoryMutationContext;
   };
 
 export type KnowhowLifecycleWorkerRequest =
@@ -205,7 +208,10 @@ async function runSourceLifecycleDirect(
           request.projectRoot,
           request.oldId,
           request.newId,
-          { ownerGeneration: request.ownerGeneration },
+          {
+            ownerGeneration: request.ownerGeneration,
+            repositoryContext: request.repositoryContext,
+          },
         ),
       };
     case 'history':
@@ -218,7 +224,10 @@ async function runSourceLifecycleDirect(
         operation: request.operation,
         result: lifecycle.recoverKnowhowLifecycleIntent(
           request.projectRoot,
-          { ownerGeneration: request.ownerGeneration },
+          {
+            ownerGeneration: request.ownerGeneration,
+            repositoryContext: request.repositoryContext,
+          },
         ),
       };
   }

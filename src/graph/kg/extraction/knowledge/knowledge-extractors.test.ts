@@ -63,6 +63,48 @@ Use the second rule.
       .toBe('spec:project:coding-conventions-001');
   });
 
+  it('normalizes legacy Knowhow metadata through the canonical content model', () => {
+    const projectRoot = root();
+    const workflowRoot = join(projectRoot, '.workflow');
+    const knowhowDir = join(workflowRoot, 'knowhow');
+    mkdirSync(knowhowDir, { recursive: true });
+    writeFileSync(join(knowhowDir, 'DCS-20260728-Legacy.md'), `---
+title: Legacy decision
+type: decision
+category: architecture-decision
+specCategory: arch
+tags:
+  - auth
+keywords:
+  - tokens
+source: issue:42
+lang: typescript
+status: superseded
+assetType: api-contract
+codePaths:
+  - src/auth/token.ts
+---
+
+First useful paragraph.
+`, 'utf8');
+
+    const [node] = extractWiki(knowhowDir, workflowRoot).nodes;
+
+    expect(node).toMatchObject({
+      definition: 'First useful paragraph.',
+      keywords: ['tokens', 'auth', 'architecture-decision', 'api-contract'],
+      category: 'arch',
+      status: 'deprecated',
+      metadata: expect.objectContaining({
+        language: 'typescript',
+        sourceRef: 'issue:42',
+        relatedPaths: ['src/auth/token.ts'],
+        decisionState: 'superseded',
+        lifecycleStatus: 'deprecated',
+      }),
+    });
+  });
+
   it('normalizes Knowhow graph IDs to the canonical Wiki slug', () => {
     const projectRoot = root();
     const workflowRoot = join(projectRoot, '.workflow');

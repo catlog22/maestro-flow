@@ -125,20 +125,29 @@ describe('maestro spec add', () => {
     expect(parsed.title).toBe('JSON Test');
   });
 
+  it('rejects an unknown repository selector without mutation', () => {
+    runMaestro('spec init');
+    const file = join(testDir, '.workflow', 'specs', 'coding-conventions.md');
+    const before = readFileSync(file, 'utf8');
+    const output = runMaestro('spec add coding "Wrong target" "Must not write." --repo missing');
+    expect(output).toContain('Repository selector not found');
+    expect(readFileSync(file, 'utf8')).toBe(before);
+  });
+
   it('supports --source attribute', () => {
     runMaestro('spec init');
     runMaestro('spec add coding "Agent Find" "Found during analysis." --keywords discovery --source agent');
 
     const content = readFileSync(join(testDir, '.workflow', 'specs', 'coding-conventions.md'), 'utf-8');
-    expect(content).toContain('source="agent"');
+    expect(content).toContain('sourceRef="agent"');
   });
 });
 
 // ---------------------------------------------------------------------------
-// spec add --ref
+// spec link
 // ---------------------------------------------------------------------------
 
-describe('maestro spec add --ref', () => {
+describe('maestro spec link', () => {
   it('creates ref entry referencing existing knowhow', () => {
     runMaestro('spec init');
     // Create a knowhow file first
@@ -154,25 +163,21 @@ Complete OAuth PKCE flow with token exchange...`;
     const { writeFileSync: wfs } = require('node:fs');
     wfs(knowhowFile, knowhowContent, 'utf-8');
 
-    const output = runMaestro('spec add learning "OAuth Integration" "PKCE flow design." --keywords oauth,pkce --ref knowhow/AST-oauth-flow.md');
-    expect(output).toContain('Added ref entry');
+    const output = runMaestro('spec link learning "OAuth Integration" knowhow/AST-oauth-flow.md --content "PKCE flow design." --keywords oauth,pkce');
+    expect(output).toContain('Linked');
     expect(output).toContain('knowhow/AST-oauth-flow.md');
 
     const content = readFileSync(join(testDir, '.workflow', 'specs', 'learnings.md'), 'utf-8');
     expect(content).toContain('ref="knowhow/AST-oauth-flow.md"');
   });
 
-  it('creates knowhow doc when --knowhow-type specified and file missing', () => {
+  it('never creates a missing Knowhow document implicitly', () => {
     runMaestro('spec init');
-    const output = runMaestro('spec add learning "API Design" "REST conventions." --keywords api,design --ref knowhow/DOC-api-design.md --knowhow-type document');
+    const output = runMaestro('spec link learning "API Design" knowhow/DOC-api-design.md --content "REST conventions." --keywords api,design');
 
-    expect(output).toContain('Created knowhow doc');
-
+    expect(output).toContain('does not exist');
     const knowhowFile = join(testDir, '.workflow', 'knowhow', 'DOC-api-design.md');
-    expect(existsSync(knowhowFile)).toBe(true);
-    const knowhowContent = readFileSync(knowhowFile, 'utf-8');
-    expect(knowhowContent).toContain('title: API Design');
-    expect(knowhowContent).toContain('type: document');
+    expect(existsSync(knowhowFile)).toBe(false);
   });
 });
 

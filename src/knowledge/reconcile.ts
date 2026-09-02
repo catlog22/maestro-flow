@@ -1175,7 +1175,9 @@ export function promoteReconciledSessionKnowledge(
   );
   if (recovering.length > 0) {
     const recovered = promoteSessionKnowledge(projectRoot, sessionId, {
+      ...options,
       candidateIds: recovering.map(candidate => candidate.candidate_id),
+      all: false,
     });
     const remaining = promoteReconciledSessionKnowledge(projectRoot, sessionId, options);
     const recoveredIds = new Set(recovered.promoted.map(item => item.candidate_id));

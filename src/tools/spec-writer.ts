@@ -11,8 +11,13 @@ import { join } from 'node:path';
 import { formatNewEntry, parseSpecEntries, generateSid } from './spec-entry-parser.js';
 import { resolveSpecDir, CATEGORY_MAP, type SpecCategory, type SpecScope } from './spec-loader.js';
 import { ensureSpecFile } from './spec-init.js';
-import { parseFrontmatter, slugify } from '../utils/frontmatter.js';
+import { normalizeCanonicalKnowledgeContent, slugify } from '../utils/frontmatter.js';
 import { updateFileAtomic } from '../utils/atomic-write.js';
+import { executeAdd, type KnowhowWriteContext } from './store-knowhow.js';
+import {
+  withRepositoryMutation,
+  type RepositoryMutationContext,
+} from '../repository/context.js';
 
 // ============================================================================
 // Size guard — prevent oversized entries in spec files
@@ -20,6 +25,7 @@ import { updateFileAtomic } from '../utils/atomic-write.js';
 
 /** Maximum content size (in characters) before auto-redirecting to knowhow */
 export const MAX_SPEC_ENTRY_SIZE = 2048; // 2KB
+const REPOSITORY_ID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 // ============================================================================
 // Types
@@ -37,11 +43,37 @@ export interface SpecAddResult {
   knowhowRef?: string;
   /** Auto-captured git evidence (commit hash) */
   evidence?: string;
-  /** Stable identity assigned to the new entry (undefined for duplicates). */
+  /** Stable identity assigned to the new entry (undefined for title duplicates). */
   sid?: string;
+  /** True when an explicit sid replay matched every canonical caller-owned field. */
+  replayed?: boolean;
 }
 
+export type SpecWriteContext = RepositoryMutationContext;
+
 export interface SpecAppendOptions {
+  allowDuplicateTitle?: boolean;
+  /** Explicit host-resolved physical repository context. */
+  operationContext?: SpecWriteContext;
+  relatedPaths?: string[];
+  appliesToRepoIds?: string[];
+  /** Internal recursion fence: authority was revalidated under target locks. */
+  mutationValidated?: boolean;
+}
+
+export interface CanonicalSpecWriteInput extends Record<string, unknown> {
+  category: SpecCategory;
+  title: string;
+  content: string;
+  keywords?: string[];
+  sourceRef?: string | null;
+  relatedPaths?: string[];
+  appliesToRepoIds?: string[];
+  /** Canonical ID-only physical target, verified against the resolved context. */
+  targetRepoId?: string;
+  scope?: SpecScope;
+  uid?: string;
+  sid?: string;
   allowDuplicateTitle?: boolean;
 }
 
@@ -82,55 +114,96 @@ function categoryToFilename(category: SpecCategory): string | undefined {
 // Internal: knowhow redirect for oversized content
 // ============================================================================
 
-// slugify imported from utils/frontmatter.ts
-
 /**
- * Create a knowhow file with the full content and return the relative ref path.
- * Used when spec entry content exceeds MAX_SPEC_ENTRY_SIZE.
+ * Redirect oversized content through the canonical Knowhow writer. This keeps
+ * Spec from maintaining a second, subtly different Knowhow serialization path.
  */
 function redirectToKnowhow(
-  projectPath: string,
+  context: KnowhowWriteContext,
   category: SpecCategory,
   title: string,
   content: string,
   keywords: string[],
+  sourceRef: string | undefined,
+  options: SpecAppendOptions | undefined,
 ): string {
-  const knowhowDir = join(projectPath, '.workflow', 'knowhow');
-  if (!existsSync(knowhowDir)) {
-    mkdirSync(knowhowDir, { recursive: true });
-  }
-
-  const now = new Date();
-  const pad = (n: number) => String(n).padStart(2, '0');
-  const ts = `${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}`;
-  const slug = slugify(title).slice(0, 40);
-  const filename = slug ? `DOC-${ts}-${slug}.md` : `DOC-${ts}-${pad(now.getHours())}${pad(now.getMinutes())}.md`;
-
-  const fmLines = ['---'];
-  fmLines.push(`title: ${title}`);
-  fmLines.push(`type: document`);
-  fmLines.push(`category: ${category}`);
-  fmLines.push(`created: ${now.toISOString()}`);
-  if (keywords.length > 0) {
-    fmLines.push('tags:');
-    for (const t of keywords) fmLines.push(`  - ${t}`);
-  }
-  fmLines.push('---', '', content);
-
-  const filePath = join(knowhowDir, filename);
-  updateFileAtomic(filePath, current => {
-    if (current === null) return fmLines.join('\n');
-    const parsed = parseFrontmatter(current);
-    if (parsed.data.title === title && parsed.body.trim() === content.trim()) return current;
-    throw new Error(`Knowhow redirect already exists with different content: ${filename}`);
-  });
-
-  return `knowhow/${filename}`;
+  const date = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+  const stableSlug = slugify(title).slice(0, 40) || 'entry';
+  const response = executeAdd({
+    operation: 'add',
+    type: 'document',
+    explicitId: `doc-${date}-${stableSlug}`,
+    title,
+    content,
+    keywords,
+    category,
+    sourceRef,
+    relatedPaths: options?.relatedPaths,
+    appliesToRepoIds: options?.appliesToRepoIds,
+    targetRepoId: context.repoId ?? undefined,
+    limit: 20,
+  }, context);
+  if (!response.success) throw new Error(response.error ?? 'Knowhow redirect failed');
+  return (response.result as { path: string }).path;
 }
 
 // ============================================================================
 // Public API
 // ============================================================================
+
+function canonicalSpecReplayPayload(input: CanonicalSpecWriteInput): string {
+  const canonical = normalizeCanonicalKnowledgeContent(input);
+  if (!canonical.category || canonical.errors.length > 0) {
+    throw new Error(canonical.errors.join('; ') || `Invalid Spec category: ${input.category}`);
+  }
+  const invalidApplicability = canonical.appliesToRepoIds.find(repoId => !REPOSITORY_ID_PATTERN.test(repoId));
+  if (invalidApplicability) {
+    throw new Error(`appliesToRepoIds must contain exact persisted repository IDs: ${invalidApplicability}`);
+  }
+  return JSON.stringify({
+    category: canonical.category,
+    title: canonical.title,
+    content: canonical.content.replace(/\n+$/g, ''),
+    keywords: [...new Set(canonical.keywords)].sort(),
+    sourceRef: canonical.sourceRef,
+    relatedPaths: [...new Set(canonical.relatedPaths)].sort(),
+    appliesToRepoIds: [...new Set(canonical.appliesToRepoIds)].sort(),
+  });
+}
+
+/** Canonical object contract for ordinary Spec creation. */
+export function writeSpecEntry(
+  context: SpecWriteContext,
+  input: CanonicalSpecWriteInput,
+): SpecAddResult {
+  if (input.targetRepoId && !REPOSITORY_ID_PATTERN.test(input.targetRepoId)) {
+    throw new Error(`targetRepoId must be an exact persisted repository ID: ${input.targetRepoId}`);
+  }
+  if (input.targetRepoId && context.repoId !== input.targetRepoId) {
+    throw new Error(`Resolved write context does not match targetRepoId: ${input.targetRepoId}`);
+  }
+  if ((input.scope ?? 'project') !== 'project' && input.targetRepoId) {
+    throw new Error(`Scope "${input.scope}" cannot use targetRepoId to choose its physical store`);
+  }
+  return appendSpecEntry(
+    context.projectRoot,
+    input.category,
+    input.title,
+    input.content,
+    input.keywords ?? [],
+    input.sourceRef === null ? '' : input.sourceRef,
+    input.scope,
+    input.uid,
+    undefined,
+    input.sid,
+    {
+      operationContext: context,
+      relatedPaths: input.relatedPaths,
+      appliesToRepoIds: input.appliesToRepoIds,
+      allowDuplicateTitle: input.allowDuplicateTitle,
+    },
+  );
+}
 
 /**
  * Append a new spec entry to the appropriate file for the given category.
@@ -154,11 +227,44 @@ export function appendSpecEntry(
   sidOverride?: string,
   options?: SpecAppendOptions,
 ): SpecAddResult {
-  const evidence = source ?? captureGitEvidence(projectPath);
+  const resolvedScope = scope ?? 'project';
+  if (resolvedScope !== 'project' && options?.operationContext?.relation === 'linked') {
+    throw new Error(`Scope "${resolvedScope}" cannot use a repository selector to choose its physical store`);
+  }
+  const physicalProjectPath = options?.operationContext?.projectRoot ?? projectPath;
+  const filename = categoryToFilename(category);
+  if (!filename) {
+    return { ok: false, file: '', category, title, duplicate: false };
+  }
+  if (options?.operationContext?.relation === 'linked' && !options.mutationValidated) {
+    const guardedFile = join(resolveSpecDir(physicalProjectPath, resolvedScope, uid), filename);
+    return withRepositoryMutation(
+      options.operationContext,
+      'spec',
+      [guardedFile],
+      () => appendSpecEntry(
+        projectPath, category, title, content, keywords, source, scope, uid,
+        description, sidOverride, { ...options, mutationValidated: true },
+      ),
+    );
+  }
+  canonicalSpecReplayPayload({
+    category, title, content, keywords, sourceRef: source,
+    relatedPaths: options?.relatedPaths,
+    appliesToRepoIds: options?.appliesToRepoIds,
+  });
+  const evidence = source ?? captureGitEvidence(physicalProjectPath);
 
   // Size guard: redirect oversized content to knowhow
   if (content && content.length > MAX_SPEC_ENTRY_SIZE) {
-    const ref = redirectToKnowhow(projectPath, category, title, content, keywords);
+    const knowhowContext: KnowhowWriteContext = options?.operationContext ?? {
+      projectRoot: physicalProjectPath,
+      repoId: null,
+      relation: 'current',
+    };
+    const ref = redirectToKnowhow(
+      knowhowContext, category, title, content, keywords, source, options,
+    );
     const summary = content.slice(0, 200).replace(/\s+/g, ' ').trim();
     console.log('[spec] Content exceeds 2KB, stored as knowhow with spec ref');
     const result = appendSpecEntryWithRef(
@@ -167,12 +273,7 @@ export function appendSpecEntry(
     return { ...result, redirected: true, knowhowRef: ref, evidence };
   }
 
-  const specsDir = resolveSpecDir(projectPath, scope ?? 'project', uid);
-
-  const filename = categoryToFilename(category);
-  if (!filename) {
-    return { ok: false, file: '', category, title, duplicate: false };
-  }
+  const specsDir = resolveSpecDir(physicalProjectPath, resolvedScope, uid);
 
   // Ensure directory exists
   if (!existsSync(specsDir)) {
@@ -190,10 +291,38 @@ export function appendSpecEntry(
   const date = new Date().toISOString().slice(0, 10);
   const sid = sidOverride ?? generateSid();
   let isDuplicate = false;
+  let replayed = false;
   updateFileAtomic(filePath, existing => {
     const current = existing ?? '';
     // Parsed duplicate check: exact title match against parsed entries
     const { entries, legacy } = parseSpecEntries(current);
+    if (sidOverride) {
+      const existingReplay = entries.find(entry => entry.sid === sidOverride);
+      if (existingReplay) {
+        const existingBody = existingReplay.content
+          .replace(/^###\s+.*(?:\r?\n)+(?:\r?\n)?/, '')
+          .trim();
+        const expected = canonicalSpecReplayPayload({
+          category, title, content, keywords, sourceRef: source,
+          relatedPaths: options?.relatedPaths,
+          appliesToRepoIds: options?.appliesToRepoIds,
+        });
+        const actual = canonicalSpecReplayPayload({
+          category: existingReplay.category as SpecCategory,
+          title: existingReplay.title,
+          content: existingBody,
+          keywords: existingReplay.keywords,
+          sourceRef: source === undefined ? undefined : existingReplay.sourceRef,
+          relatedPaths: existingReplay.relatedPaths,
+          appliesToRepoIds: existingReplay.appliesToRepoIds,
+        });
+        if (actual !== expected) {
+          throw new Error(`CALLER_PAYLOAD_CONFLICT: divergent existing spec sid ${sidOverride}`);
+        }
+        replayed = true;
+        return null;
+      }
+    }
     isDuplicate = !options?.allowDuplicateTitle && (
       entries.some(
         e => e.title.toLowerCase().trim() === title.toLowerCase().trim()
@@ -204,10 +333,21 @@ export function appendSpecEntry(
     if (isDuplicate) return null;
 
     // Generate and append entry with a stable identity
-    const entry = formatNewEntry(category, keywords, date, title, content, evidence, undefined, description, undefined, undefined, undefined, { sid });
+    const entry = formatNewEntry(
+      category, keywords, date, title, content, evidence, undefined, description,
+      undefined, undefined, undefined,
+      {
+        sid,
+        relatedPaths: options?.relatedPaths,
+        appliesToRepoIds: options?.appliesToRepoIds,
+      },
+    );
     return current + '\n\n' + entry;
   });
 
+  if (replayed) {
+    return { ok: true, file: filePath, category, title, duplicate: false, evidence, sid, replayed: true };
+  }
   if (isDuplicate) {
     return { ok: true, file: filePath, category, title, duplicate: true };
   }
@@ -231,11 +371,27 @@ export function appendSpecEntryWithRef(
   sidOverride?: string,
   options?: SpecAppendOptions,
 ): SpecAddResult {
-  const specsDir = resolveSpecDir(projectPath, scope ?? 'project', uid);
+  const resolvedScope = scope ?? 'project';
+  if (resolvedScope !== 'project' && options?.operationContext?.relation === 'linked') {
+    throw new Error(`Scope "${resolvedScope}" cannot use a repository selector to choose its physical store`);
+  }
+  const physicalProjectPath = options?.operationContext?.projectRoot ?? projectPath;
+  const specsDir = resolveSpecDir(physicalProjectPath, resolvedScope, uid);
 
   const filename = categoryToFilename(category);
   if (!filename) {
     return { ok: false, file: '', category, title, duplicate: false };
+  }
+  if (options?.operationContext?.relation === 'linked' && !options.mutationValidated) {
+    return withRepositoryMutation(
+      options.operationContext,
+      'spec',
+      [join(specsDir, filename)],
+      () => appendSpecEntryWithRef(
+        projectPath, category, title, summary, keywords, ref, source, scope, uid,
+        sidOverride, { ...options, mutationValidated: true },
+      ),
+    );
   }
 
   if (!existsSync(specsDir)) {
@@ -252,10 +408,38 @@ export function appendSpecEntryWithRef(
   const date = new Date().toISOString().slice(0, 10);
   const sid = sidOverride ?? generateSid();
   let isDuplicateRef = false;
+  let replayed = false;
   updateFileAtomic(filePath, existing => {
     const current = existing ?? '';
     // Parsed duplicate check: exact title match against parsed entries
     const { entries: existingEntries, legacy: existingLegacy } = parseSpecEntries(current);
+    if (sidOverride) {
+      const existingReplay = existingEntries.find(entry => entry.sid === sidOverride);
+      if (existingReplay) {
+        const existingBody = existingReplay.content
+          .replace(/^###\s+.*(?:\r?\n)+(?:\r?\n)?/, '')
+          .trim();
+        const expected = `${canonicalSpecReplayPayload({
+          category, title, content: summary, keywords, sourceRef: source,
+          relatedPaths: options?.relatedPaths,
+          appliesToRepoIds: options?.appliesToRepoIds,
+        })}\nref:${ref}`;
+        const actual = `${canonicalSpecReplayPayload({
+          category: existingReplay.category as SpecCategory,
+          title: existingReplay.title,
+          content: existingBody,
+          keywords: existingReplay.keywords,
+          sourceRef: source === undefined ? undefined : existingReplay.sourceRef,
+          relatedPaths: existingReplay.relatedPaths,
+          appliesToRepoIds: existingReplay.appliesToRepoIds,
+        })}\nref:${existingReplay.ref ?? ''}`;
+        if (actual !== expected) {
+          throw new Error(`CALLER_PAYLOAD_CONFLICT: divergent existing spec sid ${sidOverride}`);
+        }
+        replayed = true;
+        return null;
+      }
+    }
     isDuplicateRef = !options?.allowDuplicateTitle && (
       existingEntries.some(
         e => e.title.toLowerCase().trim() === title.toLowerCase().trim()
@@ -265,10 +449,21 @@ export function appendSpecEntryWithRef(
     );
     if (isDuplicateRef) return null;
 
-    const entry = formatNewEntry(category, keywords, date, title, summary, source, ref, undefined, undefined, undefined, undefined, { sid });
+    const entry = formatNewEntry(
+      category, keywords, date, title, summary, source, ref, undefined,
+      undefined, undefined, undefined,
+      {
+        sid,
+        relatedPaths: options?.relatedPaths,
+        appliesToRepoIds: options?.appliesToRepoIds,
+      },
+    );
     return current + '\n\n' + entry;
   });
 
+  if (replayed) {
+    return { ok: true, file: filePath, category, title, duplicate: false, sid, replayed: true };
+  }
   if (isDuplicateRef) {
     return { ok: true, file: filePath, category, title, duplicate: true };
   }

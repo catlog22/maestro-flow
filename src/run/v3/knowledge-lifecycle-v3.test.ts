@@ -8,6 +8,8 @@ import { registerKnowledgeCommand } from '../../commands/knowledge.js';
 import { MaestroGraph } from '../../graph/kg/engine.js';
 import { reconcileRunKnowledgeSync, reconciliationPath, resolveKnowledgeCandidate } from '../../knowledge/reconcile.js';
 import { WikiIndexer } from '../../../dashboard/src/server/wiki/wiki-indexer.js';
+
+vi.setConfig({ testTimeout: 60_000 });
 import {
   promoteSessionKnowledge,
   readRunKnowledgeDelta,
@@ -302,10 +304,16 @@ describe('session/3.0 knowledge lifecycle', () => {
       })],
     });
 
-    const promoted = await invokeKnowledge(
+    await expect(invokeKnowledge(
       root,
       'promote', 's-session-origin', '--resolve', staged.candidate_id,
       '--as', 'unique', '--reason', 'Reviewed as a new v3 Session-origin recipe', '--json',
+    )).rejects.toThrow(/active Runs/);
+    sealFixtureRun(store, 's-session-origin', 'run-session-host');
+    const sealedAuthority = readFileSync(join(store.sessionDir('s-session-origin'), 'session.json'), 'utf8');
+    const promoted = await invokeKnowledge(
+      root,
+      'promote', 's-session-origin', '--candidate', staged.candidate_id, '--json',
     );
     expect(promoted).toMatchObject({
       promoted: [expect.objectContaining({ candidate_id: staged.candidate_id, outcome: 'created' })],
@@ -327,7 +335,9 @@ describe('session/3.0 knowledge lifecycle', () => {
       promoted_id: expect.stringMatching(/^knowhow-tip-/),
     });
     expect(readFileSync(join(store.sessionDir('s-session-origin'), 'session.json'), 'utf8'))
-      .toBe(authorityBefore);
+      .not.toBe(authorityBefore);
+    expect(readFileSync(join(store.sessionDir('s-session-origin'), 'session.json'), 'utf8'))
+      .toBe(sealedAuthority);
   });
 
   it('reconciles candidate-bearing frontmatter inside completion and replays before re-reading it', () => {

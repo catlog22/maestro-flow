@@ -55,8 +55,7 @@ export function registerSpecCommand(program: Command): void {
       const { loadSpecs } = await import('../tools/spec-loader.js');
       const { loadWorkspaceConfig, resolveWorkspaceLinks } = await import('../config/index.js');
       const { join } = await import('node:path');
-      logCliEndpoint(process.cwd(), 'spec load', { category: opts.category, scope: opts.scope, keyword: opts.keyword, stdin: !!opts.stdin });
-
+      const { resolveRepositoryContext } = await import('../repository/context.js');
       let projectPath = process.cwd();
       let keyword = opts.keyword as string | undefined;
 
@@ -86,12 +85,28 @@ export function registerSpecCommand(program: Command): void {
         process.exit(1);
       }
 
+      const currentRepository = resolveRepositoryContext('current', { projectRoot: projectPath });
+      projectPath = currentRepository.projectRoot;
+      logCliEndpoint(projectPath, 'spec load', {
+        category: opts.category, scope: opts.scope, keyword, stdin: !!opts.stdin,
+      });
       const wsConfig = loadWorkspaceConfig(projectPath);
       const resolved = resolveWorkspaceLinks(projectPath, wsConfig);
       const linkedSpecs = resolved
-        .filter(lw => lw.valid && lw.share.includes('spec'))
-        .map(lw => ({ name: lw.name, specsDir: join(lw.workflowRoot, 'specs') }));
-      const loaderOpts = linkedSpecs.length > 0 ? { linkedWorkspaces: linkedSpecs } : undefined;
+        .filter(lw => lw.valid && (lw.share.includes('spec') || lw.share.includes('knowhow')))
+        .map(lw => ({
+          name: lw.name,
+          specsDir: join(lw.workflowRoot, 'specs'),
+          includeSpecs: lw.share.includes('spec'),
+          knowhowDir: lw.share.includes('knowhow') ? join(lw.workflowRoot, 'knowhow') : undefined,
+          repoId: lw.repoId,
+          repoName: lw.repoName,
+          workspaceFence: lw.repoId ? `repo:${lw.repoId}` : `linked:${lw.name}`,
+        }));
+      const loaderOpts = {
+        ...(linkedSpecs.length > 0 ? { linkedWorkspaces: linkedSpecs } : {}),
+        applicableRepoId: currentRepository.repoId,
+      };
       const result = loadSpecs(projectPath, opts.category, uid, keyword, scope, loaderOpts);
 
       if (opts.stdin) {
@@ -405,148 +420,175 @@ export function registerSpecCommand(program: Command): void {
       }
     });
 
-  // ── add ──────────────────────────────────────────────────────────────
+  // ── add / link ──────────────────────────────────────────────────────
+  const collect = (value: string, previous: string[]): string[] => [...previous, value];
+
   spec
     .command('add')
-    .description('Add a spec entry to the appropriate file')
-    .argument('<category>', 'Entry category: coding|arch|debug|test|review|learning')
+    .description('Add a canonical spec entry')
+    .argument('<category>', 'Entry category: coding|arch|debug|test|review|learning|ui')
     .argument('<title>', 'Entry title')
-    .argument('[content]', 'Entry content (if omitted, reads from remaining args)')
+    .argument('[content]', 'Entry content')
     .option('--keywords <words>', 'Comma-separated keywords')
-    .option('--description <desc>', 'One-line description for search results')
-    .option('--source <source>', 'Source reference (e.g., analyze:ANL-xxx)')
-    .option('--ref <path>', 'Create as index entry referencing a knowhow document')
-    .option('--knowhow-type <type>', 'Knowhow type for --ref (asset, blueprint, document, template, etc.)')
+    .option('--source-ref <ref>', 'Source URL or document identifier')
+    .option('--source <ref>', '[deprecated] Alias for --source-ref')
+    .option('--related-path <path>', 'Project-relative related path (repeatable)', collect, [])
+    .option('--repo <selector>', 'Physical repository selector (project scope only)')
+    .option('--applies-to-repo <selector>', 'Applicability repository selector (repeatable)', collect, [])
+    .option('--scope <scope>', 'Spec scope: project|global|team|personal (default: project)')
+    .option('--uid <uid>', 'User id for personal scope')
+    .option('--description <desc>', '[deprecated] Summary is derived from content')
+    .option('--ref <path>', '[deprecated] Use "spec link"')
+    .option('--knowhow-type <type>', '[deprecated] Knowhow creation is no longer implicit')
+    .option('--json', 'Output result as JSON')
+    .action(async (category: string, title: string, content: string | undefined, opts: Record<string, any>) => {
+      try {
+        const { logCliEndpoint } = await import('../hooks/spec-analytics.js');
+        const { appendSpecEntry, appendSpecEntryWithRef } = await import('../tools/spec-writer.js');
+        const { VALID_CATEGORIES } = await import('../tools/spec-entry-parser.js');
+        const { resolveRepositoryContext, resolveRepositorySelectorIds } = await import('../repository/context.js');
+        const { existsSync, readFileSync } = await import('node:fs');
+        const { resolve, relative, isAbsolute, sep } = await import('node:path');
+        const { deriveContentSummary, stripFrontmatter } = await import('../utils/frontmatter.js');
+
+        const currentContext = resolveRepositoryContext('current', { projectRoot: process.cwd() });
+        logCliEndpoint(currentContext.projectRoot, 'spec add', { category, scope: opts.scope, keywords: opts.keywords });
+        if (!VALID_CATEGORIES.includes(category as typeof VALID_CATEGORIES[number])) {
+          throw new Error(`category must be one of ${VALID_CATEGORIES.join(', ')} (got "${category}")`);
+        }
+        const scope = validateScope(opts.scope);
+        const uid = await resolveUid(opts);
+        if (scope === 'personal' && !uid) throw new Error('personal scope requires --uid or team membership.');
+        if (scope !== 'project' && opts.repo) {
+          throw new Error(`scope "${scope}" cannot use --repo to choose its physical store`);
+        }
+        if (opts.description) console.warn('[deprecated] --description is ignored; summary is derived from content');
+        if (opts.source) console.warn('[deprecated] Use --source-ref instead of --source');
+        if (opts.knowhowType) {
+          throw new Error('--knowhow-type no longer creates Knowhow; create it explicitly, then use "spec link"');
+        }
+
+        const context = opts.repo
+          ? resolveRepositoryContext(opts.repo, {
+            projectRoot: currentContext.projectRoot,
+            require: { mode: 'write', corpus: 'spec' },
+          })
+          : currentContext;
+        const appliesToRepoIds = resolveRepositorySelectorIds(opts.appliesToRepo ?? [], {
+          projectRoot: currentContext.projectRoot,
+        });
+        const keywords = typeof opts.keywords === 'string'
+          ? opts.keywords.split(',').map((word: string) => word.trim()).filter(Boolean)
+          : [];
+        const sourceRef = opts.sourceRef ?? opts.source;
+        const writerOptions = {
+          operationContext: context,
+          relatedPaths: opts.relatedPath,
+          appliesToRepoIds,
+        };
+
+        let result;
+        if (opts.ref) {
+          console.warn('[deprecated] Use "maestro spec link" instead of "spec add --ref"');
+          const absoluteRef = resolve(context.projectRoot, '.workflow', opts.ref);
+          const knowhowRoot = resolve(context.projectRoot, '.workflow', 'knowhow');
+          const rel = relative(knowhowRoot, absoluteRef);
+          if (isAbsolute(rel) || rel === '..' || rel.startsWith(`..${sep}`)) {
+            throw new Error(`ref must point inside .workflow/knowhow: ${opts.ref}`);
+          }
+          if (!existsSync(absoluteRef)) throw new Error(`ref path does not exist: ${opts.ref}`);
+          const summary = content?.trim()
+            || deriveContentSummary(stripFrontmatter(readFileSync(absoluteRef, 'utf8')));
+          result = appendSpecEntryWithRef(
+            context.projectRoot, category as any, title, summary, keywords, opts.ref,
+            sourceRef, scope, uid, undefined, writerOptions,
+          );
+        } else {
+          if (!content) throw new Error('content is required for spec add');
+          result = appendSpecEntry(
+            context.projectRoot, category as any, title, content, keywords, sourceRef,
+            scope, uid, undefined, undefined, writerOptions,
+          );
+        }
+
+        if (opts.json) console.log(JSON.stringify(result, null, 2));
+        else if (result.duplicate) console.log(`⚠ Skipped duplicate: "${result.title}" already exists in ${result.file}`);
+        else console.log(`✓ Added to ${result.file} [${result.category}] "${result.title}"`);
+        if (result.ok && !result.duplicate) {
+          const { invalidateSearchIndex } = await import('../search/daemon-client.js');
+          invalidateSearchIndex(context.workflowRoot).catch(() => {});
+        }
+      } catch (error) {
+        console.error(`Error: ${(error as Error).message}`);
+        process.exitCode = 1;
+      }
+    });
+
+  spec
+    .command('link')
+    .description('Link a Spec index entry to an existing Knowhow document (never creates Knowhow)')
+    .argument('<category>', 'Entry category')
+    .argument('<title>', 'Entry title')
+    .argument('<ref>', 'Existing path relative to .workflow (for example knowhow/DOC-example.md)')
+    .option('--content <summary>', 'Optional inline summary; otherwise derived from the Knowhow content')
+    .option('--keywords <words>', 'Comma-separated keywords')
+    .option('--source-ref <ref>', 'Source URL or document identifier')
+    .option('--related-path <path>', 'Project-relative related path (repeatable)', collect, [])
+    .option('--repo <selector>', 'Physical repository selector (project scope only)')
+    .option('--applies-to-repo <selector>', 'Applicability repository selector (repeatable)', collect, [])
     .option('--scope <scope>', 'Spec scope: project|global|team|personal (default: project)')
     .option('--uid <uid>', 'User id for personal scope')
     .option('--json', 'Output result as JSON')
-    .action(async (category: string, title: string, content: string | undefined, opts: Record<string, unknown>) => {
-      const { logCliEndpoint } = await import('../hooks/spec-analytics.js');
-      logCliEndpoint(process.cwd(), 'spec add', { category, scope: opts.scope, keywords: opts.keywords });
-      const { appendSpecEntry } = await import('../tools/spec-writer.js');
-      const { VALID_CATEGORIES } = await import('../tools/spec-entry-parser.js');
-
-      // ── single entry mode ─────────────────────────────────────────
-      if (!VALID_CATEGORIES.includes(category as typeof VALID_CATEGORIES[number])) {
-        console.error(`Error: category must be one of ${VALID_CATEGORIES.join(', ')} (got "${category}")`);
-        process.exit(1);
-      }
-
-      const scope = validateScope(opts.scope as string | undefined);
-      const uid = await resolveUid(opts as { uid?: string });
-
-      if (scope === 'personal' && !uid) {
-        console.error('Error: personal scope requires --uid or team membership.');
-        process.exit(1);
-      }
-
-      const keywords = typeof opts.keywords === 'string'
-        ? opts.keywords.split(',').map((k: string) => k.trim()).filter(Boolean)
-        : [];
-
-      // ── --ref mode: create index entry referencing a knowhow document ──
-      const refPath = opts.ref as string | undefined;
-      if (refPath) {
-        const { existsSync: fileExists, mkdirSync: mkDir, writeFileSync: writeFs, readFileSync: readFs } = await import('node:fs');
-        const { join: pathJoin, resolve: pathResolve } = await import('node:path');
-
-        const knowhowType = (opts.knowhowType ?? opts['knowhow-type']) as string | undefined;
-        const absRefPath = pathResolve(process.cwd(), '.workflow', refPath);
-
-        // If ref file doesn't exist AND --knowhow-type given → create knowhow doc first
-        if (!fileExists(absRefPath) && knowhowType) {
-          const { KNOWHOW_PREFIX_MAP } = await import('../utils/frontmatter.js');
-          const prefix = KNOWHOW_PREFIX_MAP[knowhowType] ?? 'DOC';
-          const dir = pathJoin(process.cwd(), '.workflow', 'knowhow');
-          if (!fileExists(dir)) mkDir(dir, { recursive: true });
-
-          const { escapeYamlValue } = await import('../utils/frontmatter.js');
-          const now = new Date();
-          const fmLines = ['---', `title: ${escapeYamlValue(title)}`, `type: ${knowhowType}`, `category: ${category}`, `created: ${now.toISOString()}`];
-          if (keywords.length > 0) {
-            fmLines.push('keywords:');
-            for (const t of keywords) fmLines.push(`  - ${t}`);
-          }
-          fmLines.push('---', '', content || '');
-          writeFs(absRefPath, fmLines.join('\n'), 'utf-8');
-          console.log(`Created knowhow doc: ${refPath}`);
-        } else if (!fileExists(absRefPath) && !knowhowType) {
-          console.error(`Error: ref path "${refPath}" does not exist. Use --knowhow-type to create it.`);
-          process.exit(1);
-        }
-
-        // Create spec index entry with summary (first ~200 chars)
-        let summary = content || '';
-        if (!summary && fileExists(absRefPath)) {
-          const raw = readFs(absRefPath, 'utf-8');
-          // Strip frontmatter
-          const trimmed = raw.trimStart();
-          if (trimmed.startsWith('---')) {
-            const endIdx = trimmed.indexOf('\n---', 3);
-            summary = endIdx !== -1 ? trimmed.substring(endIdx + 4).trim() : raw;
-          } else {
-            summary = raw;
-          }
-        }
-        summary = summary.slice(0, 200).replace(/\s+/g, ' ').trim();
-
+    .action(async (category: string, title: string, ref: string, opts: Record<string, any>) => {
+      try {
         const { appendSpecEntryWithRef } = await import('../tools/spec-writer.js');
+        const { VALID_CATEGORIES } = await import('../tools/spec-entry-parser.js');
+        const { resolveRepositoryContext, resolveRepositorySelectorIds } = await import('../repository/context.js');
+        const { existsSync, readFileSync } = await import('node:fs');
+        const { resolve, relative, isAbsolute, sep } = await import('node:path');
+        const { deriveContentSummary, stripFrontmatter } = await import('../utils/frontmatter.js');
+        if (!VALID_CATEGORIES.includes(category as typeof VALID_CATEGORIES[number])) {
+          throw new Error(`category must be one of ${VALID_CATEGORIES.join(', ')} (got "${category}")`);
+        }
+        const scope = validateScope(opts.scope);
+        const uid = await resolveUid(opts);
+        if (scope === 'personal' && !uid) throw new Error('personal scope requires --uid or team membership.');
+        if (scope !== 'project' && opts.repo) {
+          throw new Error(`scope "${scope}" cannot use --repo to choose its physical store`);
+        }
+        const currentContext = resolveRepositoryContext('current', { projectRoot: process.cwd() });
+        const context = opts.repo
+          ? resolveRepositoryContext(opts.repo, {
+            projectRoot: currentContext.projectRoot,
+            require: { mode: 'write', corpus: 'spec' },
+          })
+          : currentContext;
+        const absoluteRef = resolve(context.projectRoot, '.workflow', ref);
+        const knowhowRoot = resolve(context.projectRoot, '.workflow', 'knowhow');
+        const rel = relative(knowhowRoot, absoluteRef);
+        if (isAbsolute(rel) || rel === '..' || rel.startsWith(`..${sep}`)) {
+          throw new Error(`ref must point inside .workflow/knowhow: ${ref}`);
+        }
+        if (!existsSync(absoluteRef)) throw new Error(`ref path does not exist: ${ref}`);
+        const appliesToRepoIds = resolveRepositorySelectorIds(opts.appliesToRepo ?? [], {
+          projectRoot: currentContext.projectRoot,
+        });
+        const summary = opts.content?.trim()
+          || deriveContentSummary(stripFrontmatter(readFileSync(absoluteRef, 'utf8')));
+        const keywords = typeof opts.keywords === 'string'
+          ? opts.keywords.split(',').map((word: string) => word.trim()).filter(Boolean)
+          : [];
         const result = appendSpecEntryWithRef(
-          process.cwd(),
-          category as import('../tools/spec-loader.js').SpecCategory,
-          title,
-          summary,
-          keywords,
-          refPath,
-          opts.source as string | undefined,
-          scope,
-          uid,
+          context.projectRoot, category as any, title, summary, keywords, ref,
+          opts.sourceRef, scope, uid, undefined,
+          { operationContext: context, relatedPaths: opts.relatedPath, appliesToRepoIds },
         );
-
-        if (opts.json) {
-          console.log(JSON.stringify(result, null, 2));
-        } else if (result.duplicate) {
-          console.log(`\u26A0 Skipped duplicate: "${result.title}" already exists in ${result.file}`);
-        } else if (result.ok) {
-          console.log(`\u2713 Added ref entry to ${result.file} [${result.category}] "${result.title}" → ${refPath}`);
-        } else {
-          console.error(`Error: failed to add "${result.title}"`);
-          process.exit(1);
-        }
-        if (result.ok && !result.duplicate) {
-          const { resolve: pathResolve } = await import('node:path');
-          const { invalidateSearchIndex } = await import('../search/daemon-client.js');
-          invalidateSearchIndex(pathResolve(process.cwd(), '.workflow')).catch(() => {});
-        }
-        return;
-      }
-
-      const result = appendSpecEntry(
-        process.cwd(),
-        category as import('../tools/spec-loader.js').SpecCategory,
-        title,
-        content || '',
-        keywords,
-        opts.source as string | undefined,
-        scope,
-        uid,
-        opts.description as string | undefined,
-      );
-
-      if (opts.json) {
-        console.log(JSON.stringify(result, null, 2));
-      } else if (result.duplicate) {
-        console.log(`\u26A0 Skipped duplicate: "${result.title}" already exists in ${result.file}`);
-      } else if (result.ok) {
-        console.log(`\u2713 Added to ${result.file} [${result.category}] "${result.title}"`);
-      } else {
-        console.error(`Error: failed to add "${result.title}"`);
-        process.exit(1);
-      }
-      if (result.ok && !result.duplicate) {
-        const { resolve: pathResolve } = await import('node:path');
-        const { invalidateSearchIndex } = await import('../search/daemon-client.js');
-        invalidateSearchIndex(pathResolve(process.cwd(), '.workflow')).catch(() => {});
+        if (opts.json) console.log(JSON.stringify(result, null, 2));
+        else if (result.duplicate) console.log(`⚠ Skipped duplicate: "${result.title}" already exists in ${result.file}`);
+        else console.log(`✓ Linked ${result.file} [${result.category}] "${result.title}" → ${ref}`);
+      } catch (error) {
+        console.error(`Error: ${(error as Error).message}`);
+        process.exitCode = 1;
       }
     });
 

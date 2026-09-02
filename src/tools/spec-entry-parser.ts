@@ -5,7 +5,13 @@
  * Supports dual-format: new `<spec-entry>` tags + legacy heading-based entries.
  */
 
-import { knowhowFileToWikiId } from '../utils/frontmatter.js';
+import {
+  CANONICAL_KNOWLEDGE_CATEGORIES,
+  knowhowFileToWikiId,
+  normalizeCanonicalKnowledgeContent,
+  type CanonicalKnowledgeCategory,
+  type KnowledgeLifecycleStatus,
+} from '../utils/frontmatter.js';
 
 // ============================================================================
 // Types
@@ -33,8 +39,12 @@ export interface SpecEntryParsed {
   category: string;
   keywords: string[];
   date: string;
+  sourceRef?: string;
+  /** Legacy compatibility alias for sourceRef. */
   source?: string;
   ref?: string;
+  relatedPaths: string[];
+  appliesToRepoIds: string[];
   description?: string;
   domain?: string;
   confidence?: ConfidenceLevel;
@@ -48,7 +58,9 @@ export interface SpecEntryParsed {
   supersedes?: string;
   /** sid of the entry that replaced this one (this is the older version). */
   supersededBy?: string;
-  /** Lifecycle status; absent = active. */
+  /** Canonical lifecycle status; absent legacy status normalizes to active. */
+  lifecycleStatus?: KnowledgeLifecycleStatus;
+  /** Legacy compatibility alias for lifecycleStatus. */
   status?: SpecStatus;
   title: string;
   content: string;
@@ -77,9 +89,9 @@ export interface ParseError {
 // Valid categories (shared with spec-loader)
 // ============================================================================
 
-export const VALID_CATEGORIES = ['coding', 'arch', 'debug', 'test', 'review', 'learning', 'ui'] as const;
+export const VALID_CATEGORIES = CANONICAL_KNOWLEDGE_CATEGORIES;
 
-export type ValidCategory = (typeof VALID_CATEGORIES)[number];
+export type ValidCategory = CanonicalKnowledgeCategory;
 
 // ============================================================================
 // Core regex
@@ -143,14 +155,38 @@ export function parseSpecEntries(content: string): ParseResult {
     const conflictMarker = attrs['conflict-marker'] || undefined;
     const conflictNote = attrs['conflict-note'] || undefined;
     const conflictDate = attrs['conflict-date'] || undefined;
-    const status = attrs.status as SpecStatus | undefined;
+    const normalized = normalizeCanonicalKnowledgeContent({
+      title,
+      content: body.trim(),
+      category: attrs.category,
+      specCategory: attrs.specCategory,
+      keywords: attrs.keywords ? attrs.keywords.split(',') : undefined,
+      tags: attrs.tags ? attrs.tags.split(',') : undefined,
+      sourceRef: attrs.sourceRef ?? attrs['source-ref'],
+      source: attrs.source,
+      relatedPaths: (attrs.relatedPaths ?? attrs['related-paths'])?.split(','),
+      codePaths: attrs.codePaths?.split(','),
+      appliesToRepoIds: (attrs.appliesToRepoIds ?? attrs['applies-to-repo-ids'])?.split(','),
+      lifecycleStatus: attrs.lifecycleStatus ?? attrs['lifecycle-status'],
+      status: attrs.status,
+    });
+    const rawLifecycle = attrs.lifecycleStatus ?? attrs['lifecycle-status'];
+    const lifecycleWasExplicit = rawLifecycle === 'active'
+      || rawLifecycle === 'deprecated'
+      || attrs.status === 'active'
+      || attrs.status === 'deprecated'
+      || attrs.status === 'superseded';
+    const lifecycleStatus = lifecycleWasExplicit ? normalized.lifecycleStatus : undefined;
 
     const entry: SpecEntryParsed = {
-      category: attrs.category ?? '',
-      keywords: attrs.keywords ? attrs.keywords.split(',').map(k => k.trim().toLowerCase()).filter(Boolean) : [],
+      category: normalized.category ?? attrs.category ?? '',
+      keywords: normalized.keywords.map(k => k.toLowerCase()),
       date: attrs.date ?? '',
-      source: attrs.source,
+      sourceRef: normalized.sourceRef ?? undefined,
+      source: normalized.sourceRef ?? undefined,
       ref,
+      relatedPaths: normalized.relatedPaths,
+      appliesToRepoIds: normalized.appliesToRepoIds,
       description: attrs.description || undefined,
       domain: attrs.domain || undefined,
       confidence: confidence && VALID_CONFIDENCE_LEVELS.includes(confidence) ? confidence : undefined,
@@ -160,9 +196,10 @@ export function parseSpecEntries(content: string): ParseResult {
       sid: attrs.sid || undefined,
       supersedes: attrs.supersedes || undefined,
       supersededBy: attrs['superseded-by'] || undefined,
-      status: status && VALID_STATUS.includes(status) ? status : undefined,
+      lifecycleStatus,
+      status: lifecycleStatus,
       title,
-      content: body.trim(),
+      content: normalized.content.trim(),
       lineStart,
       lineEnd,
     };
@@ -170,7 +207,7 @@ export function parseSpecEntries(content: string): ParseResult {
     entries.push(entry);
 
     // Collect validation errors
-    const validationErrors = validateSpecEntry(entry);
+    const validationErrors = [...normalized.errors, ...validateSpecEntry(entry)];
     for (const msg of validationErrors) {
       errors.push({ line: lineStart, message: msg });
     }
@@ -312,6 +349,10 @@ export interface SpecEntryLifecycle {
   supersededBy?: string;
   /** Lifecycle status; `active` (or omitted) writes no attribute. */
   status?: SpecStatus;
+  /** Canonical project-relative paths related to this entry. */
+  relatedPaths?: string[];
+  /** Canonical persisted repository IDs to which this entry applies. */
+  appliesToRepoIds?: string[];
 }
 
 /**
@@ -344,10 +385,29 @@ export function formatNewEntry(
   lifecycle?: SpecEntryLifecycle,
 ): string {
   const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-  const kwStr = keywords.map(k => k.toLowerCase().trim()).filter(Boolean).join(',');
-  const sourceAttr = source ? ` source="${esc(source)}"` : '';
+  const canonical = normalizeCanonicalKnowledgeContent({
+    category,
+    keywords,
+    title,
+    content,
+    sourceRef: source,
+    relatedPaths: lifecycle?.relatedPaths,
+    appliesToRepoIds: lifecycle?.appliesToRepoIds,
+    lifecycleStatus: lifecycle?.status,
+  });
+  if (!canonical.category) {
+    throw new Error(`Invalid category "${category}". Must be one of: ${VALID_CATEGORIES.join(', ')}`);
+  }
+  if (canonical.errors.length > 0) throw new Error(canonical.errors.join('; '));
+  const kwStr = canonical.keywords.map(k => k.toLowerCase()).join(',');
+  const sourceRefAttr = canonical.sourceRef ? ` sourceRef="${esc(canonical.sourceRef)}"` : '';
   const refAttr = ref ? ` ref="${esc(ref)}"` : '';
-  const descAttr = description ? ` description="${esc(description)}"` : '';
+  const relatedPathsAttr = canonical.relatedPaths.length > 0
+    ? ` relatedPaths="${esc(canonical.relatedPaths.join(','))}"`
+    : '';
+  const appliesToRepoIdsAttr = canonical.appliesToRepoIds.length > 0
+    ? ` appliesToRepoIds="${esc(canonical.appliesToRepoIds.join(','))}"`
+    : '';
   const titleAttr = ` title="${esc(title)}"`;
   const confidenceAttr = confidence ? ` confidence="${confidence}"` : '';
   const conflictMarkerAttr = conflictMarker ? ` conflict-marker="${conflictMarker}"` : '';
@@ -355,9 +415,11 @@ export function formatNewEntry(
   const sidAttr = lifecycle?.sid ? ` sid="${esc(lifecycle.sid)}"` : '';
   const supersedesAttr = lifecycle?.supersedes ? ` supersedes="${esc(lifecycle.supersedes)}"` : '';
   const supersededByAttr = lifecycle?.supersededBy ? ` superseded-by="${esc(lifecycle.supersededBy)}"` : '';
-  const statusAttr = lifecycle?.status && lifecycle.status !== 'active' ? ` status="${lifecycle.status}"` : '';
+  const lifecycleAttr = lifecycle?.status && lifecycle.status !== 'active'
+    ? ` lifecycleStatus="${lifecycle.status}"`
+    : '';
 
-  return `<spec-entry category="${category}" keywords="${kwStr}" date="${date}"${sidAttr}${titleAttr}${descAttr}${sourceAttr}${refAttr}${confidenceAttr}${conflictMarkerAttr}${conflictNoteAttr}${supersedesAttr}${supersededByAttr}${statusAttr}>\n\n### ${title}\n\n${content}\n\n</spec-entry>`;
+  return `<spec-entry category="${canonical.category}" keywords="${kwStr}" date="${date}"${sidAttr}${titleAttr}${sourceRefAttr}${refAttr}${relatedPathsAttr}${appliesToRepoIdsAttr}${confidenceAttr}${conflictMarkerAttr}${conflictNoteAttr}${supersedesAttr}${supersededByAttr}${lifecycleAttr}>\n\n### ${title}\n\n${canonical.content}\n\n</spec-entry>`;
 }
 
 // ============================================================================
@@ -366,10 +428,15 @@ export function formatNewEntry(
 
 function parseAttributes(attrStr: string): Record<string, string> {
   const attrs: Record<string, string> = {};
+  const unescape = (value: string): string => value
+    .replace(/&quot;/g, '"')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&amp;/g, '&');
   let m: RegExpExecArray | null;
   ATTR_RE.lastIndex = 0;
   while ((m = ATTR_RE.exec(attrStr)) !== null) {
-    attrs[m[1]] = m[2];
+    attrs[m[1]] = unescape(m[2]);
   }
   return attrs;
 }

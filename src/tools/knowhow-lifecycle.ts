@@ -15,6 +15,10 @@ import {
 } from '../utils/frontmatter.js';
 import { acquireKnowledgeCorpusNamespaceLockSync } from '../utils/atomic-write.js';
 import {
+  withRepositoryMutation,
+  type RepositoryMutationContext,
+} from '../repository/context.js';
+import {
   acquireLifecycleLockBound,
   compareReleaseLifecycleLock,
   LifecycleFsHelperError,
@@ -62,6 +66,10 @@ export interface KnowhowEvolutionLink {
 
 export interface LifecycleFaultOptions {
   ownerGeneration?: string;
+  /** Host-resolved authority for an explicitly linked lifecycle target. */
+  repositoryContext?: RepositoryMutationContext;
+  /** Internal recursion fence set only while authority locks are held. */
+  authorityValidated?: boolean;
   afterTarget?: (path: string, completedTargets: number) => void;
   beforeTargetCheckpoint?: (path: string, completedTargets: number) => void;
   afterTargetQuarantine?: (
@@ -851,6 +859,11 @@ export function recoverKnowhowLifecycleIntent(
   options?: LifecycleFaultOptions,
 ): KnowhowLifecycleResult {
   try {
+    if (options?.repositoryContext?.relation === 'linked' && !options.authorityValidated) {
+      return withRepositoryMutation(options.repositoryContext, 'knowhow', [], () => (
+        recoverKnowhowLifecycleIntent(projectRoot, { ...options, authorityValidated: true })
+      ));
+    }
     const replayed = withLifecycleLock(
       projectRoot,
       () => recoverLifecycleUnlocked(projectRoot, options),
@@ -873,6 +886,11 @@ export function supersedeKnowhowEntry(
   options?: LifecycleFaultOptions,
 ): KnowhowLifecycleResult {
   try {
+    if (options?.repositoryContext?.relation === 'linked' && !options.authorityValidated) {
+      return withRepositoryMutation(options.repositoryContext, 'knowhow', [], () => (
+        supersedeKnowhowEntry(projectRoot, oldId, newId, { ...options, authorityValidated: true })
+      ));
+    }
     return withLifecycleLock(projectRoot, () => {
       recoverLifecycleUnlocked(projectRoot);
       if (oldId === newId) throw new Error(`Cannot supersede a knowhow id with itself: ${oldId}`);

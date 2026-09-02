@@ -4,23 +4,12 @@
 import { readFileSync, existsSync, readdirSync, statSync } from 'node:fs';
 import { resolve, join, extname, basename } from 'node:path';
 import { makeNodeId } from '../../db/connection.js';
+import { parseFrontmatter } from '../../../../utils/frontmatter.js';
+import { normalizeCanonicalKnowledgeContent } from '../../../../../shared/knowledge-content.js';
 import type {
   UnifiedNode, UnifiedEdge, FileRecord, ExtractionResult,
   SourceType, Language,
 } from '../../db/types.js';
-
-interface KnowhowFrontmatter {
-  type?: string;
-  title?: string;
-  description?: string;
-  tags?: string[];
-  specCategory?: string;
-  category?: string;
-  status?: string;
-  lang?: string;
-  source?: string;
-  keywords?: string[];
-}
 
 export function extractWiki(
   knowhowDir: string,
@@ -40,17 +29,19 @@ export function extractWiki(
 
   for (const filePath of mdFiles) {
     const content = readFileSync(filePath, 'utf-8');
-    const fm = parseKnowhowFrontmatter(content);
+    const parsed = parseFrontmatter(content);
+    const canonical = normalizeCanonicalKnowledgeContent({
+      ...parsed.data,
+      content: parsed.body.trimStart(),
+    });
     const slug = basename(filePath, '.md');
     const nodeId = makeNodeId('knowhow', slug.toLowerCase());
-
-    // 解析 body (去掉 frontmatter)
-    const body = extractBody(content);
+    const body = canonical.content;
 
     nodes.push({
       id: nodeId,
       kind: 'knowhow_entry',
-      name: fm.title ?? slug,
+      name: canonical.title || slug,
       qualifiedName: `knowhow:${slug}`,
       filePath: filePath,
       language: 'unknown',
@@ -68,19 +59,24 @@ export function extractWiki(
       decorators: [],
       typeParameters: [],
       sourceType: 'knowhow' as SourceType,
-      definition: fm.description ?? '',
+      definition: canonical.summary,
       aliases: [],
-      keywords: fm.keywords ?? fm.tags ?? [],
-      category: fm.specCategory ?? fm.category ?? fm.type ?? '',
+      keywords: canonical.keywords,
+      category: canonical.category ?? canonical.type ?? '',
       roles: [],
       priority: '',
-      status: fm.status ?? 'active',
+      status: canonical.lifecycleStatus,
       body: body,
       metadata: {
         wikiId: `knowhow-${slug.toLowerCase()}`,
-        type: fm.type ?? '',
-        lang: fm.lang ?? '',
-        source: fm.source ?? '',
+        type: canonical.type ?? '',
+        language: canonical.language ?? '',
+        sourceRef: canonical.sourceRef ?? '',
+        relatedPaths: canonical.relatedPaths,
+        appliesToRepoIds: canonical.appliesToRepoIds,
+        decisionState: canonical.decisionState ?? '',
+        lifecycleStatus: canonical.lifecycleStatus,
+        canonicalAudit: canonical.auditMarkers,
       },
       updatedAt: now,
     });
@@ -106,65 +102,6 @@ export function extractWiki(
       sourceType: 'knowhow' as SourceType,
     },
   };
-}
-
-// ---------------------------------------------------------------------------
-// Frontmatter 解析
-// ---------------------------------------------------------------------------
-
-function parseKnowhowFrontmatter(content: string): KnowhowFrontmatter {
-  const lines = content.split('\n');
-  if (lines[0]?.trim() !== '---') return {};
-
-  const endIdx = lines.findIndex((l, i) => i > 0 && l.trim() === '---');
-  if (endIdx <= 0) return {};
-
-  const fmLines = lines.slice(1, endIdx);
-  const result: KnowhowFrontmatter = {};
-
-  for (const line of fmLines) {
-    const match = line.match(/^(\w+):\s*(.+)$/);
-    if (match) {
-      const key = match[1];
-      let value: unknown = match[2].trim();
-      // 尝试解析 JSON 数组/对象
-      if (typeof value === 'string') {
-        const str = value as string;
-        if (str.startsWith('[') || str.startsWith('{')) {
-          try { value = JSON.parse(str); } catch { /* keep as string */ }
-        }
-        // 处理 YAML 风格的数组 ["a", "b"]
-        else if (str.startsWith('[')) {
-          try { value = JSON.parse(str); } catch { /* keep */ }
-        }
-      }
-      // 映射到 KnowhowFrontmatter 字段
-      switch (key) {
-        case 'type': result.type = value as string; break;
-        case 'title': result.title = value as string; break;
-        case 'description': result.description = value as string; break;
-        case 'tags': result.tags = Array.isArray(value) ? value as string[] : [value as string]; break;
-        case 'specCategory': result.specCategory = value as string; break;
-        case 'category': result.category = value as string; break;
-        case 'status': result.status = value as string; break;
-        case 'lang': result.lang = value as string; break;
-        case 'source': result.source = value as string; break;
-        case 'keywords': result.keywords = Array.isArray(value) ? value as string[] : [value as string]; break;
-      }
-    }
-  }
-
-  return result;
-}
-
-function extractBody(content: string): string {
-  const lines = content.split('\n');
-  if (lines[0]?.trim() !== '---') return content;
-
-  const endIdx = lines.findIndex((l, i) => i > 0 && l.trim() === '---');
-  if (endIdx <= 0) return content;
-
-  return lines.slice(endIdx + 1).join('\n');
 }
 
 function createEmptyFileRecord(path: string): FileRecord {

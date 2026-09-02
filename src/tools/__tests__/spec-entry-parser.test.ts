@@ -61,6 +61,25 @@ Modules must not have circular dependencies.
     assert.strictEqual(result.entries[1].category, 'arch');
   });
 
+  it('dual-reads legacy aliases into canonical fields', () => {
+    const content = `
+<spec-entry category="legacy-bucket" specCategory="learning" tags="Bug, regression" keywords="parser" date="2026-04-21" source="agent" status="deprecated">
+
+### Found off-by-one
+
+Content here.
+
+</spec-entry>
+`;
+    const result = parseSpecEntries(content);
+    assert.strictEqual(result.entries[0].category, 'learning');
+    assert.deepStrictEqual(result.entries[0].keywords, ['parser', 'bug', 'regression', 'legacy-bucket']);
+    assert.strictEqual(result.entries[0].sourceRef, 'agent');
+    assert.strictEqual(result.entries[0].source, 'agent');
+    assert.strictEqual(result.entries[0].lifecycleStatus, 'deprecated');
+    assert.strictEqual(result.entries[0].status, 'deprecated');
+  });
+
   it('extracts optional source attribute', () => {
     const content = `
 <spec-entry category="learning" keywords="bug" date="2026-04-21" source="agent">
@@ -281,6 +300,13 @@ describe('formatSpecEntries', () => {
 // ---------------------------------------------------------------------------
 
 describe('formatNewEntry', () => {
+  it('rejects a non-canonical category on new writes', () => {
+    assert.throws(
+      () => formatNewEntry('free-form', ['auth'], '2026-04-21', 'Title', 'Body'),
+      /Invalid category/,
+    );
+  });
+
   it('produces valid <spec-entry> block with category attribute', () => {
     const result = formatNewEntry('coding', ['auth', 'token'], '2026-04-21', 'Token rotation', 'Content here.');
     assert.ok(result.startsWith('<spec-entry'));
@@ -292,14 +318,15 @@ describe('formatNewEntry', () => {
     assert.ok(result.includes('### Token rotation'));
   });
 
-  it('includes source attribute when provided', () => {
+  it('includes canonical sourceRef attribute when provided', () => {
     const result = formatNewEntry('coding', ['test'], '2026-04-21', 'Title', 'Body', 'agent');
-    assert.ok(result.includes('source="agent"'));
+    assert.ok(result.includes('sourceRef="agent"'));
+    assert.ok(!result.includes(' source="agent"'));
   });
 
-  it('omits source attribute when not provided', () => {
+  it('omits sourceRef attribute when not provided', () => {
     const result = formatNewEntry('coding', ['test'], '2026-04-21', 'Title', 'Body');
-    assert.ok(!result.includes('source='));
+    assert.ok(!result.includes('sourceRef='));
   });
 });
 
@@ -345,7 +372,8 @@ describe('lifecycle round-trip', () => {
     const deprecated = formatNewEntry('coding', ['x'], '2026-07-04', 'T', 'B',
       undefined, undefined, undefined, undefined, undefined, undefined,
       { status: 'deprecated', supersededBy: 'S-20260704-cccc' });
-    assert.ok(deprecated.includes('status="deprecated"'));
+    assert.ok(deprecated.includes('lifecycleStatus="deprecated"'));
+    assert.ok(!deprecated.includes(' status="deprecated"'));
     assert.ok(deprecated.includes('superseded-by="S-20260704-cccc"'));
 
     const { entries } = parseSpecEntries(deprecated);

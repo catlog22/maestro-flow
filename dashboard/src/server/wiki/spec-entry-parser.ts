@@ -6,6 +6,10 @@
  */
 
 import { basename, extname } from 'node:path';
+import {
+  normalizeCanonicalKnowledgeContent,
+  type KnowledgeLifecycleStatus,
+} from '../../../../shared/knowledge-content.js';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -21,6 +25,12 @@ export interface SpecEntry {
   timestamp: string;
   category: string;
   keywords: string[];
+  sourceRef?: string;
+  relatedPaths?: string[];
+  appliesToRepoIds?: string[];
+  language?: string;
+  decisionState?: string;
+  lifecycleStatus?: KnowledgeLifecycleStatus;
   ref?: string;
   confidence?: string;
   conflictNote?: string;
@@ -139,13 +149,28 @@ function parseEntryBlocks(
     const title = attrs.title || (titleMatch ? titleMatch[1].trim() : innerContent.split('\n')[0].trim());
     const type = attrs.type ?? detectEntryType(title, fileName);
     const id = `${stem}-${String(++entryIndex).padStart(3, '0')}`;
-    const kws = attrs.keywords ? attrs.keywords.split(',').map((k) => k.trim().toLowerCase()).filter(Boolean) : [];
+    const normalized = normalizeCanonicalKnowledgeContent({
+      ...frontmatter,
+      title,
+      content: innerContent,
+      category: attrs.category ?? frontmatter?.category,
+      specCategory: attrs.specCategory ?? frontmatter?.specCategory,
+      keywords: attrs.keywords ? attrs.keywords.split(',') : frontmatter?.keywords,
+      tags: attrs.tags ? attrs.tags.split(',') : frontmatter?.tags,
+      sourceRef: attrs.sourceRef ?? attrs['source-ref'] ?? frontmatter?.sourceRef,
+      source: attrs.source ?? frontmatter?.source,
+      relatedPaths: attrs.relatedPaths ? attrs.relatedPaths.split(',') : frontmatter?.relatedPaths,
+      codePaths: attrs.codePaths ? attrs.codePaths.split(',') : frontmatter?.codePaths,
+      appliesToRepoIds: attrs.appliesToRepoIds ? attrs.appliesToRepoIds.split(',') : frontmatter?.appliesToRepoIds,
+      language: attrs.language ?? frontmatter?.language,
+      lang: attrs.lang ?? frontmatter?.lang,
+      decisionState: attrs.decisionState ?? frontmatter?.decisionState,
+      lifecycleStatus: attrs.lifecycleStatus ?? attrs['lifecycle-status'] ?? frontmatter?.lifecycleStatus,
+      status: attrs.status ?? frontmatter?.status,
+    });
     const ref = attrs.ref || undefined;
     const description = attrs.description || undefined;
-    const entryCategory = attrs.category
-      || (typeof frontmatter?.category === 'string' ? frontmatter.category : null)
-      || FILE_CATEGORY_MAP[stem]
-      || 'general';
+    const entryCategory = normalized.category ?? FILE_CATEGORY_MAP[stem] ?? 'general';
 
     const VALID_CONFIDENCE = ['high', 'medium', 'low', 'contested'];
     const VALID_STATUS = ['active', 'deprecated'];
@@ -155,8 +180,10 @@ function parseEntryBlocks(
     const sid = attrs.sid || undefined;
     const supersedes = attrs.supersedes || undefined;
     const supersededBy = attrs['superseded-by'] || undefined;
-    const rawStatus = attrs.status || undefined;
-    const status = rawStatus && VALID_STATUS.includes(rawStatus) ? rawStatus : undefined;
+    const rawStatus = attrs.lifecycleStatus || attrs['lifecycle-status'] || attrs.status || undefined;
+    const status = rawStatus && VALID_STATUS.includes(normalized.lifecycleStatus)
+      ? normalized.lifecycleStatus
+      : undefined;
 
     entries.push({
       id,
@@ -167,7 +194,13 @@ function parseEntryBlocks(
       file: fileName,
       timestamp: attrs.date ?? '',
       category: entryCategory,
-      keywords: kws,
+      keywords: normalized.keywords.map(keyword => keyword.toLowerCase()),
+      ...(normalized.sourceRef ? { sourceRef: normalized.sourceRef } : {}),
+      ...(normalized.relatedPaths.length ? { relatedPaths: normalized.relatedPaths } : {}),
+      ...(normalized.appliesToRepoIds.length ? { appliesToRepoIds: normalized.appliesToRepoIds } : {}),
+      ...(normalized.language ? { language: normalized.language } : {}),
+      ...(normalized.decisionState ? { decisionState: normalized.decisionState } : {}),
+      ...(status ? { lifecycleStatus: status as KnowledgeLifecycleStatus } : {}),
       ...(ref ? { ref } : {}),
       ...(confidence ? { confidence } : {}),
       ...(conflictNote ? { conflictNote } : {}),
@@ -209,14 +242,28 @@ function parseEntryBlocks(
       sec.heading.match(/\[(\d{4}-\d{2}-\d{2})\]/) ?? sec.heading.match(/(\d{4}-\d{2}-\d{2})/);
     const timestamp = dateMatch ? dateMatch[1] : '';
     const title = extractCleanTitle(sec.heading) || sec.heading;
-    const category =
-      typeof frontmatter?.category === 'string'
-        ? frontmatter.category
-        : (FILE_CATEGORY_MAP[stem] ?? 'general');
-    const keywords = Array.isArray(frontmatter?.keywords)
-      ? frontmatter.keywords.map(String)
-      : [];
-    entries.push({ id, type, title, content, file: fileName, timestamp, category, keywords });
+    const normalized = normalizeCanonicalKnowledgeContent({
+      ...frontmatter,
+      title,
+      content,
+    });
+    const category = normalized.category ?? FILE_CATEGORY_MAP[stem] ?? 'general';
+    entries.push({
+      id,
+      type,
+      title,
+      content,
+      file: fileName,
+      timestamp,
+      category,
+      keywords: normalized.keywords,
+      ...(normalized.sourceRef ? { sourceRef: normalized.sourceRef } : {}),
+      ...(normalized.relatedPaths.length ? { relatedPaths: normalized.relatedPaths } : {}),
+      ...(normalized.appliesToRepoIds.length ? { appliesToRepoIds: normalized.appliesToRepoIds } : {}),
+      ...(normalized.language ? { language: normalized.language } : {}),
+      ...(normalized.decisionState ? { decisionState: normalized.decisionState } : {}),
+      lifecycleStatus: normalized.lifecycleStatus,
+    });
   }
 
   return entries;

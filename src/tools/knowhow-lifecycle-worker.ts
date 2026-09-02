@@ -28,7 +28,10 @@ function assertRequest(value: unknown): asserts value is KnowhowLifecycleWorkerR
     && typeof request.oldId === 'string'
     && typeof request.newId === 'string'
     && Object.keys(request).sort().join(',')
-      === 'newId,oldId,operation,ownerGeneration,projectRoot') {
+      === [
+        'newId', 'oldId', 'operation', 'ownerGeneration', 'projectRoot',
+        ...(request.repositoryContext === undefined ? [] : ['repositoryContext']),
+      ].sort().join(',')) {
     return;
   }
   if (request.operation === 'history'
@@ -37,7 +40,10 @@ function assertRequest(value: unknown): asserts value is KnowhowLifecycleWorkerR
       === 'id,operation,ownerGeneration,projectRoot') return;
   if (request.operation === 'recover'
     && Object.keys(request).sort().join(',')
-      === 'operation,ownerGeneration,projectRoot') return;
+      === [
+        'operation', 'ownerGeneration', 'projectRoot',
+        ...(request.repositoryContext === undefined ? [] : ['repositoryContext']),
+      ].sort().join(',')) return;
   throw new Error('Invalid knowhow lifecycle worker operation');
 }
 
@@ -50,7 +56,10 @@ function dispatch(request: KnowhowLifecycleWorkerRequest): KnowhowLifecycleWorke
           request.projectRoot,
           request.oldId,
           request.newId,
-          { ownerGeneration: request.ownerGeneration },
+          {
+            ownerGeneration: request.ownerGeneration,
+            repositoryContext: request.repositoryContext,
+          },
         ),
       };
     case 'history':
@@ -63,7 +72,10 @@ function dispatch(request: KnowhowLifecycleWorkerRequest): KnowhowLifecycleWorke
         operation: request.operation,
         result: recoverKnowhowLifecycleIntent(
           request.projectRoot,
-          { ownerGeneration: request.ownerGeneration },
+          {
+            ownerGeneration: request.ownerGeneration,
+            repositoryContext: request.repositoryContext,
+          },
         ),
       };
   }

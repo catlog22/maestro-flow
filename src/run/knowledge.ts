@@ -11,17 +11,18 @@ import {
   type StoreTransaction,
 } from './store.js';
 import { formatNewEntry, parseSpecEntries } from '../tools/spec-entry-parser.js';
-import { appendSpecEntry } from '../tools/spec-writer.js';
+import { appendSpecEntry, MAX_SPEC_ENTRY_SIZE, writeSpecEntry } from '../tools/spec-writer.js';
 import { CATEGORY_MAP, resolveSpecDir, type SpecCategory } from '../tools/spec-loader.js';
-import { executeAdd } from '../tools/store-knowhow.js';
+import { executeAdd, renderKnowhowDocument } from '../tools/store-knowhow.js';
 import { supersedeEntry } from '../tools/spec-conflict-marker.js';
 import { supersedeKnowhowEntry, setFrontmatterValues as setKnowhowFrontmatterValues } from '../tools/knowhow-lifecycle.js';
 import { findSeedByFilename, renderSeedContent } from '../tools/spec-seeds.js';
 import {
-  escapeYamlValue,
   generateKnowhowFilename,
+  KNOWHOW_PREFIX_MAP,
   knowhowFileToWikiId,
-  normalizeKnowhowBody,
+  normalizeCanonicalKnowledgeContent,
+  normalizeKnowhowReplayPayload,
   parseFrontmatter,
 } from '../utils/frontmatter.js';
 import { hashDirectory, readVerifiedContainedFile } from './artifacts.js';
@@ -37,6 +38,18 @@ import {
   type KnowledgeCandidateReconciliation,
   type KnowledgeReconciliation,
 } from '../knowledge/reconciliation-schema.js';
+import {
+  CURRENT_REPOSITORY_ALIAS,
+  resolveRepositoryContext,
+  resolveRepositoryId,
+  type RepositoryContext,
+} from '../repository/context.js';
+import {
+  CANONICAL_KNOWLEDGE_CATEGORIES,
+  DECISION_STATES,
+  KNOWHOW_TYPES,
+  LIFECYCLE_STATUSES,
+} from '../../shared/knowledge-content.js';
 
 const nonEmptyString = z.string().min(1);
 const sha256Schema = z.string().regex(/^[a-f0-9]{64}$/);
@@ -110,42 +123,143 @@ export const sessionKnowledgeCandidateSourceSchema = z.object({
   evidence_root_descriptors: z.array(sessionKnowledgeEvidenceRootSchema).min(1).optional(),
 }).strict();
 
-export const knowledgeCandidateSchema = z.object({
-  candidate_id: z.string().regex(/^KDC-[a-f0-9]{16}$/),
+const candidateIdSchema = z.string().regex(/^KDC-[a-f0-9]{16}$/);
+const candidateActionSchema = z.enum(['propose', 'reaffirm', 'supersede', 'contest']);
+const candidateSourceKindSchema = z.enum(['decision', 'constraint', 'manual']);
+const candidateStatusSchema = z.enum(['pending', 'promoting', 'promoted', 'rejected']);
+const repositoryIdSchema = z.string().uuid();
+
+export const legacyKnowledgePromotionReceiptSchema = z.object({
+  outcome: z.enum(['created', 'reaffirmed']),
+  promoted_at: nonEmptyString,
+  content_hash: sha256Schema,
+}).strict();
+
+export const knowledgePromotionIntentV11Schema = z.object({
+  schema_version: z.literal('knowledge-promotion-intent/1.1'),
+  planned_id: nonEmptyString,
+  target_repo_id: repositoryIdSchema,
+  payload_hash: sha256Schema,
+  started_at: nonEmptyString,
+}).strict();
+
+export const knowledgePromotionReceiptV11Schema = z.object({
+  schema_version: z.literal('knowledge-promotion-receipt/1.1'),
+  outcome: z.enum(['created', 'reaffirmed']),
+  promoted_at: nonEmptyString,
+  content_hash: sha256Schema,
+  target_repo_id: repositoryIdSchema,
+  target_workspace_id: nonEmptyString,
+  target_alias_snapshot: nonEmptyString,
+  planned_id: nonEmptyString,
+  acknowledged_payload_hash: sha256Schema,
+}).strict();
+
+export const legacyKnowledgeCandidateSchema = z.object({
+  candidate_id: candidateIdSchema,
   target: z.enum(['spec', 'knowhow']),
-  action: z.enum(['propose', 'reaffirm', 'supersede', 'contest']),
+  action: candidateActionSchema,
   title: nonEmptyString,
   content: nonEmptyString,
   category: z.string().nullable(),
-  source_kind: z.enum(['decision', 'constraint', 'manual']),
+  source_kind: candidateSourceKindSchema,
   evidence_refs: z.array(nonEmptyString),
   occurrences: z.number().int().positive(),
   first_recorded_at: nonEmptyString,
   last_recorded_at: nonEmptyString,
-  status: z.enum(['pending', 'promoting', 'promoted', 'rejected']),
+  status: candidateStatusSchema,
   promoted_id: z.string().nullable(),
-  promotion_receipt: z.object({
-    outcome: z.enum(['created', 'reaffirmed']),
-    promoted_at: nonEmptyString,
-    content_hash: z.string().regex(/^[a-f0-9]{64}$/),
-  }).strict().nullable().optional(),
-  /** Immutable source binding for newly staged origin=session candidates. */
+  promotion_receipt: legacyKnowledgePromotionReceiptSchema.nullable().optional(),
   source_snapshot: sessionKnowledgeCandidateSourceSchema.optional(),
 }).strict();
+
+export const candidateRepositoryBindingV11Schema = z.object({
+  source_repo_id: repositoryIdSchema,
+  source_workspace_id: nonEmptyString,
+  target_repo_id: repositoryIdSchema,
+  target_alias_snapshot: nonEmptyString,
+}).strict();
+
+const canonicalSpecPayloadV11Schema = z.object({
+  kind: z.literal('spec'),
+  category: z.enum(CANONICAL_KNOWLEDGE_CATEGORIES),
+  title: nonEmptyString,
+  content: nonEmptyString,
+  keywords: z.array(nonEmptyString),
+  sourceRef: nonEmptyString.nullable(),
+  relatedPaths: z.array(nonEmptyString),
+  appliesToRepoIds: z.array(repositoryIdSchema),
+}).strict();
+
+const canonicalKnowhowPayloadV11Schema = z.object({
+  kind: z.literal('knowhow'),
+  type: z.enum(KNOWHOW_TYPES),
+  title: nonEmptyString,
+  content: nonEmptyString,
+  keywords: z.array(nonEmptyString),
+  category: z.enum(CANONICAL_KNOWLEDGE_CATEGORIES).nullable(),
+  sourceRef: nonEmptyString.nullable(),
+  relatedPaths: z.array(nonEmptyString),
+  appliesToRepoIds: z.array(repositoryIdSchema),
+  summary: z.string(),
+  language: nonEmptyString.nullable(),
+  decisionState: z.enum(DECISION_STATES).nullable(),
+  lifecycleStatus: z.enum(LIFECYCLE_STATUSES),
+  tool: z.boolean(),
+}).strict();
+
+export const canonicalKnowledgeCandidatePayloadV11Schema = z.discriminatedUnion('kind', [
+  canonicalSpecPayloadV11Schema,
+  canonicalKnowhowPayloadV11Schema,
+]);
+
+export const knowledgeCandidateV11Schema = z.object({
+  schema_version: z.literal('knowledge-candidate/1.1'),
+  candidate_id: candidateIdSchema,
+  repository_binding: candidateRepositoryBindingV11Schema,
+  payload: canonicalKnowledgeCandidatePayloadV11Schema,
+  // Compatibility projection retained in-memory and on 1.1 only. The payload
+  // is authoritative and the refinement prevents the two views diverging.
+  target: z.enum(['spec', 'knowhow']),
+  action: candidateActionSchema,
+  title: nonEmptyString,
+  content: nonEmptyString,
+  category: z.string().nullable(),
+  source_kind: candidateSourceKindSchema,
+  evidence_refs: z.array(nonEmptyString),
+  occurrences: z.number().int().positive(),
+  first_recorded_at: nonEmptyString,
+  last_recorded_at: nonEmptyString,
+  status: candidateStatusSchema,
+  promoted_id: z.string().nullable(),
+  promotion_intent: knowledgePromotionIntentV11Schema.nullable().optional(),
+  promotion_receipt: knowledgePromotionReceiptV11Schema.nullable().optional(),
+  source_snapshot: sessionKnowledgeCandidateSourceSchema.optional(),
+}).strict().superRefine((candidate, ctx) => {
+  if (candidate.target !== candidate.payload.kind
+    || candidate.title !== candidate.payload.title
+    || candidate.content !== candidate.payload.content
+    || candidate.category !== candidate.payload.category) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'Candidate compatibility projection differs from canonical payload' });
+  }
+});
+
+export const knowledgeCandidateSchema = z.union([
+  knowledgeCandidateV11Schema,
+  legacyKnowledgeCandidateSchema,
+]);
 
 export type KnowledgeInputSource = z.infer<typeof knowledgeInputSchema>['source'];
 export type KnowledgeInput = z.infer<typeof knowledgeInputSchema>;
 
-/**
- * Minimal ledger surface shared by run and session knowledge deltas, so
- * input/candidate append logic stays single-sourced (session delta reuse).
- */
 export interface KnowledgeLedgerDraft {
+  schema_version?: string;
+  source_repository?: { repo_id: string; workspace_id: string };
   inputs: KnowledgeInput[];
   candidates: KnowledgeCandidate[];
 }
 
-export const runKnowledgeDeltaSchema = z.object({
+export const runKnowledgeDeltaV10Schema = z.object({
   schema_version: z.literal('run-knowledge-delta/1.0'),
   session_id: nonEmptyString,
   run_id: nonEmptyString,
@@ -153,17 +267,42 @@ export const runKnowledgeDeltaSchema = z.object({
   created_at: nonEmptyString,
   updated_at: nonEmptyString,
   inputs: z.array(knowledgeInputSchema),
+  candidates: z.array(legacyKnowledgeCandidateSchema),
+}).strict();
+
+export const runKnowledgeDeltaV11Schema = z.object({
+  schema_version: z.literal('run-knowledge-delta/1.1'),
+  session_id: nonEmptyString,
+  run_id: nonEmptyString,
+  source_repository: z.object({ repo_id: repositoryIdSchema, workspace_id: nonEmptyString }).strict(),
+  revision: z.number().int().nonnegative(),
+  created_at: nonEmptyString,
+  updated_at: nonEmptyString,
+  inputs: z.array(knowledgeInputSchema),
+  // A delta upgrades as a whole, while legacy candidate byte shapes remain
+  // untouched. Newly staged candidates are always 1.1.
   candidates: z.array(knowledgeCandidateSchema),
 }).strict();
 
-/**
- * Session-level knowledge ledger (origin=session). Separate schema family on
- * purpose: run-knowledge-delta/1.0 is strict() and frozen byte-for-byte for
- * backward compatibility with deployed CLIs (see knowledge-session-decoupling-mvp.md S1).
- */
-export const sessionKnowledgeDeltaSchema = z.object({
+export const runKnowledgeDeltaSchema = z.discriminatedUnion('schema_version', [
+  runKnowledgeDeltaV10Schema,
+  runKnowledgeDeltaV11Schema,
+]);
+
+export const sessionKnowledgeDeltaV10Schema = z.object({
   schema_version: z.literal('session-knowledge-delta/1.0'),
   session_id: nonEmptyString,
+  revision: z.number().int().nonnegative(),
+  created_at: nonEmptyString,
+  updated_at: nonEmptyString,
+  inputs: z.array(knowledgeInputSchema),
+  candidates: z.array(legacyKnowledgeCandidateSchema),
+}).strict();
+
+export const sessionKnowledgeDeltaV11Schema = z.object({
+  schema_version: z.literal('session-knowledge-delta/1.1'),
+  session_id: nonEmptyString,
+  source_repository: z.object({ repo_id: repositoryIdSchema, workspace_id: nonEmptyString }).strict(),
   revision: z.number().int().nonnegative(),
   created_at: nonEmptyString,
   updated_at: nonEmptyString,
@@ -171,9 +310,16 @@ export const sessionKnowledgeDeltaSchema = z.object({
   candidates: z.array(knowledgeCandidateSchema),
 }).strict();
 
+export const sessionKnowledgeDeltaSchema = z.discriminatedUnion('schema_version', [
+  sessionKnowledgeDeltaV10Schema,
+  sessionKnowledgeDeltaV11Schema,
+]);
+
 export type RunKnowledgeDelta = z.infer<typeof runKnowledgeDeltaSchema>;
 export type SessionKnowledgeDelta = z.infer<typeof sessionKnowledgeDeltaSchema>;
 export type KnowledgeCandidate = z.infer<typeof knowledgeCandidateSchema>;
+export type KnowledgeCandidateV11 = z.infer<typeof knowledgeCandidateV11Schema>;
+export type CanonicalKnowledgeCandidatePayloadV11 = z.infer<typeof canonicalKnowledgeCandidatePayloadV11Schema>;
 export type SessionKnowledgeCandidateSource = z.infer<typeof sessionKnowledgeCandidateSourceSchema>;
 export type SessionKnowledgeEvidenceRoot = z.infer<typeof sessionKnowledgeEvidenceRootSchema>;
 export type KnowledgeInputSignal = z.infer<typeof knowledgeInputSignalSchema>;
@@ -209,10 +355,14 @@ export interface SessionKnowledgeSummary {
 export interface PromoteSessionKnowledgeOptions {
   candidateIds?: string[];
   all?: boolean;
+  /** Optional human selector used only to assert the already-frozen target. */
+  targetRepository?: string;
   /** Internal deterministic interleaving hook used by focused CAS tests. */
   _beforeFinalSessionValidation?: () => void;
   /** Wrapper-supplied corpus/receipt validator, executed under the final store lock. */
   _finalSessionValidation?: (store: SessionStore) => void;
+  /** Internal crash-saga hook: fires after a durable target write and acknowledgment. */
+  _afterTargetWrite?: (candidateId: string) => void;
 }
 
 export interface KnowledgePromotionResult {
@@ -281,29 +431,72 @@ function nowIso(): string {
   return new Date().toISOString();
 }
 
-function createDelta(sessionId: string, runId: string, now: string = nowIso()): RunKnowledgeDelta {
-  return {
-    schema_version: 'run-knowledge-delta/1.0',
-    session_id: sessionId,
-    run_id: runId,
-    revision: 0,
-    created_at: now,
-    updated_at: now,
-    inputs: [],
-    candidates: [],
-  };
+export function sourceRepositoryBinding(projectRoot: string): { repo_id: string; workspace_id: string } | null {
+  try {
+    const context = resolveRepositoryContext(CURRENT_REPOSITORY_ALIAS, { projectRoot });
+    return context.repoId && context.identityPersisted
+      ? { repo_id: context.repoId, workspace_id: context.workspaceId }
+      : null;
+  } catch {
+    return null;
+  }
 }
 
-export function createSessionDelta(sessionId: string, now: string = nowIso()): SessionKnowledgeDelta {
-  return {
-    schema_version: 'session-knowledge-delta/1.0',
-    session_id: sessionId,
-    revision: 0,
-    created_at: now,
-    updated_at: now,
-    inputs: [],
-    candidates: [],
-  };
+function createDelta(
+  sessionId: string,
+  runId: string,
+  now: string = nowIso(),
+  sourceRepository?: { repo_id: string; workspace_id: string } | null,
+): RunKnowledgeDelta {
+  return sourceRepository
+    ? {
+        schema_version: 'run-knowledge-delta/1.1',
+        session_id: sessionId,
+        run_id: runId,
+        source_repository: sourceRepository,
+        revision: 0,
+        created_at: now,
+        updated_at: now,
+        inputs: [],
+        candidates: [],
+      }
+    : {
+        schema_version: 'run-knowledge-delta/1.0',
+        session_id: sessionId,
+        run_id: runId,
+        revision: 0,
+        created_at: now,
+        updated_at: now,
+        inputs: [],
+        candidates: [],
+      };
+}
+
+export function createSessionDelta(
+  sessionId: string,
+  now: string = nowIso(),
+  sourceRepository?: { repo_id: string; workspace_id: string } | null,
+): SessionKnowledgeDelta {
+  return sourceRepository
+    ? {
+        schema_version: 'session-knowledge-delta/1.1',
+        session_id: sessionId,
+        source_repository: sourceRepository,
+        revision: 0,
+        created_at: now,
+        updated_at: now,
+        inputs: [],
+        candidates: [],
+      }
+    : {
+        schema_version: 'session-knowledge-delta/1.0',
+        session_id: sessionId,
+        revision: 0,
+        created_at: now,
+        updated_at: now,
+        inputs: [],
+        candidates: [],
+      };
 }
 
 export function runKnowledgeDeltaPath(store: SessionStore, sessionId: string, runId: string): string {
@@ -320,7 +513,7 @@ export function readSessionKnowledgeDelta(
   readOnly = false,
 ): SessionKnowledgeDelta {
   const path = sessionKnowledgeDeltaPath(store, sessionId);
-  const fallback = createSessionDelta(sessionId);
+  const fallback = createSessionDelta(sessionId, nowIso(), sourceRepositoryBinding(store.projectRoot));
   return readOnly
     ? store.readJsonFileReadOnly(path, sessionKnowledgeDeltaSchema, fallback)
     : store.readJsonFile(path, sessionKnowledgeDeltaSchema, fallback);
@@ -368,15 +561,124 @@ export function sessionKnowledgeSnapshotHash(delta: SessionKnowledgeDelta): stri
       source_kind: candidate.source_kind,
       evidence_roots: normalizeKnowledgeEvidenceRoots(candidate.evidence_refs),
       source_snapshot: candidate.source_snapshot ?? null,
+      repository_binding: isKnowledgeCandidateV11(candidate) ? candidate.repository_binding : null,
+      payload: isKnowledgeCandidateV11(candidate) ? candidate.payload : null,
     }))
     .sort((left, right) => left.candidate_id.localeCompare(right.candidate_id));
   return createHash('sha256').update(JSON.stringify(views)).digest('hex');
 }
 
-export function knowledgeCandidateId(target: KnowledgeCandidate['target'], content: string): string {
-  const normalized = content.normalize('NFKC').toLowerCase().replace(/\s+/g, ' ').trim();
-  const hash = createHash('sha256').update(`${target}\0${normalized}`).digest('hex').slice(0, 16);
+export interface KnowledgeCandidateIdentityV11 {
+  targetRepoId: string;
+  appliesToRepoIds: string[];
+  payload: CanonicalKnowledgeCandidatePayloadV11;
+}
+
+export function knowledgeCandidateId(
+  targetOrIdentity: KnowledgeCandidate['target'] | KnowledgeCandidateIdentityV11,
+  content?: string,
+): string {
+  if (typeof targetOrIdentity !== 'string') {
+    const canonical = JSON.stringify({
+      target_repo_id: targetOrIdentity.targetRepoId,
+      appliesToRepoIds: [...new Set(targetOrIdentity.appliesToRepoIds)].sort(),
+      payload: targetOrIdentity.payload,
+    });
+    return `KDC-${createHash('sha256').update(canonical).digest('hex').slice(0, 16)}`;
+  }
+  const normalized = (content ?? '').normalize('NFKC').toLowerCase().replace(/\s+/g, ' ').trim();
+  const hash = createHash('sha256').update(`${targetOrIdentity}\0${normalized}`).digest('hex').slice(0, 16);
   return `KDC-${hash}`;
+}
+
+function canonicalCandidatePayload(
+  target: KnowledgeCandidate['target'],
+  input: {
+    title: string;
+    content: string;
+    category?: string | null;
+    keywords?: string[];
+    sourceRef?: string | null;
+    relatedPaths?: string[];
+    appliesToRepoIds?: string[];
+    type?: string | null;
+    language?: string | null;
+    decisionState?: string | null;
+    lifecycleStatus?: string | null;
+    tool?: boolean;
+  },
+): CanonicalKnowledgeCandidatePayloadV11 {
+  const canonical = normalizeCanonicalKnowledgeContent({
+    ...input,
+    category: target === 'spec' ? (input.category ?? 'learning') : input.category,
+  });
+  if (!canonical.title || !canonical.content || canonical.errors.length > 0) {
+    throw new Error(canonical.errors.join('; ') || 'Knowledge candidate title and content are required');
+  }
+  if (target === 'spec') {
+    if (!canonical.category) throw new Error('Spec candidates require a canonical category');
+    if (canonical.content.length > MAX_SPEC_ENTRY_SIZE) {
+      throw new Error('Spec candidates larger than 2KB must be staged explicitly as Knowhow; promotion never creates redirects or multiple copies');
+    }
+    return canonicalSpecPayloadV11Schema.parse({
+      kind: 'spec',
+      category: canonical.category,
+      title: canonical.title,
+      content: canonical.content,
+      keywords: [...canonical.keywords].map(keyword => keyword.toLowerCase()).sort(),
+      sourceRef: canonical.sourceRef,
+      relatedPaths: [...canonical.relatedPaths].sort(),
+      appliesToRepoIds: [...canonical.appliesToRepoIds].sort(),
+    });
+  }
+  const type = canonical.type ?? 'tip';
+  if (canonical.decisionState && type !== 'decision') {
+    throw new Error('decisionState is only valid for Knowhow type "decision"');
+  }
+  return canonicalKnowhowPayloadV11Schema.parse({
+    kind: 'knowhow',
+    type,
+    title: canonical.title,
+    content: canonical.content,
+    keywords: [...canonical.keywords].sort(),
+    category: canonical.category,
+    sourceRef: canonical.sourceRef,
+    relatedPaths: [...canonical.relatedPaths].sort(),
+    appliesToRepoIds: [...canonical.appliesToRepoIds].sort(),
+    summary: canonical.summary,
+    language: canonical.language,
+    decisionState: canonical.decisionState,
+    lifecycleStatus: canonical.lifecycleStatus,
+    tool: canonical.tool,
+  });
+}
+
+export function isKnowledgeCandidateV11(candidate: KnowledgeCandidate): candidate is KnowledgeCandidateV11 {
+  return 'schema_version' in candidate && candidate.schema_version === 'knowledge-candidate/1.1';
+}
+
+/**
+ * Explicit write-time upgrade. Reads never rewrite legacy deltas, and legacy
+ * candidate objects are retained byte-for-byte inside the upgraded container.
+ */
+export function upgradeKnowledgeLedgerForStaging(
+  draft: KnowledgeLedgerDraft,
+  source: Pick<RepositoryContext, 'repoId' | 'workspaceId' | 'identityPersisted'> | null,
+  family: 'run' | 'session',
+): void {
+  if (!source?.repoId || !source.identityPersisted) return;
+  if (draft.schema_version === `${family}-knowledge-delta/1.0`) {
+    draft.schema_version = `${family}-knowledge-delta/1.1`;
+    draft.source_repository = { repo_id: source.repoId, workspace_id: source.workspaceId };
+    return;
+  }
+  if (draft.schema_version === `${family}-knowledge-delta/1.1`) {
+    if (!draft.source_repository
+      || draft.source_repository.repo_id !== source.repoId
+      || draft.source_repository.workspace_id !== source.workspaceId) {
+      throw new Error('Knowledge ledger source repository binding changed');
+    }
+  }
 }
 
 function normalizedText(value: string): string {
@@ -389,6 +691,39 @@ function contentHash(value: string): string {
 
 export function knowledgeCandidateContentHash(value: string): string {
   return contentHash(value);
+}
+
+export function knowledgeCandidatePayloadHash(candidate: KnowledgeCandidateV11): string {
+  return createHash('sha256').update(JSON.stringify(candidate.payload)).digest('hex');
+}
+
+function promotionReceiptForCandidate(
+  projectRoot: string,
+  candidate: KnowledgeCandidate,
+  outcome: 'created' | 'reaffirmed',
+  promotedAt: string,
+  plannedId: string,
+): z.infer<typeof legacyKnowledgePromotionReceiptSchema> | z.infer<typeof knowledgePromotionReceiptV11Schema> {
+  if (!isKnowledgeCandidateV11(candidate)) {
+    return { outcome, promoted_at: promotedAt, content_hash: contentHash(candidate.content) };
+  }
+  const target = resolveRepositoryId(candidate.repository_binding.target_repo_id, {
+    projectRoot,
+    corpus: candidate.target,
+    mode: 'write',
+  });
+  const payloadHash = knowledgeCandidatePayloadHash(candidate);
+  return {
+    schema_version: 'knowledge-promotion-receipt/1.1',
+    outcome,
+    promoted_at: promotedAt,
+    content_hash: contentHash(candidate.content),
+    target_repo_id: candidate.repository_binding.target_repo_id,
+    target_workspace_id: target.workspaceId,
+    target_alias_snapshot: target.alias,
+    planned_id: plannedId,
+    acknowledged_payload_hash: payloadHash,
+  };
 }
 
 export function normalizeKnowledgeEvidenceRoots(refs: readonly string[]): string[] {
@@ -673,13 +1008,63 @@ export function addInput(
 
 export function addCandidate(
   draft: KnowledgeLedgerDraft,
-  input: Pick<KnowledgeCandidate, 'target' | 'action' | 'title' | 'content' | 'category' | 'source_kind'>
-    & { evidence_refs: string[]; source_snapshot?: SessionKnowledgeCandidateSource },
+  input: {
+    target: KnowledgeCandidate['target'];
+    action: KnowledgeCandidate['action'];
+    title: string;
+    content: string;
+    category: string | null;
+    source_kind: KnowledgeCandidate['source_kind'];
+    evidence_refs: string[];
+    source_snapshot?: SessionKnowledgeCandidateSource;
+    target_repository?: Pick<RepositoryContext, 'repoId' | 'workspaceId' | 'alias'>;
+    keywords?: string[];
+    sourceRef?: string | null;
+    relatedPaths?: string[];
+    appliesToRepoIds?: string[];
+    type?: string | null;
+    language?: string | null;
+    decisionState?: string | null;
+    lifecycleStatus?: string | null;
+    tool?: boolean;
+  },
   now: string,
 ): string {
-  const id = knowledgeCandidateId(input.target, input.content);
+  const canonicalLedger = draft.schema_version?.endsWith('/1.1') === true;
+  let payload: CanonicalKnowledgeCandidatePayloadV11 | null = null;
+  let binding: KnowledgeCandidateV11['repository_binding'] | null = null;
+  if (canonicalLedger) {
+    const source = draft.source_repository;
+    const target = input.target_repository ?? (source
+      ? { repoId: source.repo_id, workspaceId: source.workspace_id, alias: CURRENT_REPOSITORY_ALIAS }
+      : undefined);
+    if (!source || !target?.repoId) {
+      throw new Error('Canonical knowledge candidates require persisted source and target repository bindings');
+    }
+    payload = canonicalCandidatePayload(input.target, input);
+    binding = candidateRepositoryBindingV11Schema.parse({
+      source_repo_id: source.repo_id,
+      source_workspace_id: source.workspace_id,
+      target_repo_id: target.repoId,
+      target_alias_snapshot: target.alias,
+    });
+  }
+  const id = payload && binding
+    ? knowledgeCandidateId({
+        targetRepoId: binding.target_repo_id,
+        appliesToRepoIds: payload.appliesToRepoIds,
+        payload,
+      })
+    : knowledgeCandidateId(input.target, input.content);
   const existing = draft.candidates.find(candidate => candidate.candidate_id === id);
   if (existing) {
+    if (isKnowledgeCandidateV11(existing)) {
+      if (!payload || !binding
+        || JSON.stringify(existing.payload) !== JSON.stringify(payload)
+        || JSON.stringify(existing.repository_binding) !== JSON.stringify(binding)) {
+        throw new Error(`Candidate ${id} cannot change its immutable repository or canonical payload binding`);
+      }
+    }
     if (existing.action !== input.action && input.source_kind === 'manual') {
       throw new Error(
         `Candidate ${id} already exists with action ${existing.action}; `
@@ -701,22 +1086,40 @@ export function addCandidate(
     existing.evidence_refs = [...new Set([...existing.evidence_refs, ...input.evidence_refs])];
     return id;
   }
-  draft.candidates.push({
+  const common = {
     candidate_id: id,
-    ...input,
+    target: input.target,
+    action: input.action,
+    title: input.title,
+    content: input.content,
+    category: input.category,
+    source_kind: input.source_kind,
     evidence_refs: [...new Set(input.evidence_refs)],
     occurrences: 1,
     first_recorded_at: now,
     last_recorded_at: now,
-    status: 'pending',
+    status: 'pending' as const,
     promoted_id: null,
     promotion_receipt: null,
-  });
+    ...(input.source_snapshot ? { source_snapshot: input.source_snapshot } : {}),
+  };
+  draft.candidates.push(payload && binding
+    ? knowledgeCandidateV11Schema.parse({
+        schema_version: 'knowledge-candidate/1.1',
+        repository_binding: binding,
+        payload,
+        promotion_intent: null,
+        ...common,
+      })
+    : legacyKnowledgeCandidateSchema.parse(common));
   return id;
 }
 
 export interface KnowledgeCandidateDraft {
   candidate_id: string;
+  schema_version?: 'knowledge-candidate/1.1';
+  repository_binding?: KnowledgeCandidateV11['repository_binding'];
+  payload?: CanonicalKnowledgeCandidatePayloadV11;
   target: KnowledgeCandidate['target'];
   action: KnowledgeCandidate['action'];
   title: string;
@@ -792,6 +1195,11 @@ export function runKnowledgeCandidateSnapshotHash(
     if (candidate.status === 'promoted') continue;
     byId.set(candidate.candidate_id, {
       candidate_id: candidate.candidate_id,
+      ...(isKnowledgeCandidateV11(candidate) ? {
+        schema_version: candidate.schema_version,
+        repository_binding: candidate.repository_binding,
+        payload: candidate.payload,
+      } : {}),
       target: candidate.target,
       action: candidate.action,
       title: candidate.title,
@@ -814,6 +1222,8 @@ export function runKnowledgeCandidateSnapshotHash(
       content: normalizedKnowledgeSnapshotText(candidate.content),
       category: candidate.category,
       source_kind: candidate.source_kind,
+      repository_binding: candidate.repository_binding ?? null,
+      payload: candidate.payload ?? null,
     }));
   return createHash('sha256').update(JSON.stringify(views)).digest('hex');
 }
@@ -825,7 +1235,7 @@ export function readRunKnowledgeDelta(
   readOnly = false,
 ): RunKnowledgeDelta {
   const path = runKnowledgeDeltaPath(store, sessionId, runId);
-  const fallback = createDelta(sessionId, runId);
+  const fallback = createDelta(sessionId, runId, nowIso(), sourceRepositoryBinding(store.projectRoot));
   return readOnly
     ? store.readJsonFileReadOnly(path, runKnowledgeDeltaSchema, fallback)
     : store.readJsonFile(path, runKnowledgeDeltaSchema, fallback);
@@ -892,6 +1302,7 @@ export function recordRunKnowledgeInputs(
   const v3Run = located.run.schema_version === 'run/3.0';
   const now = nowIso();
   const path = runKnowledgeDeltaPath(store, located.sessionId, runId);
+  const sourceBinding = sourceRepositoryBinding(projectRoot);
   const mutate = (draft: RunKnowledgeDelta) => {
     for (const id of ids) addInput(draft, id, signal, source, now, evidence);
     draft.revision++;
@@ -905,7 +1316,7 @@ export function recordRunKnowledgeInputs(
       runId,
       path,
       schema: runKnowledgeDeltaSchema,
-      initial: createDelta(located.sessionId, runId, now),
+      initial: createDelta(located.sessionId, runId, now, sourceBinding),
       authority: executionAuthority,
       operation: 'knowledge-record',
       requestPayload: {
@@ -926,7 +1337,7 @@ export function recordRunKnowledgeInputs(
     runId,
     path,
     runKnowledgeDeltaSchema,
-    createDelta(located.sessionId, runId, now),
+    createDelta(located.sessionId, runId, now, sourceBinding),
     mutate,
   );
 }
@@ -941,6 +1352,16 @@ export function stageRunKnowledgeCandidate(
     content: string;
     category?: string | null;
     evidenceRefs?: string[];
+    repository?: string;
+    keywords?: string[];
+    sourceRef?: string | null;
+    relatedPaths?: string[];
+    appliesToRepoIds?: string[];
+    type?: string | null;
+    language?: string | null;
+    decisionState?: string | null;
+    lifecycleStatus?: string | null;
+    tool?: boolean;
   },
   sessionId?: string,
   executionAuthority?: KnowledgeExecutionAuthority,
@@ -951,7 +1372,25 @@ export function stageRunKnowledgeCandidate(
   const store = new SessionStore(projectRoot);
   const located = store.findRunRecord(runId, sessionId);
   const v3Run = located.run.schema_version === 'run/3.0';
-  const candidateId = knowledgeCandidateId(input.target, content);
+  const sourceContext = resolveRepositoryContext(CURRENT_REPOSITORY_ALIAS, { projectRoot });
+  const targetContext = resolveRepositoryContext(input.repository ?? CURRENT_REPOSITORY_ALIAS, {
+    projectRoot,
+    require: { mode: 'write', corpus: input.target },
+  });
+  if (targetContext.relation === 'linked' && !sourceContext.repoId) {
+    throw new Error('Cross-repository staging requires a persisted source repository identity');
+  }
+  const normalizedCategory = input.category?.trim() || (input.target === 'spec' ? 'learning' : null);
+  const payload = sourceContext.repoId && targetContext.repoId
+    ? canonicalCandidatePayload(input.target, { ...input, title, content, category: normalizedCategory })
+    : null;
+  const candidateId = payload && targetContext.repoId
+    ? knowledgeCandidateId({
+        targetRepoId: targetContext.repoId,
+        appliesToRepoIds: payload.appliesToRepoIds,
+        payload,
+      })
+    : knowledgeCandidateId(input.target, content);
   const prior = summarizeSessionKnowledge(projectRoot, located.sessionId, {
     readOnly: true,
     strict: true,
@@ -966,18 +1405,30 @@ export function stageRunKnowledgeCandidate(
   const reused = Boolean(prior);
   const now = nowIso();
   const path = runKnowledgeDeltaPath(store, located.sessionId, runId);
+  const sourceBinding = sourceRepositoryBinding(projectRoot);
   const mutate = (draft: RunKnowledgeDelta) => {
+    upgradeKnowledgeLedgerForStaging(draft, sourceContext, 'run');
     const candidateId = addCandidate(draft, {
       target: input.target,
       action: input.action ?? 'propose',
       title,
       content,
-      category: input.category?.trim() || null,
+      category: normalizedCategory,
       source_kind: 'manual',
       evidence_refs: [...new Set([
         `run:${runId}`,
         ...(input.evidenceRefs ?? []).map(ref => ref.trim()).filter(Boolean),
       ])],
+      target_repository: targetContext,
+      keywords: input.keywords,
+      sourceRef: input.sourceRef,
+      relatedPaths: input.relatedPaths,
+      appliesToRepoIds: input.appliesToRepoIds,
+      type: input.type,
+      language: input.language,
+      decisionState: input.decisionState,
+      lifecycleStatus: input.lifecycleStatus,
+      tool: input.tool,
     }, now);
     draft.revision++;
     draft.updated_at = now;
@@ -990,7 +1441,7 @@ export function stageRunKnowledgeCandidate(
       runId,
       path,
       schema: runKnowledgeDeltaSchema,
-      initial: createDelta(located.sessionId, runId, now),
+      initial: createDelta(located.sessionId, runId, now, sourceBinding),
       authority: executionAuthority,
       operation: 'knowledge-stage',
       requestPayload: {
@@ -998,7 +1449,17 @@ export function stageRunKnowledgeCandidate(
         action: input.action ?? 'propose',
         title,
         content,
-        category: input.category?.trim() || null,
+        category: normalizedCategory,
+        repository: input.repository ?? CURRENT_REPOSITORY_ALIAS,
+        keywords: input.keywords ?? [],
+        source_ref: input.sourceRef ?? null,
+        related_paths: input.relatedPaths ?? [],
+        applies_to_repo_ids: input.appliesToRepoIds ?? [],
+        type: input.type ?? null,
+        language: input.language ?? null,
+        decision_state: input.decisionState ?? null,
+        lifecycle_status: input.lifecycleStatus ?? null,
+        tool: input.tool ?? false,
         evidence_refs: [...new Set((input.evidenceRefs ?? []).map(ref => ref.trim()).filter(Boolean))],
       },
       revisionOf: draft => draft.revision,
@@ -1013,7 +1474,7 @@ export function stageRunKnowledgeCandidate(
     runId,
     path,
     runKnowledgeDeltaSchema,
-    createDelta(located.sessionId, runId, now),
+    createDelta(located.sessionId, runId, now, sourceBinding),
     mutate,
   );
 }
@@ -1032,6 +1493,8 @@ export function stageHandoffKnowledgeCandidates(
   const path = runKnowledgeDeltaPath(store, sessionId, run.run_id);
   const draft = readRunKnowledgeDelta(store, sessionId, run.run_id);
   const now = nowIso();
+  const sourceContext = resolveRepositoryContext(CURRENT_REPOSITORY_ALIAS, { projectRoot: store.projectRoot });
+  upgradeKnowledgeLedgerForStaging(draft, sourceContext, 'run');
   const evidence = [`run:${run.run_id}`, ...run.handoff.artifact_refs.map(id => `artifact:${id}`)];
 
   for (const decision of run.handoff.decisions) {
@@ -1288,7 +1751,10 @@ function plannedSpecId(candidate: KnowledgeCandidate): string {
 
 function plannedKnowhowId(candidate: KnowledgeCandidate): string {
   const date = candidate.first_recorded_at.slice(0, 10).replace(/-/g, '');
-  return `tip-${date}-${candidate.candidate_id.slice(4)}`;
+  const type = isKnowledgeCandidateV11(candidate) && candidate.payload.kind === 'knowhow'
+    ? candidate.payload.type
+    : 'tip';
+  return `${KNOWHOW_PREFIX_MAP[type].toLowerCase()}-${date}-${candidate.candidate_id.slice(4)}`;
 }
 
 function findExistingSpec(
@@ -1336,6 +1802,23 @@ function promoteSpecCandidate(
   plannedId: string,
   supersessionTarget: string | null,
 ): { promoted_id: string; outcome: 'created' | 'reaffirmed' } {
+  if (isKnowledgeCandidateV11(candidate) && candidate.payload.kind === 'spec') {
+    const context = resolveRepositoryId(candidate.repository_binding.target_repo_id, {
+      projectRoot,
+      corpus: 'spec',
+      mode: 'write',
+    });
+    const result = writeSpecEntry(context, {
+      ...candidate.payload,
+      content: safeSpecContent(candidate.payload.content),
+      sourceRef: candidate.payload.sourceRef,
+      targetRepoId: candidate.repository_binding.target_repo_id,
+      sid: plannedId,
+      allowDuplicateTitle: supersessionTarget !== null,
+    });
+    if (!result.ok || !result.sid) throw new Error(`Failed to promote spec candidate ${candidate.candidate_id}`);
+    return { promoted_id: result.sid, outcome: result.replayed ? 'reaffirmed' : 'created' };
+  }
   const content = safeSpecContent(candidate.content);
   const plannedExisting = findSpecById(projectRoot, plannedId);
   if (plannedExisting) {
@@ -1392,27 +1875,47 @@ function promoteKnowhowCandidate(
   candidate: KnowledgeCandidate,
   plannedId: string,
 ): { promoted_id: string; outcome: 'created' | 'reaffirmed' } {
-  const previousRoot = process.env.MAESTRO_PROJECT_ROOT;
-  process.env.MAESTRO_PROJECT_ROOT = projectRoot;
-  try {
-    const response = executeAdd({
+  let response;
+  if (isKnowledgeCandidateV11(candidate) && candidate.payload.kind === 'knowhow') {
+    const canonical = candidate.payload;
+    const context = resolveRepositoryId(candidate.repository_binding.target_repo_id, {
+      projectRoot,
+      corpus: 'knowhow',
+      mode: 'write',
+    });
+    response = executeAdd({
       operation: 'add',
       limit: 20,
-      id: plannedId,
+      explicitId: plannedId,
+      targetRepoId: candidate.repository_binding.target_repo_id,
+      type: canonical.type,
+      title: canonical.title,
+      content: canonical.content,
+      keywords: canonical.keywords,
+      category: canonical.category ?? undefined,
+      sourceRef: canonical.sourceRef ?? undefined,
+      relatedPaths: canonical.relatedPaths,
+      appliesToRepoIds: canonical.appliesToRepoIds,
+      language: canonical.language ?? undefined,
+      decisionState: canonical.decisionState ?? undefined,
+      lifecycleStatus: canonical.lifecycleStatus,
+      tool: canonical.tool,
+    }, context);
+  } else {
+    response = executeAdd({
+      operation: 'add',
+      limit: 20,
+      explicitId: plannedId,
       type: 'tip',
       title: candidate.title,
-      description: `Promoted from ${candidate.evidence_refs.join(', ')}`,
-      body: candidate.content,
-      keywords: ['session-knowledge', candidate.source_kind],
-      tags: ['promoted'],
-    });
-    if (!response.success) throw new Error(response.error ?? 'unknown knowhow promotion error');
-    const result = response.result as { id: string; replayed: boolean };
-    return { promoted_id: result.id, outcome: result.replayed ? 'reaffirmed' : 'created' };
-  } finally {
-    if (previousRoot === undefined) delete process.env.MAESTRO_PROJECT_ROOT;
-    else process.env.MAESTRO_PROJECT_ROOT = previousRoot;
+      content: candidate.content,
+      keywords: ['session-knowledge', candidate.source_kind, 'promoted'],
+      sourceRef: `evidence:${candidate.evidence_refs.join(',')}`,
+    }, { projectRoot, repoId: null });
   }
+  if (!response.success) throw new Error(response.error ?? 'unknown knowhow promotion error');
+  const result = response.result as { id: string; replayed: boolean };
+  return { promoted_id: result.id, outcome: result.replayed ? 'reaffirmed' : 'created' };
 }
 
 function atomicSpecFilename(category: SpecCategory): string {
@@ -1440,7 +1943,10 @@ function stageAtomicSessionCorpusPromotion(
   supersessionTarget: string | null = null,
 ): { promoted_id: string; outcome: 'created' | 'reaffirmed' } {
   if (candidate.target === 'spec') {
-    const content = safeSpecContent(candidate.content);
+    const canonical = isKnowledgeCandidateV11(candidate) && candidate.payload.kind === 'spec'
+      ? candidate.payload
+      : null;
+    const content = safeSpecContent(canonical?.content ?? candidate.content);
     const plannedExisting = findSpecById(projectRoot, promotedId);
     if (plannedExisting) {
       if (normalizedText(plannedExisting.content) !== normalizedText(content)) {
@@ -1456,9 +1962,9 @@ function stageAtomicSessionCorpusPromotion(
       return { promoted_id: existing.id, outcome: 'reaffirmed' };
     }
     const validCategories: SpecCategory[] = ['coding', 'arch', 'debug', 'test', 'review', 'learning', 'ui'];
-    const category = validCategories.includes(candidate.category as SpecCategory)
+    const category = canonical?.category ?? (validCategories.includes(candidate.category as SpecCategory)
       ? candidate.category as SpecCategory
-      : 'learning';
+      : 'learning');
     const filename = atomicSpecFilename(category);
     const path = join(resolveSpecDir(projectRoot, 'project'), filename);
     const seed = findSeedByFilename(filename);
@@ -1466,55 +1972,59 @@ function stageAtomicSessionCorpusPromotion(
       ?? (seed ? renderSeedContent(seed) : '');
     const entry = formatNewEntry(
       category,
-      ['session-knowledge', candidate.source_kind],
+      canonical?.keywords ?? ['session-knowledge', candidate.source_kind],
       promotedAt.slice(0, 10),
-      candidate.title,
+      canonical?.title ?? candidate.title,
       content,
-      `session:${sessionId}:${candidate.candidate_id}`,
+      canonical ? (canonical.sourceRef ?? '') : `session:${sessionId}:${candidate.candidate_id}`,
       undefined,
-      `Promoted from ${candidate.evidence_refs.join(', ')}`,
+      canonical ? undefined : `Promoted from ${candidate.evidence_refs.join(', ')}`,
       undefined,
       undefined,
       undefined,
-      { sid: promotedId },
+      {
+        sid: promotedId,
+        relatedPaths: canonical?.relatedPaths,
+        appliesToRepoIds: canonical?.appliesToRepoIds,
+      },
     );
     tx.writeText(path, `${current.replace(/\s*$/, '')}\n\n${entry}\n`);
     return { promoted_id: promotedId, outcome: 'created' };
   }
 
-  const generated = generateKnowhowFilename('tip', candidate.title, promotedId);
+  const payload = isKnowledgeCandidateV11(candidate) && candidate.payload.kind === 'knowhow'
+    ? candidate.payload
+    : null;
+  const type = payload?.type ?? 'tip';
+  const generated = generateKnowhowFilename(type, candidate.title, promotedId);
   const path = join(projectRoot, '.workflow', 'knowhow', generated.filename);
+  const canonical = normalizeCanonicalKnowledgeContent(payload ? {
+    ...payload,
+    explicitId: promotedId,
+  } : {
+    type: 'tip',
+    title: candidate.title,
+    content: candidate.content,
+    explicitId: promotedId,
+    keywords: ['session-knowledge', candidate.source_kind, 'promoted'],
+    sourceRef: `evidence:${candidate.evidence_refs.join(',')}`,
+  });
+  if (!canonical.content) throw new Error(`Knowledge candidate ${candidate.candidate_id} has empty content`);
+  const expectedReplay = normalizeKnowhowReplayPayload({ ...canonical });
   const existingDocument = readPromotionText(tx, path);
   if (existingDocument !== null) {
     const parsed = parseFrontmatter(existingDocument);
-    const existingBody = normalizeKnowhowBody(parsed.body);
-    if (parsed.data.title !== candidate.title
-      || parsed.data.type !== 'tip'
-      || parsed.data.explicitId !== promotedId
-      || existingBody !== normalizeKnowhowBody(candidate.content)) {
+    const actualReplay = normalizeKnowhowReplayPayload({
+      ...parsed.data,
+      content: parsed.body,
+      explicitId: parsed.data.explicitId ?? promotedId,
+    });
+    if (actualReplay.canonical !== expectedReplay.canonical) {
       throw new Error(`Persisted promotion ID ${promotedId} has different content for ${candidate.candidate_id}`);
     }
     return { promoted_id: generated.id, outcome: 'reaffirmed' };
   }
-  const body = normalizeKnowhowBody(candidate.content);
-  if (!body) throw new Error(`Knowledge candidate ${candidate.candidate_id} has empty content`);
-  const description = `Promoted from ${candidate.evidence_refs.join(', ')}`;
-  const document = [
-    '---',
-    `title: ${escapeYamlValue(candidate.title)}`,
-    `description: ${escapeYamlValue(description)}`,
-    'type: tip',
-    `explicitId: ${promotedId}`,
-    `created: ${promotedAt}`,
-    'keywords:',
-    '  - session-knowledge',
-    `  - ${candidate.source_kind}`,
-    'tags:',
-    '  - promoted',
-    '---',
-    '',
-    body,
-  ].join('\n');
+  const document = renderKnowhowDocument({ ...canonical, type, explicitId: promotedId }, promotedAt);
   tx.writeText(path, document);
   return { promoted_id: generated.id, outcome: 'created' };
 }
@@ -1634,9 +2144,12 @@ function promotionCorpusPaths(
     return [...new Set(paths)];
   }
   const knowhowDir = join(projectRoot, '.workflow', 'knowhow');
+  const type = isKnowledgeCandidateV11(candidate) && candidate.payload.kind === 'knowhow'
+    ? candidate.payload.type
+    : 'tip';
   const paths = [join(
     knowhowDir,
-    generateKnowhowFilename('tip', candidate.title, promotedId).filename,
+    generateKnowhowFilename(type, candidate.title, promotedId).filename,
   )];
   if (supersessionTarget && existsSync(knowhowDir)) {
     paths.push(...readdirSync(knowhowDir)
@@ -1797,14 +2310,26 @@ function persistedPromotionMatches(
     return existing !== null
       && normalizedText(existing.content) === normalizedText(safeSpecContent(candidate.content));
   }
-  const generated = generateKnowhowFilename('tip', candidate.title, plannedId);
+  const payload = isKnowledgeCandidateV11(candidate) && candidate.payload.kind === 'knowhow'
+    ? candidate.payload
+    : null;
+  const generated = generateKnowhowFilename(payload?.type ?? 'tip', candidate.title, plannedId);
   const path = join(projectRoot, '.workflow', 'knowhow', generated.filename);
   if (!existsSync(path)) return false;
   const parsed = parseFrontmatter(readFileSync(path, 'utf8'));
-  return parsed.data.title === candidate.title
-    && parsed.data.type === 'tip'
-    && parsed.data.explicitId === plannedId
-    && normalizeKnowhowBody(parsed.body) === normalizeKnowhowBody(candidate.content);
+  const actual = normalizeKnowhowReplayPayload({ ...parsed.data, content: parsed.body });
+  const expected = normalizeKnowhowReplayPayload(payload ? {
+    ...payload,
+    explicitId: plannedId,
+  } : {
+    type: 'tip',
+    title: candidate.title,
+    content: candidate.content,
+    explicitId: plannedId,
+    keywords: ['session-knowledge', candidate.source_kind, 'promoted'],
+    sourceRef: `evidence:${candidate.evidence_refs.join(',')}`,
+  });
+  return actual.canonical === expected.canonical;
 }
 
 function samePromotionCandidate(left: PromotionCandidate, right: PromotionCandidate): boolean {
@@ -1817,7 +2342,11 @@ function samePromotionCandidate(left: PromotionCandidate, right: PromotionCandid
     && left.category === right.category
     && left.source_kind === right.source_kind
     && JSON.stringify(left.evidence_refs) === JSON.stringify(right.evidence_refs)
-    && JSON.stringify(left.source_snapshot) === JSON.stringify(right.source_snapshot);
+    && JSON.stringify(left.source_snapshot) === JSON.stringify(right.source_snapshot)
+    && JSON.stringify(isKnowledgeCandidateV11(left) ? left.repository_binding : null)
+      === JSON.stringify(isKnowledgeCandidateV11(right) ? right.repository_binding : null)
+    && JSON.stringify(isKnowledgeCandidateV11(left) ? left.payload : null)
+      === JSON.stringify(isKnowledgeCandidateV11(right) ? right.payload : null);
 }
 
 function assertV30RecoveryCandidateFences(
@@ -1895,11 +2424,9 @@ function applyV30PromotionResults(
       if (!result) continue;
       candidate.status = 'promoted';
       candidate.promoted_id = result.promoted_id;
-      candidate.promotion_receipt = {
-        outcome: result.outcome,
-        promoted_at: promotedAt,
-        content_hash: contentHash(candidate.content),
-      };
+      candidate.promotion_receipt = promotionReceiptForCandidate(
+        store.projectRoot, candidate, result.outcome, promotedAt, result.promoted_id,
+      );
       changed = true;
     }
     if (!changed) continue;
@@ -1917,11 +2444,9 @@ function applyV30PromotionResults(
     if (!result) continue;
     candidate.status = 'promoted';
     candidate.promoted_id = result.promoted_id;
-    candidate.promotion_receipt = {
-      outcome: result.outcome,
-      promoted_at: promotedAt,
-      content_hash: contentHash(candidate.content),
-    };
+    candidate.promotion_receipt = promotionReceiptForCandidate(
+      store.projectRoot, candidate, result.outcome, promotedAt, result.promoted_id,
+    );
     changed = true;
   }
   if (!changed) return;
@@ -2042,6 +2567,203 @@ function promoteV30KnowledgeAtomically(
     applyV30PromotionResults(store, tx, sessionId, currentSummary, promoted, promotedAt);
     return promoted;
   });
+}
+
+function updatePromotionLedgers(
+  store: SessionStore,
+  sessionId: string,
+  summary: SessionKnowledgeSummary,
+  update: (candidate: KnowledgeCandidate) => boolean,
+  updatedAt: string,
+): void {
+  const sessionSchema = store.readSessionRecordReadOnly(sessionId).schema_version;
+  const runIds = [...new Set(summary.candidates.flatMap(candidate => candidate.run_ids))];
+  const applyDelta = (delta: RunKnowledgeDelta | SessionKnowledgeDelta): boolean => {
+    let changed = false;
+    for (const candidate of delta.candidates) changed = update(candidate) || changed;
+    if (changed) {
+      delta.revision++;
+      delta.updated_at = updatedAt;
+    }
+    return changed;
+  };
+  if (sessionSchema === 'session/3.0') {
+    store.withV30KnowledgeTransaction(sessionId, tx => {
+      for (const runId of runIds) {
+        const path = runKnowledgeDeltaPath(store, sessionId, runId);
+        const delta = structuredClone(tx.readJson(path, runKnowledgeDeltaSchema));
+        if (applyDelta(delta)) tx.writeJson(path, delta, runKnowledgeDeltaSchema);
+      }
+      const sessionPath = sessionKnowledgeDeltaPath(store, sessionId);
+      if (existsSync(sessionPath)) {
+        const delta = structuredClone(tx.readJson(sessionPath, sessionKnowledgeDeltaSchema));
+        if (applyDelta(delta)) tx.writeJson(sessionPath, delta, sessionKnowledgeDeltaSchema);
+      }
+    });
+    return;
+  }
+  if (sessionSchema === 'session/2.0') {
+    store.updateKnowledgeTransaction(sessionId, tx => {
+      for (const runId of runIds) {
+        const path = runKnowledgeDeltaPath(store, sessionId, runId);
+        const delta = structuredClone(tx.readJson(path, runKnowledgeDeltaSchema));
+        if (applyDelta(delta)) tx.writeJson(path, delta, runKnowledgeDeltaSchema);
+      }
+      const sessionPath = sessionKnowledgeDeltaPath(store, sessionId);
+      if (existsSync(sessionPath)) {
+        const delta = structuredClone(tx.readJson(sessionPath, sessionKnowledgeDeltaSchema));
+        if (applyDelta(delta)) tx.writeJson(sessionPath, delta, sessionKnowledgeDeltaSchema);
+      }
+    });
+    return;
+  }
+  store.updateKnowledgeLifecycle(sessionId, (_lifecycle, tx) => {
+    for (const runId of runIds) {
+      const delta = readRunKnowledgeDelta(store, sessionId, runId);
+      if (applyDelta(delta)) {
+        tx.writeJson(runKnowledgeDeltaPath(store, sessionId, runId), delta, runKnowledgeDeltaSchema);
+      }
+    }
+    const sessionPath = sessionKnowledgeDeltaPath(store, sessionId);
+    if (existsSync(sessionPath)) {
+      const delta = readSessionKnowledgeDelta(store, sessionId);
+      if (applyDelta(delta)) tx.writeJson(sessionPath, delta, sessionKnowledgeDeltaSchema);
+    }
+  });
+}
+
+function acknowledgedCanonicalPayload(
+  target: RepositoryContext,
+  candidate: KnowledgeCandidateV11,
+  plannedId: string,
+): CanonicalKnowledgeCandidatePayloadV11 {
+  if (candidate.payload.kind === 'spec') {
+    const specDir = resolveSpecDir(target.projectRoot, 'project');
+    for (const file of existsSync(specDir) ? readdirSync(specDir).filter(name => name.endsWith('.md')) : []) {
+      const entry = parseSpecEntries(readFileSync(join(specDir, file), 'utf8')).entries
+        .find(item => item.sid === plannedId);
+      if (!entry) continue;
+      return canonicalSpecPayloadV11Schema.parse({
+        kind: 'spec',
+        category: entry.category,
+        title: entry.title,
+        content: specBody(entry.content),
+        keywords: [...entry.keywords].sort(),
+        sourceRef: entry.sourceRef ?? null,
+        relatedPaths: [...entry.relatedPaths].sort(),
+        appliesToRepoIds: [...entry.appliesToRepoIds].sort(),
+      });
+    }
+    throw new Error(`Target acknowledgment is missing planned spec ${plannedId}`);
+  }
+  const generated = generateKnowhowFilename(candidate.payload.type, candidate.payload.title, plannedId);
+  const path = join(target.projectRoot, '.workflow', 'knowhow', generated.filename);
+  if (!existsSync(path)) throw new Error(`Target acknowledgment is missing planned Knowhow ${plannedId}`);
+  const parsed = parseFrontmatter(readFileSync(path, 'utf8'));
+  const canonical = normalizeCanonicalKnowledgeContent({ ...parsed.data, content: parsed.body });
+  return canonicalKnowhowPayloadV11Schema.parse({
+    kind: 'knowhow',
+    type: canonical.type,
+    title: canonical.title,
+    content: canonical.content.trim(),
+    keywords: [...canonical.keywords].sort(),
+    category: canonical.category,
+    sourceRef: canonical.sourceRef,
+    relatedPaths: [...canonical.relatedPaths].sort(),
+    appliesToRepoIds: [...canonical.appliesToRepoIds].sort(),
+    summary: canonical.summary,
+    language: canonical.language,
+    decisionState: canonical.decisionState,
+    lifecycleStatus: canonical.lifecycleStatus,
+    tool: canonical.tool,
+  });
+}
+
+function promoteCrossRepositoryPlan(
+  projectRoot: string,
+  store: SessionStore,
+  sessionId: string,
+  summary: SessionKnowledgeSummary,
+  plan: KnowledgePromotionPlanItem[],
+  options: PromoteSessionKnowledgeOptions,
+): KnowledgePromotionResult['promoted'] {
+  if (plan.some(item => !isKnowledgeCandidateV11(item.candidate))) {
+    throw new Error('Cross-repository promotion requires canonical 1.1 candidates');
+  }
+  if (plan.some(item => item.supersessionTarget || item.candidate.action === 'supersede')) {
+    throw new Error('Cross-repository supersession is not supported; promote without supersession');
+  }
+  const intentAt = nowIso();
+  const byId = new Map(plan.map(item => [item.candidate.candidate_id, item]));
+  updatePromotionLedgers(store, sessionId, summary, candidate => {
+    const item = byId.get(candidate.candidate_id);
+    if (!item) return false;
+    if (!isKnowledgeCandidateV11(candidate)) {
+      throw new Error(`Candidate ${candidate.candidate_id} lost its canonical repository binding`);
+    }
+    const expected = {
+      schema_version: 'knowledge-promotion-intent/1.1' as const,
+      planned_id: item.promotedId,
+      target_repo_id: candidate.repository_binding.target_repo_id,
+      payload_hash: knowledgeCandidatePayloadHash(candidate),
+      started_at: candidate.promotion_intent?.started_at ?? intentAt,
+    };
+    if (candidate.promotion_intent
+      && JSON.stringify(candidate.promotion_intent) !== JSON.stringify(expected)) {
+      throw new Error(`Candidate ${candidate.candidate_id} has a conflicting promotion intent`);
+    }
+    if (candidate.status === 'promoted') return false;
+    candidate.status = 'promoting';
+    candidate.promoted_id = item.promotedId;
+    candidate.promotion_intent = expected;
+    return true;
+  }, intentAt);
+
+  const promoted: KnowledgePromotionResult['promoted'] = [];
+  for (const item of plan) {
+    const candidate = item.candidate;
+    if (!isKnowledgeCandidateV11(candidate)) throw new Error('Canonical candidate required');
+    const target = resolveRepositoryId(candidate.repository_binding.target_repo_id, {
+      projectRoot,
+      corpus: candidate.target,
+      mode: 'write',
+    });
+    const result = candidate.target === 'spec'
+      ? promoteSpecCandidate(projectRoot, sessionId, candidate, item.promotedId, null)
+      : promoteKnowhowCandidate(projectRoot, candidate, item.promotedId);
+    const acknowledged = acknowledgedCanonicalPayload(target, candidate, item.promotedId);
+    const acknowledgedHash = createHash('sha256').update(JSON.stringify(acknowledged)).digest('hex');
+    const expectedHash = knowledgeCandidatePayloadHash(candidate);
+    if (acknowledgedHash !== expectedHash) {
+      throw new Error(`Target payload acknowledgment conflict for ${candidate.candidate_id}`);
+    }
+    promoted.push({
+      candidate_id: candidate.candidate_id,
+      target: candidate.target,
+      promoted_id: result.promoted_id,
+      outcome: result.outcome,
+    });
+    options._afterTargetWrite?.(candidate.candidate_id);
+  }
+
+  const promotedAt = nowIso();
+  const promotedById = new Map(promoted.map(item => [item.candidate_id, item]));
+  updatePromotionLedgers(store, sessionId, summary, candidate => {
+    const result = promotedById.get(candidate.candidate_id);
+    if (!result) return false;
+    if (!isKnowledgeCandidateV11(candidate) || !candidate.promotion_intent) {
+      throw new Error(`Candidate ${candidate.candidate_id} has no recoverable promotion intent`);
+    }
+    candidate.status = 'promoted';
+    candidate.promoted_id = result.promoted_id;
+    candidate.promotion_receipt = knowledgePromotionReceiptV11Schema.parse(
+      promotionReceiptForCandidate(
+        projectRoot, candidate, result.outcome, promotedAt, candidate.promotion_intent.planned_id,
+      ),
+    );
+    return true;
+  }, promotedAt);
+  return promoted;
 }
 
 /**
@@ -2172,6 +2894,50 @@ export function promoteSessionKnowledge(
     }
   }
   const selected = [...selectedById.values()];
+  const sourceContext = resolveRepositoryContext(CURRENT_REPOSITORY_ALIAS, { projectRoot });
+  const targetAssertionCandidates = selected.length > 0
+    ? selected
+    : summary.candidates.filter(candidate =>
+        candidate.status === 'promoted'
+        && (options.all || requested.has(candidate.candidate_id))
+      );
+  const selectedTargetIds = new Set<string>();
+  for (const candidate of targetAssertionCandidates) {
+    if (isKnowledgeCandidateV11(candidate)) {
+      if (!sourceContext.repoId
+        || candidate.repository_binding.source_repo_id !== sourceContext.repoId
+        || candidate.repository_binding.source_workspace_id !== sourceContext.workspaceId) {
+        throw new Error(`Candidate ${candidate.candidate_id} source repository binding no longer matches`);
+      }
+      selectedTargetIds.add(candidate.repository_binding.target_repo_id);
+    } else {
+      selectedTargetIds.add(sourceContext.repoId ?? 'legacy-current');
+    }
+  }
+  if (selectedTargetIds.size > 1) {
+    throw new Error('One promotion invocation cannot write multiple physical repository targets');
+  }
+  if (options.targetRepository) {
+    const asserted = resolveRepositoryContext(options.targetRepository, { projectRoot });
+    const targetId = [...selectedTargetIds][0];
+    if (!asserted.repoId || asserted.repoId !== targetId) {
+      throw new Error(`Promotion target assertion does not match the immutable staged target ${targetId}`);
+    }
+  }
+  const lifecycleSession = store.readSessionRecordReadOnly(sessionId);
+  if (selected.length > 0 && lifecycleSession.schema_version === 'session/3.0') {
+    if (store.readSessionV30(sessionId).active_run_ids.length > 0) {
+      throw new Error(`Session ${sessionId} has active Runs; promotion waits until every Run is sealed`);
+    }
+  } else if (selected.length > 0) {
+    const openExecution = store.readOpenExecution(sessionId);
+    if (openExecution) {
+      throw new Error(
+        `Session ${sessionId} has open Execution ${openExecution.execution_id}; `
+        + 'knowledge promotion waits until the Execution and its Runs are sealed',
+      );
+    }
+  }
   const skippedObserved = options.all
     ? eligibleSelected.filter(candidate => candidate.stage === 'observed').map(candidate => candidate.candidate_id)
     : [];
@@ -2276,7 +3042,14 @@ export function promoteSessionKnowledge(
       );
     }
     selectedSpecTitles.set(normalizedTitle, candidate);
-    const existing = findExistingSpec(projectRoot, candidate.title);
+    const physicalRoot = isKnowledgeCandidateV11(candidate)
+      ? resolveRepositoryId(candidate.repository_binding.target_repo_id, {
+          projectRoot,
+          corpus: 'spec',
+          mode: 'write',
+        }).projectRoot
+      : projectRoot;
+    const existing = findExistingSpec(physicalRoot, candidate.title);
     if (existing
       && normalizedText(existing.content) !== normalizedText(safeSpecContent(candidate.content))
       && existing.id !== supersessionTarget) {
@@ -2294,7 +3067,7 @@ export function promoteSessionKnowledge(
     const policies = policyByCandidate.get(candidate.candidate_id) ?? [];
     const supersessionTarget = confirmedSupersessionTarget(policies);
     const promotedId = candidate.promoted_id
-      ?? (existing && !supersessionTarget ? existing.id : null)
+      ?? (!isKnowledgeCandidateV11(candidate) && existing && !supersessionTarget ? existing.id : null)
       ?? (candidate.target === 'spec' ? plannedSpecId(candidate) : plannedKnowhowId(candidate));
     return {
       candidate,
@@ -2303,6 +3076,31 @@ export function promoteSessionKnowledge(
       policySnapshot: reconciliationPolicySnapshot(policies),
     };
   });
+
+  const frozenTargetId = [...selectedTargetIds][0];
+  const crossRepository = Boolean(sourceContext.repoId && frozenTargetId !== sourceContext.repoId);
+  if (crossRepository) {
+    options._beforeFinalSessionValidation?.();
+    options._finalSessionValidation?.(store);
+    const promoted = promoteCrossRepositoryPlan(
+      projectRoot,
+      store,
+      sessionId,
+      summary,
+      plan,
+      options,
+    );
+    return {
+      schema_version: 'knowledge-promotion-result/1.0',
+      session_id: sessionId,
+      promoted,
+      already_promoted: alreadyPromoted,
+      skipped_observed: skippedObserved,
+      skipped_review_required: skippedReviewRequired,
+      skipped_suppressed: skippedSuppressed,
+      skipped_blocked: skippedBlocked,
+    };
+  }
 
   const sessionSchema = store.readSessionRecordReadOnly(sessionId).schema_version;
   const v3Session = sessionSchema === 'session/3.0';
@@ -2410,11 +3208,9 @@ export function promoteSessionKnowledge(
         if (!result) continue;
         candidate.status = 'promoted';
         candidate.promoted_id = result.promoted_id;
-        candidate.promotion_receipt = {
-          outcome: result.outcome,
-          promoted_at: promotedAt,
-          content_hash: contentHash(candidate.content),
-        };
+        candidate.promotion_receipt = promotionReceiptForCandidate(
+          projectRoot, candidate, result.outcome, promotedAt, result.promoted_id,
+        );
       }
       lockedDelta.revision++;
       lockedDelta.updated_at = promotedAt;
@@ -2645,11 +3441,9 @@ export function promoteSessionKnowledge(
           if (!item) continue;
           candidate.status = 'promoted';
           candidate.promoted_id = item.promoted_id;
-          candidate.promotion_receipt = {
-            outcome: item.outcome,
-            promoted_at: promotedAt,
-            content_hash: contentHash(candidate.content),
-          };
+          candidate.promotion_receipt = promotionReceiptForCandidate(
+            projectRoot, candidate, item.outcome, promotedAt, item.promoted_id,
+          );
           changed = true;
         }
         if (changed) {
@@ -2671,11 +3465,9 @@ export function promoteSessionKnowledge(
           if (!item) continue;
           candidate.status = 'promoted';
           candidate.promoted_id = item.promoted_id;
-          candidate.promotion_receipt = {
-            outcome: item.outcome,
-            promoted_at: promotedAt,
-            content_hash: contentHash(candidate.content),
-          };
+          candidate.promotion_receipt = promotionReceiptForCandidate(
+            projectRoot, candidate, item.outcome, promotedAt, item.promoted_id,
+          );
           changed = true;
         }
         if (changed) {
@@ -2737,11 +3529,9 @@ export function promoteSessionKnowledge(
           if (!item) continue;
           candidate.status = 'promoted';
           candidate.promoted_id = item.promoted_id;
-          candidate.promotion_receipt = {
-            outcome: item.outcome,
-            promoted_at: promotedAt,
-            content_hash: contentHash(candidate.content),
-          };
+          candidate.promotion_receipt = promotionReceiptForCandidate(
+            projectRoot, candidate, item.outcome, promotedAt, item.promoted_id,
+          );
           changed = true;
         }
         if (changed) {
@@ -2759,11 +3549,9 @@ export function promoteSessionKnowledge(
           if (!item) continue;
           candidate.status = 'promoted';
           candidate.promoted_id = item.promoted_id;
-          candidate.promotion_receipt = {
-            outcome: item.outcome,
-            promoted_at: promotedAt,
-            content_hash: contentHash(candidate.content),
-          };
+          candidate.promotion_receipt = promotionReceiptForCandidate(
+            projectRoot, candidate, item.outcome, promotedAt, item.promoted_id,
+          );
           changed = true;
         }
         if (changed) {

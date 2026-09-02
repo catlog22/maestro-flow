@@ -24,6 +24,12 @@ import {
 } from '../run/transcript-evidence.js';
 import { resolveWriteAuthority } from '../run/knowledge-identity.js';
 import { auditKnowledge, type KnowledgeAuditScope } from '../knowledge/audit.js';
+import {
+  applyKnowledgeNormalization,
+  planKnowledgeNormalization,
+  writeKnowledgeNormalizationReport,
+  type KnowledgeNormalizeScope,
+} from '../knowledge/normalize.js';
 import { SessionStore } from '../run/store.js';
 import {
   persistActiveKnowledgeReconciliation,
@@ -45,6 +51,9 @@ import type {
 } from '../knowledge/reconciliation-schema.js';
 import { readReportFrontmatter } from '../run/report.js';
 import {
+  resolveRepositorySelectorIds,
+} from '../repository/context.js';
+import {
   EXECUTION_OWNER_KINDS,
   parseNonNegativeInteger,
   parseOwnerKind,
@@ -59,6 +68,10 @@ const KNOWLEDGE_RESOLUTIONS = ['duplicate', 'related', 'conflict', 'supersede', 
 /** Attribution sources exposed for explicit recording (injection stays automatic-only). */
 const KNOWLEDGE_INPUT_SOURCES = ['search', 'load', 'manual'] as const;
 const EXECUTION_AUTHORITY_FILE_ENV = 'MAESTRO_EXECUTION_AUTHORITY_FILE';
+
+function collectOption(value: string, previous: string[] = []): string[] {
+  return [...previous, value];
+}
 
 interface KnowledgeExecutionOptions {
   execution?: string;
@@ -483,16 +496,14 @@ export function registerKnowledgeCommand(program: Command): void {
 
   knowledge
     .command('audit')
-    .description('Audit knowledge health and optionally apply a safe soft-prune plan')
+    .description('Audit knowledge health without mutating knowledge sources')
     .option('--scope <scope>', 'Audit scope: spec|knowhow|all', 'all')
-    .option('--prune', 'Include a deterministic soft-prune plan')
-    .option('--apply', 'Apply the prune plan after backups (requires --prune)')
+    .option('--prune', 'Include a deterministic read-only soft-prune report')
     .option('--json', 'Output as JSON')
     .option('--workflow-root <path>', 'Project root containing .workflow', process.cwd())
     .action(async (opts: {
       scope?: string;
       prune?: boolean;
-      apply?: boolean;
       json?: boolean;
       workflowRoot: string;
     }) => {
@@ -503,7 +514,6 @@ export function registerKnowledgeCommand(program: Command): void {
         const result = await auditKnowledge(resolve(opts.workflowRoot), {
           scope: (opts.scope ?? 'all') as KnowledgeAuditScope,
           prune: opts.prune,
-          apply: opts.apply,
         });
         if (opts.json) {
           console.log(JSON.stringify(result, null, 2));
@@ -515,6 +525,16 @@ export function registerKnowledgeCommand(program: Command): void {
           + `${result.pipeline.pending_corroborated} corroborated pending · `
           + `${result.pipeline.pending_observed} observed pending · `
           + `${result.pipeline.promoted} promoted`,
+        );
+        console.log(
+          `Repositories: current ${result.compatibility.current_repository.repo_id ?? 'manifest missing'} · `
+          + `${result.compatibility.linked_repositories.length} linked · `
+          + `${result.compatibility.counts.invalid_links ?? 0} invalid · `
+          + `${result.compatibility.pending_cross_repo_promotions.length} pending cross-repo promotion(s)`,
+        );
+        console.log(
+          `Compatibility: ${result.compatibility.entries.length} legacy entry state(s); `
+          + 'audit is read-only (use knowledge normalize with a saved dry-run report)',
         );
         if (result.usage) {
           console.log(
@@ -528,11 +548,54 @@ export function registerKnowledgeCommand(program: Command): void {
             + `${finding.target}: ${finding.evidence}`,
           );
         }
-        if (opts.prune) console.log(`Prune plan: ${result.prune_plan.length} soft action(s)`);
+        if (opts.prune) console.log(`Prune report: ${result.prune_plan.length} suggested soft action(s); no files were changed`);
+      } catch (error) {
+        console.error(`Error: ${error instanceof Error ? error.message : String(error)}`);
+        process.exitCode = 1;
+      }
+    });
+
+  knowledge
+    .command('normalize')
+    .description('Plan or explicitly apply deterministic legacy knowledge normalization (dry-run report is mandatory first)')
+    .requiredOption('--report <path>', 'Dry-run report path; --apply reads this exact pre-existing report')
+    .option('--scope <scope>', 'Normalization scope: spec|knowhow|all', 'all')
+    .option('--apply', 'Apply the exact saved report after fingerprint validation and backups')
+    .option('--json', 'Output as JSON')
+    .option('--workflow-root <path>', 'Project root containing .workflow', process.cwd())
+    .action((opts: {
+      report: string;
+      scope?: string;
+      apply?: boolean;
+      json?: boolean;
+      workflowRoot: string;
+    }) => {
+      try {
+        if (!['spec', 'knowhow', 'all'].includes(opts.scope ?? 'all')) {
+          throw new Error('--scope must be one of spec, knowhow, all');
+        }
+        const projectRoot = resolve(opts.workflowRoot);
+        const reportPath = resolve(projectRoot, opts.report);
         if (opts.apply) {
-          console.log(
-            `Applied: ${result.applied.count} · backup: ${result.applied.backup_dir ?? 'not needed'}`,
-          );
+          const result = applyKnowledgeNormalization(projectRoot, reportPath);
+          if (opts.json) console.log(JSON.stringify(result, null, 2));
+          else {
+            console.log(`Applied ${result.applied} normalized file(s); backup: ${result.backup_dir ?? 'not needed'}.`);
+            if (result.unresolved > 0) console.log(`Unresolved compatibility entries: ${result.unresolved} (manual category selection required).`);
+          }
+          return;
+        }
+        const report = planKnowledgeNormalization(
+          projectRoot,
+          (opts.scope ?? 'all') as KnowledgeNormalizeScope,
+        );
+        writeKnowledgeNormalizationReport(reportPath, report);
+        if (opts.json) console.log(JSON.stringify(report, null, 2));
+        else {
+          const actionable = report.actions.filter(action => action.blocked.length === 0 && action.before_sha256 !== action.after_sha256).length;
+          console.log(`Normalization dry-run: ${actionable} file(s) actionable · ${report.unresolved.length} unresolved.`);
+          console.log(`Report: ${reportPath}`);
+          console.log(`Apply only this reviewed snapshot: maestro knowledge normalize --report "${opts.report}" --apply`);
         }
       } catch (error) {
         console.error(`Error: ${error instanceof Error ? error.message : String(error)}`);
@@ -549,6 +612,16 @@ export function registerKnowledgeCommand(program: Command): void {
     .option('--content-file <path>', 'Read candidate content from a file; "-" reads stdin')
     .option('--action <action>', `Candidate intent: ${KNOWLEDGE_CANDIDATE_ACTIONS.join('|')}`, 'propose')
     .option('--category <category>', 'Spec/knowhow category')
+    .option('--type <type>', 'Canonical Knowhow subtype (defaults to tip for Knowhow)')
+    .option('--keywords <words>', 'Comma-separated canonical keywords')
+    .option('--source-ref <ref>', 'Canonical source URL or document identifier')
+    .option('--related-path <path>', 'Project-relative related path (repeatable)', collectOption, [])
+    .option('--repo <selector>', 'Immutable physical promotion target repository')
+    .option('--applies-to-repo <selector>', 'Applicability repository selector (repeatable)', collectOption, [])
+    .option('--language <language>', 'Optional Knowhow content/programming language')
+    .option('--decision-state <state>', 'proposed|accepted|superseded (decision Knowhow only)')
+    .option('--lifecycle-status <status>', 'active|deprecated', 'active')
+    .option('--tool', 'Mark a Knowhow candidate as a tool')
     .option('--evidence <refs>', 'Comma-separated evidence references (required for session-source candidates)')
     .option('--transcript-quote <path>', 'Transcript quote JSON descriptor file: {host_kind, host_session_id, entry_id, quote}; captures a content-addressed snapshot and appends its transcript: URI to the evidence refs')
     .option('--signal <signal>', `Also record a knowledge signal: ${KNOWLEDGE_INPUT_SIGNALS.join('|')}`)
@@ -575,6 +648,16 @@ export function registerKnowledgeCommand(program: Command): void {
       opts: {
         category?: string;
         action?: string;
+        type?: string;
+        keywords?: string;
+        sourceRef?: string;
+        relatedPath: string[];
+        repo?: string;
+        appliesToRepo: string[];
+        language?: string;
+        decisionState?: string;
+        lifecycleStatus?: string;
+        tool?: boolean;
         contentFile?: string;
         evidence?: string;
         transcriptQuote?: string;
@@ -608,6 +691,11 @@ export function registerKnowledgeCommand(program: Command): void {
           'utf8',
         );
         const projectRoot = resolve(opts.workflowRoot);
+        const appliesToRepoIds = resolveRepositorySelectorIds(opts.appliesToRepo, {
+          projectRoot,
+          corpus: target as 'spec' | 'knowhow',
+          mode: 'read',
+        });
         const store = new SessionStore(projectRoot);
         const authority = resolveWriteAuthority({
           projectRoot,
@@ -709,6 +797,16 @@ export function registerKnowledgeCommand(program: Command): void {
               content,
               category: opts.category,
               evidenceRefs,
+              repository: opts.repo,
+              keywords: opts.keywords?.split(',').map(value => value.trim()).filter(Boolean),
+              sourceRef: opts.sourceRef,
+              relatedPaths: opts.relatedPath,
+              appliesToRepoIds,
+              type: opts.type,
+              language: opts.language,
+              decisionState: opts.decisionState,
+              lifecycleStatus: opts.lifecycleStatus,
+              tool: opts.tool,
             },
             authority.sessionId,
             executionAuthority,
@@ -733,6 +831,16 @@ export function registerKnowledgeCommand(program: Command): void {
             content,
             category: opts.category,
             evidenceRefs,
+            repository: opts.repo,
+            keywords: opts.keywords?.split(',').map(value => value.trim()).filter(Boolean),
+            sourceRef: opts.sourceRef,
+            relatedPaths: opts.relatedPath,
+            appliesToRepoIds,
+            type: opts.type,
+            language: opts.language,
+            decisionState: opts.decisionState,
+            lifecycleStatus: opts.lifecycleStatus,
+            tool: opts.tool,
           });
           if (signal) {
             signalResult = recordSessionKnowledgeInputs(
@@ -995,6 +1103,7 @@ export function registerKnowledgeCommand(program: Command): void {
     .option('--as <resolution>', `Resolution for --resolve: ${KNOWLEDGE_RESOLUTIONS.join('|')}`)
     .option('--target <knowledge-id>', 'Evidence-backed canonical knowledge ID for --resolve (forbidden for unique)')
     .option('--reason <reason>', 'Human review reason for --resolve (required, non-empty)')
+    .option('--repo <selector>', 'Assert the immutable staged promotion target (never retargets)')
     .option('--json', 'Output as JSON')
     .option('--workflow-root <path>', 'Project root containing .workflow', process.cwd())
     .action((
@@ -1006,6 +1115,7 @@ export function registerKnowledgeCommand(program: Command): void {
         as?: string;
         target?: string;
         reason?: string;
+        repo?: string;
         json?: boolean;
         workflowRoot: string;
       },
@@ -1050,6 +1160,7 @@ export function registerKnowledgeCommand(program: Command): void {
         const result = promoteReconciledSessionKnowledge(projectRoot, sessionId, {
           candidateIds,
           all: opts.all,
+          targetRepository: opts.repo,
         });
         if (opts.json) {
           console.log(JSON.stringify(result, null, 2));

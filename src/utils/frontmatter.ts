@@ -1,5 +1,29 @@
 import { createHash } from 'node:crypto';
 import { resolve, join } from 'node:path';
+import {
+  KNOWHOW_TYPES,
+  normalizeCanonicalKnowledgeContent,
+  type CanonicalContentInput,
+} from '../../shared/knowledge-content.js';
+
+export {
+  CANONICAL_KNOWLEDGE_CATEGORIES,
+  DECISION_STATES,
+  KNOWHOW_TYPES,
+  LIFECYCLE_STATUSES,
+  deriveContentSummary,
+  isCanonicalKnowledgeCategory,
+  normalizeCanonicalKnowledgeContent,
+  normalizeRelatedPath,
+} from '../../shared/knowledge-content.js';
+export type {
+  CanonicalContentInput,
+  CanonicalKnowledgeCategory,
+  CanonicalKnowledgeContent,
+  CanonicalKnowhowType,
+  DecisionState,
+  KnowledgeLifecycleStatus,
+} from '../../shared/knowledge-content.js';
 
 // ============================================================================
 // Frontmatter parsing & formatting
@@ -86,7 +110,7 @@ export function slugify(text: string): string {
 // Knowhow shared constants
 // ============================================================================
 
-export const KNOWHOW_CATEGORIES = ['session', 'tip', 'template', 'recipe', 'reference', 'decision', 'asset', 'blueprint', 'document'] as const;
+export const KNOWHOW_CATEGORIES = KNOWHOW_TYPES;
 export type KnowHowCategory = (typeof KNOWHOW_CATEGORIES)[number];
 
 export const KNOWHOW_PREFIX_MAP: Record<string, string> = {
@@ -167,31 +191,12 @@ export function generateKnowhowFilename(
   return resolveKnowhowFilename(type, title, explicitId);
 }
 
-export interface KnowhowReplayPayloadInput {
-  type?: unknown;
-  category?: unknown;
-  title?: unknown;
-  description?: unknown;
-  keywords?: unknown;
-  tags?: unknown;
-  body?: unknown;
-  explicitId?: unknown;
+export interface KnowhowReplayPayloadInput extends CanonicalContentInput {
   [key: string]: unknown;
 }
 
-function optionalString(value: unknown): string | null {
-  return typeof value === 'string' ? value : null;
-}
-
-function normalizedStringSet(value: unknown): string[] | null {
-  if (value === undefined || value === null) return null;
-  const items = Array.isArray(value) ? value : [value];
-  const normalized = [...new Set(
-    items
-      .filter((item): item is string => typeof item === 'string')
-      .map(item => item.trim())
-      .filter(Boolean),
-  )].sort((left, right) => left.localeCompare(right));
+function normalizedStringSet(value: string[]): string[] | null {
+  const normalized = [...new Set(value)].sort((left, right) => left.localeCompare(right));
   return normalized.length > 0 ? normalized : null;
 }
 
@@ -209,15 +214,21 @@ export function normalizeKnowhowBody(value: unknown): string | null {
 export function normalizeKnowhowReplayPayload(
   input: KnowhowReplayPayloadInput,
 ): { canonical: string; sha256: string } {
+  const normalized = normalizeCanonicalKnowledgeContent(input);
   const payload = {
-    type: optionalString(input.type),
-    category: optionalString(input.category),
-    title: optionalString(input.title),
-    description: optionalString(input.description),
-    keywords: normalizedStringSet(input.keywords),
-    tags: normalizedStringSet(input.tags),
-    body: normalizeKnowhowBody(input.body),
-    explicitId: optionalString(input.explicitId)?.trim().toLowerCase() ?? null,
+    type: normalized.type,
+    title: normalized.title || null,
+    content: normalizeKnowhowBody(normalized.content),
+    keywords: normalizedStringSet(normalized.keywords),
+    category: normalized.category,
+    sourceRef: normalized.sourceRef,
+    relatedPaths: normalizedStringSet(normalized.relatedPaths),
+    appliesToRepoIds: normalizedStringSet(normalized.appliesToRepoIds),
+    language: normalized.language,
+    decisionState: normalized.decisionState,
+    lifecycleStatus: normalized.lifecycleStatus,
+    tool: normalized.tool,
+    explicitId: normalized.explicitId,
   };
   const canonical = JSON.stringify(payload);
   const sha256 = `sha256:${createHash('sha256').update(canonical, 'utf8').digest('hex')}`;

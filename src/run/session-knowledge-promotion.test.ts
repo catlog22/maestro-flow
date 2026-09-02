@@ -1,9 +1,10 @@
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   existsSync,
   mkdirSync,
   mkdtempSync,
   readFileSync,
+  readdirSync,
   rmSync,
   writeFileSync,
 } from 'node:fs';
@@ -16,6 +17,8 @@ import {
   sessionKnowledgeDeltaPath,
   sessionReconciliationPath,
   addCandidate,
+  isKnowledgeCandidateV11,
+  knowledgeCandidateId,
   stageRunKnowledgeCandidate,
   summarizeSessionKnowledge,
 } from './knowledge.js';
@@ -38,6 +41,12 @@ import { completeRun, createRun, sealSession } from './runtime.js';
 import { startExecution } from './execution.js';
 import { SessionStore } from './store.js';
 import { buildTranscriptUri, storeTranscriptEvidence } from './transcript-evidence.js';
+import {
+  initializeRepositoryIdentity,
+  reseedRepositoryIdentity,
+} from '../repository/context.js';
+
+vi.setConfig({ testTimeout: 60_000 });
 
 function v2Workspace(root: string): void {
   mkdirSync(join(root, ".workflow"), { recursive: true });
@@ -679,5 +688,285 @@ describe('per-candidate session fence (blocked candidate does not block promotio
     expect(() => promoteReconciledSessionKnowledge(projectRoot, sessionId, {
       candidateIds: [bad],
     })).toThrow(/is blocked: .*no immutable source snapshot/);
+  });
+});
+
+
+function linkedPromotionFixture(): {
+  sourceRoot: string;
+  targetRoot: string;
+  sourceRepoId: string;
+  targetRepoId: string;
+} {
+  const sourceRoot = root();
+  const targetRoot = mkdtempSync(join(tmpdir(), 'maestro-promotion-target-'));
+  roots.push(targetRoot);
+  v2Workspace(targetRoot);
+  const source = initializeRepositoryIdentity(sourceRoot, { repoName: 'Source' });
+  const target = initializeRepositoryIdentity(targetRoot, { repoName: 'Target' });
+  const configPath = join(sourceRoot, '.workflow', 'config.json');
+  const config = JSON.parse(readFileSync(configPath, 'utf8'));
+  config.workspaces = {
+    linked: [{
+      name: 'library',
+      path: targetRoot,
+      repo_id: target.repo_id,
+      share: ['spec', 'knowhow'],
+      write: ['spec', 'knowhow'],
+    }],
+  };
+  writeFileSync(configPath, `${JSON.stringify(config, null, 2)}\n`, 'utf8');
+  return {
+    sourceRoot,
+    targetRoot,
+    sourceRepoId: source.repo_id,
+    targetRepoId: target.repo_id,
+  };
+}
+
+describe('canonical cross-repository promotion saga', () => {
+  it('dual-reads legacy 1.0 bytes and upgrades without injecting fields into legacy candidates', () => {
+    const fixture = linkedPromotionFixture();
+    const { sessionId } = ensureSyntheticKnowledgeSession(fixture.sourceRoot, 'legacy-upgrade-host');
+    const store = new SessionStore(fixture.sourceRoot);
+    const path = sessionKnowledgeDeltaPath(store, sessionId);
+    const legacy = {
+      schema_version: 'session-knowledge-delta/1.0',
+      session_id: sessionId,
+      revision: 0,
+      created_at: '2026-09-01T00:00:00.000Z',
+      updated_at: '2026-09-01T00:00:00.000Z',
+      inputs: [],
+      candidates: [{
+        candidate_id: 'KDC-0000000000000001', target: 'knowhow', action: 'propose',
+        title: 'Legacy candidate', content: 'Legacy bytes remain legacy.', category: null,
+        source_kind: 'manual', evidence_refs: ['legacy:evidence'], occurrences: 1,
+        first_recorded_at: '2026-09-01T00:00:00.000Z', last_recorded_at: '2026-09-01T00:00:00.000Z',
+        status: 'pending', promoted_id: null, promotion_receipt: null,
+      }],
+    };
+    writeFileSync(path, `${JSON.stringify(legacy, null, 2)}\n`, 'utf8');
+    const before = readFileSync(path, 'utf8');
+    expect(readSessionKnowledgeDelta(store, sessionId, true).schema_version)
+      .toBe('session-knowledge-delta/1.0');
+    expect(readFileSync(path, 'utf8')).toBe(before);
+
+    stageSessionKnowledgeCandidate(fixture.sourceRoot, sessionId, {
+      target: 'knowhow', title: 'Canonical candidate', content: 'New bytes are canonical.',
+      evidenceRefs: ['src/evidence.ts:1'],
+    });
+    const upgraded = JSON.parse(readFileSync(path, 'utf8'));
+    expect(upgraded).toMatchObject({
+      schema_version: 'session-knowledge-delta/1.1',
+      source_repository: { repo_id: fixture.sourceRepoId },
+    });
+    expect(upgraded.candidates[0]).toEqual(legacy.candidates[0]);
+    expect(upgraded.candidates[1]).toMatchObject({ schema_version: 'knowledge-candidate/1.1' });
+  });
+
+  it('keeps the physical target excluded from canonical Knowhow applicability through recovery', () => {
+    const fixture = linkedPromotionFixture();
+    const { sessionId } = ensureSyntheticKnowledgeSession(fixture.sourceRoot, 'cross-root-host');
+    const staged = stageSessionKnowledgeCandidate(fixture.sourceRoot, sessionId, {
+      target: 'knowhow',
+      repository: 'library',
+      title: 'Recoverable linked recipe',
+      content: 'Use the recoverable linked promotion saga.',
+      evidenceRefs: ['src/evidence.ts:1'],
+      type: 'recipe',
+      category: 'coding',
+      keywords: ['recovery', 'linked'],
+      sourceRef: 'issue:cross-root',
+      relatedPaths: ['src/evidence.ts'],
+      appliesToRepoIds: [fixture.sourceRepoId, fixture.sourceRepoId],
+      language: 'typescript',
+      lifecycleStatus: 'active',
+      tool: true,
+    });
+    reviewSessionKnowledge(fixture.sourceRoot, sessionId);
+
+    const stagedCandidate = summarizeSessionKnowledge(fixture.sourceRoot, sessionId, { readOnly: true })
+      .candidates.find(candidate => candidate.candidate_id === staged.candidate_id)!;
+    expect(stagedCandidate).toMatchObject({
+      schema_version: 'knowledge-candidate/1.1',
+      repository_binding: {
+        source_repo_id: fixture.sourceRepoId,
+        target_repo_id: fixture.targetRepoId,
+        target_alias_snapshot: 'library',
+      },
+      payload: {
+        kind: 'knowhow',
+        type: 'recipe',
+        category: 'coding',
+        sourceRef: 'issue:cross-root',
+        relatedPaths: ['src/evidence.ts'],
+        appliesToRepoIds: [fixture.sourceRepoId],
+        language: 'typescript',
+        tool: true,
+      },
+    });
+    if (!isKnowledgeCandidateV11(stagedCandidate)) throw new Error('Expected canonical candidate');
+    const targetVisiblePayload = {
+      ...stagedCandidate.payload,
+      appliesToRepoIds: [fixture.targetRepoId],
+    };
+    expect(knowledgeCandidateId({
+      targetRepoId: fixture.targetRepoId,
+      appliesToRepoIds: targetVisiblePayload.appliesToRepoIds,
+      payload: targetVisiblePayload,
+    })).not.toBe(staged.candidate_id);
+    expect(() => promoteReconciledSessionKnowledge(fixture.sourceRoot, sessionId, {
+      candidateIds: [staged.candidate_id],
+      targetRepository: 'current',
+    })).toThrow(/target assertion/);
+
+    let crashed = false;
+    expect(() => promoteReconciledSessionKnowledge(fixture.sourceRoot, sessionId, {
+      candidateIds: [staged.candidate_id],
+      targetRepository: 'library',
+      _afterTargetWrite: () => {
+        if (!crashed) {
+          crashed = true;
+          throw new Error('simulated crash after target write');
+        }
+      },
+    })).toThrow(/simulated crash/);
+    expect(readSessionKnowledgeDelta(new SessionStore(fixture.sourceRoot), sessionId, true)
+      .candidates[0]).toMatchObject({
+        status: 'promoting',
+        promotion_intent: {
+          schema_version: 'knowledge-promotion-intent/1.1',
+          target_repo_id: fixture.targetRepoId,
+        },
+      });
+    expect(existsSync(join(fixture.sourceRoot, '.workflow', 'knowhow'))).toBe(false);
+
+    // Alias renames recover by stable repository ID, not the staged alias snapshot.
+    const configPath = join(fixture.sourceRoot, '.workflow', 'config.json');
+    const config = JSON.parse(readFileSync(configPath, 'utf8'));
+    config.workspaces.linked[0].name = 'renamed-library';
+    writeFileSync(configPath, `${JSON.stringify(config, null, 2)}\n`, 'utf8');
+    const recovered = promoteReconciledSessionKnowledge(fixture.sourceRoot, sessionId, {
+      candidateIds: [staged.candidate_id],
+      targetRepository: fixture.targetRepoId,
+    });
+    expect(recovered.promoted).toEqual([
+      expect.objectContaining({ candidate_id: staged.candidate_id, outcome: 'reaffirmed' }),
+    ]);
+    const files = readdirSync(join(fixture.targetRoot, '.workflow', 'knowhow'));
+    expect(files).toHaveLength(1);
+    const document = readFileSync(join(fixture.targetRoot, '.workflow', 'knowhow', files[0]), 'utf8');
+    expect(document).toContain('type: recipe');
+    expect(document).toContain('category: coding');
+    expect(document).toMatch(/sourceRef: ["']?issue:cross-root["']?/);
+    expect(document).toContain('language: typescript');
+    expect(document).toContain('tool: true');
+    expect(document).toContain(fixture.sourceRepoId);
+    expect(document).not.toContain(fixture.targetRepoId);
+    expect(readSessionKnowledgeDelta(new SessionStore(fixture.sourceRoot), sessionId, true)
+      .candidates[0]).toMatchObject({
+        status: 'promoted',
+        promotion_receipt: {
+          schema_version: 'knowledge-promotion-receipt/1.1',
+          target_repo_id: fixture.targetRepoId,
+          target_alias_snapshot: 'renamed-library',
+          acknowledged_payload_hash: expect.stringMatching(/^[a-f0-9]{64}$/),
+        },
+      });
+  }, 60_000);
+
+  it('promotes a canonical Spec to its frozen target without adding target visibility', () => {
+    const fixture = linkedPromotionFixture();
+    const { sessionId } = ensureSyntheticKnowledgeSession(fixture.sourceRoot, 'cross-spec-host');
+    const staged = stageSessionKnowledgeCandidate(fixture.sourceRoot, sessionId, {
+      target: 'spec', repository: 'library', title: 'Linked canonical rule',
+      content: 'Always preserve the full canonical Spec payload.',
+      category: 'coding', keywords: ['canonical', 'linked'],
+      sourceRef: 'decision:linked-spec', relatedPaths: ['src/evidence.ts'],
+      appliesToRepoIds: [fixture.sourceRepoId], evidenceRefs: ['src/evidence.ts:1'],
+    });
+    reviewSessionKnowledge(fixture.sourceRoot, sessionId);
+    const result = promoteReconciledSessionKnowledge(fixture.sourceRoot, sessionId, {
+      candidateIds: [staged.candidate_id], targetRepository: fixture.targetRepoId,
+    });
+    expect(result.promoted).toEqual([
+      expect.objectContaining({ candidate_id: staged.candidate_id, target: 'spec', outcome: 'created' }),
+    ]);
+    expect(existsSync(join(fixture.sourceRoot, '.workflow', 'specs'))).toBe(false);
+    const targetSpec = readFileSync(join(fixture.targetRoot, '.workflow', 'specs', 'coding-conventions.md'), 'utf8');
+    expect(targetSpec).toContain('title="Linked canonical rule"');
+    expect(targetSpec).toContain('keywords="canonical,linked"');
+    expect(targetSpec).toContain('sourceRef="decision:linked-spec"');
+    expect(targetSpec).toContain('relatedPaths="src/evidence.ts"');
+    expect(targetSpec).toContain(fixture.sourceRepoId);
+    expect(targetSpec).not.toContain(fixture.targetRepoId);
+  });
+
+  it('retries a missing target write from the durable promoting intent', () => {
+    const fixture = linkedPromotionFixture();
+    const { sessionId } = ensureSyntheticKnowledgeSession(fixture.sourceRoot, 'missing-target-host');
+    const staged = stageSessionKnowledgeCandidate(fixture.sourceRoot, sessionId, {
+      target: 'knowhow', repository: 'library', title: 'Retry missing target',
+      content: 'A missing target is recreated idempotently.', evidenceRefs: ['src/evidence.ts:1'],
+    });
+    reviewSessionKnowledge(fixture.sourceRoot, sessionId);
+    expect(() => promoteReconciledSessionKnowledge(fixture.sourceRoot, sessionId, {
+      candidateIds: [staged.candidate_id],
+      _afterTargetWrite: () => { throw new Error('crash'); },
+    })).toThrow(/crash/);
+    const dir = join(fixture.targetRoot, '.workflow', 'knowhow');
+    rmSync(join(dir, readdirSync(dir)[0]));
+    const recovered = promoteReconciledSessionKnowledge(fixture.sourceRoot, sessionId, {
+      candidateIds: [staged.candidate_id],
+    });
+    expect(recovered.promoted).toEqual([
+      expect.objectContaining({ candidate_id: staged.candidate_id, outcome: 'created' }),
+    ]);
+    expect(readdirSync(dir)).toHaveLength(1);
+  }, 60_000);
+
+  it('keeps a conflicting target payload fenced in promoting state', () => {
+    const fixture = linkedPromotionFixture();
+    const { sessionId } = ensureSyntheticKnowledgeSession(fixture.sourceRoot, 'payload-conflict-host');
+    const staged = stageSessionKnowledgeCandidate(fixture.sourceRoot, sessionId, {
+      target: 'knowhow', repository: 'library', title: 'Payload fenced tip',
+      content: 'The target payload is immutable.', evidenceRefs: ['src/evidence.ts:1'],
+    });
+    reviewSessionKnowledge(fixture.sourceRoot, sessionId);
+    expect(() => promoteReconciledSessionKnowledge(fixture.sourceRoot, sessionId, {
+      candidateIds: [staged.candidate_id],
+      _afterTargetWrite: () => { throw new Error('crash'); },
+    })).toThrow(/crash/);
+    const dir = join(fixture.targetRoot, '.workflow', 'knowhow');
+    const path = join(dir, readdirSync(dir)[0]);
+    writeFileSync(path, readFileSync(path, 'utf8').replace(
+      'The target payload is immutable.',
+      'The target payload now conflicts.',
+    ), 'utf8');
+    expect(() => promoteReconciledSessionKnowledge(fixture.sourceRoot, sessionId, {
+      candidateIds: [staged.candidate_id],
+    })).toThrow(/CALLER_PAYLOAD_CONFLICT|acknowledgment conflict/);
+    expect(readSessionKnowledgeDelta(new SessionStore(fixture.sourceRoot), sessionId, true)
+      .candidates[0].status).toBe('promoting');
+  }, 60_000);
+
+  it('fails closed on target repository identity mismatch and leaves the intent recoverable', () => {
+    const fixture = linkedPromotionFixture();
+    const { sessionId } = ensureSyntheticKnowledgeSession(fixture.sourceRoot, 'identity-mismatch-host');
+    const staged = stageSessionKnowledgeCandidate(fixture.sourceRoot, sessionId, {
+      target: 'knowhow', repository: 'library', title: 'Identity fenced tip',
+      content: 'The target identity is immutable.', evidenceRefs: ['src/evidence.ts:1'],
+    });
+    reviewSessionKnowledge(fixture.sourceRoot, sessionId);
+    expect(() => promoteReconciledSessionKnowledge(fixture.sourceRoot, sessionId, {
+      candidateIds: [staged.candidate_id],
+      _afterTargetWrite: () => { throw new Error('crash'); },
+    })).toThrow(/crash/);
+    reseedRepositoryIdentity(fixture.targetRoot);
+    expect(() => promoteReconciledSessionKnowledge(fixture.sourceRoot, sessionId, {
+      candidateIds: [staged.candidate_id],
+    })).toThrow(/identity mismatch|not found/i);
+    expect(readSessionKnowledgeDelta(new SessionStore(fixture.sourceRoot), sessionId, true)
+      .candidates[0].status).toBe('promoting');
   });
 });

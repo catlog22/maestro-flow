@@ -10,7 +10,7 @@ import { readFileSync, existsSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { parseSpecEntries, type SpecEntryParsed } from './spec-entry-parser.js';
 import { CATEGORY_MAP } from './spec-loader.js';
-import { stripFrontmatter } from '../utils/frontmatter.js';
+import { parseFrontmatter, stripFrontmatter } from '../utils/frontmatter.js';
 
 // ============================================================================
 // Types
@@ -35,7 +35,10 @@ export interface IndexedEntry {
  * Build a keyword → entries inverted index from all spec files.
  * Each keyword maps to an array of matching entries.
  */
-export function buildKeywordIndex(projectPath: string): Map<string, IndexedEntry[]> {
+export function buildKeywordIndex(
+  projectPath: string,
+  applicableRepoId?: string | null,
+): Map<string, IndexedEntry[]> {
   const index = new Map<string, IndexedEntry[]>();
   const specsDir = join(projectPath, '.workflow', 'specs');
 
@@ -57,6 +60,10 @@ export function buildKeywordIndex(projectPath: string): Map<string, IndexedEntry
       continue;
     }
 
+    const document = parseFrontmatter(raw);
+    const fileApplicability = Object.prototype.hasOwnProperty.call(document.data, 'appliesToRepoIds')
+      ? asStrings(document.data.appliesToRepoIds)
+      : undefined;
     const body = stripFrontmatter(raw);
     const { entries } = parseSpecEntries(body);
     const fileCategory = CATEGORY_MAP[file] ?? 'learning';
@@ -65,6 +72,12 @@ export function buildKeywordIndex(projectPath: string): Map<string, IndexedEntry
       // Deprecated (superseded) entries are never injected into agent context —
       // align with spec-loader's formatFileContent filtering.
       if (entry.status === 'deprecated') continue;
+      const applicability = entry.appliesToRepoIds.length > 0
+        ? entry.appliesToRepoIds
+        : fileApplicability;
+      if (applicability !== undefined
+        && applicableRepoId !== undefined
+        && (applicableRepoId === null || !applicability.includes(applicableRepoId))) continue;
 
       const indexed: IndexedEntry = {
         file,
@@ -95,6 +108,12 @@ export function buildKeywordIndex(projectPath: string): Map<string, IndexedEntry
   }
 
   return index;
+}
+
+function asStrings(value: unknown): string[] {
+  return Array.isArray(value)
+    ? value.filter((item): item is string => typeof item === 'string').map(item => item.trim()).filter(Boolean)
+    : [];
 }
 
 function addToIndex(index: Map<string, IndexedEntry[]>, key: string, entry: IndexedEntry): void {

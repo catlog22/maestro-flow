@@ -113,8 +113,21 @@ export interface LoadSpecsOptions {
   excludeKeywords?: string[];
   /** Extra spec filenames to include for the category (dynamic CATEGORY_MAP extension) */
   extraSpecFiles?: string[];
-  /** Linked workspace specs directories (read-only, inserted between global and baseline layers) */
-  linkedWorkspaces?: Array<{ name: string; specsDir: string }>;
+  /** Linked repository specs directories (read-only, inserted between global and baseline layers). */
+  linkedWorkspaces?: Array<{
+    name: string;
+    specsDir: string;
+    repoId?: string | null;
+    repoName?: string;
+    workspaceFence?: string;
+    includeSpecs?: boolean;
+    knowhowDir?: string;
+  }>;
+  /** Repository against which scoped applicability is evaluated. Null hides scoped entries. */
+  applicableRepoId?: string | null;
+  /** Targeted linked reads disable local/global layers. Defaults preserve aggregate legacy behavior. */
+  includeProject?: boolean;
+  includeGlobal?: boolean;
   /** Include deprecated entries for explicit audit/history loading. */
   includeDeprecated?: boolean;
 }
@@ -123,12 +136,12 @@ export function loadSpecs(projectPath: string, category?: SpecCategory, uid?: st
   const globalDir = options?.globalDir ?? paths.specs;
 
   // Build ordered list of (directory, label) pairs to scan
-  const layers = buildLayers(projectPath, uid, scope, globalDir, options?.linkedWorkspaces);
+  const layers = buildLayers(projectPath, uid, scope, globalDir, options);
 
   // Auto-init baseline and global layers.
   // Team/personal are per-user — auto-creating them for arbitrary uids is wrong.
-  autoInitSeeds(join(projectPath, SPECS_DIR));
-  autoInitSeeds(globalDir);
+  if (options?.includeProject !== false) autoInitSeeds(join(projectPath, SPECS_DIR));
+  if (options?.includeGlobal !== false) autoInitSeeds(globalDir);
 
   // First pass: collect results per layer (skip empty)
   const layerResults: Array<{ label: string; sections: string[]; matched: string[] }> = [];
@@ -158,10 +171,22 @@ export function loadSpecs(projectPath: string, category?: SpecCategory, uid?: st
 
   // Tool discovery: scan knowhow/ for documents matching category + tool: true
   if (category) {
-    const toolSection = discoverKnowhowTools(join(projectPath, '.workflow'), category);
-    if (toolSection) {
-      allSections.push(toolSection.content);
-      totalCount += toolSection.count;
+    const toolRoots = [
+      ...(options?.includeProject !== false ? [join(projectPath, '.workflow', 'knowhow')] : []),
+      ...(options?.linkedWorkspaces ?? [])
+        .map(link => link.knowhowDir)
+        .filter((dir): dir is string => Boolean(dir)),
+    ];
+    for (const knowhowDir of toolRoots) {
+      const toolSection = discoverKnowhowTools(
+        knowhowDir,
+        category,
+        options?.applicableRepoId,
+      );
+      if (toolSection) {
+        allSections.push(toolSection.content);
+        totalCount += toolSection.count;
+      }
     }
   }
 
@@ -183,35 +208,63 @@ export function loadSpecs(projectPath: string, category?: SpecCategory, uid?: st
 // Internal — multi-directory helpers
 // ============================================================================
 
+function stringArray(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  return value.filter((item): item is string => typeof item === 'string')
+    .map(item => item.trim())
+    .filter(Boolean);
+}
+
+/** Undefined applicability is historical/unscoped and remains visible. */
+function isApplicableToRepository(
+  appliesToRepoIds: string[] | undefined,
+  targetRepoId: string | null | undefined,
+): boolean {
+  if (appliesToRepoIds === undefined) return true;
+  // An omitted target means a legacy caller that has not opted into repository filtering.
+  if (targetRepoId === undefined) return true;
+  return targetRepoId !== null && appliesToRepoIds.includes(targetRepoId);
+}
+
 interface LayerDef {
   dir: string;
   label: string;
 }
 
-function buildLayers(projectPath: string, uid?: string, scope?: SpecScope, globalDir?: string, linkedWorkspaces?: Array<{ name: string; specsDir: string }>): LayerDef[] {
+function buildLayers(
+  projectPath: string,
+  uid?: string,
+  scope?: SpecScope,
+  globalDir?: string,
+  options?: LoadSpecsOptions,
+): LayerDef[] {
   const layers: LayerDef[] = [];
 
-  // Global layer — always included as lowest priority
-  layers.push({ dir: globalDir ?? paths.specs, label: LAYER_LABELS.global });
+  // Global layer — included by default for backward compatibility.
+  if (options?.includeGlobal !== false) {
+    layers.push({ dir: globalDir ?? paths.specs, label: LAYER_LABELS.global });
+  }
 
-  // Linked workspace layers — between global and baseline (read-only)
-  if (linkedWorkspaces) {
-    for (const lw of linkedWorkspaces) {
-      if (existsSync(lw.specsDir)) {
+  // Linked repository layers — between global and baseline (read-only)
+  if (options?.linkedWorkspaces) {
+    for (const lw of options.linkedWorkspaces) {
+      if (lw.includeSpecs !== false && existsSync(lw.specsDir)) {
         layers.push({ dir: lw.specsDir, label: `# Linked Specs (${lw.name})` });
       }
     }
   }
 
-  // Baseline — always included
-  layers.push({
-    dir: join(projectPath, SPECS_DIR),
-    label: LAYER_LABELS.baseline,
-  });
+  // Baseline — included by default.
+  if (options?.includeProject !== false) {
+    layers.push({
+      dir: join(projectPath, SPECS_DIR),
+      label: LAYER_LABELS.baseline,
+    });
+  }
 
   // Team + personal layers
   // Activated by scope='team'|'personal', or by uid (backward compat)
-  if (scope === 'team' || scope === 'personal' || uid) {
+  if (options?.includeProject !== false && (scope === 'team' || scope === 'personal' || uid)) {
     layers.push({ dir: join(projectPath, TEAM_SPECS_DIR), label: LAYER_LABELS.team });
 
     if (uid) {
@@ -260,13 +313,24 @@ function loadFromDir(
       continue;
     }
 
+    const parsedDocument = parseFrontmatter(raw);
     const body = stripFrontmatter(raw).trim();
     if (!body) continue;
+    const fileAppliesToRepoIds = Object.prototype.hasOwnProperty.call(parsedDocument.data, 'appliesToRepoIds')
+      ? stringArray(parsedDocument.data.appliesToRepoIds)
+      : undefined;
 
     const isPrimaryDoc = category && (resolvedCat === category || options?.extraSpecFiles?.includes(file));
 
     const workflowRoot = join(specsDir, '..');
-    const formatted = formatFileContent(body, keyword, isPrimaryDoc ? undefined : category, workflowRoot, options);
+    const formatted = formatFileContent(
+      body,
+      keyword,
+      isPrimaryDoc ? undefined : category,
+      workflowRoot,
+      options,
+      fileAppliesToRepoIds,
+    );
     if (formatted) {
       sections.push(formatted);
       matched.push(file);
@@ -321,17 +385,29 @@ function shouldInclude(filename: string, category?: SpecCategory, resolvedCat?: 
  * (cross-category matching for non-primary docs).
  * Falls back to raw body for files with no structured entries.
  */
-function formatFileContent(body: string, keyword?: string, crossCategory?: SpecCategory, workflowRoot?: string, options?: LoadSpecsOptions): string | null {
+function formatFileContent(
+  body: string,
+  keyword?: string,
+  crossCategory?: SpecCategory,
+  workflowRoot?: string,
+  options?: LoadSpecsOptions,
+  fileAppliesToRepoIds?: string[],
+): string | null {
   const { entries: allEntries, legacy } = parseSpecEntries(body);
   // Deprecated (superseded) entries are never injected into agent context —
   // the current version lives elsewhere in the chain. `maestro spec history`
   // still surfaces them for audit.
-  const entries = options?.includeDeprecated
+  const lifecycleEntries = options?.includeDeprecated
     ? allEntries
     : allEntries.filter(e => e.status !== 'deprecated');
+  const entries = lifecycleEntries.filter(entry => isApplicableToRepository(
+    entry.appliesToRepoIds.length > 0 ? entry.appliesToRepoIds : fileAppliesToRepoIds,
+    options?.applicableRepoId,
+  ));
 
   // No structured entries at all → pass through raw body (or keyword-grep it)
   if (allEntries.length === 0 && legacy.length === 0) {
+    if (!isApplicableToRepository(fileAppliesToRepoIds, options?.applicableRepoId)) return null;
     // Cross-category mode: non-primary docs with no structured entries are skipped
     if (crossCategory) return null;
 
@@ -374,6 +450,7 @@ function formatFileContent(body: string, keyword?: string, crossCategory?: SpecC
   }
 
   const parts: string[] = [];
+  const includeLegacy = isApplicableToRepository(fileAppliesToRepoIds, options?.applicableRepoId);
 
   // Separate ref entries (lightweight display) from regular entries
   const refEntries = filteredEntries.filter(e => e.ref);
@@ -385,7 +462,7 @@ function formatFileContent(body: string, keyword?: string, crossCategory?: SpecC
     const matchedRef = refEntries.filter(e => e.keywords.includes(kw));
     if (matchedRegular.length > 0) parts.push(formatSpecEntries(matchedRegular));
     if (matchedRef.length > 0) parts.push(matchedRef.map(e => formatRefEntry(e, workflowRoot)).join('\n\n---\n\n'));
-    if (!crossCategory) {
+    if (!crossCategory && includeLegacy) {
       for (const leg of legacy) {
         if (leg.content.toLowerCase().includes(kw)) parts.push(leg.content);
       }
@@ -393,7 +470,7 @@ function formatFileContent(body: string, keyword?: string, crossCategory?: SpecC
   } else {
     if (regularEntries.length > 0) parts.push(formatSpecEntries(regularEntries));
     if (refEntries.length > 0) parts.push(refEntries.map(e => formatRefEntry(e, workflowRoot)).join('\n\n---\n\n'));
-    if (!crossCategory) {
+    if (!crossCategory && includeLegacy) {
       for (const leg of legacy) parts.push(leg.content);
     }
   }
@@ -449,8 +526,11 @@ function resolveRefSummary(ref: string | undefined, workflowRoot: string | undef
  * Scan knowhow/ for documents matching category + tool: true in YAML frontmatter.
  * Returns a formatted section with tool summaries and load commands.
  */
-function discoverKnowhowTools(workflowRoot: string, category: SpecCategory): { content: string; count: number } | null {
-  const knowhowDir = join(workflowRoot, 'knowhow');
+function discoverKnowhowTools(
+  knowhowDir: string,
+  category: SpecCategory,
+  applicableRepoId?: string | null,
+): { content: string; count: number } | null {
   if (!existsSync(knowhowDir)) return null;
 
   let files: string[];
@@ -467,6 +547,12 @@ function discoverKnowhowTools(workflowRoot: string, category: SpecCategory): { c
       const raw = readFileSync(join(knowhowDir, file), 'utf-8');
       const fmMatch = raw.match(/^---\s*\n([\s\S]*?)\n---/);
       if (!fmMatch) continue;
+
+      const parsed = parseFrontmatter(raw);
+      const appliesToRepoIds = Object.prototype.hasOwnProperty.call(parsed.data, 'appliesToRepoIds')
+        ? stringArray(parsed.data.appliesToRepoIds)
+        : undefined;
+      if (!isApplicableToRepository(appliesToRepoIds, applicableRepoId)) continue;
 
       const fm = fmMatch[1];
       // Check tool: true
@@ -575,7 +661,11 @@ export interface ExtraDocsResult {
  *
  * Returns concatenated markdown content and loaded count.
  */
-export function loadExtraDocs(projectPath: string, docPaths?: string[]): ExtraDocsResult {
+export function loadExtraDocs(
+  projectPath: string,
+  docPaths?: string[],
+  options?: { applicableRepoId?: string | null },
+): ExtraDocsResult {
   if (!docPaths || docPaths.length === 0) return { content: '', count: 0 };
 
   const sections: string[] = [];
@@ -588,6 +678,11 @@ export function loadExtraDocs(projectPath: string, docPaths?: string[]): ExtraDo
     try {
       if (!existsSync(absPath)) continue;
       const raw = readFileSync(absPath, 'utf-8');
+      const parsed = parseFrontmatter(raw);
+      const appliesToRepoIds = Object.prototype.hasOwnProperty.call(parsed.data, 'appliesToRepoIds')
+        ? stringArray(parsed.data.appliesToRepoIds)
+        : undefined;
+      if (!isApplicableToRepository(appliesToRepoIds, options?.applicableRepoId)) continue;
       const body = stripFrontmatter(raw).trim();
       if (body) {
         sections.push(body);

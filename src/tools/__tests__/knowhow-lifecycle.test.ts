@@ -19,7 +19,12 @@ import { dirname, join, relative, sep } from 'node:path';
 import { Command } from 'commander';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+// Native lifecycle fencing intentionally performs multiple bound helper round-trips.
+// Allow realistic loaded/Windows CI latency without weakening any assertion.
+vi.setConfig({ testTimeout: 60_000, hookTimeout: 60_000 });
+
 import { registerKnowhowCommand } from '../../commands/knowhow.js';
+import { initializeRepositoryIdentity } from '../../repository/context.js';
 import {
   normalizeKnowhowReplayPayload,
   resolveKnowhowFilename,
@@ -50,6 +55,7 @@ describe('knowhow replay-safe lifecycle', () => {
   const externalRoots: string[] = [];
   let previousRoot: string | undefined;
   let previousExitCode: number | string | null | undefined;
+  let repoId: string;
 
   beforeEach(() => {
     root = mkdtempSync(join(tmpdir(), 'maestro-knowhow-lifecycle-'));
@@ -57,6 +63,7 @@ describe('knowhow replay-safe lifecycle', () => {
     previousExitCode = process.exitCode;
     process.env.MAESTRO_PROJECT_ROOT = root;
     process.exitCode = undefined;
+    repoId = initializeRepositoryIdentity(root, { repoName: 'Lifecycle test' }).repo_id;
     vi.useFakeTimers();
     vi.setSystemTime(new Date('2026-07-23T01:00:00.000Z'));
   });
@@ -246,17 +253,23 @@ describe('knowhow replay-safe lifecycle', () => {
       body: 'line 1\nline 2\n',
       explicitId: 'tip-20260723-x',
       created: 'other',
+      lifecycleStatus: 'deprecated',
     });
 
     expect(first).toEqual(second);
     expect(JSON.parse(first.canonical)).toEqual({
       type: 'tip',
-      category: null,
       title: 'T',
-      description: null,
-      keywords: ['a', 'b'],
-      tags: ['y', 'z'],
-      body: 'line 1\nline 2\n',
+      content: 'line 1\nline 2\n',
+      keywords: ['a', 'b', 'y', 'z'],
+      category: null,
+      sourceRef: null,
+      relatedPaths: null,
+      appliesToRepoIds: null,
+      language: null,
+      decisionState: null,
+      lifecycleStatus: 'deprecated',
+      tool: false,
       explicitId: 'tip-20260723-x',
     });
   });
@@ -306,16 +319,23 @@ describe('knowhow replay-safe lifecycle', () => {
     ['type', { type: 'recipe' }],
     ['category', { category: 'arch' }],
     ['title', { title: 'different title' }],
-    ['description', { description: 'different description' }],
     ['keywords', { keywords: ['different'] }],
     ['tags', { tags: ['different'] }],
     ['body', { body: 'different body' }],
+    ['sourceRef', { sourceRef: 'issue:42' }],
+    ['relatedPaths', { relatedPaths: ['src/other.ts'] }],
+    ['appliesToRepoIds', { appliesToRepoIds: ['__CURRENT_REPO_ID__'] }],
+    ['language', { language: 'typescript' }],
+    ['tool', { tool: true }],
   ])('fails closed for divergent caller field %s', async (_field, override) => {
     await add(OLD_STEM);
     const path = pathFor(OLD_STEM);
     const before = readFileSync(path);
     const listing = readdirSync(knowhowDir()).sort();
-    const result = await add(OLD_STEM, override);
+    const resolvedOverride = 'appliesToRepoIds' in override
+      ? { ...override, appliesToRepoIds: [repoId] }
+      : override;
+    const result = await add(OLD_STEM, resolvedOverride);
     expect(result.success).toBe(false);
     expect(result.error).toContain('CALLER_PAYLOAD_CONFLICT');
     expect(readFileSync(path)).toEqual(before);

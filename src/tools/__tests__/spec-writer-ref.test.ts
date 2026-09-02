@@ -62,6 +62,7 @@ describe('appendSpecEntryWithRef — basic', () => {
     expect(content).toContain('Complete OAuth PKCE flow design.');
     expect(content).toContain('keywords="oauth,pkce,auth"');
     expect(content).toContain('</spec-entry>');
+    expect(existsSync(join(testDir, '.workflow', 'knowhow'))).toBe(false);
   });
 
   it('includes category in the entry tag', () => {
@@ -144,7 +145,7 @@ describe('appendSpecEntryWithRef — source attribute', () => {
     );
 
     const content = readFileSync(result.file, 'utf-8');
-    expect(content).toContain('source="analyze:ANL-001"');
+    expect(content).toContain('sourceRef="analyze:ANL-001"');
   });
 
   it('omits source when not provided', () => {
@@ -153,7 +154,7 @@ describe('appendSpecEntryWithRef — source attribute', () => {
     );
 
     const content = readFileSync(result.file, 'utf-8');
-    expect(content).not.toContain('source=');
+    expect(content).not.toContain('sourceRef=');
   });
 });
 

@@ -25,7 +25,9 @@ import {
   knowledgeCandidateId,
   sessionKnowledgeDeltaPath,
   sessionKnowledgeDeltaSchema,
+  sourceRepositoryBinding,
   summarizeSessionKnowledge,
+  upgradeKnowledgeLedgerForStaging,
   type KnowledgeCandidate,
   type KnowledgeInputSignal,
   type KnowledgeInputSource,
@@ -33,6 +35,10 @@ import {
 } from './knowledge.js';
 import { artifactRegistrySchema, evidenceStoreSchema, sessionStateV30Schema } from './schemas.js';
 import { SessionStore } from './store.js';
+import {
+  CURRENT_REPOSITORY_ALIAS,
+  resolveRepositoryContext,
+} from '../repository/context.js';
 
 function nowIso(): string {
   return new Date().toISOString();
@@ -68,7 +74,7 @@ export function updateSessionKnowledgeSidecar<T>(
       const draft = structuredClone(tx.readJson(
         path,
         sessionKnowledgeDeltaSchema,
-        createSessionDelta(sessionId, nowIso()),
+        createSessionDelta(sessionId, nowIso(), sourceRepositoryBinding(projectRoot)),
       ));
       const result = mutator(draft, {
         schemaVersion: session.schema_version,
@@ -84,7 +90,7 @@ export function updateSessionKnowledgeSidecar<T>(
   store.updateJsonFile(
     path,
     sessionKnowledgeDeltaSchema,
-    createSessionDelta(sessionId, nowIso()),
+    createSessionDelta(sessionId, nowIso(), sourceRepositoryBinding(projectRoot)),
     draft => {
       const session = store.readSessionRecordReadOnly(sessionId);
       if (session.schema_version === 'session/3.0') {
@@ -208,6 +214,16 @@ export function stageSessionKnowledgeCandidate(
     content: string;
     category?: string | null;
     evidenceRefs?: string[];
+    repository?: string;
+    keywords?: string[];
+    sourceRef?: string | null;
+    relatedPaths?: string[];
+    appliesToRepoIds?: string[];
+    type?: string | null;
+    language?: string | null;
+    decisionState?: string | null;
+    lifecycleStatus?: string | null;
+    tool?: boolean;
   },
 ): { session_id: string; candidate_id: string; origin: 'session' } {
   const title = input.title.trim();
@@ -222,7 +238,43 @@ export function stageSessionKnowledgeCandidate(
       + '(file:line / artifact / output anchors)',
     );
   }
-  const candidateId = knowledgeCandidateId(input.target, content);
+  const sourceContext = resolveRepositoryContext(CURRENT_REPOSITORY_ALIAS, { projectRoot });
+  const targetContext = resolveRepositoryContext(input.repository ?? CURRENT_REPOSITORY_ALIAS, {
+    projectRoot,
+    require: { mode: 'write', corpus: input.target },
+  });
+  if (targetContext.relation === 'linked' && !sourceContext.repoId) {
+    throw new Error('Cross-repository staging requires a persisted source repository identity');
+  }
+  const normalizedCategory = input.category?.trim() || (input.target === 'spec' ? 'learning' : null);
+  // addCandidate computes the canonical ID. This preview uses a scratch 1.1
+  // ledger so the cross-origin conflict check sees the same immutable identity.
+  const scratch = createSessionDelta(
+    sessionId,
+    nowIso(),
+    sourceContext.repoId && sourceContext.identityPersisted
+      ? { repo_id: sourceContext.repoId, workspace_id: sourceContext.workspaceId }
+      : null,
+  );
+  const candidateId = addCandidate(scratch, {
+    target: input.target,
+    action: input.action ?? 'propose',
+    title,
+    content,
+    category: normalizedCategory,
+    source_kind: 'manual',
+    evidence_refs: ['preview'],
+    target_repository: targetContext,
+    keywords: input.keywords,
+    sourceRef: input.sourceRef,
+    relatedPaths: input.relatedPaths,
+    appliesToRepoIds: input.appliesToRepoIds,
+    type: input.type,
+    language: input.language,
+    decisionState: input.decisionState,
+    lifecycleStatus: input.lifecycleStatus,
+    tool: input.tool,
+  }, nowIso());
   const prior = summarizeSessionKnowledge(projectRoot, sessionId, {
     readOnly: true,
     strict: true,
@@ -239,6 +291,7 @@ export function stageSessionKnowledgeCandidate(
   const now = nowIso();
   const evidenceRefs = [...new Set([`session:${sessionId}`, ...evidence])];
   return updateSessionKnowledgeSidecar(projectRoot, sessionId, (draft, source) => {
+    upgradeKnowledgeLedgerForStaging(draft, sourceContext, 'session');
     const retainedSource = draft.candidates.find(candidate => candidate.candidate_id === candidateId)
       ?.source_snapshot;
     const id = addCandidate(draft, {
@@ -246,9 +299,19 @@ export function stageSessionKnowledgeCandidate(
       action: input.action ?? 'propose',
       title,
       content,
-      category: input.category?.trim() || null,
+      category: normalizedCategory,
       source_kind: 'manual',
       evidence_refs: evidenceRefs,
+      target_repository: targetContext,
+      keywords: input.keywords,
+      sourceRef: input.sourceRef,
+      relatedPaths: input.relatedPaths,
+      appliesToRepoIds: input.appliesToRepoIds,
+      type: input.type,
+      language: input.language,
+      decisionState: input.decisionState,
+      lifecycleStatus: input.lifecycleStatus,
+      tool: input.tool,
       source_snapshot: retainedSource ?? createSessionKnowledgeCandidateSource(
         projectRoot,
         source.store,

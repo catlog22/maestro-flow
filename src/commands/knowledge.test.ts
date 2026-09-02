@@ -18,6 +18,9 @@ import {
 import { readRunKnowledgeDelta, summarizeSessionKnowledge } from '../run/knowledge.js';
 import type { RunV30, SessionStateV30 } from '../run/schemas.js';
 import { SessionStore } from '../run/store.js';
+import { initializeRepositoryIdentity } from '../repository/context.js';
+
+vi.setConfig({ testTimeout: 60_000 });
 
 function v2Workspace(root: string): void {
   mkdirSync(join(root, ".workflow"), { recursive: true });
@@ -360,6 +363,56 @@ describe('maestro knowledge Execution Run authority', () => {
 });
 
 describe('maestro knowledge Run lifecycle CLI', () => {
+  it('resolves --repo during stage and freezes the full canonical target payload', async () => {
+    const sourceIdentity = initializeRepositoryIdentity(projectRoot, { repoName: 'CLI Source' });
+    const targetRoot = join(projectRoot, 'linked-target');
+    v2Workspace(targetRoot);
+    const targetIdentity = initializeRepositoryIdentity(targetRoot, { repoName: 'CLI Target' });
+    const configPath = join(projectRoot, '.workflow', 'config.json');
+    const config = JSON.parse(readFileSync(configPath, 'utf8'));
+    config.workspaces = { linked: [{
+      name: 'library', path: targetRoot, repo_id: targetIdentity.repo_id,
+      share: ['knowhow'], write: ['knowhow'],
+    }] };
+    writeFileSync(configPath, JSON.stringify(config), 'utf8');
+    const created = createRun({
+      projectRoot,
+      command: 'knowledge-cli',
+      intent: 'freeze linked promotion target',
+    });
+
+    await run(
+      'stage', 'knowhow', 'CLI linked recipe', 'Preserve every canonical field.',
+      '--run', created.run_id, '--repo', 'library', '--type', 'recipe',
+      '--category', 'coding', '--keywords', 'linked,canonical',
+      '--source-ref', 'issue:cli-linked', '--related-path', 'src/index.ts',
+      '--applies-to-repo', 'current', '--language', 'typescript', '--tool', '--json',
+    );
+    expect(process.exitCode).toBeUndefined();
+    const delta = readRunKnowledgeDelta(new SessionStore(projectRoot), created.session_id, created.run_id, true);
+    expect(delta).toMatchObject({
+      schema_version: 'run-knowledge-delta/1.1',
+      source_repository: { repo_id: sourceIdentity.repo_id },
+    });
+    expect(delta.candidates).toHaveLength(1);
+    expect(delta.candidates[0]).toMatchObject({
+      schema_version: 'knowledge-candidate/1.1',
+      repository_binding: {
+        source_repo_id: sourceIdentity.repo_id,
+        target_repo_id: targetIdentity.repo_id,
+        target_alias_snapshot: 'library',
+      },
+      payload: {
+        kind: 'knowhow', type: 'recipe', category: 'coding',
+        keywords: ['canonical', 'linked'], sourceRef: 'issue:cli-linked',
+        relatedPaths: ['src/index.ts'],
+        // Physical storage target and logical applicability are independent.
+        appliesToRepoIds: [sourceIdentity.repo_id],
+        language: 'typescript', tool: true,
+      },
+    });
+  });
+
   it('stages candidates with inline signals on the active Run', async () => {
     const created = createRun({
       projectRoot,
@@ -1198,6 +1251,43 @@ Full knowledge lifecycle verified.
     expect(output).toContain('maestro spec supersede <old-sid> --by <new-sid>');
     expect(output).toContain('stage after evidence files are finalized');
     expect(output).toContain('Fast path: for a standalone insight that needs no Run/Session binding');
+  });
+});
+
+describe('maestro knowledge audit CLI', () => {
+  it('does not expose the removed mutating --apply option', async () => {
+    await expect(run('audit', '--apply')).rejects.toThrow(/unknown option '--apply'/);
+  });
+});
+
+describe('maestro knowledge normalize CLI', () => {
+  it('writes a dry-run report first and applies only that reviewed snapshot', async () => {
+    const repo = initializeRepositoryIdentity(projectRoot, { repoName: 'Normalize CLI' });
+    const knowhowDir = join(projectRoot, '.workflow', 'knowhow');
+    mkdirSync(knowhowDir, { recursive: true });
+    const entry = join(knowhowDir, 'TIP-20260801-cli-normalize.md');
+    writeFileSync(entry, `---\ntitle: CLI normalize\ntype: tip\ntags: [legacy]\nlang: typescript\n---\n\nNormalize explicitly.\n`, 'utf8');
+    const report = join('.workflow', 'knowledge-normalize.json');
+
+    await run('normalize', '--report', report, '--json');
+    expect(process.exitCode ?? 0).toBe(0);
+    const planned = JSON.parse(logs.at(-1)!);
+    expect(planned).toMatchObject({
+      schema_version: 'knowledge-normalization-report/1.0',
+      mode: 'dry-run',
+      repo_id: repo.repo_id,
+      safety: { report_required_before_apply: true, automatic_bulk_rewrite: false },
+    });
+    expect(readFileSync(entry, 'utf8')).toContain('tags:');
+
+    logs = [];
+    await run('normalize', '--report', report, '--apply', '--json');
+    expect(JSON.parse(logs.at(-1)!)).toMatchObject({ applied: 1, unresolved: 0 });
+    const normalized = readFileSync(entry, 'utf8');
+    expect(normalized).toContain('keywords:');
+    expect(normalized).toContain('language: typescript');
+    expect(normalized).toContain(repo.repo_id);
+    expect(normalized).not.toContain('tags:');
   });
 });
 

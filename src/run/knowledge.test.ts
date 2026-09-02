@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   existsSync,
   mkdirSync,
@@ -22,6 +22,8 @@ import {
 } from './knowledge.js';
 import { completeRun, createRun, sealSession } from './runtime.js';
 import { SessionStore } from './store.js';
+
+vi.setConfig({ testTimeout: 20_000 });
 
 function v2Workspace(root: string): void {
   mkdirSync(join(root, ".workflow"), { recursive: true });

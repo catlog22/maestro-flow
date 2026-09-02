@@ -1,11 +1,9 @@
 import {
-  copyFileSync,
   existsSync,
-  mkdirSync,
   readFileSync,
   readdirSync,
 } from 'node:fs';
-import { dirname, join, relative, resolve } from 'node:path';
+import { join, relative, resolve } from 'node:path';
 import { createHash } from 'node:crypto';
 
 import { MaestroGraph } from '../graph/kg/engine.js';
@@ -18,8 +16,10 @@ import { SessionStore } from '../run/store.js';
 import { analyzeSpecHealth, type SpecHealthReport } from '../tools/spec-conflict-marker.js';
 import { parseSpecEntries, type SpecEntryParsed } from '../tools/spec-entry-parser.js';
 import { parseFrontmatter, knowhowFileToWikiId } from '../utils/frontmatter.js';
-import { updateFileAtomic } from '../utils/atomic-write.js';
-import { supersedeKnowhowEntry } from '../tools/knowhow-lifecycle.js';
+import {
+  inspectKnowledgeCompatibility,
+  type KnowledgeCompatibilityReport,
+} from './normalize.js';
 
 export type KnowledgeAuditScope = 'spec' | 'knowhow' | 'all';
 
@@ -74,14 +74,12 @@ export interface KnowledgeAuditResult {
   };
   findings: KnowledgeAuditFinding[];
   prune_plan: KnowledgePruneAction[];
-  applied: {
-    count: number;
-    backup_dir: string | null;
-  };
+  compatibility: KnowledgeCompatibilityReport;
   safety: {
     usage_only_never_pruned: true;
     physical_delete: false;
-    apply_requires_prune: true;
+    diagnostics_read_only: true;
+    normalization_requires_prior_report: true;
   };
 }
 
@@ -172,7 +170,12 @@ function inspectKnowhow(projectRoot: string): {
     try {
       const filePath = join(dir, file);
       const { data, body } = parseFrontmatter(readFileSync(filePath, 'utf8'));
-      const status = typeof data.status === 'string' ? normalized(data.status) : 'active';
+      const lifecycleStatus = typeof data.lifecycleStatus === 'string'
+        ? data.lifecycleStatus
+        : typeof data.status === 'string'
+          ? data.status
+          : 'active';
+      const status = normalized(lifecycleStatus);
       const active = status !== 'deprecated' && status !== 'superseded';
       if (active) summary.active++;
       else summary.deprecated++;
@@ -196,18 +199,22 @@ function inspectKnowhow(projectRoot: string): {
           recommended_action: 'review',
         });
       }
-      const codePaths = Array.isArray(data.codePaths) ? data.codePaths : [];
-      for (const codePath of codePaths.filter((item): item is string => typeof item === 'string')) {
-        const target = resolve(projectRoot, codePath);
+      const relatedPaths = Array.isArray(data.relatedPaths)
+        ? data.relatedPaths
+        : Array.isArray(data.codePaths)
+          ? data.codePaths
+          : [];
+      for (const relatedPath of relatedPaths.filter((item): item is string => typeof item === 'string')) {
+        const target = resolve(projectRoot, relatedPath);
         const withinProject = relative(projectRoot, target).split(/[\\/]/)[0] !== '..';
         if (withinProject && !existsSync(target)) {
           findings.push({
-            id: stableId('KAU', 'ghost-code-ref', file, codePath),
+            id: stableId('KAU', 'ghost-code-ref', file, relatedPath),
             store: 'knowhow',
             priority: 'P1',
             subtype: 'ghost-code-reference',
             target: knowhowFileToWikiId(file),
-            evidence: `Missing code path: ${codePath}`,
+            evidence: `Missing related path: ${relatedPath}`,
             recommended_action: 'review',
           });
         }
@@ -492,116 +499,12 @@ function addUsageFinding(usage: KnowledgeUsageStats, findings: KnowledgeAuditFin
   }
 }
 
-function deprecateSpecAction(action: Extract<KnowledgePruneAction, { store: 'spec' }>): void {
-  let found = false;
-  updateFileAtomic(action.target_file, current => {
-    if (current === null) throw new Error(`Missing spec file: ${action.target_file}`);
-    const eol = current.includes('\r\n') ? '\r\n' : '\n';
-    const lines = current.split(/\r?\n/);
-    for (let index = 0; index < lines.length; index++) {
-      const line = lines[index];
-      if (!line.includes('<spec-entry') || !line.includes(`sid="${action.target_id}"`)) continue;
-      found = true;
-      let updated = line;
-      if (/\sstatus="[^"]*"/.test(updated)) {
-        updated = updated.replace(/\sstatus="[^"]*"/, ' status="deprecated"');
-      } else {
-        updated = updated.replace(/>\s*$/, ' status="deprecated">');
-      }
-      if (/\ssuperseded-by="[^"]*"/.test(updated)) {
-        updated = updated.replace(
-          /\ssuperseded-by="[^"]*"/,
-          ` superseded-by="${action.successor_id}"`,
-        );
-      } else {
-        updated = updated.replace(/>\s*$/, ` superseded-by="${action.successor_id}">`);
-      }
-      lines[index] = updated;
-      break;
-    }
-    if (!found) throw new Error(`Spec sid not found: ${action.target_id}`);
-    return lines.join(eol);
-  });
-}
-
-function applyPrunePlan(
-  projectRoot: string,
-  plan: KnowledgePruneAction[],
-): KnowledgeAuditResult['applied'] {
-  if (plan.length === 0) return { count: 0, backup_dir: null };
-  const stamp = new Date().toISOString().replace(/[:.]/g, '-');
-  const backupDir = join(projectRoot, '.workflow', '.trash', `knowledge-audit-${stamp}`);
-  const uniqueFiles = [...new Set(plan.flatMap(action => [
-    action.target_file,
-    action.successor_file,
-  ]))];
-  for (const file of uniqueFiles) {
-    const destination = join(backupDir, relative(projectRoot, file));
-    mkdirSync(dirname(destination), { recursive: true });
-    copyFileSync(file, destination);
-  }
-  try {
-    for (const action of plan) {
-      if (action.store === 'spec') {
-        deprecateSpecAction(action);
-      } else {
-        const result = supersedeKnowhowEntry(
-          projectRoot,
-          action.target_id,
-          action.successor_id,
-        );
-        if (!result.success) throw new Error(result.error ?? `Failed to supersede ${action.target_id}`);
-      }
-    }
-
-    const logDir = join(projectRoot, '.workflow', '.knowledge-audit');
-    mkdirSync(logDir, { recursive: true });
-    const appliedAt = new Date().toISOString();
-    const logPath = join(logDir, 'audit-log.jsonl');
-    const records = plan.map(action => JSON.stringify({
-      audit_id: stableId('AUD', appliedAt, action.id),
-      action_id: action.id,
-      store: action.store,
-      target_id: action.target_id,
-      action: action.action,
-      reason: action.reason,
-      applied_at: appliedAt,
-      backup_path: relative(projectRoot, backupDir).replaceAll('\\', '/'),
-    })).join('\n') + '\n';
-    updateFileAtomic(logPath, current => (current ?? '') + records);
-  } catch (error) {
-    const rollbackErrors: string[] = [];
-    for (const file of uniqueFiles) {
-      const backup = join(backupDir, relative(projectRoot, file));
-      try {
-        updateFileAtomic(file, () => readFileSync(backup, 'utf8'));
-      } catch (rollbackError) {
-        rollbackErrors.push(
-          `${file}: ${rollbackError instanceof Error ? rollbackError.message : String(rollbackError)}`,
-        );
-      }
-    }
-    if (rollbackErrors.length > 0) {
-      throw new Error(
-        `Knowledge prune failed and rollback was incomplete: ${rollbackErrors.join('; ')}`,
-        { cause: error },
-      );
-    }
-    throw error;
-  }
-  return {
-    count: plan.length,
-    backup_dir: relative(projectRoot, backupDir).replaceAll('\\', '/'),
-  };
-}
-
 export async function auditKnowledge(
   projectRootInput: string,
-  options: { scope?: KnowledgeAuditScope; prune?: boolean; apply?: boolean } = {},
+  options: { scope?: KnowledgeAuditScope; prune?: boolean } = {},
 ): Promise<KnowledgeAuditResult> {
   const projectRoot = resolve(projectRootInput);
   const scope = options.scope ?? 'all';
-  if (options.apply && !options.prune) throw new Error('--apply requires --prune');
 
   const findings: KnowledgeAuditFinding[] = [];
   let specHealth: SpecHealthReport | null = null;
@@ -636,6 +539,52 @@ export async function auditKnowledge(
 
   const pipeline = inspectPipeline(projectRoot);
   findings.push(...pipeline.findings);
+
+  const compatibility = inspectKnowledgeCompatibility(projectRoot, scope);
+  if (!compatibility.current_repository.identity_persisted) {
+    findings.push({
+      id: stableId('KAU', 'missing-repository-manifest', projectRoot),
+      store: 'pipeline', priority: 'P1', subtype: 'missing-repository-manifest',
+      target: '.workflow/repository.json',
+      evidence: 'Stable repository identity is not persisted; legacy reads remain available but canonical writes and safe scoping are blocked',
+      recommended_action: 'review',
+    });
+  }
+  for (const link of compatibility.linked_repositories) {
+    if (!link.valid) {
+      findings.push({
+        id: stableId('KAU', 'linked-repository-invalid', link.alias, link.error ?? ''),
+        store: 'pipeline', priority: 'P1',
+        subtype: link.error?.includes('identity mismatch') ? 'linked-repository-id-mismatch' : 'invalid-linked-repository',
+        target: link.alias,
+        evidence: link.error ?? 'Linked repository is invalid',
+        recommended_action: 'review',
+      });
+    }
+  }
+  for (const entry of compatibility.entries) {
+    for (const state of entry.states) {
+      findings.push({
+        id: stableId('KAU', state, entry.file, entry.entry),
+        store: entry.store, priority: state === 'legacy-unscoped' ? 'P1' : 'P2',
+        subtype: state,
+        target: `${entry.file}:${entry.entry}`,
+        evidence: entry.normalizable
+          ? 'Legacy compatibility state is readable and has a deterministic explicit normalization'
+          : 'Legacy compatibility state requires a human-selected canonical category',
+        recommended_action: 'review',
+      });
+    }
+  }
+  for (const pending of compatibility.pending_cross_repo_promotions) {
+    findings.push({
+      id: stableId('KAU', 'pending-cross-repo-promotion', pending.session_id, pending.candidate_id),
+      store: 'pipeline', priority: 'P1', subtype: 'pending-cross-repo-promotion',
+      target: `${pending.session_id}:${pending.candidate_id}`,
+      evidence: `${pending.target} promotion ${pending.source_repo_id} -> ${pending.target_repo_id} (${pending.target_alias_snapshot}) is ${pending.status}`,
+      recommended_action: 'review',
+    });
+  }
   findings.sort((left, right) =>
     left.priority.localeCompare(right.priority)
     || left.store.localeCompare(right.store)
@@ -643,7 +592,6 @@ export async function auditKnowledge(
     || left.id.localeCompare(right.id)
   );
   prunePlan.sort((left, right) => left.target_id.localeCompare(right.target_id));
-  const applied = options.apply ? applyPrunePlan(projectRoot, prunePlan) : { count: 0, backup_dir: null };
 
   return {
     schema_version: 'knowledge-audit/1.0',
@@ -655,11 +603,12 @@ export async function auditKnowledge(
     pipeline: pipeline.summary,
     findings,
     prune_plan: options.prune ? prunePlan : [],
-    applied,
+    compatibility,
     safety: {
       usage_only_never_pruned: true,
       physical_delete: false,
-      apply_requires_prune: true,
+      diagnostics_read_only: true,
+      normalization_requires_prior_report: true,
     },
   };
 }
