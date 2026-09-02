@@ -619,7 +619,7 @@ export const executionContractSchema = z.union([
   executionContractV10Schema,
 ]);
 
-const briefTargetPlatformSchema = z.enum(['claude', 'codex', 'agy', 'agents-standard', 'pi']);
+const briefTargetPlatformSchema = z.enum(['claude', 'codex', 'agy', 'agents-standard', 'pi', 'grok']);
 const briefRunStatusSchema = z.enum(['created', 'running', 'blocked', 'failed', 'completed', 'sealed']);
 const briefSessionStatusSchema = z.enum(['running', 'paused', 'sealed', 'archived', 'failed']);
 const briefDecisionPointSchema = z.object({

@@ -48,16 +48,19 @@ function markdownToLines(markdown: string): string[] {
 /**
  * Per-injector budget reporting for the wrapper attribute.
  *
+ * `max` 只在调用方给出真实上限（config.maxContentLength）时上报；
+ * 未配置上限时不渲染 max，避免 `budget="518/518"` 这种 max 恒等于 used 的误导值。
+ *
  * FUTURE WORK: this is local char accounting only — cross-injector budget
  * pooling (shared token accounting across spec/keyword/kg hooks in one turn)
  * is intentionally not implemented yet to avoid behavioral risk.
  */
-function computeBudgetInfo(sections: ContextSection[]): { used: number; max: number } {
+function computeBudgetInfo(sections: ContextSection[], max?: number): { used: number; max?: number } {
   const used = sections.reduce(
     (sum, s) => sum + s.lines.reduce((acc, l) => acc + l.length, 0),
     0,
   );
-  return { used, max: used };
+  return max !== undefined && max > 0 ? { used, max } : { used };
 }
 
 // ---------------------------------------------------------------------------
@@ -285,7 +288,7 @@ export function evaluateSpecInjection(
   // Apply maxContentLength as a per-section line budget guard before wrapping:
   // flatten, then let context-budget decide tier. We wrap first so the budget
   // operates on the final shape the agent will see.
-  let rawContent = wrapMaestroContext(ctxSections, computeBudgetInfo(ctxSections));
+  let rawContent = wrapMaestroContext(ctxSections, computeBudgetInfo(ctxSections, config?.maxContentLength));
 
   // Apply maxContentLength before context budget
   if (config?.maxContentLength && rawContent.length > config.maxContentLength) {

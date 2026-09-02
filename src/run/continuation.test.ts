@@ -188,3 +188,134 @@ describe('canonical Run continuation', () => {
     });
   });
 });
+
+function v3Workspace(root: string): void {
+  mkdirSync(join(root, '.workflow'), { recursive: true });
+  writeFileSync(join(root, '.workflow', 'config.json'), JSON.stringify({
+    session_schema: {
+      schema_version: 'session-schema-selection/1.0',
+      writer: 'session/3.0',
+      features: { session_statusless: false },
+    },
+  }));
+}
+
+function writeV3Session(root: string, input: {
+  sessionId: string;
+  status?: 'open' | 'completed' | 'archived' | 'failed';
+  chainStatus?: 'pending' | 'running' | 'completed';
+  activeRunIds?: string[];
+  decisionRef?: string | null;
+}): void {
+  const sessionDir = join(root, '.workflow', 'sessions', input.sessionId);
+  mkdirSync(sessionDir, { recursive: true });
+  writeFileSync(join(sessionDir, 'session.json'), `${JSON.stringify({
+    schema_version: 'session/3.0',
+    session_id: input.sessionId,
+    objective: 'v3 continuation',
+    definition_of_done: 'inspect without readBundle',
+    status: input.status ?? 'open',
+    orchestration_revision: 0,
+    activity_revision: 0,
+    chain: [{
+      step_id: 'step-1',
+      command: 'implement',
+      args: [],
+      status: input.chainStatus ?? 'pending',
+      run_ids: input.activeRunIds ?? [],
+      goal_ref: null,
+      decision_ref: input.decisionRef ?? null,
+      decision_refs: [],
+    }],
+    decisions: input.decisionRef
+      ? [{ decision_id: input.decisionRef, after_step_id: 'step-1', status: 'open', evidence_refs: [] }]
+      : [],
+    active_run_ids: input.activeRunIds ?? [],
+    artifacts_ref: 'artifacts.json',
+    evidence_ref: 'evidence.json',
+    created_at: '2026-08-24T00:00:00.000Z',
+    updated_at: '2026-08-24T00:00:00.000Z',
+    completed_at: input.status === 'completed' ? '2026-08-24T01:00:00.000Z' : null,
+    archived_at: null,
+  }, null, 2)}\n`);
+  writeFileSync(join(sessionDir, 'artifacts.json'), `${JSON.stringify({
+    schema_version: 'artifacts/1.0', revision: 0, artifacts: {}, aliases: {},
+  }, null, 2)}\n`);
+}
+
+describe('session/3.0 continuation', () => {
+  it('does not call readBundle and points at v3 run next', () => {
+    const projectRoot = mkdtempSync(join(tmpdir(), 'maestro-continuation-v3-'));
+    roots.push(projectRoot);
+    v3Workspace(projectRoot);
+    writeV3Session(projectRoot, { sessionId: 's-v3' });
+
+    expect(inspectSessionContinuation(projectRoot, 's-v3')).toMatchObject({
+      schema_version: 'run-continuation/1.0',
+      action: 'dispatch_next',
+      authority: 'automatic',
+      auto_mode: false,
+      reason_code: 'MORE_STEPS',
+      session_id: 's-v3',
+    });
+    const result = inspectSessionContinuation(projectRoot, 's-v3');
+    expect(result.command).toContain('maestro run next --session s-v3');
+    expect(result.command).toContain('--expected-orchestration-revision 0');
+  });
+
+  it('loads a unique active v3 Run via run brief', () => {
+    const projectRoot = mkdtempSync(join(tmpdir(), 'maestro-continuation-v3-run-'));
+    roots.push(projectRoot);
+    v3Workspace(projectRoot);
+    writeV3Session(projectRoot, {
+      sessionId: 's-v3',
+      chainStatus: 'running',
+      activeRunIds: ['run-1'],
+    });
+    const store = new SessionStore(projectRoot);
+    store.writeRunV30({
+      schema_version: 'run/3.0',
+      run_id: 'run-1',
+      session_id: 's-v3',
+      step_id: 'step-1',
+      parent_run_id: null,
+      retry_of_run_id: null,
+      attempt: 1,
+      command: 'implement',
+      args: [],
+      goal: null,
+      status: 'running',
+      revision: 0,
+      actor_id: 'actor',
+      input_refs: [],
+      output_refs: [],
+      primary_artifact_id: null,
+      verdict: null,
+      summary: null,
+      created_at: '2026-08-24T00:00:00.000Z',
+      started_at: '2026-08-24T00:01:00.000Z',
+      ended_at: null,
+      sealed_at: null,
+    });
+
+    expect(inspectSessionContinuation(projectRoot, 's-v3')).toMatchObject({
+      action: 'load_run',
+      reason_code: 'RUN_ACTIVE',
+      run_id: 'run-1',
+      command: 'maestro run brief run-1 --session s-v3 --json',
+    });
+  });
+
+  it('stops a terminal v3 Session without using the legacy bundle', () => {
+    const projectRoot = mkdtempSync(join(tmpdir(), 'maestro-continuation-v3-done-'));
+    roots.push(projectRoot);
+    v3Workspace(projectRoot);
+    writeV3Session(projectRoot, { sessionId: 's-v3', status: 'completed', chainStatus: 'completed' });
+
+    expect(inspectSessionContinuation(projectRoot, 's-v3')).toMatchObject({
+      action: 'stop',
+      reason_code: 'SESSION_TERMINAL',
+      command: null,
+    });
+  });
+});

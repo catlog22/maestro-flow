@@ -13,6 +13,8 @@ const AGENT_TYPE_OPTIONS = [
   { label: 'Gemini', value: 'gemini' },
   { label: 'Qwen', value: 'qwen' },
   { label: 'OpenCode', value: 'opencode' },
+  { label: 'Pi', value: 'pi' },
+  { label: 'Grok', value: 'grok' },
 ];
 
 const APPROVAL_OPTIONS = [

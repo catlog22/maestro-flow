@@ -4444,6 +4444,13 @@ const GOAL_MODE_BLOCKS: Partial<Record<TargetPlatform, string>> = {
     '2. 各子目标完成时 update_task 标记 completed。',
     '3. 全部完成时 update_task session goal 为 completed。',
   ].join('\n'),
+  grok: [
+    'Goal 模式（该 step 声明 goal 标志）：',
+    '1. Session 创建后 call `create_goal({ objective: "{intent}", success_criteria: [decomposition.goals 各 done_when] })`；单一活跃 goal，若已有未完成 goal 先收口。',
+    '2. 过程中可用 `get_goal({})` 查看进度与剩余 token 预算。',
+    '3. 全部子目标完成时 `update_goal({ status: "complete" })`；阻塞时 `update_goal({ status: "blocked" })`。',
+    '4. 完成后向用户报告最终状态。',
+  ].join('\n'),
 };
 
 function extractGoalFlag(raw: string): boolean {

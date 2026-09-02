@@ -3,7 +3,7 @@ title: "MCP 工具参考"
 icon: "🔌"
 ---
 
-Maestro MCP 服务器暴露 9 个工具，供 Claude Code、Codex 等 AI 智能体在会话中直接调用。所有工具通过 stdio 传输协议注册，无需额外配置即可使用。
+Maestro MCP 服务器暴露内置工具，供 Claude Code、Grok、Codex 等 AI 智能体在会话中直接调用。所有工具通过 stdio 传输协议注册，无需额外配置即可使用。
 
 > **启用/过滤**: 通过 `MAESTRO_ENABLED_TOOLS` 环境变量或 `config.mcp.enabledTools` 控制可见工具列表。默认 `['all']` 全部启用。
 
@@ -15,6 +15,7 @@ Maestro MCP 服务器暴露 9 个工具，供 Claude Code、Codex 等 AI 智能�
 - [文件操作](#文件操作)
 - [团队协作](#团队协作)
 - [知识复用](#知识复用)
+- [任务委派](#任务委派)
 
 ---
 
@@ -31,6 +32,7 @@ Maestro MCP 服务器暴露 9 个工具，供 Claude Code、Codex 等 AI 智能�
 | `team_task` | 团队协作 | 任务 CRUD 与状态机管理 |
 | `team_agent` | 团队协作 | 智能体生命周期管理 (spawn/shutdown) |
 | `store_knowhow` | 知识复用 | 知识复用条目存储 (6 种类型) |
+| `delegate` | 任务委派 | 派活 / 续话 / 看状态与结果 / 取消（默认只读） |
 
 ---
 
@@ -229,7 +231,7 @@ Maestro MCP 服务器暴露 9 个工具，供 Claude Code、Codex 等 AI 智能�
 | `session_id` | string | 是 | -- | 会话 ID |
 | `role` | string | spawn/shutdown/remove | -- | 角色名 |
 | `prompt` | string | spawn | -- | 智能体指令 |
-| `tool` | string | 否 | `"gemini"` | CLI 工具 |
+| `tool` | string | 否 | `"gemini"` | CLI 工具（gemini / claude / codex / grok 等） |
 
 <details>
 <summary>示例</summary>
@@ -241,6 +243,14 @@ Maestro MCP 服务器暴露 9 个工具，供 Claude Code、Codex 等 AI 智能�
 ```
 
 </details>
+
+---
+
+## 任务委派
+
+### delegate
+
+把任务交给外部 CLI 智能体。默认 `mode=analysis`（只读）；改文件必须 `mode=write`。`operation`：`run` / `message` / `status` / `output` / `cancel`。
 
 ---
 
@@ -286,6 +296,7 @@ MCP Server (stdio) -> ToolRegistry
   +-- edit_file / write_file / read_file / read_many_files  (文件操作)
   +-- team_msg / team_mailbox / team_task / team_agent      (团队协作)
   +-- store_knowhow                                         (知识复用)
+  +-- delegate                                              (任务委派)
 ```
 
 **适配**: Zod schema 校验 -> `{success, result, error}` -> `ccwResultToMcp()` -> MCP `{content, isError}`

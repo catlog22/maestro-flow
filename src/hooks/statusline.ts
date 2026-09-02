@@ -30,6 +30,7 @@ import { resolveSelf } from '../tools/team-members.js';
 import { readRecentActivity, type ActivityEvent } from '../tools/team-activity.js';
 import { findWorkspaceRoot } from './workspace.js';
 import { buildHookErrorAlertSegment } from './hook-logger.js';
+import { listLiveChildren } from './child-scope.js';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -532,6 +533,18 @@ export function buildTeamSegment(session: string): string {
   } catch { return ''; }
 }
 
+/**
+ * Live children segment — child-scope 登记表中仍 running 的子代理数（只读，不 block）。
+ * 无登记或无 running 时返回 ''。claude/grok 两个宿主的登记表都查（小文件，开销可忽略）。
+ */
+export function buildLiveChildrenSegment(session: string): string {
+  try {
+    if (!session) return '';
+    const count = listLiveChildren('claude', session).length + listLiveChildren('grok', session).length;
+    return count > 0 ? `\u{1F9FE} ${count} child` : '';
+  } catch { return ''; }
+}
+
 // ---------------------------------------------------------------------------
 // Coordinator segment
 // ---------------------------------------------------------------------------
@@ -728,6 +741,7 @@ export function formatStatusline(data: StatuslineInput): string {
   const coord = session ? buildCoordinatorSegment(session) : '';
   const task  = session ? readCurrentTask(session) : '';
   const team  = session ? buildTeamSegment(session) : '';
+  const children = session ? buildLiveChildrenSegment(session) : '';
   const alert = session ? buildHookErrorAlertSegment(session) : '';
   const git   = readGitInfo(dir);
 
@@ -744,6 +758,7 @@ export function formatStatusline(data: StatuslineInput): string {
   if (coord) segA.push({ key: 'coord', text: `${ICONS.coord} ${coord}` });
   if (task)  segA.push({ key: 'task',  text: `${ICONS.task} ${task}` });
   if (team)  segA.push({ key: 'team',  text: `${ICONS.team} ${team}` });
+  if (children) segA.push({ key: 'team', text: children });
 
   // ---- Segment group B: Dir+Git | Tokens+Lines | Context ----
   const segB: Segment[] = [];

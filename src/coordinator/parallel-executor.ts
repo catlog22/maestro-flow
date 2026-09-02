@@ -44,6 +44,7 @@ const AGENT_TYPE_TO_TOOL: Record<string, string> = {
   'claude-code': 'claude',
   opencode: 'opencode',
   pi: 'pi',
+  grok: 'grok',
 };
 
 // ---------------------------------------------------------------------------

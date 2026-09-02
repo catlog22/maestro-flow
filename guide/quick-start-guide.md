@@ -20,7 +20,7 @@ maestro install mcp
 maestro hooks install --level standard
 ```
 
-安装后即可在 Claude Code 中使用 `/maestro-*` 系列斜杠命令和 `maestro` 终端命令。
+安装后即可在 Claude Code 或 Grok Build 中使用斜杠命令 / 技能，以及 `maestro` 终端命令。Grok 宿主：项目指令在 `.grok/rules/maestro.md`；项目级 MCP / hooks 需信任该文件夹。详见 [安装指南](install-guide.md) 的 Grok Build 一节。
 
 ---
 
@@ -148,7 +148,7 @@ auto-test 1 --re-run            # 重跑失败场景
 
 ## 7. Delegate 异步委托
 
-将任务委托给外部 AI 引擎（Gemini/Qwen/Codex/Claude/OpenCode）：
+将任务委托给外部 AI 引擎（Gemini / Qwen / Codex / Claude / OpenCode / Grok）：
 
 ```bash
 # 异步分析（立即返回）

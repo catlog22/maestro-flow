@@ -7,7 +7,7 @@ import type { CoordinateStep, CoordinateStepStatus, CoordinateSessionStatus } fr
 // CoordinatorTab -- full coordinator UI matching prototype design
 // ---------------------------------------------------------------------------
 
-const TOOLS = ['claude', 'gemini', 'codex', 'qwen', 'opencode'] as const;
+const TOOLS = ['claude', 'gemini', 'codex', 'qwen', 'opencode', 'grok'] as const;
 
 const STATUS_COLORS: Record<string, { bg: string; color: string }> = {
   running:                { bg: 'var(--color-tint-running)',    color: 'var(--color-accent-blue)' },

@@ -15,7 +15,7 @@ icon: "🤖"
 claude --dangerously-load-development-channels server:maestro --dangerously-skip-permissions
 ```
 
-委托工具（`delegate_message`、`delegate_status`、`delegate_output`、`delegate_tail`、`delegate_cancel`）自动作为 MCP 工具可用。
+MCP 提供 `delegate` 工具，可在 Grok / Claude / Cursor 等宿主里直接派活、续话、看结果、取消。默认 `mode=analysis`（只读）；要改文件必须显式 `mode=write`。
 
 ### 通过 CLI 启动
 
@@ -39,7 +39,7 @@ maestro delegate "<PROMPT>" [options]
 
 | 选项 | 说明 | 默认值 |
 |------|------|--------|
-| `--to <tool>` | Agent：gemini, qwen, codex, claude, opencode, agy, pi | 配置中第一个启用的 |
+| `--to <tool>` | Agent：gemini, qwen, codex, claude, opencode, agy, pi, grok | 配置中第一个启用的 |
 | `--role <role>` | 能力角色（analyze, explore, review, implement, plan, brainstorm, research） | — |
 | `--mode <mode>` | `analysis`（只读）或 `write`（创建/修改/删除） | `analysis` |
 | `--effort <level>` | 推理强度（low, medium, high, max） | — |
@@ -73,16 +73,9 @@ maestro delegate message <id> "text" --delivery after_complete
 maestro delegate messages <id>                     # 列出排队消息
 ```
 
-### MCP 工具
+### MCP 工具 `delegate`
 
-| CLI 子命令 | MCP 工具 | 额外参数 |
-|-----------|---------|---------|
-| `message <id> "text"` | `delegate_message` | `delivery`（inject/after_complete） |
-| `messages <id>` | `delegate_messages` | — |
-| `status <id>` | `delegate_status` | `eventLimit` |
-| `output <id>` | `delegate_output` | — |
-| `tail <id>` | `delegate_tail` | `limit` |
-| `cancel <id>` | `delegate_cancel` | — |
+一个工具，用 `operation` 区分动作：`run` / `message` / `status` / `output` / `cancel`。`tail` / `messages` / `show` 仍只走命令行。已有安装若 MCP 环境变量是白名单，需重装并把 `delegate` 勾进 `MAESTRO_ENABLED_TOOLS`。
 
 ---
 
@@ -97,7 +90,9 @@ queued → running → completed
 ```
 
 **执行 ID**：`{prefix}-{HHmmss}-{rand4}`（如 `gem-143022-a7f2`）
-前缀：gemini→`gem`，qwen→`qwn`，codex→`cdx`，claude→`cld`，opencode→`opc`，agy→`agy`，pi→`pi`
+前缀：gemini→`gem`，qwen→`qwn`，codex→`cdx`，claude→`cld`，opencode→`opc`，agy→`agy`，pi→`pi`，grok→`grk`
+
+> Grok：prompt 经 `--prompt-file` 传递。`maestro delegate message` 的 inject 会停掉当前 headless 轮次并以 `grok --continue` 重拉。默认模型 `grok-4.6`。需要 `XAI_API_KEY` 或已执行 `grok login`。
 
 <details>
 <summary>Delegate vs CLI 功能对比</summary>
@@ -125,7 +120,7 @@ queued → running → completed
 | cancel | — | ✓ |
 | message 注入 | — | ✓ |
 | message after_complete | — | ✓ |
-| MCP 工具等价 | — | ✓（6 个工具） |
+| MCP 工具等价 | — | ✓（`delegate` 工具） |
 | MCP channel 通知 | — | ✓ |
 | Snapshot（最新输出预览） | — | ✓ |
 

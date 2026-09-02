@@ -10,7 +10,7 @@
 
 [![npm version](https://img.shields.io/npm/v/maestro-flow?color=cb3837&logo=npm&logoColor=white)](https://www.npmjs.com/package/maestro-flow)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.7-3178C6?logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
-[![Node.js](https://img.shields.io/badge/Node.js-≥18-339933?logo=node.js&logoColor=white)](https://nodejs.org/)
+[![Node.js](https://img.shields.io/badge/Node.js-≥22.19-339933?logo=node.js&logoColor=white)](https://nodejs.org/)
 [![MCP](https://img.shields.io/badge/MCP-Protocol-8B5CF6)](https://modelcontextprotocol.io/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
@@ -29,7 +29,7 @@
 
 **Adaptive Orchestration** — The Ralph v2 engine reads project state, classifies natural-language intent into 40+ command chain types, and makes dynamic decisions at checkpoints: proceed, fall back, or insert a fix loop. No YAML. No pipeline config.
 
-**Cross-Backend Dispatch** — Mix Claude, Codex, Gemini, Qwen, and OpenCode in a single workflow through four composable patterns: Delegate (async dispatch), Team (role-based coordination), Wave (dependency parallelism), and Swarm (ACO exploration).
+**Cross-Backend Dispatch** — Mix Claude, Codex, Gemini, Qwen, OpenCode, and Grok in a single workflow through four composable patterns: Delegate (async dispatch), Team (role-based coordination), Wave (dependency parallelism), and Swarm (ACO exploration).
 
 **Self-Reinforcing Knowledge** — Patterns, pitfalls, and decisions discovered during execution are automatically persisted as Specs and Knowhow. Hooks inject relevant knowledge into future agent prompts — the project gets smarter over time.
 
@@ -44,7 +44,11 @@ npm install -g maestro-flow
 maestro install          # interactive component selector
 ```
 
-Requires Node.js ≥ 18 and [Claude Code CLI](https://docs.anthropic.com/en/docs/claude-code). Optionally install Codex CLI or agy CLI for multi-agent workflows.
+Requires Node.js ≥ 22.19 and at least one host CLI: [Claude Code](https://docs.anthropic.com/en/docs/claude-code) (default) and/or [Grok Build](https://docs.x.ai/build/overview). Optionally install Codex CLI or agy CLI for multi-agent workflows.
+
+Grok is a first-class host: tick Grok Build in the `maestro install` platform list. Project instructions land in `.grok/rules/maestro.md`; leftover Maestro sections in `.grok/AGENTS.md` are stripped on reinstall. Project-level MCP / hooks need the folder trusted (interactive confirm or `/hooks-trust`); user-level `maestro-tools` does not. Details: [Installation Guide](guide/install-guide.en.md).
+
+After install, teach only the v3 CLI: `maestro session open` → `maestro run next` → `maestro run complete --advance` → `maestro session complete`.
 
 ---
 

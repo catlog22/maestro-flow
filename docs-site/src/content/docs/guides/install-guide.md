@@ -18,9 +18,9 @@ maestro install
 ```
 
 **前置要求**：
-- Node.js ≥ 18
-- Claude Code CLI（必需）
-- Codex CLI / Gemini CLI（可选，用于多 agent 工作流）
+- Node.js ≥ 22.19
+- 至少一个宿主 CLI：Claude Code（默认）和/或 [Grok Build](https://docs.x.ai/build/overview)
+- Codex CLI / Gemini CLI / OpenCode / Pi（可选，用于多 Agent 工作流）
 
 ---
 
@@ -28,11 +28,15 @@ maestro install
 
 `maestro install` 执行以下步骤：
 
-1. **检测项目状态** — 空项目 / 已有代码 / 已有 .workflow/
-2. **选择组件** — 交互式组件选择界面
-3. **选择安装模式** — 全局 (~/.maestro/) 或项目级 (.workflow/)
-4. **复制文件** — 按组件定义复制到目标位置
-5. **生成 manifest** — 记录已安装组件，支持增量更新
+1. **检测项目状态** — 已有 manifest / 磁盘上的平台目录 / 全新安装
+2. **选择平台** — 交互式勾选宿主（含 Grok Build）
+3. **选择组件** — 按平台过滤后的组件选择界面
+4. **选择安装范围** — 全局（用户主目录）或项目级（`--path <dir>`）
+5. **配置钩子 / MCP / Extra MCP / statusline**
+6. **复制或构建文件** — 按组件定义写入目标位置
+7. **生成 manifest** — 记录已安装组件，支持增量更新
+
+> 共享运行时始终写入 `~/.maestro/`。平台资产写入 `~/.claude/`、`~/.grok/` 或项目下对应目录。`.workflow/` 是项目数据目录，不是安装目标。
 
 ### 加法语义（v0.5.50+）
 
@@ -132,9 +136,11 @@ maestro install toggle --path ./my-project --list
 
 ## 安装模式
 
-### 全局模式（推荐）
+交互式安装默认进入 TUI；`--global` / `--path` 只预设范围。没有 `--mode` 标志。
 
-安装到 `~/.maestro/`，所有项目共享：
+### 全局范围（推荐）
+
+平台资产写入用户主目录（如 `~/.claude/`、`~/.grok/`），共享运行时写入 `~/.maestro/`：
 
 ```bash
 maestro install --global
@@ -142,15 +148,68 @@ maestro install --global
 
 适合：个人开发机，多项目共享配置
 
-### 项目模式
+### 项目范围
 
-安装到项目目录 `.workflow/`，仅当前项目生效：
+平台资产写入指定项目（如 `<dir>/.claude/`、`<dir>/.grok/`）：
 
 ```bash
 maestro install --path <dir>
 ```
 
-适合：团队协作，项目特定配置
+适合：团队协作，项目特定配置。Grok 会从当前目录向上走到 git 根读取每一层 `.grok/config.toml`。
+
+`--force` 会重建技能 / Agent，并对指令文件做 tag inject（更新 Maestro 段，保留段外用户正文）。没有 `--force` 时已存在的组件文件尽量不覆盖。
+
+项目级 MCP / hooks 需要信任该文件夹（交互 `grok` 确认，或 `/hooks-trust`）。用户级 `~/.grok/config.toml` 的 `maestro-tools` 不依赖信任。安装器不会改 `trusted_folders.toml`。
+
+---
+
+## Extra MCP 目标
+
+除 Claude Code 外，可将 `maestro-tools` 注册到：
+
+| 目标 ID | 配置路径 | 格式 |
+|---------|----------|------|
+| `cursor` | `.cursor/mcp.json` | JSON |
+| `qoder` | 项目根 `mcp.json` | JSON |
+| `trae` | `.mcp.json` | JSON |
+| `kiro` | `.kiro/settings/mcp.json` | JSON |
+| `roo` | `.roo/mcp.json`（仅项目级） | JSON |
+| `vscode-copilot` | `.vscode/mcp.json` | JSON |
+| `gemini-cli` | `.gemini/settings.json` | JSON |
+| `grok` | `~/.grok/config.toml` 或 `.grok/config.toml` | TOML `[mcp_servers.maestro-tools]` |
+
+```bash
+maestro install --force --extra-mcp grok,cursor
+```
+
+---
+
+## Grok Build
+
+Grok 是一等宿主与 delegate 后端。`maestro install` 勾选平台 `grok` 与 Extra MCP 的 Grok 目标即可。
+
+```bash
+# 安装 Grok CLI（macOS / Linux）
+curl -fsSL https://x.ai/cli/install.sh | bash
+
+# Windows PowerShell
+irm https://x.ai/cli/install.ps1 | iex
+
+# 安装 Maestro 的 Grok 资产 + MCP
+# 全新机器请同时带上 workflows,prepare,ref,arch-kb,templates,overlays
+maestro install --force --components workflows,prepare,ref,arch-kb,templates,overlays,grok-context,grok-md-chinese,grok-skills,grok-agents --extra-mcp grok
+```
+
+资产落点：`.grok/rules/maestro.md`、`.grok/skills/`、`.grok/agents/`（不是 `AGENTS.md`）。重装会剥离旧 `.grok/AGENTS.md` 里的 Maestro 段。项目资产写到调用方当前目录，可用 `--path`。装完只教 v3：`session open` → `run next` → `run complete --advance` → `session complete`。认证用 `grok login` 或 `XAI_API_KEY`。验证：
+
+```bash
+grok inspect
+grok mcp doctor maestro-tools
+maestro delegate "读 README 并总结" --to grok --mode analysis
+```
+
+执行 ID 前缀为 `grk-`。默认模型 `grok-4.6`。prompt 经 `--prompt-file` 传递。`maestro delegate message` 的 inject 会停掉当前 headless 轮次并以 `grok --continue` 重拉。完整说明见仓库 `guide/install-guide.md`。
 
 ---
 
@@ -187,14 +246,17 @@ maestro install --force
 ## 更新
 
 ```bash
-# 检查更新
+# 仅检查
+maestro update --check
+
+# 更新到最新
 maestro update
 
-# 预览变更（不实际应用）
-maestro update --dry-run
+# 预览版本通知
+maestro update --notices --dry-run
 
-# 强制覆盖
-maestro update --force
+# 非交互（CI）
+maestro update --non-interactive
 ```
 
 ---
@@ -267,9 +329,10 @@ npm install -g maestro-flow
 
 ```bash
 # 安装管理
-maestro install [--global|--path <dir>] [--force]
+maestro install [--global|--path <dir>] [--force] [--all-platforms]
+maestro install --force --extra-mcp grok,cursor --mcp --hooks standard
 maestro uninstall [--yes]
-maestro update [--dry-run] [--force]
+maestro update [--check] [--notices] [--dry-run] [--non-interactive]
 
 # 版本信息
 maestro --version

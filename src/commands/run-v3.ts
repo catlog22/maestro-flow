@@ -205,9 +205,17 @@ export function registerRunV3Command(program: Command): void {
         // knowledge delta inside completeRunAndAdvance — receipt and delta
         // can never diverge. A missing/unreadable report yields null and both
         // are omitted.
-        const knowledgeReconciliation = generateV3RunKnowledgeReconciliation(
-          store.projectRoot, resolved.session, runId,
-        );
+        // Missing report.md yields null. Generation errors must not abort the
+        // official seal; completeRunAndAdvance retries under lock and records
+        // concerns when reconciliation still fails without candidates.
+        let knowledgeReconciliation = null;
+        try {
+          knowledgeReconciliation = generateV3RunKnowledgeReconciliation(
+            store.projectRoot, resolved.session, runId,
+          );
+        } catch {
+          knowledgeReconciliation = null;
+        }
         const mutation = completeRunAndAdvance(store, {
           ...mutationIdentity(resolved), runId,
           expectedRunRevision: resolved.expectedRunRevision!,

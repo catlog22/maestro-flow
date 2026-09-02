@@ -37,7 +37,8 @@ export interface ContextSection {
 
 export interface ContextBudgetInfo {
   used: number;
-  max: number;
+  /** 真实上限；缺省表示该 injector 无配置上限，渲染为 `budget="used"`（不渲染误导性的 x/x） */
+  max?: number;
 }
 
 // ---------------------------------------------------------------------------
@@ -75,9 +76,10 @@ export function wrapMaestroContext(
   if (body.length === 0) return '';
 
   const used = Number.isFinite(budget.used) ? budget.used : 0;
-  const max = Number.isFinite(budget.max) ? budget.max : 0;
+  const max = budget.max !== undefined && Number.isFinite(budget.max) ? budget.max : null;
 
-  return `<maestro-context budget="${used}/${max}">\n${body.join('\n')}\n</maestro-context>`;
+  const budgetAttr = max !== null ? `budget="${used}/${max}"` : `budget="${used}"`;
+  return `<maestro-context ${budgetAttr}>\n${body.join('\n')}\n</maestro-context>`;
 }
 
 /** Truncate a wrapped context without exceeding maxChars or losing its close tag. */

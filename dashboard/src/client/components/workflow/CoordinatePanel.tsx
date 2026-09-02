@@ -19,7 +19,7 @@ import ListIcon from 'lucide-react/dist/esm/icons/list.js';
 // CoordinatePanel -- control bar + chain progress + step detail
 // ---------------------------------------------------------------------------
 
-const TOOL_OPTIONS = ['claude', 'gemini', 'codex', 'qwen', 'opencode'] as const;
+const TOOL_OPTIONS = ['claude', 'gemini', 'codex', 'qwen', 'opencode', 'grok'] as const;
 
 function StepStatusIcon({ status }: { status: CoordinateStepStatus }) {
   switch (status) {

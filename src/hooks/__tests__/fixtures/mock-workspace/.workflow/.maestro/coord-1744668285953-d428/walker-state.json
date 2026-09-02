@@ -1,0 +1,17 @@
+{
+  "graph_id": "full-lifecycle",
+  "current_node": "review",
+  "status": "step_paused",
+  "intent": "implement OAuth2 authentication with refresh tokens",
+  "auto_mode": false,
+  "context": {
+    "project": {
+      "current_phase": 2
+    }
+  },
+  "history": [
+    { "node_id": "plan", "node_type": "command", "outcome": "success" },
+    { "node_id": "execute", "node_type": "command", "outcome": "success" },
+    { "node_id": "review", "node_type": "command", "outcome": "success" }
+  ]
+}

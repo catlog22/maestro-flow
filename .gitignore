@@ -30,6 +30,9 @@ Thumbs.db
 !.workflow/collab/
 .workflow/collab/*
 !.workflow/collab/overlays/
+# 例外：coordinator-tracker 集成测试的 mock fixture 需要入库
+!src/hooks/__tests__/fixtures/mock-workspace/.workflow/
+!src/hooks/__tests__/fixtures/mock-workspace/.workflow/**
 claude-code-skills-guide.md
 
 # Local analysis/research checkouts and reports

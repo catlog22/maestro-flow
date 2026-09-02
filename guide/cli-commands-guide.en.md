@@ -103,7 +103,7 @@ Use these commands to inspect the current workflow:
 <details>
 <summary>maestro delegate</summary>
 
-Delegate tasks to AI agent tools (gemini/qwen/codex/claude/opencode). Supports sync, async, and session resume.
+Delegate tasks to AI agent tools (gemini/qwen/codex/claude/opencode/agy/pi/grok). Supports sync, async, and session resume.
 
 Used internally by `maestro-ralph` for CLI-type chain nodes. Ralph sets `--mode`, `--rule`, and `--cd` automatically based on session context.
 

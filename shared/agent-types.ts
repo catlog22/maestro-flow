@@ -6,7 +6,7 @@
 // ---------------------------------------------------------------------------
 
 /** Supported agent CLI types */
-export type AgentType = 'claude-code' | 'codex' | 'codex-server' | 'gemini' | 'gemini-a2a' | 'qwen' | 'opencode' | 'agy' | 'api-explore' | 'agent-sdk' | 'pi';
+export type AgentType = 'claude-code' | 'codex' | 'codex-server' | 'gemini' | 'gemini-a2a' | 'qwen' | 'opencode' | 'agy' | 'api-explore' | 'agent-sdk' | 'pi' | 'grok';
 
 /** Agent process lifecycle status */
 export type AgentProcessStatus =

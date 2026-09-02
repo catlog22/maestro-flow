@@ -7,7 +7,7 @@
 
 import { isAbsolute, join, relative, resolve } from 'node:path';
 import { homedir } from 'node:os';
-import { writeFileSync, existsSync, readdirSync, statSync, unlinkSync } from 'node:fs';
+import { writeFileSync, readFileSync, existsSync, readdirSync, statSync, unlinkSync } from 'node:fs';
 import { paths } from '../config/paths.js';
 import {
   scanComponents,
@@ -57,6 +57,8 @@ import {
   uninstallCodexHooks,
   uninstallAgyHooks,
   getGenericHooksPlatform,
+  loadCodexHooks,
+  removeCodexMaestroHooks,
   removeClaudeStatusline,
 } from '../commands/hooks.js';
 import type { InstallFlowConfig } from '../tui/install-ui/types.js';
@@ -370,8 +372,27 @@ export async function executeInstallPipeline(opts: ExecutorOptions): Promise<Ins
   // --- Generic platform hooks ---
   if (config.genericHookLevels) {
     for (const [platId, level] of Object.entries(config.genericHookLevels)) {
-      if (level === 'none') continue;
       if (cancelled()) throw new CancelledError();
+      if (level === 'none') {
+        // TUI 显式关闭：必须真正摘除磁盘上残留的 maestro 钩子。
+        // 此前这里是直接 skip——用户取消勾选后钩子仍留在平台上继续触发。
+        const platform = getGenericHooksPlatform(platId);
+        if (!platform) continue;
+        const hooksPath = platform.hooksPath({ project: config.mode === 'project' });
+        if (!existsSync(hooksPath)) continue;
+        const before = readFileSync(hooksPath, 'utf8');
+        const hooksFile = loadCodexHooks(hooksPath);
+        removeCodexMaestroHooks(hooksFile);
+        const after = JSON.stringify(hooksFile, null, 2);
+        if (after !== before) writeFileSync(hooksPath, after);
+        recordGenericHooks(manifest, platId, {
+          settingsPath: hooksPath,
+          installed: [],
+          level,
+        });
+        progress(`ghooks-${platId}` as StepName, 'done', 'removed');
+        continue;
+      }
       const stepId = `ghooks-${platId}` as StepName;
       progress(stepId, 'active', `${level}...`);
       const result = installGenericHooksByLevel(platId, level, {

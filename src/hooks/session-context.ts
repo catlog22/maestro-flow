@@ -15,6 +15,7 @@ import { createHash } from 'node:crypto';
 import { resolveWorkspace } from './workspace.js';
 import { inspectSessionContinuation } from '../run/continuation.js';
 import { SessionStore } from '../run/store.js';
+import { resolveSessionContextFromStore } from '../run/v3/resolve-context-store.js';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -109,30 +110,88 @@ export function evaluateSessionContext(data: SessionContextInput): HookOutput | 
 // Section builders
 // ---------------------------------------------------------------------------
 
-function buildActiveContinuationSection(cwd: string): string | null {
+function formatContinuationFailure(detail: string): string {
+  return [
+    '## Active Canonical Run',
+    `Unavailable: ${detail}`,
+    'Inspect with `maestro session status --json` or `maestro session resume-view --json`.',
+  ].join('\n');
+}
+
+function buildV3ActiveContinuationSection(cwd: string, store: SessionStore): string {
+  const resolution = resolveSessionContextFromStore(store);
+  if (!resolution.ok) {
+    if (resolution.error.code === 'SESSION_CONTEXT_UNRESOLVED') {
+      return [
+        '## Active Canonical Run',
+        'No open session/3.0 Session in this workspace.',
+        'Open one with `maestro session open <objective> --json`.',
+      ].join('\n');
+    }
+    const candidates = resolution.error.candidates.length > 0
+      ? ` Candidates: ${resolution.error.candidates.join(', ')}.`
+      : '';
+    return formatContinuationFailure(`${resolution.error.code} — ${resolution.error.message}.${candidates}`);
+  }
+
   try {
-    const store = new SessionStore(cwd);
-    const statePath = join(cwd, '.workflow', 'state.json');
-    let sessionId: string | null = null;
-    if (existsSync(statePath)) {
-      const state = JSON.parse(readFileSync(statePath, 'utf8')) as { active_session_id?: unknown };
-      if (typeof state.active_session_id === 'string') sessionId = state.active_session_id;
-    }
-    if (!sessionId) {
-      const candidates = store.listSessions({ statuses: ['running', 'paused'] }).candidates;
-      if (candidates.length !== 1) return null;
-      sessionId = candidates[0].sessionId;
-    }
-    const continuation = inspectSessionContinuation(cwd, sessionId);
+    const continuation = inspectSessionContinuation(cwd, resolution.session_id);
+    const session = store.readSessionRecordReadOnly(resolution.session_id);
+    const status = session.schema_version === 'session/3.0' && typeof session.status === 'string'
+      ? (session.status === 'paused' ? 'open' : session.status)
+      : 'open';
+    const activeRunIds = session.schema_version === 'session/3.0' && Array.isArray(session.active_run_ids)
+      ? session.active_run_ids.filter((id): id is string => typeof id === 'string')
+      : [];
+    const activeRuns = activeRunIds.length > 0 ? activeRunIds.join(', ') : '-';
     return [
       '## Active Canonical Run',
-      `Session: ${sessionId} | Action: ${continuation.action} | Authority: ${continuation.authority}`,
-      `Resume: /maestro -c`,
+      `Session: ${resolution.session_id} | ${status} | Action: ${continuation.action} | Authority: ${continuation.authority}`,
+      `Active Runs: ${activeRuns}`,
+      `Resume: maestro session resume-view --session ${resolution.session_id} --json`,
       `Next: ${continuation.command ?? continuation.reason}`,
       'This is advisory startup context; do not resume it unless the current user intent requests continuation.',
     ].join('\n');
-  } catch {
-    return null;
+  } catch (error) {
+    return formatContinuationFailure(
+      error instanceof Error ? error.message : String(error),
+    );
+  }
+}
+
+function buildLegacyActiveContinuationSection(cwd: string, store: SessionStore): string | null {
+  const statePath = join(cwd, '.workflow', 'state.json');
+  let sessionId: string | null = null;
+  if (existsSync(statePath)) {
+    const state = JSON.parse(readFileSync(statePath, 'utf8')) as { active_session_id?: unknown };
+    if (typeof state.active_session_id === 'string') sessionId = state.active_session_id;
+  }
+  if (!sessionId) {
+    const candidates = store.listSessions({ statuses: ['running', 'paused'] }).candidates;
+    if (candidates.length !== 1) return null;
+    sessionId = candidates[0].sessionId;
+  }
+  const continuation = inspectSessionContinuation(cwd, sessionId);
+  return [
+    '## Active Canonical Run',
+    `Session: ${sessionId} | Action: ${continuation.action} | Authority: ${continuation.authority}`,
+    `Resume: /maestro -c`,
+    `Next: ${continuation.command ?? continuation.reason}`,
+    'This is advisory startup context; do not resume it unless the current user intent requests continuation.',
+  ].join('\n');
+}
+
+function buildActiveContinuationSection(cwd: string): string | null {
+  try {
+    const store = new SessionStore(cwd);
+    if (store.sessionSchemaSelection().writer === 'session/3.0') {
+      return buildV3ActiveContinuationSection(cwd, store);
+    }
+    return buildLegacyActiveContinuationSection(cwd, store);
+  } catch (error) {
+    return formatContinuationFailure(
+      error instanceof Error ? error.message : String(error),
+    );
   }
 }
 

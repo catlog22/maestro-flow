@@ -7,7 +7,7 @@ import type { ExecutionScheduler } from '../execution/execution-scheduler.js';
 import type { AgentType } from '../../shared/agent-types.js';
 
 const VALID_EXECUTORS = new Set<string>([
-  'claude-code', 'codex', 'codex-server', 'gemini', 'gemini-a2a', 'qwen', 'opencode', 'agent-sdk', 'pi',
+  'claude-code', 'codex', 'codex-server', 'gemini', 'gemini-a2a', 'qwen', 'opencode', 'agent-sdk', 'pi', 'grok',
 ]);
 
 /**

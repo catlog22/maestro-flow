@@ -76,7 +76,7 @@ async function main(): Promise<void> {
   // ---------------------------------------------------------------------------
   const agentManager = new AgentManager(eventBus);
   const SUBPROCESS_AGENT_TYPES: AgentType[] = [
-    'claude-code', 'gemini', 'gemini-a2a', 'qwen', 'codex', 'codex-server', 'opencode', 'agy', 'api-explore', 'pi',
+    'claude-code', 'gemini', 'gemini-a2a', 'qwen', 'codex', 'codex-server', 'opencode', 'agy', 'api-explore', 'pi', 'grok',
   ];
   for (const type of SUBPROCESS_AGENT_TYPES) {
     agentManager.registerAdapter(await createAdapterForType(type));

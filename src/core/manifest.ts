@@ -241,21 +241,19 @@ export function recordExtraMcp(manifest: Manifest, record: ExtraMcpRecord): void
 
 // --- Save / Load ---
 
-export function saveManifest(
+/** 锁内保存:fencing 校验 + 写新文件 + 原子晋升 + 清理旧记录(不取锁)。 */
+function saveManifestLocked(
   manifest: Manifest,
   opts?: { expectedPriorId?: string | null },
 ): string {
-  ensureDir();
-  acquireManifestLock();
-  try {
-    if (opts && Object.prototype.hasOwnProperty.call(opts, 'expectedPriorId')) {
-      const currentId = findManifest(manifest.scope, manifest.targetPath)?.id ?? null;
-      if (currentId !== opts.expectedPriorId) {
-        throw new Error(
-          `Installation manifest changed concurrently (expected ${opts.expectedPriorId ?? 'none'}, found ${currentId ?? 'none'}).`,
-        );
-      }
+  if (opts && Object.prototype.hasOwnProperty.call(opts, 'expectedPriorId')) {
+    const currentId = findManifest(manifest.scope, manifest.targetPath)?.id ?? null;
+    if (currentId !== opts.expectedPriorId) {
+      throw new Error(
+        `Installation manifest changed concurrently (expected ${opts.expectedPriorId ?? 'none'}, found ${currentId ?? 'none'}).`,
+      );
     }
+  }
   // Never overwrite an existing manifest in place. A unique destination keeps
   // the previous installation record recoverable until the new record is
   // completely written and atomically promoted.
@@ -276,6 +274,37 @@ export function saveManifest(
   // interrupted, findManifest() deterministically selects the newest record.
   removeOld(manifest.scope, manifest.targetPath, fp);
   return fp;
+}
+
+export function saveManifest(
+  manifest: Manifest,
+  opts?: { expectedPriorId?: string | null },
+): string {
+  ensureDir();
+  acquireManifestLock();
+  try {
+    return saveManifestLocked(manifest, opts);
+  } finally {
+    releaseManifestLock();
+  }
+}
+
+/**
+ * 读-改-写在同一把 manifest 锁内完成,并发更新串行化——
+ * 不会像 read-merge-save 快照相撞那样丢记录(如 hooks install
+ * --target grok 与 --target cursor 并发)。
+ */
+export function updateManifest(
+  scope: Manifest['scope'],
+  targetPath: string,
+  mutate: (manifest: Manifest) => void,
+): string {
+  ensureDir();
+  acquireManifestLock();
+  try {
+    const manifest = findManifest(scope, targetPath) ?? createManifest(scope, targetPath);
+    mutate(manifest);
+    return saveManifestLocked(manifest);
   } finally {
     releaseManifestLock();
   }
@@ -344,7 +373,7 @@ export function deleteManifest(manifest: Manifest): void {
 const PRESERVE = new Set(['settings.json', 'settings.local.json']);
 
 /** Files that should have maestro content removed via tag injection instead of being deleted entirely. */
-const CONTENT_MANAGED = new Set(['CLAUDE.md', 'AGENTS.md', 'GEMINI.md', 'copilot-instructions.md']);
+const CONTENT_MANAGED = new Set(['CLAUDE.md', 'AGENTS.md', 'GEMINI.md', 'copilot-instructions.md', 'maestro.md']);
 
 /**
  * Remove maestro-injected content from a doc file using `<!-- maestro:start/end -->` markers.

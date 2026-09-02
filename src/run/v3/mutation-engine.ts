@@ -1170,6 +1170,7 @@ export function completeRunAndAdvance(
     // ── knowledge staging + reconciliation receipt (atomic with the seal) ──
     const frontmatterCandidates = reportKnowledgeCandidateDrafts(frontmatter, runId);
     let knowledgeReceipt: KnowledgeReconciliation | null = null;
+    const knowledgeConcerns: string[] = [];
     try {
       const corpusFingerprint = currentKnowledgeCorpusFingerprint(store.projectRoot);
       const persisted = readKnowledgeReconciliation(store, identity.sessionId, runId, true);
@@ -1206,6 +1207,9 @@ export function completeRunAndAdvance(
         );
       }
       knowledgeReceipt = null;
+      knowledgeConcerns.push(
+        `knowledge reconciliation failed: ${error instanceof Error ? error.message : String(error)}`,
+      );
     }
 
     if (knowledgeReceipt) {
@@ -1263,6 +1267,7 @@ export function completeRunAndAdvance(
         ...(knowledgeReceipt
           ? { knowledge_reconciliation: reconciliationSummary(knowledgeReceipt) }
           : {}),
+        ...(knowledgeConcerns.length > 0 ? { concerns: knowledgeConcerns } : {}),
       },
     });
   });

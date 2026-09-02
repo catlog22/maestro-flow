@@ -315,6 +315,7 @@ const PLATFORM_DEFS = [
   { id: 'firebender',      label: 'Firebender',         desc: 'Skills, agents → .firebender/' },
   { id: 'forgecode',       label: 'ForgeCode',          desc: 'Skills, agents → .forge/' },
   { id: 'goose',           label: 'Goose',              desc: 'Skills, agents → .goose/' },
+  { id: 'grok',            label: 'Grok Build',         desc: 'Skills, agents → .grok/' },
   { id: 'hermes-agent',    label: 'Hermes Agent',       desc: 'Skills, agents → .hermes/' },
   { id: 'inference-sh',    label: 'inference.sh',       desc: 'Skills, agents → .inferencesh/' },
   { id: 'jazz',            label: 'Jazz',               desc: 'Skills, agents → .jazz/' },

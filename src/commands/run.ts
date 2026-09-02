@@ -93,7 +93,7 @@ function parseVerdict(raw: string | undefined): CompletionVerdict | null {
   return VERDICT_ALIASES[normalized] ?? null;
 }
 
-const VALID_PLATFORMS: TargetPlatform[] = ['claude', 'codex', 'agy', 'agents-standard', 'pi'];
+const VALID_PLATFORMS: TargetPlatform[] = ['claude', 'codex', 'agy', 'agents-standard', 'pi', 'grok'];
 
 function collect(value: string, previous: string[] = []): string[] {
   return [...previous, value];

@@ -14,7 +14,7 @@ Async task delegation via detached worker processes, with broker-managed lifecyc
 claude --dangerously-load-development-channels server:maestro --dangerously-skip-permissions
 ```
 
-Delegate tools (`delegate_message`, `delegate_status`, `delegate_output`, `delegate_tail`, `delegate_cancel`) are available as MCP tools automatically.
+The MCP `delegate` tool can spawn, follow up, inspect, and cancel jobs from Grok / Claude / Cursor and any other maestro-tools host. Default `mode` is `analysis` (read-only); set `mode=write` only when files must change.
 
 ### Launch via CLI
 
@@ -38,7 +38,7 @@ maestro delegate "<PROMPT>" [options]
 
 | Option | Description | Default |
 |--------|-------------|---------|
-| `--to <tool>` | Agent: gemini, qwen, codex, claude, opencode, agy, pi | First enabled in config |
+| `--to <tool>` | Agent: gemini, qwen, codex, claude, opencode, agy, pi, grok | First enabled in config |
 | `--role <role>` | Capability role (analyze, explore, review, implement, plan, brainstorm, research) | — |
 | `--mode <mode>` | `analysis` (read-only) or `write` (create/modify/delete) | `analysis` |
 | `--effort <level>` | Reasoning effort (low, medium, high, max) | — |
@@ -72,16 +72,9 @@ maestro delegate message <id> "text" --delivery after_complete
 maestro delegate messages <id>                     # List queued messages
 ```
 
-### MCP Tools
+### MCP tool `delegate`
 
-| CLI Subcommand | MCP Tool | Extra Params |
-|---------------|----------|-------------|
-| `message <id> "text"` | `delegate_message` | `delivery` (inject/after_complete) |
-| `messages <id>` | `delegate_messages` | — |
-| `status <id>` | `delegate_status` | `eventLimit` |
-| `output <id>` | `delegate_output` | — |
-| `tail <id>` | `delegate_tail` | `limit` |
-| `cancel <id>` | `delegate_cancel` | — |
+One tool, selected by `operation`: `run` / `message` / `status` / `output` / `cancel`. `tail` / `messages` / `show` remain CLI-only. Existing installs with an `MAESTRO_ENABLED_TOOLS` allowlist must reinstall and include `delegate`.
 
 ---
 
@@ -96,7 +89,9 @@ queued → running → completed
 ```
 
 **Execution ID**: `{prefix}-{HHmmss}-{rand4}` (e.g. `gem-143022-a7f2`)
-Prefix: gemini→`gem`, qwen→`qwn`, codex→`cdx`, claude→`cld`, opencode→`opc`, agy→`agy`, pi→`pi`
+Prefix: gemini→`gem`, qwen→`qwn`, codex→`cdx`, claude→`cld`, opencode→`opc`, agy→`agy`, pi→`pi`, grok→`grk`
+
+> Grok: prompt is passed via `--prompt-file`. `maestro delegate message` inject stops the current headless turn and respawns with `grok --continue`. Default model is `grok-4.6`. Requires `XAI_API_KEY` or prior `grok login`.
 
 <details>
 <summary>Delegate vs CLI: Feature Comparison</summary>
@@ -124,7 +119,7 @@ Prefix: gemini→`gem`, qwen→`qwn`, codex→`cdx`, claude→`cld`, opencode→
 | cancel | — | ✅ |
 | message inject | — | ✅ |
 | message after_complete | — | ✅ |
-| MCP tool equivalents | — | ✅ (6 tools) |
+| MCP tool equivalents | — | ✅ (`delegate` tool) |
 | MCP channel notifications | — | ✅ |
 | Snapshot (latest output preview) | — | ✅ |
 

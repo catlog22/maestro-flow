@@ -556,7 +556,7 @@ export const handoffSchema = z.object({
   details: z.record(z.string(), z.unknown()),
 }).strict();
 
-export const targetPlatformSchema = z.enum(['claude', 'codex', 'agy', 'agents-standard', 'pi']);
+export const targetPlatformSchema = z.enum(['claude', 'codex', 'agy', 'agents-standard', 'pi', 'grok']);
 
 export const goalBindingSchema = z.object({
   provider: nonEmptyString,

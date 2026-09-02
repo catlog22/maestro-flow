@@ -315,13 +315,13 @@ const COMMANDS: CommandData[] = [
   {
     id: 'delegate', cmd: 'maestro delegate', category: 'advanced', status: 'recommended', level: 3,
     zh: {
-      desc: '异步委托任务到外部 AI 引擎（Gemini/Qwen/Codex/Claude）',
+      desc: '异步委托任务到外部 AI 引擎（Gemini/Qwen/Codex/Claude/Grok）',
       when: '需要利用外部 AI 的算力或特定能力',
       how: 'maestro delegate "分析性能瓶颈" --to gemini --mode analysis',
       tips: ['--mode analysis 只读安全，--mode write 可修改文件', '支持 --rule 模板加速常见任务'],
     },
     en: {
-      desc: 'Async delegate tasks to external AI engines (Gemini/Qwen/Codex/Claude)',
+      desc: 'Async delegate tasks to external AI engines (Gemini/Qwen/Codex/Claude/Grok)',
       when: 'Need external AI compute power or specific capabilities',
       how: 'maestro delegate "analyze perf bottlenecks" --to gemini --mode analysis',
       tips: ['--mode analysis is read-only safe, --mode write can modify', 'Supports --rule templates for common tasks'],

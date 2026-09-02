@@ -8,6 +8,15 @@ title: "Explore 轻量搜索指南"
 
 ## 快速开始
 
+> **前提：explore 需要 OpenAI 兼容的 LLM API 端点**（`model` + `baseUrl` + `apiKey`），
+> 配置在 `~/.maestro/api.json`。它与 `maestro delegate`（走各家 CLI 自己的登录态）
+> 是两条独立通道——CLI 已登录不代表 explore 可用。
+>
+> **explore 是可选组件，不配置不影响其他功能。** 它的定位是「入口不确定时的语义化检索兜底」；
+> 绝大多数检索可以用这些零配置替代：`maestro search`（知识/代码索引）、Grep/rg（精确文本）、
+> 宿主原生 `Agent()`（探索子代理）、`maestro delegate --to <cli>`（CLI 探索代理）。
+> 未配置 api.json 时调用 explore 会报 "No endpoints configured"——按需在下方配置或忽略即可。
+
 ```bash
 # 单 prompt 搜索
 maestro explore "What test framework is used?"

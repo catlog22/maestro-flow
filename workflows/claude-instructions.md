@@ -81,6 +81,15 @@ Before implementation, always:
 
 **Strictly follow the cli-tools.json configuration**
 
+## Agent Invocation & Join
+
+Structured concurrency: when your scope ends, every subagent you spawned must be `joined | stopped | cancelled` — never fire-and-forget.
+
+- **Default: synchronous `Agent()`** (`run_in_background: false`). The call blocks and returns the child's final result; prefer this unless parallelism is genuinely required.
+- **Background `Agent()` ⇒ must join in this turn.** Collect every background agent's result with the host's wait/notification flow before you finish; never end a turn (or stop) with your own background agents still running. A failed or timed-out parallel worker must be stopped/collected too — do not drop it on first error.
+- **Never use a `Stop` hook to "wait for running subagents"** (registry drift turns it into an infinite loop, Claude Code #58637). Join is the model's job, not the hook's.
+- **Agent Teams**: before ending, send `shutdown_request` to each teammate and `TeamDelete` the team. Do not assume `SubagentStop` fires for team members — it can be skipped (#44971).
+
 ## Explore
 
 Route code search by the Query Rules table (Knowledge System below) — it is the single source for tool selection. Use `maestro explore` only when the entry point is uncertain or a cross-file relationship needs evidence-backed synthesis. For exact text, regex, known files, or exhaustive call-site scans, use `rg`/Grep directly. When using `maestro explore`, call it and stop to wait for results.

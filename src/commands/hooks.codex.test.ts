@@ -2,6 +2,7 @@ import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
+import { maestroHookCommand } from '../core/mcp-launch.js';
 import {
   CODEX_HOOK_DEFS,
   getGenericHooksForLevel,
@@ -67,10 +68,10 @@ describe('Codex prompt context lifecycle', () => {
       .flatMap((group: { hooks: Array<{ command: string }> }) => group.hooks.map(hook => hook.command));
 
     expect(preToolCommands).toEqual([
-      'maestro hooks run preflight-guard',
-      'maestro hooks run spec-validator',
+      maestroHookCommand('preflight-guard'),
+      maestroHookCommand('spec-validator'),
     ]);
-    expect(promptCommands).toContain('maestro hooks run keyword-spec-injector');
+    expect(promptCommands).toContain(maestroHookCommand('keyword-spec-injector'));
     expect(JSON.stringify(installed)).not.toMatch(/kg-(?:context|unified)-injector/);
   });
 

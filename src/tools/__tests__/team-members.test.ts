@@ -1,4 +1,4 @@
-import { describe, it, beforeEach, afterEach } from 'vitest';
+import { describe, it, beforeEach, afterEach, vi } from 'vitest';
 import assert from 'node:assert';
 import {
   mkdtempSync,
@@ -68,10 +68,9 @@ function cdBack(): void {
 // ---------------------------------------------------------------------------
 
 async function loadModule() {
-  // Bust ESM cache by appending a unique query. Vitest/tsx both honor this.
-  const mod = await import(
-    `../team-members.js?t=${Date.now()}-${Math.random()}`
-  );
+  // 查询串动态 import 在 vitest/vite 下触发 "Unknown variable dynamic import"，改用 vi.resetModules()
+  vi.resetModules();
+  const mod = await import('../team-members.js');
   return mod as typeof import('../team-members.js');
 }
 

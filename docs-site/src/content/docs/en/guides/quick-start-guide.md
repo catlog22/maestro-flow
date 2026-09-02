@@ -23,7 +23,7 @@ maestro install mcp
 maestro hooks install --level standard
 ```
 
-After installation, the `/maestro-*` family of slash commands and the `maestro` terminal command are available in Claude Code.
+After installation, slash commands / skills and the `maestro` terminal command are available in Claude Code or Grok Build. Grok host: project instructions live in `.grok/rules/maestro.md`; project-level MCP / hooks need the folder trusted. See the Grok Build section in the [Installation Guide](/guides/install).
 
 ### Optional Skill Packs (install as needed)
 
@@ -168,7 +168,7 @@ Skip the Phase pipeline and complete tasks directly:
 
 ## 7. Delegate Async Delegation
 
-Delegate tasks to external AI engines (Gemini/Qwen/Codex/Claude/OpenCode):
+Delegate tasks to external AI engines (Gemini / Qwen / Codex / Claude / OpenCode / Grok):
 
 ```bash
 # Async analysis (returns immediately)

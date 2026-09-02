@@ -300,7 +300,7 @@ maestro skills --json                   # 机器可读（每行一条 JSON）
 <details>
 <summary>maestro delegate</summary>
 
-委派任务给 AI 智能体（gemini/qwen/codex/claude/opencode/agy/pi）。支持同步、异步、会话恢复。
+委派任务给 AI 智能体（gemini/qwen/codex/claude/opencode/agy/pi/grok）。支持同步、异步、会话恢复。
 
 ```bash
 maestro delegate "analyze auth module" --to gemini

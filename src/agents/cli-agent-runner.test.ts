@@ -152,15 +152,10 @@ describe('CliAgentRunner', () => {
 
     assert.deepEqual(
       publishedEvents.map((event) => event.type),
-      ['status_update', 'snapshot', 'completed'],
+      ['status_update', 'completed'],
     );
     assert.equal(publishedEvents[0].status, 'running');
-    assert.equal(publishedEvents[1].status, 'running');
-    assert.equal(publishedEvents[2].status, 'completed');
-
-    const snapshotEvent = publishedEvents[1];
-    assert.equal((snapshotEvent.payload as Record<string, unknown>).summary, 'Worker output');
-    assert.equal((snapshotEvent.snapshot as Record<string, unknown>).outputPreview, 'Worker output');
+    assert.equal(publishedEvents[1].status, 'completed');
     assert.deepEqual(bridgeCalls, ['spawn', 'entry', 'entry', 'stopped', 'close']);
   });
 

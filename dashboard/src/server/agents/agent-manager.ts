@@ -115,7 +115,8 @@ export class AgentManager {
     this.entryHistory.set(process.id, []);
 
     // Generate execId for CLI History persistence (dashboard-spawned sessions)
-    const prefix = config.type === 'claude-code' ? 'cld' : config.type.substring(0, 3);
+    // grok 对齐 CLI 侧 grk 前缀(src/agents/cli-agent-runner.ts),其余类型保持既有派生
+    const prefix = config.type === 'claude-code' ? 'cld' : config.type === 'grok' ? 'grk' : config.type.substring(0, 3);
     const execId = `${prefix}-${process.id.replace(/-/g, '').substring(0, 12)}`;
     this.processExecIds.set(process.id, execId);
     this.processConfigs.set(process.id, { process, config });

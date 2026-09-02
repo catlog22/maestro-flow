@@ -115,7 +115,7 @@ Dashboard UI 不再发布，`maestro view` 和 `maestro stop` 已从命令帮助
 <details>
 <summary>maestro delegate</summary>
 
-委派任务给 AI 智能体（gemini/qwen/codex/claude/opencode）。支持同步、异步、会话恢复。
+委派任务给 AI 智能体（gemini/qwen/codex/claude/opencode/agy/pi/grok）。支持同步、异步、会话恢复。
 
 ```bash
 maestro delegate "analyze auth module" --to gemini

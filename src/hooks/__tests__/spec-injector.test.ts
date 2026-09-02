@@ -1,6 +1,7 @@
+import './isolate-maestro-home.js'; // 必须第一个 import：先把 MAESTRO_HOME 隔离到临时目录
 import { describe, it, beforeEach, afterEach } from 'vitest';
 import assert from 'node:assert';
-import { mkdirSync, writeFileSync, rmSync, existsSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, writeFileSync, rmSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { evaluateSpecInjection } from '../spec-injector.js';
@@ -116,13 +117,25 @@ describe('evaluateSpecInjection', () => {
   });
 
   it('returns inject: false when no specs directory exists', () => {
-    const result = evaluateSpecInjection('code-developer', '/nonexistent/path');
-    assert.strictEqual(result.inject, false);
+    // 两点确定性保障：
+    // 1. 传空 uid：scope 限定 project baseline（否则 loadSpecs 对 global 层 auto-seed）
+    // 2. 用每次全新的临时路径：'/nonexistent/path' 会解析到盘符根目录，
+    //    logInjectionEvent 写入的 .workflow/spec-analytics.jsonl 会残留在根目录，
+    //    下一轮 autoInit 见到 .workflow 已存在就会播种——测试因此奇偶轮交替失败并污染盘符根
+    const base = mkdtempSync(join(tmpdir(), 'maestro-no-specs-'));
+    try {
+      const result = evaluateSpecInjection('code-developer', join(base, 'path'), undefined, undefined, '');
+      assert.strictEqual(result.inject, false);
+    } finally {
+      rmSync(base, { recursive: true, force: true });
+    }
   });
 
   it('does not include learnings.md when loading coding category', () => {
-    const result = evaluateSpecInjection('code-developer', TEST_DIR);
-    // 1:1 mapping: coding category only loads coding-conventions.md
+    // cli-explore-agent 的映射是 ['coding','arch']（不含 learning）：
+    // 验证 category 隔离——coding 加载不会带出 learnings.md。
+    // （code-developer 映射含 learning，不能用在此断言）
+    const result = evaluateSpecInjection('cli-explore-agent', TEST_DIR);
     assert.ok(!result.content?.includes('Pattern X works well'));
   });
 

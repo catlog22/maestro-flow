@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------------
 // `maestro cli` — unified CLI agent command
-// Runs agent tools (gemini, qwen, codex, claude, opencode, agy, pi) with a shared
+// Runs agent tools (gemini, qwen, codex, claude, opencode, agy, pi, grok) with a shared
 // interface for prompt, mode, model, working directory, templates, and more.
 // ---------------------------------------------------------------------------
 
@@ -39,7 +39,7 @@ export function registerCliCommand(program: Command): void {
 
   cli
     .option('-p, --prompt <prompt>', 'Prompt to send to the agent')
-    .option('--tool <name>', 'CLI tool to use (gemini, qwen, codex, claude, opencode, agy, pi)')
+    .option('--tool <name>', 'CLI tool to use (gemini, qwen, codex, claude, opencode, agy, pi, grok)')
     .option('--role <role>', 'Capability role for auto tool selection (analyze, explore, review, implement, plan, brainstorm, research)')
     .option('--mode <mode>', 'Execution mode (analysis or write)', 'analysis')
     .option('--model <model>', 'Model override')

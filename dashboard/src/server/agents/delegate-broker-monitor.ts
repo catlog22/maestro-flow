@@ -47,6 +47,7 @@ function normalizeAgentType(tool: string | undefined): AgentType {
     case 'agy':
     case 'api-explore':
     case 'pi':
+    case 'grok':
       return tool;
     default:
       return 'codex';

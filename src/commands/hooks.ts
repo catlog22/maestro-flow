@@ -13,6 +13,35 @@ import {
 } from '../config/index.js';
 import { resolveWorkspace } from '../hooks/workspace.js';
 import type { CoordBridgeData } from '../hooks/coordinator-tracker.js';
+import { maestroHookCommand, maestroStatuslineCommand } from '../core/mcp-launch.js';
+import {
+  recordGenericHooks,
+  updateManifest,
+  type HookRecord,
+} from '../core/manifest.js';
+
+/**
+ * 将 generic 平台 hooks 的安装/卸载结果同步进安装 manifest。
+ * CLI（maestro hooks install --target grok）与 TUI/--force 共享同一份 manifest 作为
+ * TUI 勾选状态的依据；此前 CLI 不写 manifest，导致 TUI 显示与磁盘实际状态漂移。
+ * 记录失败不影响 hooks 本身的安装结果。
+ */
+function syncGenericHooksManifest(platformId: string, record: HookRecord, project?: boolean): void {
+  const scope = project ? 'project' : 'global';
+  // targetPath 必须与 install 流程的 findManifest 查找键一致：global 用 paths.home（~/.maestro），
+  // 不是 homedir()——否则会写出 install 流程读不到的平行 manifest 家族
+  const targetPath = project ? process.cwd() : paths.home;
+  try {
+    // 读-改-写在同一把 manifest 锁内串行化:并发 install(如 --target grok
+    // 与 --target cursor 同时)不会互相覆盖 generic-hook 记录
+    updateManifest(scope, targetPath, (manifest) => {
+      recordGenericHooks(manifest, platformId, record);
+    });
+  } catch (err) {
+    // manifest 同步失败不影响 hooks 安装本身,但不静默——留可诊断线索
+    console.warn(`[maestro] manifest 同步失败(hooks 已安装,仅勾选状态未记录): ${err instanceof Error ? err.message : String(err)}`);
+  }
+}
 
 // ---------------------------------------------------------------------------
 // Types
@@ -20,7 +49,8 @@ import type { CoordBridgeData } from '../hooks/coordinator-tracker.js';
 
 interface HookGroup {
   matcher?: string;
-  hooks: Array<{ type: string; command: string }>;
+  // type:"http" webhook hooks 只有 url 没有 command，command 必须可选
+  hooks: Array<{ type: string; command?: string; url?: string }>;
 }
 
 export interface ClaudeSettings {
@@ -41,12 +71,14 @@ export interface ClaudeSettings {
 // ---------------------------------------------------------------------------
 
 interface HookDef {
-  event: 'PreToolUse' | 'PostToolUse' | 'UserPromptSubmit' | 'Notification' | 'SessionStart' | 'Stop';
+  event: 'PreToolUse' | 'PostToolUse' | 'UserPromptSubmit' | 'Notification' | 'SessionStart' | 'Stop' | 'SubagentStart' | 'SubagentStop' | 'SessionEnd' | 'StopCancelled';
   matcher?: string;
   /** Minimum level required to install this hook */
   level: HookLevel;
   /** If true, hook exits silently when no Maestro workspace is found */
   requiresWorkspace?: boolean;
+  /** Runner name when different from the def key (multiple defs → one runner) */
+  runner?: string;
 }
 
 /**
@@ -84,6 +116,10 @@ export const HOOK_DEFS: Record<string, HookDef> = {
   'search-daemon-start': { event: 'SessionStart', matcher: 'startup', level: 'standard', requiresWorkspace: true },
   'workflow-guard': { event: 'PreToolUse', matcher: 'Bash|Write|Edit', level: 'full', requiresWorkspace: true },
   'prompt-guard': { event: 'UserPromptSubmit', level: 'full', requiresWorkspace: false },
+  // child-scope：子代理生命周期登记（Join/Reap/Unregister 观察面，只记账不阻塞）
+  'child-scope-start': { event: 'SubagentStart', level: 'standard', runner: 'child-scope' },
+  'child-scope-stop': { event: 'SubagentStop', level: 'standard', runner: 'child-scope' },
+  'child-scope-end': { event: 'SessionEnd', level: 'standard', runner: 'child-scope' },
 };
 
 // ---------------------------------------------------------------------------
@@ -91,12 +127,14 @@ export const HOOK_DEFS: Record<string, HookDef> = {
 // ---------------------------------------------------------------------------
 
 interface CodexHookDef {
-  event: 'SessionStart' | 'PreToolUse' | 'PostToolUse' | 'UserPromptSubmit' | 'Stop';
+  event: 'SessionStart' | 'SessionEnd' | 'PreToolUse' | 'PostToolUse' | 'UserPromptSubmit' | 'Stop' | 'StopCancelled' | 'SubagentStart' | 'SubagentStop';
   matcher?: string;          // regex pattern (Codex uses regex matchers)
   level: HookLevel;
   requiresWorkspace?: boolean;
   statusMessage?: string;
   timeout?: number;
+  /** Runner name when different from the def key (multiple defs → one runner) */
+  runner?: string;
 }
 
 export const CODEX_HOOK_DEFS: Record<string, CodexHookDef> = {
@@ -123,6 +161,44 @@ export const CODEX_HOOK_LEVEL_DESCRIPTIONS: Record<HookLevel, string> = {
   minimal: 'Session context (SessionStart)',
   standard: '+ keyword/spec/wiki/KG context (UserPromptSubmit) + skill-context + kg-sync + kg-auto-init(SessionStart) + delegate-monitor + coordinator/team/telemetry(Stop) + preflight/spec guards + search-daemon-start(SessionStart) + search-cache-invalidator',
   full: '+ workflow-guard (PreToolUse, Bash only) + prompt-guard (UserPromptSubmit)',
+};
+
+// ---------------------------------------------------------------------------
+// Grok hook definitions — grok 原生事件集与 matcher（工具名均为 grok 原生）
+// Grok 支持 SessionEnd / StopCancelled / SubagentStart / SubagentStop，
+// 是 child-scope 登记的主要宿主之一。hooks 写入 ~/.grok/hooks/maestro.json。
+// ---------------------------------------------------------------------------
+
+export const GROK_HOOK_DEFS: Record<string, CodexHookDef> = {
+  'session-context':       { event: 'SessionStart', matcher: 'startup|resume', level: 'minimal', requiresWorkspace: true },
+  'kg-auto-init':          { event: 'SessionStart', matcher: 'startup', level: 'standard', requiresWorkspace: true },
+  'search-daemon-start':   { event: 'SessionStart', matcher: 'startup', level: 'standard', requiresWorkspace: true },
+  'spec-injector':         { event: 'PreToolUse', matcher: 'spawn_subagent|Task', level: 'minimal', requiresWorkspace: true },
+  'preflight-guard':       { event: 'PreToolUse', matcher: 'run_terminal_command|write_file|search_replace|spawn_subagent|Task', level: 'standard', requiresWorkspace: true },
+  'spec-validator':        { event: 'PreToolUse', matcher: 'write_file|search_replace', level: 'standard', requiresWorkspace: true },
+  'skill-context':         { event: 'UserPromptSubmit', level: 'standard', requiresWorkspace: true },
+  'keyword-spec-injector': { event: 'UserPromptSubmit', level: 'standard', requiresWorkspace: true },
+  'kg-sync':               { event: 'UserPromptSubmit', level: 'standard', requiresWorkspace: true },
+  'delegate-monitor':      { event: 'PostToolUse', matcher: 'run_terminal_command|spawn_subagent|Task', level: 'standard' },
+  'search-cache-invalidator': { event: 'PostToolUse', matcher: 'write_file|search_replace', level: 'standard', requiresWorkspace: true },
+  'coordinator-tracker':   { event: 'Stop', level: 'standard', requiresWorkspace: true },
+  'team-monitor':          { event: 'Stop', level: 'standard' },
+  'telemetry':             { event: 'Stop', level: 'standard' },
+  'workflow-guard':        { event: 'PreToolUse', matcher: 'run_terminal_command|write_file|search_replace', level: 'full', requiresWorkspace: true },
+  'prompt-guard':          { event: 'UserPromptSubmit', level: 'full', requiresWorkspace: false },
+  // child-scope：子代理生命周期登记（观察面，只记账不阻塞）
+  'child-scope-start':     { event: 'SubagentStart', level: 'standard', runner: 'child-scope' },
+  'child-scope-stop':      { event: 'SubagentStop', level: 'standard', runner: 'child-scope' },
+  'child-scope-pretool':   { event: 'PreToolUse', matcher: 'spawn_subagent|Task', level: 'standard', runner: 'child-scope' },
+  'child-scope-end':       { event: 'SessionEnd', level: 'standard', runner: 'child-scope' },
+  'child-scope-cancelled': { event: 'StopCancelled', level: 'standard', runner: 'child-scope' },
+};
+
+export const GROK_HOOK_LEVEL_DESCRIPTIONS: Record<HookLevel, string> = {
+  none: 'No hooks',
+  minimal: 'Session context (SessionStart) + spec-injector (spawn_subagent)',
+  standard: '+ keyword/spec/KG context (UserPromptSubmit) + kg-auto-init + delegate-monitor + coordinator/team/telemetry(Stop) + guards + child-scope (SubagentStart/Stop, SessionEnd, StopCancelled)',
+  full: '+ workflow-guard (PreToolUse) + prompt-guard (UserPromptSubmit)',
 };
 
 /** Numeric ordering for level comparison */
@@ -188,6 +264,10 @@ function getMaestroBinDir(): string {
 
 const HOOK_MARKER = 'maestro';
 
+// 所有事件列表 — removeMaestroHooks / findHookInSettings 必须覆盖全部已安装事件，
+// 否则重装时旧条目（如 child-scope 的 SubagentStart/SessionEnd）无法摘除，破坏幂等。
+const ALL_CLAUDE_EVENTS = ['PreToolUse', 'PostToolUse', 'UserPromptSubmit', 'Notification', 'SessionStart', 'Stop', 'SubagentStart', 'SubagentStop', 'SessionEnd', 'StopCancelled'] as const;
+
 /**
  * Remove maestro hooks from Claude settings.
  *
@@ -202,13 +282,14 @@ export function removeMaestroHooks(settings: ClaudeSettings, hookNames?: string[
     ? new Set(hookNames.map((n) => `hooks run ${n}`))
     : null;
 
-  for (const eventKey of ['PreToolUse', 'PostToolUse', 'UserPromptSubmit', 'Notification', 'SessionStart', 'Stop'] as const) {
+  for (const eventKey of ALL_CLAUDE_EVENTS) {
     const groups = settings.hooks[eventKey] as HookGroup[] | undefined;
     if (!groups) continue;
     for (const group of groups) {
       group.hooks = group.hooks.filter((h) => {
-        if (targets) return ![...targets].some((needle) => h.command.includes(needle));
-        return !h.command.includes(HOOK_MARKER);
+        const command = h.command ?? '';
+        if (targets) return ![...targets].some((needle) => command.includes(needle));
+        return !command.includes(HOOK_MARKER);
       });
     }
     settings.hooks[eventKey] = groups.filter((g) => g.hooks.length > 0) as never;
@@ -269,10 +350,13 @@ function countHookEntries(hooks: Record<string, HookGroup[]> | undefined): numbe
 
 function findHookInSettings(settings: ClaudeSettings, hookName: string): boolean {
   if (!settings.hooks) return false;
-  for (const eventKey of ['PreToolUse', 'PostToolUse', 'UserPromptSubmit', 'Notification', 'SessionStart', 'Stop'] as const) {
+  for (const eventKey of ALL_CLAUDE_EVENTS) {
     const groups = settings.hooks[eventKey] as HookGroup[] | undefined;
     if (!groups) continue;
-    if (groups.some((g) => g.hooks.some((h) => h.command.includes(`hooks run ${hookName}`) || h.command.includes(`hook-runner.js") ${hookName}`) || h.command.includes(`hook-runner.js" ${hookName}`)))) {
+    if (groups.some((g) => g.hooks.some((h) => {
+      const command = h.command ?? '';
+      return command.includes(`hooks run ${hookName}`) || command.includes(`hook-runner.js") ${hookName}`) || command.includes(`hook-runner.js" ${hookName}`);
+    }))) {
       return true;
     }
   }
@@ -315,7 +399,7 @@ export function installStatusline(opts: {
       ? join(process.cwd(), '.claude', 'settings.json')
       : getClaudeSettingsPath());
   const settings = loadClaudeSettings(settingsPath);
-  settings.statusLine = { type: 'command', command: 'maestro-statusline' };
+  settings.statusLine = { type: 'command', command: maestroStatuslineCommand() };
   paths.ensure(join(settingsPath, '..'));
   writeFileSync(settingsPath, JSON.stringify(settings, null, 2));
 
@@ -370,7 +454,7 @@ export function installHooksByLevel(
     if (!settings.hooks[eventKey]) settings.hooks[eventKey] = [] as never;
     const groups = settings.hooks[eventKey] as HookGroup[];
     const group: HookGroup = {
-      hooks: [{ type: 'command', command: `maestro hooks run ${name}` }],
+      hooks: [{ type: 'command', command: maestroHookCommand(def.runner ?? name) }],
     };
     if (def.matcher) group.matcher = def.matcher;
     groups.push(group);
@@ -390,7 +474,8 @@ export function installHooksByLevel(
 
 interface CodexHookGroup {
   matcher?: string;
-  hooks: Array<{ type: string; command: string; statusMessage?: string; timeout?: number }>;
+  // type:"http" webhook hooks 只有 url 没有 command，command 必须可选
+  hooks: Array<{ type: string; command?: string; url?: string; statusMessage?: string; timeout?: number }>;
 }
 
 interface CodexHooksFile {
@@ -423,14 +508,15 @@ export function removeCodexMaestroHooks(hooksFile: CodexHooksFile, hookNames?: s
     ? new Set(hookNames.map((n) => `hooks run ${n}`))
     : null;
 
-  const events = ['SessionStart', 'PreToolUse', 'PostToolUse', 'UserPromptSubmit', 'Stop'] as const;
+  const events = ['SessionStart', 'SessionEnd', 'PreToolUse', 'PostToolUse', 'UserPromptSubmit', 'Stop', 'StopCancelled', 'SubagentStart', 'SubagentStop'] as const;
   for (const eventKey of events) {
     const groups = hooksFile.hooks[eventKey] as CodexHookGroup[] | undefined;
     if (!groups) continue;
     for (const group of groups) {
       group.hooks = group.hooks.filter((h) => {
-        if (targets) return ![...targets].some((needle) => h.command.includes(needle));
-        return !h.command.includes(HOOK_MARKER);
+        const command = h.command ?? '';
+        if (targets) return ![...targets].some((needle) => command.includes(needle));
+        return !command.includes(HOOK_MARKER);
       });
     }
     hooksFile.hooks[eventKey] = groups.filter((g) => g.hooks.length > 0) as never;
@@ -488,12 +574,13 @@ export function checkCodexHooksFeatureFlag(opts: { project?: boolean } = {}): bo
  */
 export function installCodexHooksByLevel(
   level: HookLevel,
-  opts: { project?: boolean; hooksPath?: string; selectedHooks?: string[] } = {},
+  opts: { project?: boolean; hooksPath?: string; selectedHooks?: string[]; defs?: Record<string, CodexHookDef> } = {},
 ): InstallHooksResult {
   if (level === 'none' && !opts.selectedHooks?.length) {
     return { settingsPath: '', installedHooks: [], level };
   }
 
+  const defs = opts.defs ?? CODEX_HOOK_DEFS;
   const hooksPath = opts.hooksPath ?? getCodexHooksPath({ project: opts.project });
   const hooksFile = loadCodexHooks(hooksPath);
 
@@ -505,7 +592,7 @@ export function installCodexHooksByLevel(
 
   const customSet = opts.selectedHooks ? new Set(opts.selectedHooks) : null;
   const installedHooks: string[] = [];
-  for (const [name, def] of Object.entries(CODEX_HOOK_DEFS)) {
+  for (const [name, def] of Object.entries(defs)) {
     if (customSet ? !customSet.has(name) : !hookIncludedInLevel(def.level, level)) continue;
 
     const eventKey = def.event;
@@ -514,7 +601,7 @@ export function installCodexHooksByLevel(
 
     const hookEntry: { type: string; command: string; statusMessage?: string; timeout?: number } = {
       type: 'command',
-      command: `maestro hooks run ${name}`,
+      command: maestroHookCommand(def.runner ?? name),
     };
     if (def.statusMessage) hookEntry.statusMessage = def.statusMessage;
     if (def.timeout) hookEntry.timeout = def.timeout;
@@ -540,13 +627,15 @@ export function installCodexHooksByLevel(
 // an event filter to skip unsupported events.
 // ---------------------------------------------------------------------------
 
-type CodexEvent = 'SessionStart' | 'PreToolUse' | 'PostToolUse' | 'UserPromptSubmit' | 'Stop';
+type CodexEvent = 'SessionStart' | 'SessionEnd' | 'PreToolUse' | 'PostToolUse' | 'UserPromptSubmit' | 'Stop' | 'StopCancelled' | 'SubagentStart' | 'SubagentStop';
 
 export interface GenericHooksPlatform {
   id: string;
   label: string;
   supportedEvents: Set<CodexEvent>;
   hooksPath: (opts: { project?: boolean }) => string;
+  /** 平台专属 hook defs（默认复用 CODEX_HOOK_DEFS）；grok 使用 GROK_HOOK_DEFS */
+  defs?: Record<string, CodexHookDef>;
 }
 
 export const GENERIC_HOOKS_PLATFORMS: GenericHooksPlatform[] = [
@@ -595,6 +684,14 @@ export const GENERIC_HOOKS_PLATFORMS: GenericHooksPlatform[] = [
     supportedEvents: new Set(['SessionStart', 'PreToolUse', 'UserPromptSubmit']),
     hooksPath: (opts) => opts.project ? join(process.cwd(), '.roo', 'hooks.json') : join(homedir(), '.roo', 'hooks.json'),
   },
+  {
+    // Grok Build：~/.grok/hooks/*.json 每文件一个 hooks 对象，全局 always-trusted。
+    // 事件集含 grok 特有的 StopCancelled / SubagentStart / SubagentStop / SessionEnd。
+    id: 'grok', label: 'Grok Build',
+    supportedEvents: new Set(['SessionStart', 'SessionEnd', 'PreToolUse', 'PostToolUse', 'UserPromptSubmit', 'Stop', 'StopCancelled', 'SubagentStart', 'SubagentStop']),
+    hooksPath: (opts) => opts.project ? join(process.cwd(), '.grok', 'hooks', 'maestro.json') : join(homedir(), '.grok', 'hooks', 'maestro.json'),
+    defs: GROK_HOOK_DEFS,
+  },
 ];
 
 export function getGenericHooksPlatform(platformId: string): GenericHooksPlatform | undefined {
@@ -610,13 +707,14 @@ export function installGenericHooksByLevel(
   if (!platform) return { settingsPath: '', installedHooks: [], level };
 
   const hooksPath = platform.hooksPath({ project: opts.project });
+  const defs = platform.defs ?? CODEX_HOOK_DEFS;
 
   const filteredHooks = opts.selectedHooks
     ? opts.selectedHooks.filter((name) => {
-        const def = CODEX_HOOK_DEFS[name];
+        const def = defs[name];
         return def && platform.supportedEvents.has(def.event);
       })
-    : Object.entries(CODEX_HOOK_DEFS)
+    : Object.entries(defs)
         .filter(([, def]) => hookIncludedInLevel(def.level, level) && platform.supportedEvents.has(def.event))
         .map(([name]) => name);
 
@@ -628,13 +726,15 @@ export function installGenericHooksByLevel(
     project: opts.project,
     hooksPath,
     selectedHooks: filteredHooks.length > 0 ? filteredHooks : undefined,
+    defs,
   });
 }
 
 export function getGenericHooksForLevel(platformId: string, level: HookLevel): string[] {
   const platform = getGenericHooksPlatform(platformId);
   if (!platform) return [];
-  return Object.entries(CODEX_HOOK_DEFS)
+  const defs = platform.defs ?? CODEX_HOOK_DEFS;
+  return Object.entries(defs)
     .filter(([, def]) => hookIncludedInLevel(def.level, level) && platform.supportedEvents.has(def.event))
     .map(([name]) => name);
 }
@@ -821,7 +921,7 @@ export function installAgyHooksByLevel(
     if (customSet ? !customSet.has(name) : !hookIncludedInLevel(def.level, level)) continue;
 
     const hookName = `${AGY_HOOK_NAME_PREFIX}${name}`;
-    const handler: AgyHookHandler = { type: 'command', command: `maestro hooks run ${name}` };
+    const handler: AgyHookHandler = { type: 'command', command: maestroHookCommand(name) };
     if (def.timeout) handler.timeout = def.timeout;
 
     const config: AgyHookConfig = {};
@@ -1341,6 +1441,14 @@ const HOOK_RUNNERS: Record<string, HookRunner> = {
     const { spawnDaemon } = await import('../search/daemon-client.js');
     await spawnDaemon(workflowRoot);
   },
+
+  // child-scope：子代理生命周期登记 + SessionEnd/StopCancelled reap（fail-open）
+  'child-scope': async () => {
+    if (loadHooksConfig().toggles['childScope'] === false) return;
+    const raw = await readStdin();
+    const { runChildScopeHook } = await import('../hooks/child-scope.js');
+    await runChildScopeHook(raw);
+  },
 };
 
 // ---------------------------------------------------------------------------
@@ -1413,11 +1521,11 @@ export function registerHooksCommand(program: Command): void {
   // --- maestro hooks install ---
   hooks
     .command('install')
-    .description('Install maestro hooks into Claude Code or Codex settings')
+    .description('Install maestro hooks into Claude Code, Codex, or a generic platform (grok, cursor, ...) settings')
     .option('--global', 'Install to global settings (default)')
     .option('--project', 'Install to project settings')
     .option('--level <level>', 'Hook level: minimal, standard, full (default: full)', 'full')
-    .option('--target <target>', 'Target: claude (default) or codex', 'claude')
+    .option('--target <target>', 'Target: claude (default), codex, or a generic platform id (grok, cursor, ...)')
     .action((opts: { global?: boolean; project?: boolean; level?: string; target?: string }) => {
       const level = (opts.level ?? 'full') as HookLevel;
       if (!HOOK_LEVELS.includes(level) || level === 'none') {
@@ -1426,7 +1534,29 @@ export function registerHooksCommand(program: Command): void {
         return;
       }
 
-      if (opts.target === 'codex') {
+      const target = opts.target ?? 'claude';
+      const genericPlatform = target !== 'claude' && target !== 'codex' ? getGenericHooksPlatform(target) : undefined;
+      if (target !== 'claude' && target !== 'codex' && !genericPlatform) {
+        console.error(`Unknown target: ${target}. Use: claude, codex, or ${GENERIC_HOOKS_PLATFORMS.map((p) => p.id).join(', ')}`);
+        process.exitCode = 1;
+        return;
+      }
+
+      if (genericPlatform) {
+        const result = installGenericHooksByLevel(genericPlatform.id, level, { project: opts.project });
+        console.log(`Maestro hooks installed for ${genericPlatform.label} (level: ${level}):`);
+        for (const name of result.installedHooks) {
+          const def = (genericPlatform.defs ?? CODEX_HOOK_DEFS)[name];
+          const matcher = def?.matcher ? ` [${def.matcher}]` : '';
+          console.log(`  ${name}: ${def?.event ?? '?'}${matcher}`);
+        }
+        console.log(`  Config: ${result.settingsPath}`);
+        syncGenericHooksManifest(genericPlatform.id, {
+          settingsPath: result.settingsPath,
+          installed: result.installedHooks,
+          level,
+        }, opts.project);
+      } else if (target === 'codex') {
         // Windows warning
         if (process.platform === 'win32') {
           console.log('Warning: Codex hooks are not yet supported on Windows.');
@@ -1458,12 +1588,32 @@ export function registerHooksCommand(program: Command): void {
   // --- maestro hooks uninstall ---
   hooks
     .command('uninstall')
-    .description('Remove maestro hooks from Claude Code or Codex settings')
+    .description('Remove maestro hooks from Claude Code, Codex, or a generic platform (grok, cursor, ...) settings')
     .option('--global', 'Uninstall from global settings (default)')
     .option('--project', 'Uninstall from project settings')
-    .option('--target <target>', 'Target: claude (default) or codex', 'claude')
+    .option('--target <target>', 'Target: claude (default), codex, or a generic platform id (grok, cursor, ...)')
     .action((opts: { global?: boolean; project?: boolean; target?: string }) => {
-      if (opts.target === 'codex') {
+      const target = opts.target ?? 'claude';
+      const genericPlatform = target !== 'claude' && target !== 'codex' ? getGenericHooksPlatform(target) : undefined;
+      if (target !== 'claude' && target !== 'codex' && !genericPlatform) {
+        console.error(`Unknown target: ${target}. Use: claude, codex, or ${GENERIC_HOOKS_PLATFORMS.map((p) => p.id).join(', ')}`);
+        process.exitCode = 1;
+        return;
+      }
+
+      if (genericPlatform) {
+        const hooksPath = genericPlatform.hooksPath({ project: opts.project });
+        if (!existsSync(hooksPath)) {
+          console.log(`No ${genericPlatform.label} hooks file found — nothing to uninstall.`);
+          syncGenericHooksManifest(genericPlatform.id, { settingsPath: hooksPath, installed: [], level: 'none' }, opts.project);
+          return;
+        }
+        const hooksFile = loadCodexHooks(hooksPath);
+        removeCodexMaestroHooks(hooksFile);
+        writeFileSync(hooksPath, JSON.stringify(hooksFile, null, 2));
+        console.log(`Maestro hooks removed from ${hooksPath}`);
+        syncGenericHooksManifest(genericPlatform.id, { settingsPath: hooksPath, installed: [], level: 'none' }, opts.project);
+      } else if (target === 'codex') {
         const hooksPath = getCodexHooksPath({ project: opts.project });
         if (!existsSync(hooksPath)) {
           console.log('No Codex hooks.json found — nothing to uninstall.');
@@ -1534,7 +1684,7 @@ export function registerHooksCommand(program: Command): void {
         for (const name of Object.keys(CODEX_HOOK_DEFS)) {
           const def = CODEX_HOOK_DEFS[name];
           const groups = (hf.hooks?.[def.event] as CodexHookGroup[] | undefined) ?? [];
-          const installed = groups.some((g) => g.hooks.some((h) => h.command.includes(`hooks run ${name}`)));
+          const installed = groups.some((g) => g.hooks.some((h) => (h.command ?? '').includes(`hooks run ${name}`)));
           console.log(`    ${name}: ${installed ? 'installed' : 'not installed'}`);
         }
       }

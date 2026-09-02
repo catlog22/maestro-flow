@@ -60,7 +60,12 @@ describe('KG sync runtime', () => {
   }
 
   afterEach(() => {
-    for (const value of roots.splice(0)) rmSync(value, { recursive: true, force: true });
+    // Windows 上被测 worker 可能仍持有目录句柄，直接 rm 报 EPERM——加重试
+    for (const value of roots.splice(0)) {
+      try {
+        rmSync(value, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 });
+      } catch { /* 清理失败不阻塞测试结果 */ }
+    }
   });
 
   it('parses modified, untracked, deleted, copy and both rename paths from NUL porcelain', () => {
@@ -425,6 +430,79 @@ describe('KG sync runtime', () => {
     expect(lstatSync(guardPath).isDirectory()).toBe(true);
   });
 
+  it('reclaims an expired mutation guard left by a crashed holder', () => {
+    const project = root();
+    const guardPath = join(project, '.workflow', '.kg-sync-worker-mutation.lock');
+    mkdirSync(guardPath);
+    writeFileSync(join(guardPath, 'owner.json'), JSON.stringify({
+      schema_version: 'kg-sync-worker-mutation-guard/1.0',
+      pid: 424242,
+      token: '77777777-7777-4777-8777-777777777777',
+      created_at: Date.now() - 10 * 60_000,
+    }));
+
+    const acquired = acquireKgSyncWorkerToken(project, 'worker');
+    expect(acquired.acquired).toBe(true);
+    // The stale guard was reclaimed and the critical section already released:
+    // the guard directory is gone and the marker belongs to this process.
+    expect(existsSync(guardPath)).toBe(false);
+    expect(inspectKgSyncWorkerMarker(project).owner).toMatchObject({ pid: process.pid });
+    if (acquired.acquired) releaseKgSyncWorkerToken(acquired.token);
+    expect(existsSync(guardPath)).toBe(false);
+  });
+
+  it('keeps waiting on a fresh mutation guard and preserves it after timing out', () => {
+    const project = root();
+    const guardPath = join(project, '.workflow', '.kg-sync-worker-mutation.lock');
+    mkdirSync(guardPath);
+    writeFileSync(join(guardPath, 'owner.json'), JSON.stringify({
+      schema_version: 'kg-sync-worker-mutation-guard/1.0',
+      pid: 424242,
+      token: '88888888-8888-4888-8888-888888888888',
+      created_at: Date.now(),
+    }));
+
+    expect(() => acquireKgSyncWorkerToken(project, 'worker'))
+      .toThrow('Timed out acquiring KG sync worker mutation guard');
+    expect(lstatSync(guardPath).isDirectory()).toBe(true);
+  });
+
+  it('fences a holder whose guard is reclaimed mid-section', () => {
+    const project = root();
+    const path = kgSyncWorkerMarkerPath(project);
+    const base = Date.now();
+    const deadToken = '11111111-1111-4111-8111-111111111111';
+    writeFileSync(path, serializeKgSyncWorkerMarker(424242, deadToken, base - 200, 'worker'));
+    const staleTime = new Date(base - 200);
+    utimesSync(path, staleTime, staleTime);
+    const guardPath = join(project, '.workflow', '.kg-sync-worker-mutation.lock');
+
+    // isPidLive fires inside the critical section, right before the stale
+    // marker would be unlinked. Swap the guard there to simulate a
+    // competitor reclaiming it while this holder is suspended.
+    expect(() => acquireKgSyncWorkerToken(project, 'worker', {
+      staleMs: 100,
+      isPidLive: () => {
+        rmSync(guardPath, { recursive: true, force: true });
+        mkdirSync(guardPath);
+        writeFileSync(join(guardPath, 'owner.json'), JSON.stringify({
+          schema_version: 'kg-sync-worker-mutation-guard/1.0',
+          pid: process.pid,
+          token: '99999999-9999-4999-8999-999999999999',
+          created_at: Date.now(),
+        }));
+        return false; // dead marker owner → reclaimable
+      },
+    })).toThrow('guard release both failed');
+
+    // The fence must fire before the destructive unlink: without it the
+    // stale marker is removed and a new one created inside the stolen
+    // section, and the guard swap is only detected on release.
+    expect(readFileSync(path, 'utf8')).toContain(deadToken);
+
+    rmSync(guardPath, { recursive: true });
+  });
+
   it('serializes a stale reclaim against a deterministic second contender', async () => {
     const project = root();
     const path = kgSyncWorkerMarkerPath(project);
@@ -579,7 +657,13 @@ describe('KG sync runtime', () => {
     expect(existsSync(kgSyncWorkerMarkerPath(project))).toBe(true);
     expect(releaseKgSyncWorkerToken({
       ...first.token,
-      generation: { ...first.token.generation, inode: first.token.generation.inode + 1 },
+      // NTFS inos are 64-bit and can exceed Number.MAX_SAFE_INTEGER, where
+      // `inode + 1` silently rounds back to the same value. Pick a constant
+      // that provably differs from the real ino on any filesystem.
+      generation: {
+        ...first.token.generation,
+        inode: first.token.generation.inode === 1 ? 2 : 1,
+      },
     })).toBe(false);
     expect(existsSync(kgSyncWorkerMarkerPath(project))).toBe(true);
     expect(releaseKgSyncWorkerToken(first.token)).toBe(true);

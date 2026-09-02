@@ -68,7 +68,11 @@ const MCP_TOOLS = [
   'read_file',
   'read_many_files',
   'team_msg',
+  'delegate',
 ] as const;
+
+// delegate 具备任务派发能力(含 write 模式),默认不启用,需在 MCP 步骤显式勾选
+const MCP_TOOLS_DEFAULT_ENABLED = MCP_TOOLS.filter((tool) => tool !== 'delegate');
 
 export { MCP_TOOLS };
 
@@ -120,7 +124,7 @@ export const useInstallStore = create<InstallStore>((set, get) => ({
   selectedComponents: new Set<string>(),
   backup: true,
   mcpEnabled: true,
-  enabledTools: new Set(MCP_TOOLS),
+  enabledTools: new Set(MCP_TOOLS_DEFAULT_ENABLED),
   detecting: false,
   installing: false,
   result: null,
@@ -293,7 +297,7 @@ export const useInstallStore = create<InstallStore>((set, get) => ({
       selectedComponents: new Set<string>(),
       backup: true,
       mcpEnabled: true,
-      enabledTools: new Set(MCP_TOOLS),
+      enabledTools: new Set(MCP_TOOLS_DEFAULT_ENABLED),
       detecting: false,
       installing: false,
       result: null,

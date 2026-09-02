@@ -146,3 +146,114 @@ On callback: consume result`;
     expect(converted.match(/--platform pi/g)).toHaveLength(3);
   });
 });
+
+describe('Grok platform conversion', () => {
+  it('rewrites Claude tool calls to grok-native tools', () => {
+    const source = [
+      'Agent({ description: "x", prompt: "do it" })',
+      'Read({ file_path: "a.ts" })',
+      'Write({ file_path: "b.ts" })',
+      'Edit({ file_path: "c.ts" })',
+      'Bash({ command: "ls" })',
+      'Grep({ pattern: "foo" })',
+      'Glob({ pattern: "*.ts" })',
+    ].join('\n');
+
+    const converted = transformContentForPlatform(source, 'grok');
+
+    expect(converted).toContain('spawn_subagent(');
+    expect(converted).toContain('read_file(');
+    expect(converted).toContain('write_file(');
+    expect(converted).toContain('search_replace(');
+    expect(converted).toContain('run_terminal_command(');
+    expect(converted).toContain('grep(');
+    expect(converted).toContain('list_dir(');
+    expect(converted).not.toContain('delegate_subagent');
+    expect(converted).not.toContain('spawn_agent(');
+  });
+
+  it('maps other-platform subagent tool names to grok-native ones', () => {
+    const source = 'use delegate_subagent / spawn_agent then wait_agent and interrupt_agent';
+    const converted = transformContentForPlatform(source, 'grok');
+    expect(converted).toContain('spawn_subagent');
+    expect(converted).toContain('get_command_or_subagent_output');
+    expect(converted).toContain('kill_command_or_subagent');
+    expect(converted).not.toContain('delegate_subagent');
+    expect(converted).not.toContain('wait_agent');
+  });
+
+  it('binds --platform grok on run content-loading commands', () => {
+    const converted = transformContentForPlatform('maestro run brief run-1 --session demo', 'grok');
+    expect(converted).toContain('--platform grok');
+  });
+
+  it('maps Agent() fields per TOOL_FIELD_MAP: background rename, name/model/mode dropped', () => {
+    const source = 'Agent({ prompt: "do it", description: "d", subagent_type: "worker", run_in_background: true, name: "w1", model: "grok-4", mode: "write" })';
+    const converted = transformContentForPlatform(source, 'grok');
+    expect(converted).toContain('spawn_subagent({');
+    expect(converted).toContain('prompt: "do it"');
+    expect(converted).toContain('subagent_type: "worker"');
+    expect(converted).toContain('background: true');
+    expect(converted).not.toContain('run_in_background');
+    expect(converted).not.toContain('name:');
+    expect(converted).not.toContain('model:');
+    expect(converted).not.toContain('mode:');
+  });
+
+  it('adds grok subagent tools to restricted allowed-tools when body calls Agent()', () => {
+    const source = [
+      '---',
+      'name: demo',
+      'allowed-tools: Read, Grep',
+      '---',
+      'Run Agent({ prompt: "x", subagent_type: "w" }) now.',
+    ].join('\n');
+    const converted = transformContentForPlatform(source, 'grok');
+    expect(converted).toContain('spawn_subagent');
+    expect(converted).toContain('get_command_or_subagent_output');
+    expect(converted).toContain('kill_command_or_subagent');
+    expect(converted).toContain('wait_commands_or_subagents');
+    expect(converted).toContain('read_file');
+    // frontmatter 已映射,正文裸 Agent( 不残留
+    expect(converted).not.toMatch(/\bAgent\s*\(/);
+  });
+
+  it('keeps unrestricted frontmatter without allowed-tools untouched by subagent injection', () => {
+    const source = ['---', 'name: demo', '---', 'plain body'].join('\n');
+    const converted = transformContentForPlatform(source, 'grok');
+    expect(converted).not.toContain('spawn_subagent');
+  });
+
+  it('preserves expression and multiline Agent() values, renames mapped keys', () => {
+    const source = [
+      'Agent({',
+      '  prompt: buildPrompt({ topic: "t" }),',
+      '  subagent_type: workerType,',
+      '  run_in_background: enabled,',
+      '  model: preferredModel,',
+      '})',
+    ].join('\n');
+    const converted = transformContentForPlatform(source, 'grok');
+    expect(converted).toContain('spawn_subagent({');
+    expect(converted).toContain('prompt: buildPrompt({ topic: "t" })');
+    expect(converted).toContain('subagent_type: workerType');
+    expect(converted).toContain('background: enabled');
+    expect(converted).not.toContain('run_in_background');
+    expect(converted).not.toContain('preferredModel');
+  });
+
+  it('keeps unknown Agent() fields verbatim instead of dropping them', () => {
+    const source = 'Agent({ prompt: "x", team_name: "t1" })';
+    const converted = transformContentForPlatform(source, 'grok');
+    expect(converted).toContain('spawn_subagent({');
+    expect(converted).toContain('prompt: "x"');
+    expect(converted).toContain('team_name: "t1"');
+  });
+
+  it('treats a quote after an even run of backslashes as the string end', () => {
+    // 文本为 Agent({ prompt: "C:\\" }):引号前两个反斜杠是字面量,引号闭合
+    const source = 'Agent({ prompt: "C:\\\\" })';
+    const converted = transformContentForPlatform(source, 'grok');
+    expect(converted).toContain('spawn_subagent({ prompt: "C:\\\\" })');
+  });
+});

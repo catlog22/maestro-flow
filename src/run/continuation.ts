@@ -4,9 +4,24 @@ import {
   type ContinuationDirective,
 } from './protocol-schemas.js';
 import type { ReuseAssessment } from './reuse-assessment.js';
-import type { CommandRun, GateRegistry, SessionState } from './schemas.js';
+import {
+  runV30ReadSchema,
+  sessionStateV30ReadSchema,
+  type CommandRun,
+  type GateRegistry,
+  type RunV30,
+  type SessionState,
+  type SessionStateV30,
+} from './schemas.js';
 import { SessionStore } from './store.js';
 import { stableJsonUtf8 } from './transition-receipts.js';
+import {
+  v3BriefCommand,
+  v3CheckNext,
+  v3DecideNext,
+  v3RunNext,
+  v3SessionCompleteNext,
+} from './v3/continuation-v3.js';
 
 const SAFE_AUTO_REVIEW_REASONS = new Set(['QUALITY_MEDIUM']);
 
@@ -93,6 +108,208 @@ function directive(
     auto_mode: session.orchestration.auto_mode,
     session_id: session.session_id,
     ...input,
+  });
+}
+
+function v3Directive(
+  sessionId: string,
+  input: Omit<ContinuationDirective, 'schema_version' | 'auto_mode' | 'session_id'>,
+): ContinuationDirective {
+  return continuationDirectiveSchema.parse({
+    schema_version: 'run-continuation/1.0',
+    auto_mode: false,
+    session_id: sessionId,
+    ...input,
+  });
+}
+
+function unresolvedV3DecisionRef(session: SessionStateV30): string | null {
+  for (const step of session.chain) {
+    if (step.status !== 'completed' || step.decision_ref === null) continue;
+    const decision = session.decisions.find(item => item.decision_id === step.decision_ref);
+    if (!decision || decision.status === 'open' || decision.status === 'escalated') {
+      return step.decision_ref;
+    }
+  }
+  return null;
+}
+
+function readV30SessionReadonly(store: SessionStore, sessionId: string): SessionStateV30 {
+  const record = store.readSessionRecordReadOnly(sessionId);
+  if (record.schema_version !== 'session/3.0') {
+    throw new Error(`Session ${sessionId} uses ${record.schema_version}; session/3.0 is required`);
+  }
+  const parsed = sessionStateV30ReadSchema.parse(record);
+  return parsed.status === 'paused' ? { ...parsed, status: 'open' } : parsed as SessionStateV30;
+}
+
+function readV30RunReadonly(store: SessionStore, sessionId: string, runId: string): RunV30 {
+  const run = store.readRunRecordReadOnly(sessionId, runId);
+  if (run.schema_version !== 'run/3.0') {
+    throw new Error(`Run ${runId} uses ${run.schema_version}; run/3.0 is required`);
+  }
+  return runV30ReadSchema.parse(run);
+}
+
+function inspectV3SessionContinuation(
+  store: SessionStore,
+  sessionId: string,
+  options: InspectContinuationOptions,
+): ContinuationDirective {
+  const session = readV30SessionReadonly(store, sessionId);
+
+  if (session.status === 'completed' || session.status === 'archived' || session.status === 'failed') {
+    return v3Directive(sessionId, {
+      action: 'stop',
+      authority: 'user_required',
+      reason_code: 'SESSION_TERMINAL',
+      command: null,
+      reason: `Session is ${session.status}; no lifecycle command may resume it`,
+      preconditions: [],
+      run_id: null,
+      assessment: null,
+      recommendations: [],
+    });
+  }
+
+  const activeRunIds = [...new Set(session.active_run_ids)];
+  const runId = options.runId ?? (activeRunIds.length === 1 ? activeRunIds[0] : null);
+
+  if (options.runId || activeRunIds.length === 1) {
+    const id = runId!;
+    try {
+      const run = readV30RunReadonly(store, sessionId, id);
+      if (run.status === 'blocked' || run.status === 'failed') {
+        const next = v3CheckNext({
+          sessionId,
+          runId: id,
+          reason: 're-attach the same Run and repair its blocking condition; do not allocate a duplicate Run',
+        });
+        return v3Directive(sessionId, {
+          action: 'repair_run',
+          authority: 'automatic',
+          reason_code: run.status === 'blocked' ? 'RUN_GATES_BLOCKING' : 'RUN_FAILED',
+          command: next.next.command,
+          reason: next.next.reason,
+          preconditions: [
+            `run_already_created=${id}`,
+            'use only canonical v3 Session/Run locators',
+            'do not call run create or allocate another Run',
+          ],
+          run_id: id,
+          assessment: null,
+          recommendations: [],
+        });
+      }
+      if (run.status === 'running' || run.status === 'pending') {
+        return v3Directive(sessionId, {
+          action: 'load_run',
+          authority: 'automatic',
+          reason_code: 'RUN_ACTIVE',
+          command: v3BriefCommand(sessionId, id),
+          reason: 'load the active Run Resume Packet and continue its lifecycle',
+          preconditions: [
+            `run_already_created=${id}`,
+            'load this exact Run brief before domain execution',
+            'do not call run create or allocate another Run',
+          ],
+          run_id: id,
+          assessment: null,
+          recommendations: [],
+        });
+      }
+    } catch {
+      return v3Directive(sessionId, {
+        action: 'stop',
+        authority: 'user_required',
+        reason_code: 'RUN_NOT_FOUND',
+        command: `maestro session status --session ${sessionId} --json`,
+        reason: `Session points at missing Run ${id}; authority must be repaired before continuing`,
+        preconditions: ['re-read Session status', 'do not allocate a replacement Run implicitly'],
+        run_id: id,
+        assessment: null,
+        recommendations: [],
+      });
+    }
+  }
+
+  if (activeRunIds.length > 1) {
+    return v3Directive(sessionId, {
+      action: 'stop',
+      authority: 'user_required',
+      reason_code: 'RUN_AMBIGUOUS',
+      command: `maestro session resume-view --session ${sessionId} --json`,
+      reason: `Session has multiple active Runs: ${[...activeRunIds].sort().join(', ')}`,
+      preconditions: ['inspect session resume-view', 'choose one Run explicitly'],
+      run_id: null,
+      assessment: null,
+      recommendations: [],
+    });
+  }
+
+  const gateId = unresolvedV3DecisionRef(session);
+  if (gateId) {
+    const next = v3DecideNext({
+      sessionId,
+      pointId: gateId,
+      orchestrationRevision: session.orchestration_revision,
+      reason: 'the next chain node is a decision; evaluate it without allocating a Run',
+    });
+    return v3Directive(sessionId, {
+      action: 'evaluate_decision',
+      authority: 'automatic',
+      reason_code: 'DECISION_REQUIRED',
+      command: next.next.command,
+      reason: next.next.reason,
+      preconditions: [
+        `decision_point=${gateId}`,
+        'decision remains pending',
+        'do not allocate an execution Run for a decision node',
+      ],
+      run_id: null,
+      assessment: null,
+      recommendations: [],
+    });
+  }
+
+  if (session.chain.some(step => step.status === 'pending')) {
+    const next = v3RunNext({
+      sessionId,
+      orchestrationRevision: session.orchestration_revision,
+      reason: 'a confirmed pending chain step is ready for explicit allocation',
+    });
+    return v3Directive(sessionId, {
+      action: 'dispatch_next',
+      authority: 'automatic',
+      reason_code: 'MORE_STEPS',
+      command: next.next.command,
+      reason: next.next.reason,
+      preconditions: [
+        'session_status=open',
+        'active_run_ids empty or already terminal',
+        'no earlier pending decision',
+      ],
+      run_id: null,
+      assessment: null,
+      recommendations: [],
+    });
+  }
+
+  const next = v3SessionCompleteNext({
+    sessionId,
+    orchestrationRevision: session.orchestration_revision,
+    reason: 'all chain steps are terminal; complete the Session',
+  });
+  return v3Directive(sessionId, {
+    action: 'seal_session',
+    authority: 'automatic',
+    reason_code: 'CHAIN_COMPLETE',
+    command: next.next.command,
+    reason: next.next.reason,
+    preconditions: ['all Runs are sealed', 'all decision points are terminal'],
+    run_id: null,
+    assessment: null,
+    recommendations: [],
   });
 }
 
@@ -227,6 +444,10 @@ export function inspectSessionContinuation(
   options: InspectContinuationOptions = {},
 ): ContinuationDirective {
   const store = new SessionStore(projectRoot);
+  const record = store.readSessionRecordReadOnly(sessionId);
+  if (record.schema_version === 'session/3.0') {
+    return inspectV3SessionContinuation(store, sessionId, options);
+  }
   const bundle = store.readBundle(sessionId);
   const session = bundle.session;
 
@@ -385,6 +606,27 @@ export function continuationAfterDecide(
 ): ContinuationDirective {
   if (verdict !== 'fix') return inspectSessionContinuation(projectRoot, sessionId);
   const store = new SessionStore(projectRoot);
+  const record = store.readSessionRecordReadOnly(sessionId);
+  if (record.schema_version === 'session/3.0') {
+    return v3Directive(sessionId, {
+      action: 'repair_chain',
+      authority: 'user_required',
+      reason_code: retry?.exhausted ? 'DECISION_RETRY_EXHAUSTED' : 'DECISION_FIX_REQUIRED',
+      command: null,
+      reason: retry?.exhausted
+        ? `decision ${pointId} exhausted its retry budget; escalation or an explicitly approved repair is required`
+        : `decision ${pointId} requested a fix; evidence-backed repair must occur before this decision is evaluated again`,
+      preconditions: [
+        `decision_point=${pointId}`,
+        `decision_retry=${retry ? `${retry.count}/${retry.max}` : 'unknown'}`,
+        'do not repeat run decide without new repair evidence',
+        'do not bypass or directly mark the decision passed',
+      ],
+      run_id: null,
+      assessment: null,
+      recommendations: [],
+    });
+  }
   const session = store.readBundle(sessionId).session;
   return directive(session, {
     action: 'repair_chain',
@@ -442,6 +684,23 @@ export function continuationForNextFailure(
     }
   }
   const store = new SessionStore(projectRoot);
+  const record = store.readSessionRecordReadOnly(sessionId);
+  if (record.schema_version === 'session/3.0') {
+    return v3Directive(sessionId, {
+      action: 'repair_chain',
+      authority: 'user_required',
+      reason_code: reasonCode,
+      command: null,
+      reason: message,
+      preconditions: [
+        'repair or replace the invalid pending chain step',
+        'validate command content and required arguments before retrying run next',
+      ],
+      run_id: null,
+      assessment: null,
+      recommendations: [],
+    });
+  }
   const session = store.readBundle(sessionId).session;
   return directive(session, {
     action: 'repair_chain',

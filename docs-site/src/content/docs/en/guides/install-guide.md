@@ -20,9 +20,9 @@ maestro install
 ```
 
 **Prerequisites**:
-- Node.js ≥ 18
-- Claude Code CLI (required)
-- Codex CLI / Gemini CLI (optional, for multi-agent workflows)
+- Node.js ≥ 22.19
+- At least one host CLI: Claude Code (default) and/or [Grok Build](https://docs.x.ai/build/overview)
+- Codex CLI / Gemini CLI / OpenCode / Pi (optional, for multi-agent workflows)
 
 ---
 
@@ -30,11 +30,15 @@ maestro install
 
 `maestro install` performs the following steps:
 
-1. **Detect project state** — empty project / existing code / existing .workflow/
-2. **Select components** — interactive component selection
-3. **Choose install mode** — global (~/.maestro/) or project-level (.workflow/)
-4. **Copy files** — copy components to target locations per component definitions
-5. **Generate manifest** — record installed components for incremental updates
+1. **Detect project state** — existing manifest / on-disk platform dirs / fresh install
+2. **Select platforms** — interactive host picker (including Grok Build)
+3. **Select components** — component picker filtered by selected platforms
+4. **Choose install scope** — global (home directory) or project (`--path <dir>`)
+5. **Configure hooks / MCP / Extra MCP / statusline**
+6. **Copy or build files** — write to targets per component definition
+7. **Generate manifest** — record installed components for incremental updates
+
+> Shared runtime always goes to `~/.maestro/`. Platform assets go to `~/.claude/`, `~/.grok/`, or the matching project directories. `.workflow/` is project data, not an install target.
 
 ---
 
@@ -127,25 +131,80 @@ maestro install toggle --path ./my-project --list
 
 ## Install Modes
 
-### Global Mode (recommended)
+Interactive install opens the TUI; `--global` / `--path` only pre-select the scope. There is no `--mode` flag.
 
-Install to `~/.maestro/`, shared across all projects:
+### Global scope (recommended)
+
+Platform assets go under the home directory (`~/.claude/`, `~/.grok/`); shared runtime goes to `~/.maestro/`:
 
 ```bash
 maestro install --global
 ```
 
-Best for: personal dev machine, multi-project shared config
+Best for: personal machines, shared config across projects
 
-### Project Mode
+### Project scope
 
-Install to the project directory `.workflow/`, scoped to the current project:
+Platform assets go into the given project (`<dir>/.claude/`, `<dir>/.grok/`):
 
 ```bash
 maestro install --path <dir>
 ```
 
-Best for: team collaboration, project-specific config
+Best for: team / project-specific config. Grok walks from cwd up to the git root and reads every `.grok/config.toml`.
+
+`--force` rebuilds skill / agent files and tag-injects instruction files (updates Maestro sections, keeps user prose). Without `--force`, existing component files are left in place.
+
+Project-level MCP / hooks need the folder trusted (interactive `grok`, or `/hooks-trust`). User-level `maestro-tools` in `~/.grok/config.toml` does not. The installer never writes `trusted_folders.toml`.
+
+---
+
+## Extra MCP Targets
+
+Besides Claude Code, `maestro-tools` can be registered to:
+
+| Target ID | Config path | Format |
+|-----------|-------------|--------|
+| `cursor` | `.cursor/mcp.json` | JSON |
+| `qoder` | project-root `mcp.json` | JSON |
+| `trae` | `.mcp.json` | JSON |
+| `kiro` | `.kiro/settings/mcp.json` | JSON |
+| `roo` | `.roo/mcp.json` (project only) | JSON |
+| `vscode-copilot` | `.vscode/mcp.json` | JSON |
+| `gemini-cli` | `.gemini/settings.json` | JSON |
+| `grok` | `~/.grok/config.toml` or `.grok/config.toml` | TOML `[mcp_servers.maestro-tools]` |
+
+```bash
+maestro install --force --extra-mcp grok,cursor
+```
+
+---
+
+## Grok Build
+
+Grok is a first-class host and a delegate backend. Tick platform `grok` and the Grok Extra MCP target in `maestro install`.
+
+```bash
+# Install the Grok CLI (macOS / Linux)
+curl -fsSL https://x.ai/cli/install.sh | bash
+
+# Windows PowerShell
+irm https://x.ai/cli/install.ps1 | iex
+
+# Install Maestro Grok assets + MCP
+# Fresh machines should also include workflows,prepare,ref,arch-kb,templates,overlays
+maestro install --force --components workflows,prepare,ref,arch-kb,templates,overlays,grok-context,grok-md-chinese,grok-skills,grok-agents --extra-mcp grok
+```
+
+Destinations: `.grok/rules/maestro.md`, `.grok/skills/`, `.grok/agents/` (not `AGENTS.md`). Reinstall strips leftover Maestro sections from `.grok/AGENTS.md`. Project assets go to the caller cwd (`--path` supported). After install, teach only v3: `session open` → `run next` → `run complete --advance` → `session complete`. Authenticate with `grok login` or `XAI_API_KEY`. Verify:
+
+```bash
+grok inspect
+grok mcp doctor maestro-tools
+maestro delegate "summarize README" --to grok --mode analysis
+```
+
+Exec IDs use the `grk-` prefix. Default model is `grok-4.6`. The prompt is passed via `--prompt-file`. `maestro delegate message` inject stops the current headless turn and respawns with `grok --continue`. Full details: `guide/install-guide.en.md`.
 
 ---
 
@@ -182,14 +241,17 @@ maestro install --force
 ## Update
 
 ```bash
-# Check for updates
+# Check only
+maestro update --check
+
+# Update to latest
 maestro update
 
-# Preview changes (dry run)
-maestro update --dry-run
+# Preview version notices
+maestro update --notices --dry-run
 
-# Force overwrite
-maestro update --force
+# Non-interactive (CI)
+maestro update --non-interactive
 ```
 
 ---
@@ -262,9 +324,10 @@ npm install -g maestro-flow
 
 ```bash
 # Install management
-maestro install [--global|--path <dir>] [--force]
+maestro install [--global|--path <dir>] [--force] [--all-platforms]
+maestro install --force --extra-mcp grok,cursor --mcp --hooks standard
 maestro uninstall [--yes]
-maestro update [--dry-run] [--force]
+maestro update [--check] [--notices] [--dry-run] [--non-interactive]
 
 # Version info
 maestro --version

@@ -138,7 +138,8 @@ describe('Scenario B: link-coordinate Bash output capture', () => {
 
     assert.ok(hint.includes('## Coordinator Session Active'));
     assert.ok(hint.includes('step_paused'));
-    assert.ok(hint.includes('/maestro-link-coordinate -c coord-1744668285953-d428'));
+    // resume 命令现为 `maestro coordinate -c`（buildNextStepHint 的统一格式）
+    assert.ok(hint.includes('maestro coordinate -c coord-1744668285953-d428'));
   });
 });
 
@@ -192,10 +193,11 @@ describe('Scenario D: bridge file + session merge', () => {
     assert.strictEqual(read.session_id, testSession);
     assert.strictEqual(read.chain_name, 'full-lifecycle');
     assert.strictEqual(read.steps_total, 6);
-    assert.strictEqual(read.steps_completed, 3);
+    // 与 Scenario A 同一 fixture：plan+execute 完成，current 为 quality-review
+    assert.strictEqual(read.steps_completed, 2);
     assert.strictEqual(read.current_step?.skill, 'quality-review');
     assert.strictEqual(read.next_step?.skill, 'quality-test');
-    assert.strictEqual(read.remaining_steps.length, 2);
+    assert.strictEqual(read.remaining_steps.length, 3);
     assert.strictEqual(read.status, 'paused');
 
     // Cleanup

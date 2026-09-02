@@ -566,6 +566,8 @@ export interface PlatformRegistryEntry {
   contextFile?: string;
   /** Global config directory name when different from configDir (e.g. agy uses .gemini) */
   globalConfigDir?: string;
+  /** Context instruction source under workflows/ (default: 'codex-instructions.md') */
+  contextSource?: string;
 }
 
 export const EXTRA_PLATFORMS: PlatformRegistryEntry[] = [
@@ -602,6 +604,7 @@ export const EXTRA_PLATFORMS: PlatformRegistryEntry[] = [
   { id: 'firebender',      label: 'Firebender',         description: 'Firebender Agent',         configDir: '.firebender' },
   { id: 'forgecode',       label: 'ForgeCode',          description: 'ForgeCode Agent',          configDir: '.forge' },
   { id: 'goose',           label: 'Goose',              description: 'Goose Agent',              configDir: '.goose' },
+  { id: 'grok',            label: 'Grok Build',         description: 'xAI Grok Build CLI',       configDir: '.grok', contextFile: 'rules/maestro.md', contextSource: 'grok-instructions.md' },
   { id: 'hermes-agent',    label: 'Hermes Agent',       description: 'Hermes Agent Agent',       configDir: '.hermes', globalConfigDir: '.hermes' },
   { id: 'inference-sh',    label: 'inference.sh',       description: 'inference.sh Agent',       configDir: '.inferencesh' },
   { id: 'jazz',            label: 'Jazz',               description: 'Jazz Agent',               configDir: '.jazz' },
@@ -652,7 +655,7 @@ function makeExtraPlatformDefs(entry: PlatformRegistryEntry): ComponentDef[] {
       id: `${id}-context`,
       label: `${entry.label} Context`,
       description: `${entry.label} project instructions (${contextFile})`,
-      sourcePath: join('workflows', 'codex-instructions.md'),
+      sourcePath: join('workflows', entry.contextSource ?? 'codex-instructions.md'),
       target: (mode, projectPath) =>
         mode === 'global'
           ? join(homedir(), globalDir, contextFile)
@@ -692,6 +695,10 @@ function makeExtraPlatformDefs(entry: PlatformRegistryEntry): ComponentDef[] {
           const { buildEveSkills } = require('./skill-converter.js');
           return buildEveSkills(claudeDir, targetDir);
         }
+        if (id === 'grok') {
+          const { buildGrokSkills } = require('./skill-converter.js');
+          return buildGrokSkills(claudeDir, targetDir);
+        }
         const { buildAgentsStandardSkills } = require('./skill-converter.js');
         return buildAgentsStandardSkills(claudeDir, targetDir);
       },
@@ -712,6 +719,10 @@ function makeExtraPlatformDefs(entry: PlatformRegistryEntry): ComponentDef[] {
         if (id === 'eve') {
           const { buildEveAgents } = require('./skill-converter.js');
           return buildEveAgents(claudeDir, targetDir);
+        }
+        if (id === 'grok') {
+          const { buildGrokAgents } = require('./skill-converter.js');
+          return buildGrokAgents(claudeDir, targetDir);
         }
         const { buildAgentsStandardAgents } = require('./skill-converter.js');
         return buildAgentsStandardAgents(claudeDir, targetDir);

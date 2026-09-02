@@ -21,6 +21,8 @@ const AGENT_TYPES: { value: AgentType; label: string }[] = [
   { value: 'codex', label: 'Codex' },
   { value: 'qwen', label: 'Qwen' },
   { value: 'opencode', label: 'OpenCode' },
+  { value: 'pi', label: 'Pi' },
+  { value: 'grok', label: 'Grok' },
 ];
 
 const inputCls = cn(

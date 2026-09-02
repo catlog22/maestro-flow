@@ -1,4 +1,5 @@
 import { existsSync, readFileSync } from 'node:fs';
+import { join } from 'node:path';
 
 import {
   knowledgeReconciliationSchema,
@@ -11,6 +12,21 @@ import {
 import { readReportFrontmatter } from '../report.js';
 import { SessionStore } from '../store.js';
 
+/** Unexpected generation failure. Missing report.md still returns null. */
+export class V3KnowledgeReconciliationError extends Error {
+  readonly cause?: unknown;
+
+  constructor(message: string, cause?: unknown) {
+    super(message);
+    this.name = 'V3KnowledgeReconciliationError';
+    this.cause = cause;
+  }
+}
+
+function reconciliationFailureMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
 /**
  * Generate the v3 Run knowledge reconciliation receipt (pure computation, no
  * writes). Reuses the v2 reconciliation engine verbatim
@@ -19,21 +35,23 @@ import { SessionStore } from '../store.js';
  * withV30Transaction as the staged knowledge delta (mutation-engine.ts), so
  * reconciliation and staging can never diverge.
  *
- * Returns null when reconciliation is unavailable (e.g. missing/unreadable
- * report frontmatter) so callers degrade gracefully instead of failing.
+ * Returns null only when report.md is absent (nothing to reconcile). Invalid
+ * frontmatter and engine failures throw V3KnowledgeReconciliationError so
+ * callers can surface them instead of treating failure as success.
  */
 export function generateV3RunKnowledgeReconciliation(
   projectRoot: string,
   sessionId: string,
   runId: string,
 ): KnowledgeReconciliation | null {
+  const store = new SessionStore(projectRoot);
+  const runDir = store.runDir(sessionId, runId);
+  if (!existsSync(join(runDir, 'report.md'))) return null;
   try {
-    const store = new SessionStore(projectRoot);
-    const runDir = store.runDir(sessionId, runId);
     const frontmatter = readReportFrontmatter(runDir);
     return reconcileRunKnowledgeSync(projectRoot, sessionId, runId, frontmatter);
-  } catch {
-    return null;
+  } catch (error) {
+    throw new V3KnowledgeReconciliationError(reconciliationFailureMessage(error), error);
   }
 }
 

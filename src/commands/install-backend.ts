@@ -28,8 +28,13 @@ import {
   type Manifest,
 } from '../core/manifest.js';
 import { applyOverlays, ensureOverlayDir, deleteOverlayManifest } from '../core/overlay/applier.js';
-import { injectDocFile, hasAnyMarkers, removeAllSections, type MigrateResult } from '../core/tag-injector.js';
+import { injectDocFile as injectDocFileCore, hasAnyMarkers, removeAllSections, type MigrateResult } from '../core/tag-injector.js';
+import {
+  grokDirFromRulesMaestroPath,
+  stripLegacyGrokAgentsAtGrokDir,
+} from '../core/grok-legacy-agents.js';
 import { COMPONENT_DEFS, type ComponentDef } from '../core/component-defs.js';
+import { resolveMaestroMcpLaunch } from '../core/mcp-launch.js';
 import {
   HOOK_LEVELS,
   HOOK_LEVEL_DESCRIPTIONS,
@@ -182,18 +187,17 @@ export function addMcpServer(
   enabledTools: string[],
   projectRoot?: string,
 ): string | null {
-  const isWin = process.platform === 'win32';
   const env: Record<string, string> = {
     MAESTRO_ENABLED_TOOLS: enabledTools.join(','),
   };
   if (projectRoot) env.MAESTRO_PROJECT_ROOT = projectRoot;
 
-  // Use the maestro-mcp binary exposed by the globally installed maestro-flow package.
-  // On Windows, npm generates maestro-mcp.cmd shim resolved via cmd.exe; on Unix, it's
-  // symlinked onto PATH directly.
+  // Unix: PATH `maestro-mcp`. Windows: node.exe + maestro-mcp.js (not cmd /c
+  // maestro-mcp.cmd — that flashes a console window when hosts pipe stdio).
+  const launch = resolveMaestroMcpLaunch();
   const serverConfig = {
-    command: isWin ? 'cmd' : 'maestro-mcp',
-    args: isWin ? ['/c', 'maestro-mcp'] : [],
+    command: launch.command,
+    args: launch.args,
     env,
   };
 
@@ -423,7 +427,6 @@ export function addCodexMcpServer(
   enabledTools: string[],
   projectRoot?: string,
 ): string | null {
-  const isWin = process.platform === 'win32';
   const fp = getCodexConfigPath(scope, projectPath);
 
   try {
@@ -436,8 +439,7 @@ export function addCodexMcpServer(
     content = removeCodexMcpBlock(content);
 
     // Build TOML block
-    const command = isWin ? 'cmd' : 'maestro-mcp';
-    const args = isWin ? '["/c", "maestro-mcp"]' : '[]';
+    const launch = resolveMaestroMcpLaunch();
     const envLines = [`MAESTRO_ENABLED_TOOLS = "${enabledTools.join(',')}"`];
     if (projectRoot) {
       envLines.push(`MAESTRO_PROJECT_ROOT = "${projectRoot.replace(/\\/g, '\\\\').replace(/"/g, '\\"')}"`);
@@ -446,8 +448,8 @@ export function addCodexMcpServer(
     const block = [
       '',
       `[mcp_servers.maestro-tools]`,
-      `command = "${command}"`,
-      `args = ${args}`,
+      `command = ${tomlBasicString(launch.command)}`,
+      `args = [${launch.args.map(tomlBasicString).join(', ')}]`,
       '',
       `[mcp_servers.maestro-tools.env]`,
       ...envLines,
@@ -654,8 +656,21 @@ export function pruneOrphans(
   return removed;
 }
 
-// Re-export injectDocFile from shared core
-export { injectDocFile, type MigrateResult } from '../core/tag-injector.js';
+export type { MigrateResult } from '../core/tag-injector.js';
+
+/** 注入指令段；若目标是 Grok 的 rules/maestro.md，顺带剥离旧 .grok/AGENTS.md 里的 Maestro 段。 */
+export function injectDocFile(
+  src: string,
+  dest: string,
+  stats: CopyStats,
+  manifest: Manifest,
+  section?: string,
+): MigrateResult {
+  const result = injectDocFileCore(src, dest, stats, manifest, section);
+  const grokDir = grokDirFromRulesMaestroPath(dest);
+  if (grokDir) stripLegacyGrokAgentsAtGrokDir(grokDir);
+  return result;
+}
 
 // ---------------------------------------------------------------------------
 // Backup
@@ -782,6 +797,7 @@ export const MCP_TOOLS = [
   'read_many_files',
   'team_msg',
   'store_knowhow',
+  'delegate',
 ] as const;
 
 // ---------------------------------------------------------------------------
@@ -800,9 +816,9 @@ export const MCP_TOOLS = [
 
 export type ExtraMcpTargetId =
   | 'cursor' | 'qoder' | 'trae' | 'kiro' | 'roo'
-  | 'vscode-copilot' | 'gemini-cli';
+  | 'vscode-copilot' | 'gemini-cli' | 'grok';
 
-export type McpFormat = 'json-mcpServers' | 'json-vscode-servers' | 'json-gemini-merge';
+export type McpFormat = 'json-mcpServers' | 'json-vscode-servers' | 'json-gemini-merge' | 'toml-mcp-servers';
 
 interface ExtraMcpTargetSpec {
   id: ExtraMcpTargetId;
@@ -878,6 +894,14 @@ export const EXTRA_MCP_TARGETS: ExtraMcpTargetSpec[] = [
       ? join(p, '.gemini', 'settings.json')
       : join(homedir(), '.gemini', 'settings.json'),
   },
+  {
+    id: 'grok',
+    label: 'Grok Build (.grok/config.toml)',
+    format: 'toml-mcp-servers',
+    configPath: (scope, p) => scope === 'project'
+      ? join(p, '.grok', 'config.toml')
+      : join(homedir(), '.grok', 'config.toml'),
+  },
 ];
 
 function buildServerConfig(
@@ -885,15 +909,15 @@ function buildServerConfig(
   projectRoot: string | undefined,
   format: McpFormat,
 ): Record<string, unknown> {
-  const isWin = process.platform === 'win32';
   const env: Record<string, string> = {
     MAESTRO_ENABLED_TOOLS: enabledTools.join(','),
   };
   if (projectRoot) env.MAESTRO_PROJECT_ROOT = projectRoot;
 
+  const launch = resolveMaestroMcpLaunch();
   const base: Record<string, unknown> = {
-    command: isWin ? 'cmd' : 'maestro-mcp',
-    args: isWin ? ['/c', 'maestro-mcp'] : [],
+    command: launch.command,
+    args: launch.args,
     env,
   };
 
@@ -905,6 +929,101 @@ function buildServerConfig(
 
 export function getExtraMcpTargetSpec(targetId: ExtraMcpTargetId): ExtraMcpTargetSpec | undefined {
   return EXTRA_MCP_TARGETS.find((t) => t.id === targetId);
+}
+
+// ---------------------------------------------------------------------------
+// TOML MCP writer (Grok Build config.toml)
+//
+// Grok configures MCP servers as `[mcp_servers.<name>]` tables in TOML.
+// No TOML dependency is introduced: one server's tables are replaced as text
+// while all other sections and comments are preserved. Grok may rewrite the
+// inline `env = { … }` we write into a nested `[mcp_servers.<name>.env]`
+// table — strip must remove the parent and every dotted child table.
+// ---------------------------------------------------------------------------
+
+/** Escape a value for use inside a TOML basic string (JSON escapes are a valid subset) */
+function tomlBasicString(value: string): string {
+  return JSON.stringify(value);
+}
+
+/** Render the `[mcp_servers.maestro-tools]` TOML table (trailing newline included) */
+function buildTomlServerSection(enabledTools: string[], projectRoot?: string): string {
+  const launch = resolveMaestroMcpLaunch();
+  const envPairs = [`MAESTRO_ENABLED_TOOLS = ${tomlBasicString(enabledTools.join(','))}`];
+  if (projectRoot) envPairs.push(`MAESTRO_PROJECT_ROOT = ${tomlBasicString(projectRoot)}`);
+  return [
+    `[mcp_servers.${MAESTRO_MCP_SERVER_NAME}]`,
+    `command = ${tomlBasicString(launch.command)}`,
+    `args = [${launch.args.map(tomlBasicString).join(', ')}]`,
+    `env = { ${envPairs.join(', ')} }`,
+    'enabled = true',
+    '',
+  ].join('\n');
+}
+
+/**
+ * Remove `[mcp_servers.<name>]` and every dotted child table
+ * (`[mcp_servers.<name>.env]`, …) from TOML text.
+ *
+ * Line-by-line, same approach as `removeCodexMcpBlock`: a regex slice to the
+ * next `[` would stop at a nested env table that Grok writes back, leaving an
+ * orphan section and duplicate keys on re-install. Returns null when absent.
+ */
+function stripTomlServerSection(content: string, serverName: string): string | null {
+  const escaped = serverName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const tableHeaderRe = /^\[\[?[^\]]+\]\]?\s*(?:#.*)?$/;
+  const targetHeaderRe = new RegExp(
+    `^\\[mcp_servers\\.${escaped}(?:\\.[^\\]]+)?\\]\\s*(?:#.*)?$`,
+  );
+
+  const lines = content.split(/\r?\n/);
+  const out: string[] = [];
+  let skipping = false;
+  let found = false;
+
+  for (const line of lines) {
+    if (tableHeaderRe.test(line)) {
+      skipping = targetHeaderRe.test(line);
+      if (skipping) {
+        found = true;
+        continue;
+      }
+    }
+    if (!skipping) out.push(line);
+  }
+
+  if (!found) return null;
+  return out.join('\n').replace(/\n{3,}/g, '\n\n');
+}
+
+function addTomlMcpServer(
+  configPath: string,
+  enabledTools: string[],
+  projectRoot?: string,
+): boolean {
+  try {
+    let content = existsSync(configPath) ? readFileSync(configPath, 'utf-8') : '';
+    const stripped = stripTomlServerSection(content, MAESTRO_MCP_SERVER_NAME);
+    if (stripped !== null) content = stripped;
+    const prefix = content.trimEnd().length > 0 ? `${content.trimEnd()}\n\n` : '';
+    writeFileSync(configPath, prefix + buildTomlServerSection(enabledTools, projectRoot), 'utf-8');
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function removeTomlMcpServerAt(configPath: string): boolean {
+  if (!existsSync(configPath)) return false;
+  try {
+    const content = readFileSync(configPath, 'utf-8');
+    const stripped = stripTomlServerSection(content, MAESTRO_MCP_SERVER_NAME);
+    if (stripped === null) return false;
+    writeFileSync(configPath, stripped, 'utf-8');
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 export function addExtraMcpServer(
@@ -922,6 +1041,10 @@ export function addExtraMcpServer(
   try {
     const dir = dirname(fp);
     if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
+
+    if (spec.format === 'toml-mcp-servers') {
+      return addTomlMcpServer(fp, enabledTools, projectRoot) ? fp : null;
+    }
 
     const serverConfig = buildServerConfig(enabledTools, projectRoot, spec.format);
     const containerKey = spec.format === 'json-vscode-servers' ? 'servers' : 'mcpServers';
@@ -964,6 +1087,9 @@ export function removeExtraMcpServer(
 
 export function removeExtraMcpServerAt(configPath: string, format: McpFormat): boolean {
   if (!existsSync(configPath)) return false;
+  if (format === 'toml-mcp-servers') {
+    return removeTomlMcpServerAt(configPath);
+  }
   try {
     const data = JSON.parse(readFileSync(configPath, 'utf-8')) as Record<string, unknown>;
     const containerKey = format === 'json-vscode-servers' ? 'servers' : 'mcpServers';
@@ -997,7 +1123,7 @@ export interface UninstallResult {
 
 export interface UninstallOptions {
   /**
-   * Skip CONTENT_MANAGED files (CLAUDE.md, AGENTS.md). Used when uninstalling
+   * Skip CONTENT_MANAGED files (CLAUDE.md, AGENTS.md, maestro.md). Used when uninstalling
    * before a re-install — tag injection updates these in place, so cleanup
    * would lose user content.
    */
@@ -1149,7 +1275,7 @@ function legacyCleanup(manifest: Manifest, result: UninstallResult): void {
 const FALLBACK_PRESERVE = new Set(['settings.json', 'settings.local.json']);
 
 /** Content-managed doc files: remove maestro sections, don't delete entirely. */
-const FALLBACK_CONTENT_MANAGED = new Set(['CLAUDE.md', 'AGENTS.md', 'GEMINI.md', 'copilot-instructions.md']);
+const FALLBACK_CONTENT_MANAGED = new Set(['CLAUDE.md', 'AGENTS.md', 'GEMINI.md', 'copilot-instructions.md', 'maestro.md']);
 
 export interface FallbackScanResult {
   /** Unique target directories that contain files. */

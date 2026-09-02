@@ -14,9 +14,9 @@ title: "Delegate 异步执行指南"
 claude --dangerously-load-development-channels server:maestro --dangerously-skip-permissions
 ```
 
-MCP server 注册 9 个内置工具（`edit_file`、`write_file`、`read_file`、`read_many_files`、`team_msg`、`team_mailbox`、`store_knowhow`、`team_tasks_mcp`、`team_agents`），**不含 delegate 系列工具**。Delegate 子命令（`message`、`status`、`output`、`tail`、`cancel`）仅通过 CLI 使用，不注册为 MCP 工具。
+MCP 提供 `delegate` 工具，可在 Grok / Claude / Cursor 等宿主里直接派活、续话、看结果、取消。默认 `mode=analysis`（只读）；要改文件必须显式 `mode=write`。派活是异步的，先返回 `exec_id`，再用 `status` / `output` 跟进。
 
-异步 delegate 完成时，通知通过 MCP channel 推送到 Claude Code（`<channel source="maestro" ...>`），无需手动查询。要查看详细结果，在 shell 中执行 `maestro delegate status <exec_id>` 或 `maestro delegate output <exec_id>`。
+异步完成后也可能推一条 MCP channel 通知（`<channel source="maestro" ...>`）。命令行 `maestro delegate …` 仍然可用。
 
 ### 通过 CLI 启动
 
@@ -40,7 +40,7 @@ maestro delegate "<PROMPT>" [options]
 
 | 选项 | 说明 | 默认值 |
 |------|------|--------|
-| `--to <tool>` | Agent：gemini, agy, codex, claude, opencode | 配置中第一个启用的 |
+| `--to <tool>` | Agent：gemini, qwen, codex, claude, opencode, agy, pi, grok | 配置中第一个启用的 |
 | `--role <role>` | 能力角色（analyze, explore, review, implement, plan, brainstorm, research） | — |
 | `--mode <mode>` | `analysis`（只读）或 `write`（创建/修改/删除） | `analysis` |
 | `--effort <level>` | 推理强度（low, medium, high, max） | 工具的 `reasoningEffort` 配置 |
@@ -76,23 +76,19 @@ maestro delegate message <id> "text" --delivery after_complete
 maestro delegate messages <id>                     # 列出排队消息
 ```
 
-### 内置 MCP 工具
+### MCP 工具 `delegate`
 
-MCP server 注册以下 9 个内置工具（通过 `registerBuiltinTools()`），**不含 delegate 系列**：
+一个工具，用 `operation` 区分动作：
 
-| MCP 工具 | 说明 |
-|---------|------|
-| `edit_file` | 编辑文件（文本替换 / 行操作） |
-| `write_file` | 写入文件 |
-| `read_file` | 读取单个文件 |
-| `read_many_files` | 批量读取 / 目录遍历 / 内容搜索 |
-| `team_msg` | Agent 团队消息总线（JSONL） |
-| `team_mailbox` | 团队邮箱读取 |
-| `store_knowhow` | 知识条目存储与搜索 |
-| `team_tasks_mcp` | 团队任务管理 |
-| `team_agents` | 团队 agent 管理 |
+| operation | 对应 CLI | 必填 |
+|-----------|----------|------|
+| `run` | `maestro delegate "<prompt>"` | `prompt`；可选 `to` / `role` / `mode` / `model` / `cd` |
+| `message` | `maestro delegate message <id>` | `id`、`message`；可选 `delivery` |
+| `status` | `maestro delegate status <id>` | `id` |
+| `output` | `maestro delegate output <id>` | `id`；可选 `full` |
+| `cancel` | `maestro delegate cancel <id>` | `id` |
 
-> **注意**：Delegate 子命令（`message`、`status`、`output`、`tail`、`cancel`、`messages`）仅通过 CLI shell 调用，不注册为 MCP 工具。异步完成通知通过 MCP channel 推送。
+`tail` / `messages` / `show` 仍只走命令行。已有安装若 MCP 环境变量是白名单，需重装并把 `delegate` 勾进 `MAESTRO_ENABLED_TOOLS`。
 
 ---
 
@@ -107,7 +103,9 @@ queued → running → completed
 ```
 
 **执行 ID**：`{prefix}-{HHmmss}-{rand4}`（如 `gem-143022-a7f2`）
-前缀：gemini→`gem`，agy→`agy`，codex→`cdx`，claude→`cld`，opencode→`opc`
+前缀：gemini→`gem`，qwen→`qwn`，codex→`cdx`，claude→`cld`，opencode→`opc`，agy→`agy`，pi→`pi`，grok→`grk`
+
+> Grok：prompt 经 `--prompt-file` 传递。`maestro delegate message` 的 inject 会停掉当前 headless 轮次并以 `grok --continue` 重拉。默认模型 `grok-4.6`。需要 `XAI_API_KEY` 或已执行 `grok login`。
 
 <details>
 <summary>Delegate vs CLI 功能对比</summary>

@@ -8,7 +8,7 @@ import type { AgentManager } from '../agents/agent-manager.js';
 import type { AgentType } from '../../shared/agent-types.js';
 
 const VALID_AGENT_TYPES = new Set<string>([
-  'claude-code', 'codex', 'codex-server', 'gemini', 'gemini-a2a', 'qwen', 'opencode', 'agy', 'api-explore', 'agent-sdk', 'pi',
+  'claude-code', 'codex', 'codex-server', 'gemini', 'gemini-a2a', 'qwen', 'opencode', 'agy', 'api-explore', 'agent-sdk', 'pi', 'grok',
 ]);
 
 /**

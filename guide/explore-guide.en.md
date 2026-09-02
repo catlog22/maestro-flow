@@ -8,6 +8,17 @@ API-endpoint-driven lightweight code exploration command with multi-prompt paral
 
 ## Quick Start
 
+> **Prerequisite: explore requires an OpenAI-compatible LLM API endpoint** (`model` + `baseUrl`
+> + `apiKey`) configured in `~/.maestro/api.json`. It is a separate channel from
+> `maestro delegate` (which rides each CLI's own login) — being logged into a CLI does
+> NOT make explore work.
+>
+> **explore is optional; everything else works without it.** It is the semantic fallback for
+> "entry point unknown" searches. Zero-config alternatives cover most retrieval needs:
+> `maestro search` (knowledge/code index), Grep/rg (exact text), the host's native
+> `Agent()` exploration subagents, and `maestro delegate --to <cli>`. Without api.json,
+> explore reports "No endpoints configured" — configure it below or simply don't use explore.
+
 ```bash
 # Single prompt search
 maestro explore "What test framework is used?"

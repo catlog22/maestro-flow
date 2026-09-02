@@ -95,6 +95,13 @@ const AGENT_FIELD_CONFIG: Partial<Record<AgentType, AgentFieldConfig>> = {
     showBaseUrl: false,
     showSettingsFile: false,
   },
+  grok: {
+    apiKeyLabel: 'xAI API Key',
+    apiKeyPlaceholder: 'xai-...',
+    apiKeyEnvHint: 'XAI_API_KEY',
+    showBaseUrl: false,
+    showSettingsFile: false,
+  },
 };
 
 const AGENT_TYPES: { type: AgentType; label: string }[] = [
@@ -106,6 +113,7 @@ const AGENT_TYPES: { type: AgentType; label: string }[] = [
   { type: 'qwen', label: 'Qwen' },
   { type: 'opencode', label: 'OpenCode' },
   { type: 'pi', label: 'Pi' },
+  { type: 'grok', label: 'Grok' },
 ];
 
 export function AgentsSection() {
@@ -128,6 +136,7 @@ export function AgentsSection() {
       qwen: 'settings.agents.qwen_desc',
       opencode: 'settings.agents.opencode_desc',
       pi: 'settings.agents.pi_desc',
+      grok: 'settings.agents.grok_desc',
     };
     return t(keyMap[type] ?? 'settings.agents.claude_code_desc');
   };

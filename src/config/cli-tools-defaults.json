@@ -6,15 +6,16 @@
     { "name": "opencode", "cmd": "opencode", "primaryModel": "",                          "tags": ["fullstack"],            "type": "builtin" },
     { "name": "agy",      "cmd": "agy",      "primaryModel": "",                          "tags": ["fullstack"],            "type": "builtin" },
     { "name": "api-explore", "cmd": "node",  "primaryModel": "",                          "tags": ["explore", "readonly"],  "type": "builtin" },
-    { "name": "pi",        "cmd": "pi",    "primaryModel": "",                          "tags": ["fullstack"],            "type": "builtin" }
+    { "name": "pi",        "cmd": "pi",    "primaryModel": "",                          "tags": ["fullstack"],            "type": "builtin" },
+    { "name": "grok",      "cmd": "grok",  "primaryModel": "grok-4.6",                  "tags": ["fullstack"],            "type": "builtin" }
   ],
   "roleMappings": {
-    "analyze":    { "fallbackChain": ["codex", "gemini", "claude"] },
-    "explore":    { "fallbackChain": ["codex", "gemini", "claude"] },
-    "review":     { "fallbackChain": ["codex", "gemini", "claude"] },
-    "implement":  { "fallbackChain": ["codex", "claude", "gemini"] },
-    "plan":       { "fallbackChain": ["codex", "gemini", "claude"] },
-    "brainstorm": { "fallbackChain": ["gemini", "codex", "claude"] },
-    "research":   { "fallbackChain": ["gemini", "codex", "claude"] }
+    "analyze":    { "fallbackChain": ["codex", "gemini", "claude", "grok"] },
+    "explore":    { "fallbackChain": ["codex", "gemini", "claude", "grok"] },
+    "review":     { "fallbackChain": ["codex", "gemini", "claude", "grok"] },
+    "implement":  { "fallbackChain": ["codex", "claude", "gemini", "grok"] },
+    "plan":       { "fallbackChain": ["codex", "gemini", "claude", "grok"] },
+    "brainstorm": { "fallbackChain": ["gemini", "codex", "claude", "grok"] },
+    "research":   { "fallbackChain": ["gemini", "codex", "claude", "grok"] }
   }
 }

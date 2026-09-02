@@ -9,7 +9,7 @@ maestro delegate "<PROMPT>" [options]
 
 | Option | Description | Default |
 |--------|-------------|---------|
-| `--to <tool>` | gemini, qwen, codex, claude, opencode | First enabled |
+| `--to <tool>` | gemini, qwen, codex, claude, opencode, agy, pi, grok | First enabled |
 | `--role <role>` | analyze, explore, review, implement, plan, brainstorm, research | — |
 | `--mode <mode>` | `analysis` (read-only) / `write` (modify) | `analysis` |
 | `--model <model>` | Model override | Tool's `primaryModel` |
@@ -22,6 +22,8 @@ maestro delegate "<PROMPT>" [options]
 Tool resolution: `--to` > `--role` > first enabled in config.
 
 **`--mode` is authoritative** — `MODE:` in prompt text is a hint only.
+
+From any maestro-tools host (Grok included), use the MCP `delegate` tool (`operation`: run / message / status / output / cancel). Default mode is `analysis`; `write` must be explicit.
 
 ## Prompt Template
 
@@ -64,7 +66,9 @@ Bash({ command: "maestro delegate \"...\" --to gemini --mode analysis", run_in_b
 
 ### Execution ID Prefix
 
-gemini→`gem`, qwen→`qwn`, codex→`cdx`, claude→`cld`, opencode→`opc`
+gemini→`gem`, qwen→`qwn`, codex→`cdx`, claude→`cld`, opencode→`opc`, agy→`agy`, pi→`pi`, grok→`grk`
+
+> Grok note: `maestro delegate message <id>` `inject` works by stopping the current headless turn and respawning with `grok --continue` (plus Maestro history `--resume`). `--delivery after_complete` still works for post-success chaining. Requires `XAI_API_KEY` or prior `grok login`.
 
 ### Resume
 

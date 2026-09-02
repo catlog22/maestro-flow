@@ -371,6 +371,10 @@ export function registerSessionV3Command(program: Command): void {
         });
         emitV3Success({ operation: 'session-complete', sessionId: resolved.session,
           requestId: resolved.requestId, result: mutation.transition.result, mutation });
+        // child-reap：按 maestro session 归因回收其 delegate/team 资源（best-effort，不影响完成结果）
+        void import('../async/child-reap.js')
+          .then(({ reapBestEffort }) => reapBestEffort({ host: 'maestro', hostSessionId: resolved.session, maestroSessionId: resolved.session }))
+          .catch(() => { /* best-effort */ });
       } catch (error) {
         emitV3Error('session-complete', error, { session: options.session, requestId: options.requestId });
       }

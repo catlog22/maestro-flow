@@ -2,7 +2,7 @@
 title: "MCP 工具参考"
 ---
 
-Maestro MCP 服务器暴露 9 个工具，供 Claude Code、Codex 等 AI 智能体在会话中直接调用。所有工具通过 stdio 传输协议注册，无需额外配置即可使用。
+Maestro MCP 服务器暴露内置工具，供 Claude Code、Grok、Codex 等 AI 智能体在会话中直接调用。所有工具通过 stdio 传输协议注册，无需额外配置即可使用。
 
 > **启用/过滤**: 通过 `MAESTRO_ENABLED_TOOLS` 环境变量或 `config.mcp.enabledTools` 控制可见工具列表。默认 `['all']` 全部启用。
 
@@ -14,6 +14,7 @@ Maestro MCP 服务器暴露 9 个工具，供 Claude Code、Codex 等 AI 智能�
 - [文件操作](#文件操作)
 - [团队协作](#团队协作)
 - [知识复用](#知识复用)
+- [任务委派](#任务委派)
 
 ---
 
@@ -30,6 +31,7 @@ Maestro MCP 服务器暴露 9 个工具，供 Claude Code、Codex 等 AI 智能�
 | `team_task` | 团队协作 | 任务 CRUD 与状态机管理 |
 | `team_agent` | 团队协作 | 智能体生命周期管理 (spawn/shutdown) |
 | `store_knowhow` | 知识复用 | 知识复用条目存储 (9 种类型) |
+| `delegate` | 任务委派 | 派活 / 续话 / 看状态与结果 / 取消（默认只读） |
 
 ---
 
@@ -228,7 +230,7 @@ Maestro MCP 服务器暴露 9 个工具，供 Claude Code、Codex 等 AI 智能�
 | `session_id` | string | 是 | -- | 会话 ID |
 | `role` | string | spawn/shutdown/remove | -- | 角色名 |
 | `prompt` | string | spawn | -- | 智能体指令 |
-| `tool` | string | 否 | `"gemini"` | CLI 工具 |
+| `tool` | string | 否 | `"gemini"` | CLI 工具（gemini / claude / codex / grok 等） |
 
 <details>
 <summary>示例</summary>
@@ -240,6 +242,41 @@ Maestro MCP 服务器暴露 9 个工具，供 Claude Code、Codex 等 AI 智能�
 ```
 
 </details>
+
+---
+
+## 任务委派
+
+### delegate
+
+把任务交给外部 CLI 智能体（Grok / Gemini / Claude / Codex 等）。**默认 `mode=analysis`（只读）**；要改文件必须显式 `mode=write`。派活始终异步，立刻返回 `exec_id`。
+
+| 参数 | 类型 | 必填 | 默认值 | 说明 |
+|------|------|------|--------|------|
+| `operation` | run/message/status/output/cancel | 是 | -- | 动作 |
+| `prompt` | string | run | -- | 任务说明 |
+| `to` | string | 否 | 配置中第一个启用的工具 | 目标后端（`grok` / `gemini` / …） |
+| `role` | string | 否 | -- | 按角色走 fallbackChain（含 grok） |
+| `mode` | analysis/write | 否 | `analysis` | 只读 / 可改文件 |
+| `id` | string | message/status/output/cancel | -- | 执行 ID |
+| `message` | string | message | -- | 续话内容 |
+| `delivery` | inject/after_complete | 否 | `inject` | 续话投递方式 |
+| `full` | boolean | 否 | false | output 是否返回全文 |
+
+<details>
+<summary>示例</summary>
+
+```jsonc
+{ "operation": "run", "prompt": "总结 README", "to": "grok" }
+{ "operation": "status", "id": "grk-143022-a7f2" }
+{ "operation": "output", "id": "grk-143022-a7f2" }
+{ "operation": "message", "id": "grk-143022-a7f2", "message": "再查安装步骤" }
+{ "operation": "cancel", "id": "grk-143022-a7f2" }
+```
+
+</details>
+
+新安装默认把 `delegate` 写入 Extra MCP 白名单。旧安装需重跑 `maestro install --force --extra-mcp grok`（或把 `delegate` 加进 `MAESTRO_ENABLED_TOOLS`）。
 
 ---
 

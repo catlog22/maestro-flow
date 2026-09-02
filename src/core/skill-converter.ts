@@ -301,6 +301,19 @@ export const TOOL_FIELD_MAP: Record<string, Record<string, FieldMapping>> = {
         run_in_background: null,
       },
     },
+    grok: {
+      tool: 'spawn_subagent',
+      fields: {
+        prompt: 'prompt',
+        description: 'description',
+        subagent_type: 'subagent_type',
+        run_in_background: 'background',
+        isolation: 'isolation',
+        name: null,
+        model: null,
+        mode: null,
+      },
+    },
   },
   AskUserQuestion: {
     codex: {
@@ -503,6 +516,7 @@ function rewriteAllowedToolsStandard(
 }
 
 function mapToolTokenStandard(tok: string, profile: ConversionProfile): string | null {
+  if (profile.removedTools.has(tok)) return null;
   if (profile.frontmatterToolMap[tok]) return profile.frontmatterToolMap[tok];
   if (tok.startsWith('mcp__')) return tok; // pass-through MCP
   if (/^[a-z][a-z0-9_]*$/.test(tok)) return tok; // already standard
@@ -572,6 +586,132 @@ function convertTextStandard(
   const newFm = rewriteAllowedToolsStandard(raw, profile);
   const newBody = stripToolTags(applyBodyReplacements(body, profile));
   return `---\n${newFm}\n---\n${newBody}`;
+}
+
+/** 引号是否被转义:前置反斜杠为奇数个才算转义(偶数个是字面反斜杠,引号闭合)。 */
+function isQuoteEscaped(text: string, index: number): boolean {
+  let backslashes = 0;
+  for (let k = index - 1; k >= 0 && text[k] === '\\'; k--) backslashes++;
+  return backslashes % 2 === 1;
+}
+
+/**
+ * 把 `{...}` 内部文本按顶层逗号切成 key: value 字段。
+ * 值原样保留(字面量/表达式/多行均可),brace/paren 深度跟踪防误切。
+ */
+function splitTopLevelFields(inner: string): Array<{ key: string; value: string }> {
+  const parts: string[] = [];
+  let depth = 0;
+  let start = 0;
+  let inStr: string | null = null;
+  for (let i = 0; i < inner.length; i++) {
+    const ch = inner[i];
+    if (inStr) {
+      if (ch === inStr && !isQuoteEscaped(inner, i)) inStr = null;
+      continue;
+    }
+    if (ch === '"' || ch === "'" || ch === '`') { inStr = ch; continue; }
+    if (ch === '{' || ch === '(' || ch === '[') depth++;
+    else if (ch === '}' || ch === ')' || ch === ']') depth--;
+    else if (ch === ',' && depth === 0) {
+      parts.push(inner.slice(start, i));
+      start = i + 1;
+    }
+  }
+  parts.push(inner.slice(start));
+  const fields: Array<{ key: string; value: string }> = [];
+  for (const part of parts) {
+    const m = part.match(/^\s*([A-Za-z_][\w]*)\s*[:=]\s*([\s\S]*?)\s*$/);
+    if (m) fields.push({ key: m[1], value: m[2] });
+  }
+  return fields;
+}
+
+/**
+ * Agent() 调用点按 TOOL_FIELD_MAP.Agent.grok 逐字段重写:
+ * run_in_background→background,name/model/mode 等不支持字段丢弃,
+ * 未知字段与表达式值原样保留(不产生丢弃字段后的空调用);
+ * 残余裸 `Agent(` 统一改名为 grok 原生工具。
+ */
+function rewriteAgentCallSitesGrok(body: string): string {
+  const fm = TOOL_FIELD_MAP.Agent.grok;
+  let out = '';
+  let i = 0;
+  const callRe = /\bAgent\s*\(\s*\{/g;
+  for (;;) {
+    callRe.lastIndex = i;
+    const m = callRe.exec(body);
+    if (!m) { out += body.slice(i); break; }
+    const objStart = m.index + m[0].length - 1; // 指向 {
+    // 平衡扫描找匹配的 }(跳过字符串字面量)
+    let depth = 0;
+    let j = objStart;
+    let inStr: string | null = null;
+    for (; j < body.length; j++) {
+      const ch = body[j];
+      if (inStr) {
+        if (ch === inStr && !isQuoteEscaped(body, j)) inStr = null;
+        continue;
+      }
+      if (ch === '"' || ch === "'" || ch === '`') { inStr = ch; continue; }
+      if (ch === '{') depth++;
+      else if (ch === '}') { depth--; if (depth === 0) break; }
+    }
+    if (depth !== 0) { out += body.slice(i); break; } // 未闭合,放弃改写
+    let k = j + 1;
+    while (k < body.length && /\s/.test(body[k])) k++;
+    if (body[k] !== ')') { out += body.slice(i, k); i = k; continue; }
+
+    const mapped: string[] = [];
+    for (const f of splitTopLevelFields(body.slice(objStart + 1, j))) {
+      const target: string | null | undefined = fm.fields[f.key];
+      if (target === null) continue; // grok 不支持的字段,丢弃
+      mapped.push(`${target ?? f.key}: ${f.value}`); // 未知字段原样保留
+    }
+    out += body.slice(i, m.index) + `${fm.tool}({ ${mapped.join(', ')} })`;
+    i = k + 1;
+  }
+  return out.replace(/\bAgent\s*\(/g, `${fm.tool}(`);
+}
+
+/**
+ * Grok 转换:字段级 Agent() 重写 + 受限 allowed-tools 按正文检测补子代理工具。
+ * bodyReplacements 里的 `Agent(`→`spawn_subagent(` 兜底盘在此之后执行,不再命中。
+ */
+function convertTextGrok(
+  content: string,
+  profile: ConversionProfile,
+  isSkillOrCommand = true,
+): string {
+  const { frontmatter, body } = splitFrontmatter(content);
+
+  let hasAgent = false;
+  if (isSkillOrCommand) {
+    hasAgent = detectAgentCalls(body).length > 0 || /\bAgent\s*\(/.test(body);
+  }
+
+  const convertedBody = applyBodyReplacements(rewriteAgentCallSitesGrok(body), profile);
+
+  let newFrontmatter: ParsedFrontmatter | null = null;
+  if (frontmatter) {
+    const fmOut = { ...frontmatter };
+    if (fmOut['allowed-tools']) {
+      const r = rewriteAllowedToolsAgy(fmOut['allowed-tools'], profile, hasAgent);
+      if (r) {
+        if (r.hasAgent || hasAgent) {
+          for (const t of profile.subagentTools) {
+            if (!r.tools.includes(t)) r.tools.push(t);
+          }
+          r.tools.sort();
+        }
+        fmOut['allowed-tools'] = r.tools;
+      }
+    }
+    newFrontmatter = fmOut;
+  }
+
+  const fmBlock = newFrontmatter ? serializeFrontmatter(newFrontmatter) : '';
+  return fmBlock + stripToolTags(convertedBody);
 }
 
 function convertTextCodex(
@@ -1379,6 +1519,93 @@ const AGENTS_STANDARD_PROFILE: ConversionProfile = {
 };
 
 // ---------------------------------------------------------------------------
+// Grok profile — xAI Grok Build native tools
+//
+// Grok 原生工具集（docs/user-guide）：read_file / write_file / search_replace /
+// grep / list_dir / run_terminal_command / web_search / web_fetch / monitor /
+// spawn_subagent / get_command_or_subagent_output / kill_command_or_subagent /
+// wait_commands_or_subagents / create_goal / update_goal / get_goal。
+// 无 update_plan / invoke_skill / delegate_subagent / task 系列工具；
+// 子代理深度限制为 1（嵌套 spawn 直接失败）。
+// ---------------------------------------------------------------------------
+
+const GROK_TASK_TRACKING_BLOCK = `<task_tracking>
+
+Grok 无独立 task 跟踪工具（无 update_plan / create_task / track_tasks）。Session/Step 进度以 session artifacts 为权威状态。仅在用户明确要求、或 step 声明 \`goal: true\`（视为工作流显式授权）时使用 goal 工具：\`create_goal({ objective, token_budget? })\` / \`update_goal({ status })\` / \`get_goal({})\`（单一活跃 goal）。
+
+</task_tracking>`;
+
+const GROK_PROFILE: ConversionProfile = {
+  bodyReplacements: [
+    [/maestro skills --platform claude\b/g, 'maestro skills --platform grok'],
+    [/<task_tracking>[\s\S]*?<\/task_tracking>/g, GROK_TASK_TRACKING_BLOCK],
+    [/\bmaestro run (prepare|skill|brief)\b(?![^\n`]*--platform)/g, 'maestro run $1 --platform grok'],
+    // 深度限制 1：凡含多 agent 编排段的 agent 文件，补嵌套 spawn 失败警告
+    [/## Multi-Agent Orchestration\n/, '## Multi-Agent Orchestration\n\n> **Grok depth limit 1**：本 executor 若以子代理身份运行，调用 `spawn_subagent` 会因 depth-limit 直接失败。此时不得嵌套派发，应在返回结果中声明 wave 需求（`needs_wave` + worker 任务清单），由父会话（顶层）执行 spawn 并用 `wait_commands_or_subagents` 等齐。\n'],
+    // 其他平台的子代理工具名（若源文本混入）→ grok 原生
+    [/\bdelegate_subagent\b/g, 'spawn_subagent'],
+    [/\bspawn_agent\b/g, 'spawn_subagent'],
+    [/\bwait_agent\b/g, 'get_command_or_subagent_output'],
+    [/\binterrupt_agent\b/g, 'kill_command_or_subagent'],
+    [/\bWebSearch\b/g, 'web_search'],
+    [/\bWebFetch\b/g, 'web_fetch'],
+    [/\bMonitor\b/g, 'monitor'],
+    [/\bLSP\b/g, 'lsp'],
+    [/\bRead\s*\(/g, 'read_file('],
+    [/\bWrite\s*\(/g, 'write_file('],
+    [/\bEdit\s*\(/g, 'search_replace('],
+    [/\bMultiEdit\s*\(/g, 'search_replace('],
+    [/\bBash\s*\(/g, 'run_terminal_command('],
+    [/\bPowerShell\s*\(/g, 'run_terminal_command('],
+    [/\bGrep\s*\(/g, 'grep('],
+    [/\bGlob\s*\(/g, 'list_dir('],
+    [/\bAgent\s*\(/g, 'spawn_subagent('],
+    [/\bTaskStop\s*\(/g, 'kill_command_or_subagent('],
+    [/\bTaskOutput\s*\(/g, 'get_command_or_subagent_output('],
+  ],
+  frontmatterToolMap: {
+    Read: 'read_file',
+    Write: 'write_file',
+    Edit: 'search_replace',
+    MultiEdit: 'search_replace',
+    Bash: 'run_terminal_command',
+    PowerShell: 'run_terminal_command',
+    Grep: 'grep',
+    Glob: 'list_dir',
+    Agent: 'spawn_subagent',
+    TaskStop: 'kill_command_or_subagent',
+    TaskOutput: 'get_command_or_subagent_output',
+    WebSearch: 'web_search',
+    WebFetch: 'web_fetch',
+    Monitor: 'monitor',
+    LSP: 'lsp',
+  },
+  removedTools: new Set([
+    // grok 无对应工具：skills 走 /slash 或自动触发，无 task 跟踪工具，无 teams
+    'Skill',
+    'TodoWrite',
+    'TaskCreate',
+    'TaskUpdate',
+    'TaskList',
+    'TaskGet',
+    'AskUserQuestion',
+    'SendMessage',
+    'TeamCreate',
+    'TeamDelete',
+    'NotebookEdit',
+  ]),
+  subagentTools: [
+    'spawn_subagent',
+    'get_command_or_subagent_output',
+    'kill_command_or_subagent',
+    'wait_commands_or_subagents',
+  ],
+  rewriteAgentCalls: false,
+  rewriteSkillCalls: false,
+  snakeCaseUnknown: true,
+};
+
+// ---------------------------------------------------------------------------
 // Partial tree builders — skills-only and agents-only
 // ---------------------------------------------------------------------------
 
@@ -1391,6 +1618,7 @@ export const PLATFORM_SUFFIX: Record<string, string> = {
   codex: '.codex.md',
   agy: '.agy.md',
   pi: '.pi.md',
+  grok: '.grok.md',
 };
 
 function buildSkillsOnly(
@@ -1548,7 +1776,7 @@ function buildCodexAgentsToml(
 // ---------------------------------------------------------------------------
 
 /** Supported platform identifiers for runtime content transformation. */
-export type TargetPlatform = 'claude' | 'codex' | 'agy' | 'agents-standard' | 'pi';
+export type TargetPlatform = 'claude' | 'codex' | 'agy' | 'agents-standard' | 'pi' | 'grok';
 
 /** Strip [@tag] authoring markers — they're source-only anchors, not LLM content. */
 function stripToolTags(text: string): string {
@@ -1575,6 +1803,8 @@ export function transformContentForPlatform(
       return stripToolTags(convertTextStandard(content, AGENTS_STANDARD_PROFILE));
     case 'pi':
       return stripToolTags(convertTextPi(content, PI_PROFILE, true));
+    case 'grok':
+      return convertTextGrok(content, GROK_PROFILE);
   }
 }
 
@@ -1638,6 +1868,24 @@ export function buildAgentsStandardAgents(
   targetDir: string,
 ): { files: number } {
   const stats = buildAgentsOnly(claudeDir, targetDir, AGENTS_STANDARD_PROFILE, convertTextStandard);
+  return { files: stats.files };
+}
+
+/** Build grok skills (commands + skills) only — no agents. */
+export function buildGrokSkills(
+  claudeDir: string,
+  targetDir: string,
+): { files: number } {
+  const stats = buildSkillsOnly(claudeDir, targetDir, GROK_PROFILE, convertTextGrok);
+  return { files: stats.files };
+}
+
+/** Build grok agents only — no skills/commands. */
+export function buildGrokAgents(
+  claudeDir: string,
+  targetDir: string,
+): { files: number } {
+  const stats = buildAgentsOnly(claudeDir, targetDir, GROK_PROFILE, convertTextGrok);
   return { files: stats.files };
 }
 

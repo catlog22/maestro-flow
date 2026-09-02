@@ -17,6 +17,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import { runInstallWizard, runInstallFlow } from '../tui/install-ui/index.js';
 import {
   HOOK_LEVELS,
+  getHooksForLevel,
   type HookLevel,
 } from './hooks.js';
 import {
@@ -262,7 +263,7 @@ export function registerInstallCommand(program: Command): void {
     .option('--mcp', 'Register Claude MCP server in --force mode')
     .option('--codex-mcp', 'Register Codex MCP server in --force mode')
     .option('--agy-hooks <level>', 'Agy (Antigravity) hook level for --force mode: none, minimal, standard, full')
-    .option('--extra-mcp <targets>', 'Comma-separated extra MCP targets (cursor,qoder,trae,kiro,roo,vscode,gemini)')
+    .option('--extra-mcp <targets>', 'Comma-separated extra MCP targets (cursor,qoder,trae,kiro,roo,vscode-copilot,gemini-cli,grok)')
     .option('--components <ids>', 'Comma-separated component IDs to install (with --force)')
     .option('--statusline [theme]', 'Install statusline with optional theme (with --force)')
     .option('--plugin', 'Register as native plugin instead of file copy (with --force)')
@@ -573,14 +574,27 @@ async function forceInstall(
     ? opts.statusline
     : prior?.statusline?.theme ?? 'notion';
 
+  // 升级语义：继承 custom selection 时与当前 preset 求并集——
+  // 新版本向 preset 新增的 hook（如 child-scope）会随 --force/--update 送达既有安装；
+  // 用户在 preset 之外的手工追加也保留。注意：preset 内被刻意取消的 hook 在 --force
+  // 后会出现（TUI 交互选择仍是精确控制的权威路径）。
+  const mergeInheritedSelection = (
+    level: HookLevel,
+    installed: string[],
+    tool: 'claude' | 'codex' | 'agy',
+  ) => ({
+    basePreset: level,
+    selectedHooks: [...new Set([...getHooksForLevel(level, tool), ...installed])],
+    isCustom: true,
+  });
   const inheritedClaudeSelection = opts.hooks === undefined && prior?.hooks?.claude
-    ? { basePreset: hookLevel, selectedHooks: [...prior.hooks.claude.installed], isCustom: true }
+    ? mergeInheritedSelection(hookLevel, [...prior.hooks.claude.installed], 'claude')
     : undefined;
   const inheritedCodexSelection = opts.codexHooks === undefined && prior?.hooks?.codex
-    ? { basePreset: codexHookLevel, selectedHooks: [...prior.hooks.codex.installed], isCustom: true }
+    ? mergeInheritedSelection(codexHookLevel, [...prior.hooks.codex.installed], 'codex')
     : undefined;
   const inheritedAgySelection = opts.agyHooks === undefined && prior?.hooks?.agy
-    ? { basePreset: agyHookLevel, selectedHooks: [...prior.hooks.agy.installed], isCustom: true }
+    ? mergeInheritedSelection(agyHookLevel, [...prior.hooks.agy.installed], 'agy')
     : undefined;
   const claudeHooksSelection = opts.hooks === 'none'
     ? undefined

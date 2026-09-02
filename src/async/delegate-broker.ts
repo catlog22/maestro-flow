@@ -161,6 +161,7 @@ export interface DelegateBrokerApi {
   pollEvents(input: PollEventsInput): DelegateJobEvent[];
   ack(input: AckEventsInput): number;
   getJob(jobId: string): DelegateJobRecord | null;
+  listJobs(): DelegateJobRecord[];
   listJobEvents(jobId: string): DelegateJobEvent[];
   requestCancel(input: RequestCancelInput): DelegateJobRecord;
   queueMessage(input: QueueMessageInput): DelegateQueuedMessage;
@@ -540,6 +541,11 @@ export class FileDelegateBroker implements DelegateBrokerApi {
   getJob(jobId: string): DelegateJobRecord | null {
     const state = this.readState();
     return state.jobs[jobId] ?? null;
+  }
+
+  listJobs(): DelegateJobRecord[] {
+    const state = this.readState();
+    return Object.values(state.jobs);
   }
 
   listJobEvents(jobId: string): DelegateJobEvent[] {
@@ -1057,6 +1063,14 @@ export class SqliteDelegateBroker implements DelegateBrokerApi {
   getJob(jobId: string): DelegateJobRecord | null {
     const row = this.getJobRow(jobId);
     return row ? this.jobFromRow(row) : null;
+  }
+
+  listJobs(): DelegateJobRecord[] {
+    const rows = this.db.prepare(`
+      SELECT job_id, status, created_at, updated_at, last_event_id, last_event_type, latest_snapshot, metadata
+      FROM delegate_jobs
+    `).all();
+    return (rows as unknown as JobRow[]).map((row) => this.jobFromRow(row));
   }
 
   listJobEvents(jobId: string): DelegateJobEvent[] {

@@ -66,9 +66,9 @@ describe('detectTaskType', () => {
     expect(detectTaskType('code the feature')).toBe('execute');
   });
 
-  it('detects verify', () => {
-    expect(detectTaskType('verify the results')).toBe('verify');
-    expect(detectTaskType('validate result output')).toBe('verify');
+  it('classifies verify/validate phrases as execute', () => {
+    expect(detectTaskType('verify the results')).toBe('execute');
+    expect(detectTaskType('validate result output')).toBe('execute');
   });
 
   it('review pattern is shadowed by execute for "code" keyword', () => {
@@ -139,9 +139,9 @@ describe('detectTaskType', () => {
     expect(detectTaskType('ANALYZE the code')).toBe('analyze');
   });
 
-  it('detects memory_capture', () => {
-    expect(detectTaskType('memory capture the context')).toBe('memory_capture');
-    expect(detectTaskType('save memory of the session')).toBe('memory_capture');
+  it('falls back to quick for memory-capture phrasing', () => {
+    expect(detectTaskType('memory capture the context')).toBe('quick');
+    expect(detectTaskType('save memory of the session')).toBe('quick');
   });
 
   it('detects memory', () => {
@@ -222,6 +222,10 @@ describe('resolveAgentType', () => {
     expect(resolveAgentType('pi')).toBe('pi');
   });
 
+  it('maps grok to grok', () => {
+    expect(resolveAgentType('grok')).toBe('grok');
+  });
+
   it('returns claude-code for null', () => {
     expect(resolveAgentType(null)).toBe('claude-code');
   });
@@ -246,7 +250,7 @@ describe('CHAIN_MAP', () => {
   it('contains expected multi-step chains', () => {
     expect(CHAIN_MAP['full-lifecycle']!.length).toBeGreaterThan(1);
     expect(CHAIN_MAP['spec-driven']!.length).toBeGreaterThan(1);
-    expect(CHAIN_MAP['execute-verify']).toHaveLength(2);
+    expect(CHAIN_MAP['analyze-plan-execute']).toHaveLength(3);
   });
 
   it('each chain entry has cmd field', () => {

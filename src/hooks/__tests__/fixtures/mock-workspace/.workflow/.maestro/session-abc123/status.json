@@ -1,0 +1,18 @@
+{
+  "session_id": "session-abc123",
+  "source": "maestro",
+  "chain_name": "full-lifecycle",
+  "intent": "implement OAuth2 authentication with refresh tokens",
+  "phase": 2,
+  "status": "paused",
+  "current_step": 2,
+  "auto_mode": false,
+  "steps": [
+    { "skill": "maestro-plan", "args": "2", "status": "completed" },
+    { "skill": "maestro-execute", "args": "2", "status": "completed" },
+    { "skill": "quality-review", "args": "2", "status": "running" },
+    { "skill": "quality-test", "args": "2", "status": "pending" },
+    { "skill": "maestro-milestone-audit", "args": "", "status": "pending" },
+    { "skill": "maestro-milestone-complete", "args": "", "status": "pending" }
+  ]
+}

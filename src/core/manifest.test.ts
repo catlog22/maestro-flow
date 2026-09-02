@@ -266,6 +266,26 @@ describe('cleanManifestFiles content-managed safety', () => {
     expect(readFileSync(fp, 'utf8')).not.toContain('maestro:start');
   });
 
+  it('treats maestro.md as content-managed (not hard-deleted)', () => {
+    const dir = tempDir();
+    const fp = join(dir, 'maestro.md');
+    writeFileSync(fp, [
+      'user note',
+      '',
+      '<!-- maestro:start section="core" -->',
+      '# Maestro',
+      '<!-- maestro:end section="core" -->',
+      '',
+    ].join('\n'));
+
+    const result = cleanupManifest([{ path: fp, type: 'file' }]);
+
+    expect(result.removed).toBe(1);
+    expect(existsSync(fp)).toBe(true);
+    expect(readFileSync(fp, 'utf8')).toContain('user note');
+    expect(readFileSync(fp, 'utf8')).not.toContain('maestro:start');
+  });
+
   it('preserves a marker-free copilot-instructions.md', () => {
     const dir = tempDir();
     const fp = join(dir, 'copilot-instructions.md');

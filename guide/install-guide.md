@@ -17,9 +17,11 @@ maestro install
 ```
 
 **前置要求**：
-- Node.js ≥ 18
-- Claude Code CLI（必需）
-- Codex CLI / Gemini CLI（可选，用于多 agent 工作流）
+- Node.js ≥ 22.19（`package.json` `engines.node`）
+- 至少一个宿主 CLI：
+  - [Claude Code CLI](https://docs.anthropic.com/en/docs/claude-code)（默认宿主，提供 `/maestro-*` slash 命令）
+  - [Grok Build CLI](https://docs.x.ai/build/overview)（一等宿主与 delegate 后端）
+- Codex CLI / Gemini CLI / OpenCode / Pi（可选，用于多 Agent 工作流）
 
 ---
 
@@ -27,11 +29,31 @@ maestro install
 
 `maestro install` 执行以下步骤：
 
-1. **检测项目状态** — 空项目 / 已有代码 / 已有 .workflow/
-2. **选择组件** — 交互式组件选择界面
-3. **选择安装模式** — 全局 (~/.maestro/) 或项目级 (.workflow/)
-4. **复制文件** — 按组件定义复制到目标位置
-5. **生成 manifest** — 记录已安装组件，支持增量更新
+1. **检测项目状态** — 已有 manifest / 磁盘上的平台目录 / 全新安装
+2. **选择平台** — 交互式勾选宿主（Claude / Codex / Grok / 60+ EXTRA_PLATFORMS）
+3. **选择组件** — 按平台过滤后的组件选择界面
+4. **选择安装范围** — 全局（用户主目录）或项目级（`--path <dir>`）
+5. **配置钩子 / MCP / Extra MCP / statusline**
+6. **复制或构建文件** — 按组件定义写入目标位置
+7. **生成 manifest** — 记录已安装组件，支持增量更新
+
+> 安装范围决定的是平台资产落点（如 `~/.grok/` 或 `<项目>/.grok/`）。
+> 共享运行时（`workflows` / `prepare` / `templates` / `overlays` / `arch-kb`）始终写入 `~/.maestro/`。
+> `.workflow/` 是项目数据目录（specs、knowhow），不是安装目标。
+
+> **`maestro explore` 需要额外配置（可选）**：它是独立的 OpenAI 兼容 API 通道，
+> 需自行创建 `~/.maestro/api.json`（`model` + `baseUrl` + `apiKey`，格式见 `guide/explore-guide.md`）。
+> 安装器不会也不应生成该文件；不配置时 explore 报 "No endpoints configured"，属预期状态。
+> 零配置替代：`maestro search`、Grep/rg、宿主原生 `Agent()`、`maestro delegate`。
+
+### 加法语义（v0.5.50+）
+
+安装采用**加法语义**——只添加、不删除。已存在的组件文件保留不覆盖，manifest 记录 `knownComponentIds` 跟踪所有曾安装过的组件。
+
+关键机制：
+- **安装锁** — 使用 lockfile 防止并发安装互相覆盖
+- **原子写** — manifest 写入采用 write-tmp-then-rename，避免断电/崩溃导致 manifest 损坏
+- **幂等安装** — 重复运行 `maestro install` 安全无副作用
 
 ---
 
@@ -84,6 +106,7 @@ maestro install
 | `firebender` | Firebender | 技能、Agent → 复制到 `.firebender/` |
 | `forgecode` | ForgeCode | 技能、Agent → 复制到 `.forge/` |
 | `goose` | Goose | 技能、Agent → 复制到 `.goose/` |
+| `grok` | Grok Build | 项目指令 → `.grok/rules/maestro.md`；技能 / Agent → `.grok/skills/`、`.grok/agents/` |
 | `hermes-agent` | Hermes Agent | 技能、Agent → 复制到 `.hermes/` |
 | `inference-sh` | inference.sh | 技能、Agent → 复制到 `.inferencesh/` |
 | `jazz` | Jazz | 技能、Agent → 复制到 `.jazz/` |
@@ -170,25 +193,35 @@ skill-iter-tune、skill-simplify、skill-tuning、workflow-skill-designer。
 
 ## 安装模式
 
-### 全局模式（推荐）
+交互式安装默认进入 TUI；`--global` / `--path` 只预设范围，也可与 `--force` 一起用于非交互安装。**没有** `--mode` 标志。
 
-安装到 `~/.maestro/`，所有项目共享：
+### 全局范围（推荐）
+
+平台资产写入用户主目录（如 `~/.claude/`、`~/.grok/`），共享运行时写入 `~/.maestro/`：
 
 ```bash
-maestro install --mode global
+maestro install --global
+maestro install --force --global
 ```
 
 适合：个人开发机，多项目共享配置
 
-### 项目模式
+### 项目范围
 
-安装到项目目录 `.workflow/`，仅当前项目生效：
+平台资产写入指定项目（如 `<dir>/.claude/`、`<dir>/.grok/`），仅当前项目生效：
 
 ```bash
-maestro install --mode project
+maestro install --path ./my-project
+maestro install --force --path ./my-project
 ```
 
-适合：团队协作，项目特定配置
+适合：团队协作，项目特定配置。Grok 会从当前目录向上走到 git 根读取每一层 `.grok/config.toml`。
+
+`--force` 会重建技能 / Agent 文件，并对指令文件做 tag inject（更新 `<!-- maestro:start/end -->` 段，段外用户正文保留）。这与默认交互安装的加法语义不同：没有 `--force` 时已存在的组件文件尽量不覆盖。
+
+Grok 项目指令落在 `.grok/rules/maestro.md`。若目录里还留着旧的 `.grok/AGENTS.md` 且含 Maestro 段，安装时会剥段或在剥空后删除，避免与 `rules/maestro.md` 重复进上下文。
+
+项目级 MCP / hooks 需要 Grok 信任该文件夹（交互 `grok` 确认，或 TUI `/hooks-trust`）。用户级 `~/.grok/config.toml` 里的 `maestro-tools` 不依赖这一步。`maestro install` 不会改 `~/.grok/trusted_folders.toml`。
 
 ---
 
@@ -203,6 +236,9 @@ maestro install --mode project
 | `maestro install mcp` | 注册 MCP 服务器（交互式工具选择） |
 | `maestro install toggle` | 启用/禁用已安装的命令、技能、代理 |
 | `maestro install fonts` | 安装字体资源 |
+| `maestro install workflows` | 只安装共享工作流 / prepare / ref / arch-kb |
+| `maestro install entry-commands` | 生成薄 slash 命令包装（默认 grill、collab） |
+| `maestro install embedding` | 管理本地 embedding 模型与索引 |
 | `maestro install wizard` | 启动完整交互式 TUI 向导（旧版） |
 
 每个子命令支持 `--global` 或 `--path <dir>` 指定安装范围。
@@ -327,10 +363,92 @@ maestro install --import ./team-profile.json
 | `roo` | `.roo/mcp.json` | Roo Code（仅项目级） |
 | `vscode-copilot` | `.vscode/mcp.json` | VS Code Copilot |
 | `gemini-cli` | `.gemini/settings.json` | Gemini CLI |
+| `grok` | `~/.grok/config.toml` 或 `.grok/config.toml` | Grok Build（TOML `[mcp_servers.maestro-tools]`） |
 
-在交互式安装向导中，Extra MCP 步骤可选择注册到上述目标。每个目标支持全局和项目两种范围。
+在交互式安装向导中，Extra MCP 步骤可选择注册到上述目标。每个目标支持全局和项目两种范围（`roo` 仅项目级）。
 
-MCP 工具列表（6 个）：`write_file`, `edit_file`, `read_file`, `read_many_files`, `team_msg`, `store_knowhow`
+MCP 工具列表（7 个）：`write_file`, `edit_file`, `read_file`, `read_many_files`, `team_msg`, `store_knowhow`, `delegate`（任务委派，默认只读模式）
+
+非交互示例：
+
+```bash
+maestro install --force --extra-mcp grok,cursor
+```
+
+`--extra-mcp` 必须使用上表的目标 ID（`vscode-copilot`、`gemini-cli`、`grok`），不能写成 `vscode` / `gemini`。
+
+---
+
+## Grok Build
+
+Grok 是一等宿主与 delegate 后端。安装后可在 Grok TUI 中使用 Maestro 技能，也可 `maestro delegate --to grok`。
+
+### 安装 Grok CLI
+
+```bash
+# macOS / Linux
+curl -fsSL https://x.ai/cli/install.sh | bash
+
+# Windows PowerShell
+irm https://x.ai/cli/install.ps1 | iex
+```
+
+认证任选其一：交互式 `grok login`，或设置 `XAI_API_KEY`。
+
+### 安装 Maestro 的 Grok 资产
+
+交互式 `maestro install` 勾选平台 `grok`，并在 Extra MCP 步骤勾选 Grok。等价的非交互命令：
+
+```bash
+# 全新机器请同时带上 workflows,prepare,ref,arch-kb,templates,overlays
+maestro install --force --components workflows,prepare,ref,arch-kb,templates,overlays,grok-context,grok-md-chinese,grok-skills,grok-agents --extra-mcp grok
+```
+
+| 组件 ID | 落点 |
+|---------|------|
+| `grok-context` | `.grok/rules/maestro.md`（注入项目指令） |
+| `grok-md-chinese` | 同一 `rules/maestro.md` 的中文回复段 |
+| `grok-skills` | `.grok/skills/`（`SKILL.md` 标准格式） |
+| `grok-agents` | `.grok/agents/` |
+
+不要把 `~/.grok/AGENTS.md` 或 `.grok/AGENTS.md` 当成项目指令落点。安装时会剥离旧文件里的 Maestro 段。Grok 官方会发现 `./.grok/skills/`（向仓库根上溯）与 `~/.grok/skills/`。
+
+项目级 MCP / hooks 需要信任该文件夹（交互 `grok` 确认，或 `/hooks-trust`）。用户级 `maestro-tools` 不依赖信任。
+
+装完只教 v3 主线：`session open` → `run next` → `run complete --advance` → `session complete`。
+
+写入的 MCP 段形如：
+
+```toml
+[mcp_servers.maestro-tools]
+command = "maestro-mcp"
+args = []
+env = { MAESTRO_ENABLED_TOOLS = "write_file,edit_file,read_file,read_many_files,team_msg,store_knowhow,delegate" }
+enabled = true
+```
+
+Windows 上 `command` 为当前 `node.exe`，`args` 为 `maestro-mcp.js` 的绝对路径，避免 `cmd /c maestro-mcp.cmd` 弹出控制台窗口。写入器只替换 `maestro-tools` 这一节，保留其余配置与注释。
+
+### 验证
+
+```bash
+grok inspect                 # 查看本目录发现的指令 / skills / MCP
+grok mcp list
+grok mcp doctor maestro-tools
+maestro delegate "读 README 并总结" --to grok --mode analysis
+```
+
+项目级 MCP 受 Grok 自身文件夹信任策略约束；用户级 `~/.grok/config.toml` 更适合本机默认启用。
+
+### Delegate
+
+```bash
+maestro delegate "<PROMPT>" --to grok --mode analysis
+```
+
+执行 ID 前缀为 `grk-`。默认模型 `grok-4.6`。prompt 经 `--prompt-file` 临时文件传递，避免命令行长度限制。`maestro delegate message` 的 inject 会停掉当前 headless 轮次并以 `grok --continue` 重拉（见 `workflows/delegate-usage.md`）。
+
+Grok 里也可以直接调 MCP 工具 `delegate`（`run` / `message` / `status` / `output` / `cancel`），不必再开一层命令行。默认只读。旧安装需重跑 Extra MCP 才能看到该工具。
 
 ---
 
@@ -481,9 +599,10 @@ npm install -g maestro-flow
 
 ```bash
 # 安装管理
-maestro install [--global] [--path <dir>] [--force]
+maestro install [--global] [--path <dir>] [--force] [--all-platforms]
 maestro install [--export [path]] [--import <path>] [--upgrade]
-maestro install [--load <path>]  # 加载 Profile 到交互式 TUI
+maestro install [--load <path>]  # 尚未实现；请用 --import
+maestro install --force --extra-mcp grok,cursor --mcp --hooks standard
 maestro uninstall [--yes]
 maestro update [--check] [--notices] [--dry-run] [--from <ver>] [--to <ver>] [--non-interactive]
 
@@ -493,6 +612,9 @@ maestro install hooks [--global | --project]
 maestro install mcp [--global | --path <dir>]
 maestro install toggle [--global | --path <dir>] [--type <type>] [--enable <names>] [--disable <names>] [--list]
 maestro install fonts
+maestro install workflows
+maestro install entry-commands [--steps <list>]
+maestro install embedding [--download] [--status] [--local] [--rebuild]
 maestro install wizard
 
 # 版本信息

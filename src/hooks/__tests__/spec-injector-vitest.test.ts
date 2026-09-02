@@ -5,6 +5,7 @@
  * Guide coverage: 自动注入机制 — PreToolUse:Agent hook, agent-type mapping, config override
  */
 
+import './isolate-maestro-home.js'; // 必须第一个 import：先把 MAESTRO_HOME 隔离到临时目录
 import { describe, it, beforeEach, afterEach, expect } from 'vitest';
 import { mkdtempSync, mkdirSync, rmSync, writeFileSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
@@ -182,8 +183,15 @@ describe('evaluateSpecInjection — edge cases', () => {
   });
 
   it('returns inject: false when no specs directory exists', () => {
-    const result = evaluateSpecInjection('code-developer', '/nonexistent/path');
-    expect(result.inject).toBe(false);
+    // 与 spec-injector.test.ts 同款保障：空 uid 限定 project baseline；
+    // 每次全新的临时路径避免盘符根目录残留导致的奇偶轮交替失败
+    const base = mkdtempSync(join(tmpdir(), 'maestro-no-specs-'));
+    try {
+      const result = evaluateSpecInjection('code-developer', join(base, 'path'), undefined, undefined, '');
+      expect(result.inject).toBe(false);
+    } finally {
+      rmSync(base, { recursive: true, force: true });
+    }
   });
 
   it('does not include unrelated categories', () => {

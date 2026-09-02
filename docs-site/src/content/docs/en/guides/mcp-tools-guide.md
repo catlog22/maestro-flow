@@ -13,6 +13,7 @@ The Maestro MCP server exposes 9 tools for AI agents (Claude Code, Codex, etc.) 
 - [Overview](#overview)
 - [File Operations](#file-operations)
 - [Team Collaboration](#team-collaboration)
+- [Task Delegation](#task-delegation)
 - [Persistent Memory](#persistent-memory)
 
 ---
@@ -30,6 +31,7 @@ The Maestro MCP server exposes 9 tools for AI agents (Claude Code, Codex, etc.) 
 | `team_task` | Team | Task CRUD with state machine management |
 | `team_agent` | Team | Agent lifecycle management (spawn/shutdown) |
 | `store_knowhow` | Memory | Knowhow knowledge entry storage (6 types) |
+| `delegate` | Task Delegation | Spawn / follow-up / inspect / cancel CLI delegates (read-only by default) |
 
 ---
 
@@ -243,6 +245,14 @@ Agent lifecycle management. **Storage**: `.workflow/.team/{session_id}/members.j
 
 ---
 
+## Task Delegation
+
+### delegate
+
+Delegate tasks to external CLI agents (spawn / follow-up / inspect / cancel). Default `mode=analysis` (read-only); file changes require an explicit `mode=write`. Spawn is always asynchronous so the MCP request does not block. Operations: `run` / `message` / `status` / `output` / `cancel`.
+
+---
+
 ## Persistent Memory
 
 ### store_knowhow
@@ -285,6 +295,7 @@ MCP Server (stdio) -> ToolRegistry
   +-- edit_file / write_file / read_file / read_many_files  (File Ops)
   +-- team_msg / team_mailbox / team_task / team_agent      (Team)
   +-- store_knowhow                                         (Memory)
+  +-- delegate                                              (Task Delegation)
 ```
 
 **Adapter**: Zod schema validation -> `{success, result, error}` -> `ccwResultToMcp()` -> MCP `{content, isError}`

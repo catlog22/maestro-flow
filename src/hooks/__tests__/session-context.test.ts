@@ -228,4 +228,101 @@ describe('evaluateSessionContext', () => {
     assert.ok(ctx.includes('Resume: /maestro -c'));
     assert.ok(ctx.includes('advisory startup context'));
   });
+
+  it('renders session/3.0 Active Canonical Run from v3 status without readBundle', () => {
+    mkdirSync(join(TEST_DIR, '.workflow'), { recursive: true });
+    writeFileSync(join(TEST_DIR, '.workflow', 'config.json'), JSON.stringify({
+      session_schema: {
+        schema_version: 'session-schema-selection/1.0',
+        writer: 'session/3.0',
+        features: { session_statusless: false },
+      },
+    }));
+    const sessionDir = join(TEST_DIR, '.workflow', 'sessions', 'v3-open');
+    mkdirSync(sessionDir, { recursive: true });
+    writeFileSync(join(sessionDir, 'session.json'), JSON.stringify({
+      schema_version: 'session/3.0',
+      session_id: 'v3-open',
+      objective: 'Keep SessionStart readable on v3',
+      definition_of_done: 'hook shows the open Session',
+      status: 'open',
+      orchestration_revision: 0,
+      activity_revision: 0,
+      chain: [{
+        step_id: 'step-1', command: 'implement', args: [], status: 'pending',
+        run_ids: [], goal_ref: null, decision_ref: null, decision_refs: [],
+      }],
+      decisions: [],
+      active_run_ids: [],
+      artifacts_ref: 'artifacts.json',
+      evidence_ref: 'evidence.json',
+      created_at: '2026-08-24T00:00:00.000Z',
+      updated_at: '2026-08-24T00:00:00.000Z',
+      completed_at: null,
+      archived_at: null,
+    }));
+    writeFileSync(join(sessionDir, 'artifacts.json'), JSON.stringify({
+      schema_version: 'artifacts/1.0', revision: 0, artifacts: {}, aliases: {},
+    }));
+    writeFileSync(join(TEST_DIR, '.workflow', 'state.json'), JSON.stringify({
+      version: '3.0',
+      active_session_id: 'v3-open',
+    }));
+
+    const result = evaluateSessionContext({ cwd: TEST_DIR });
+    assert.ok(result);
+    const ctx = result.hookSpecificOutput.additionalContext;
+    assert.ok(ctx.includes('Active Canonical Run'));
+    assert.ok(ctx.includes('Session: v3-open | open'));
+    assert.ok(ctx.includes('maestro session resume-view --session v3-open --json'));
+    assert.ok(ctx.includes('maestro run next --session v3-open'));
+    assert.ok(!ctx.includes('Resume: /maestro -c'));
+  });
+
+  it('states when a session/3.0 workspace has no open Session', () => {
+    mkdirSync(join(TEST_DIR, '.workflow'), { recursive: true });
+    writeFileSync(join(TEST_DIR, '.workflow', 'config.json'), JSON.stringify({
+      session_schema: {
+        schema_version: 'session-schema-selection/1.0',
+        writer: 'session/3.0',
+        features: { session_statusless: false },
+      },
+    }));
+    writeFileSync(join(TEST_DIR, '.workflow', 'state.json'), JSON.stringify({
+      version: '3.0',
+      phase: 1,
+      sessions: [],
+    }));
+
+    const result = evaluateSessionContext({ cwd: TEST_DIR });
+    assert.ok(result);
+    const ctx = result.hookSpecificOutput.additionalContext;
+    assert.ok(ctx.includes('Active Canonical Run'));
+    assert.ok(ctx.includes('No open session/3.0 Session'));
+  });
+
+  it('does not swallow a bound session/3.0 Session that cannot be read', () => {
+    mkdirSync(join(TEST_DIR, '.workflow'), { recursive: true });
+    writeFileSync(join(TEST_DIR, '.workflow', 'config.json'), JSON.stringify({
+      session_schema: {
+        schema_version: 'session-schema-selection/1.0',
+        writer: 'session/3.0',
+        features: { session_statusless: false },
+      },
+    }));
+    const sessionDir = join(TEST_DIR, '.workflow', 'sessions', 'v3-broken');
+    mkdirSync(sessionDir, { recursive: true });
+    writeFileSync(join(sessionDir, 'session.json'), '{not-valid-json');
+    writeFileSync(join(TEST_DIR, '.workflow', 'state.json'), JSON.stringify({
+      version: '3.0',
+      active_session_id: 'v3-broken',
+    }));
+
+    const result = evaluateSessionContext({ cwd: TEST_DIR });
+    assert.ok(result);
+    const ctx = result.hookSpecificOutput.additionalContext;
+    assert.ok(ctx.includes('Active Canonical Run'));
+    assert.ok(ctx.includes('Unavailable:'));
+    assert.ok(ctx.includes('session status'));
+  });
 });

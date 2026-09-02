@@ -104,6 +104,7 @@ const TOOL_TO_AGENT_TYPE: Record<string, AgentType> = {
   agy: 'agy',
   'api-explore': 'api-explore',
   pi: 'pi',
+  grok: 'grok',
 };
 
 // ---------------------------------------------------------------------------
@@ -121,6 +122,7 @@ const AGENT_TYPE_TO_TERMINAL_CMD: Record<string, string> = {
   'agy': 'agy',
   'api-explore': 'api-explore',
   'pi': 'pi',
+  'grok': 'grok',
 };
 
 // ---------------------------------------------------------------------------
@@ -138,6 +140,7 @@ const TOOL_PREFIX: Record<string, string> = {
   agy: 'agy',
   'api-explore': 'axp',
   pi: 'pi',
+  grok: 'grk',
 };
 
 export function generateCliExecId(tool: string): string {
@@ -586,6 +589,9 @@ export class CliAgentRunner {
       settingsFile: options.settingsFile?.replace(/^~(?=[\\/])/, homedir()),
       reasoningEffort: options.reasoningEffort,
       streamTimeoutMs: options.streamTimeout,
+      ...(options.resume
+        ? { metadata: { continueSession: true } }
+        : {}),
       ...(options.proxyEnv && Object.keys(options.proxyEnv).length > 0
         ? { env: options.proxyEnv }
         : {}),

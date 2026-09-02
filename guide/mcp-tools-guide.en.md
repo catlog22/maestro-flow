@@ -2,7 +2,7 @@
 title: "MCP Tools Reference"
 ---
 
-The Maestro MCP server exposes 9 tools for AI agents (Claude Code, Codex, etc.) to call directly within a session. All tools are registered via the stdio transport protocol and require no additional configuration.
+The Maestro MCP server exposes built-in tools for AI agents (Claude Code, Grok, Codex, etc.) to call directly within a session. All tools are registered via the stdio transport protocol and require no additional configuration.
 
 > **Filtering**: Control which tools are visible via the `MAESTRO_ENABLED_TOOLS` environment variable or `config.mcp.enabledTools`. Default: `['all']`.
 
@@ -14,6 +14,7 @@ The Maestro MCP server exposes 9 tools for AI agents (Claude Code, Codex, etc.) 
 - [File Operations](#file-operations)
 - [Team Collaboration](#team-collaboration)
 - [Persistent Memory](#persistent-memory)
+- [Delegation](#delegation)
 
 ---
 
@@ -30,6 +31,7 @@ The Maestro MCP server exposes 9 tools for AI agents (Claude Code, Codex, etc.) 
 | `team_task` | Team | Task CRUD with state machine management |
 | `team_agent` | Team | Agent lifecycle management (spawn/shutdown) |
 | `store_knowhow` | Memory | Knowhow knowledge entry storage (6 types) |
+| `delegate` | Delegation | Spawn / follow up / inspect / cancel (read-only by default) |
 
 ---
 
@@ -228,7 +230,7 @@ Agent lifecycle management. **Storage**: `.workflow/.team/{session_id}/members.j
 | `session_id` | string | Yes | -- | Session ID |
 | `role` | string | spawn/shutdown/remove | -- | Agent role name |
 | `prompt` | string | spawn | -- | Agent instructions |
-| `tool` | string | No | `"gemini"` | CLI tool to use |
+| `tool` | string | No | `"gemini"` | CLI tool (gemini / claude / codex / grok, etc.) |
 
 <details>
 <summary>Examples</summary>
@@ -240,6 +242,41 @@ Agent lifecycle management. **Storage**: `.workflow/.team/{session_id}/members.j
 ```
 
 </details>
+
+---
+
+## Delegation
+
+### delegate
+
+Hand a task to an external CLI agent (Grok / Gemini / Claude / Codex, etc.). **Default `mode=analysis` (read-only)**; set `mode=write` only when files must change. Spawn is always async and returns `exec_id` immediately.
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `operation` | run/message/status/output/cancel | Yes | -- | Action |
+| `prompt` | string | run | -- | Task prompt |
+| `to` | string | No | first enabled tool | Backend (`grok` / `gemini` / …) |
+| `role` | string | No | -- | Role fallback (includes grok) |
+| `mode` | analysis/write | No | `analysis` | Read-only / may modify files |
+| `id` | string | message/status/output/cancel | -- | Exec ID |
+| `message` | string | message | -- | Follow-up text |
+| `delivery` | inject/after_complete | No | `inject` | Follow-up delivery |
+| `full` | boolean | No | false | Return full output |
+
+<details>
+<summary>Examples</summary>
+
+```jsonc
+{ "operation": "run", "prompt": "summarize README", "to": "grok" }
+{ "operation": "status", "id": "grk-143022-a7f2" }
+{ "operation": "output", "id": "grk-143022-a7f2" }
+{ "operation": "message", "id": "grk-143022-a7f2", "message": "also check install steps" }
+{ "operation": "cancel", "id": "grk-143022-a7f2" }
+```
+
+</details>
+
+New installs include `delegate` in the Extra MCP allowlist. Existing installs must re-run `maestro install --force --extra-mcp grok` (or add `delegate` to `MAESTRO_ENABLED_TOOLS`).
 
 ---
 

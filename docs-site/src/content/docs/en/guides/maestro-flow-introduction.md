@@ -4,7 +4,7 @@ title: "Maestro Flow Introduction"
 
 ## Overview
 
-Maestro Flow is a workflow orchestration framework for multi-agent development with Claude Code, Codex, Gemini, and other AI agents. Describe your intent, and Maestro Flow routes to the optimal command chain, drives parallel execution, and closes the loop through adaptive decision-making, a real-time dashboard, and an evolving knowledge graph.
+Maestro Flow is a workflow orchestration framework for multi-agent development with Claude Code, Codex, Gemini, Grok, and other AI agents. Describe your intent, and Maestro Flow routes to the optimal command chain, drives parallel execution, and closes the loop through adaptive decision-making, a real-time dashboard, and an evolving knowledge graph.
 
 ## Core Philosophy
 
@@ -72,7 +72,7 @@ Entry: /maestro-ralph (Adaptive Lifecycle Engine)
 | MCP | @modelcontextprotocol/sdk (stdio) |
 | Frontend | React 19, Zustand, Tailwind CSS 4, Framer Motion, Radix UI |
 | Backend | Hono, WebSocket, SSE |
-| Agents | Claude Agent SDK, Codex CLI, Gemini CLI, OpenCode |
+| Agents | Claude Agent SDK, Codex CLI, Gemini CLI, OpenCode, Grok Build CLI |
 | Build | Vite 6, TypeScript 5.7, Vitest |
 
 ## Related Guides

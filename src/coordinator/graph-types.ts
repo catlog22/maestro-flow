@@ -234,7 +234,7 @@ export interface DelegateFrame {
 // 4. Command Executor Interface
 // ---------------------------------------------------------------------------
 
-export type AgentType = 'claude-code' | 'claude' | 'codex' | 'gemini' | 'qwen' | 'opencode' | 'pi';
+export type AgentType = 'claude-code' | 'claude' | 'codex' | 'gemini' | 'qwen' | 'opencode' | 'pi' | 'grok';
 
 export interface ExecuteRequest {
   prompt: string;

@@ -130,6 +130,11 @@ function buildJobMetadata(request: DelegateExecutionRequest, workerPid?: number)
   if (request.sessionId) {
     metadata.sessionId = request.sessionId;
   }
+  // child-reap 归因：记录调用方 maestro session（若有），供 session complete / SessionEnd 回收
+  const maestroSessionId = process.env.MAESTRO_SESSION_ID;
+  if (maestroSessionId) {
+    metadata.maestroSessionId = maestroSessionId;
+  }
   if (workerPid !== undefined) {
     metadata.workerPid = workerPid;
   }
@@ -322,7 +327,7 @@ export function registerDelegateCommand(program: Command): void {
   // ---- Main action ---------------------------------------------------------
 
   delegate
-    .option('--to <tool>', 'CLI tool to delegate to (gemini, qwen, codex, claude, opencode, agy, pi)')
+    .option('--to <tool>', 'CLI tool to delegate to (gemini, qwen, codex, claude, opencode, agy, pi, grok)')
     .option('--role <role>', 'Capability role for auto tool selection (analyze, explore, review, implement, plan, brainstorm, research)')
     .option('--mode <mode>', 'Execution mode (analysis or write)', 'analysis')
     .option('--model <model>', 'Model override')
@@ -530,6 +535,8 @@ export function registerDelegateCommand(program: Command): void {
                 workDir,
                 backend,
                 ...(request.sessionId ? { sessionId: request.sessionId } : {}),
+                // child-reap 归因:与 detached 路径一致记录 maestro session
+                ...(process.env.MAESTRO_SESSION_ID ? { maestroSessionId: process.env.MAESTRO_SESSION_ID } : {}),
               },
             });
           } catch {
@@ -575,6 +582,7 @@ export function registerDelegateCommand(program: Command): void {
                 workDir,
                 backend,
                 ...(request.sessionId ? { sessionId: request.sessionId } : {}),
+                ...(process.env.MAESTRO_SESSION_ID ? { maestroSessionId: process.env.MAESTRO_SESSION_ID } : {}),
               },
             });
           } catch {

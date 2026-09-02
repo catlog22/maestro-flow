@@ -70,17 +70,20 @@ export function evaluateContextBudget(
   }
 
   if (remaining > REDUCED_THRESHOLD) {
+    // wrapper-aware：truncation 必须保留 <maestro-context> 开闭标签，否则裸正文泄漏进对话
+    const { open, body } = unwrapMaestroContext(specContent);
     return {
       action: 'reduced',
-      content: truncateMarkdown(specContent, DEFAULT_MAX_CHARS),
+      content: rewrapMaestroContext(open, truncateMarkdown(body, DEFAULT_MAX_CHARS)),
       reason: `Context at ${100 - remaining}% used — specs truncated`,
     };
   }
 
   if (remaining > MINIMAL_THRESHOLD) {
+    const { open, body } = unwrapMaestroContext(specContent);
     return {
       action: 'minimal',
-      content: extractHeadingsOnly(specContent),
+      content: rewrapMaestroContext(open, extractHeadingsOnly(body)),
       reason: `Context at ${100 - remaining}% used — headings only`,
     };
   }
@@ -94,6 +97,23 @@ export function evaluateContextBudget(
 // ---------------------------------------------------------------------------
 // Bridge reader
 // ---------------------------------------------------------------------------
+
+const WRAPPER_OPEN_RE = /^<maestro-context[^>]*>\n?/;
+const WRAPPER_CLOSE_RE = /\n?<\/maestro-context>\s*$/;
+
+/** 剥离 <maestro-context> 包裹；无包裹时 open 为 ''。 */
+function unwrapMaestroContext(content: string): { open: string; body: string } {
+  const openMatch = content.match(WRAPPER_OPEN_RE);
+  const open = openMatch ? openMatch[0] : '';
+  const body = (open ? content.slice(open.length) : content).replace(WRAPPER_CLOSE_RE, '');
+  return { open, body };
+}
+
+/** 还原包裹；无 open（输入本就没有包裹）时原样返回。 */
+function rewrapMaestroContext(open: string, body: string): string {
+  if (!open) return body;
+  return `${open.trimEnd()}\n${body}\n</maestro-context>`;
+}
 
 function readRemainingPct(sessionId?: string): number | null {
   if (!sessionId) return null;

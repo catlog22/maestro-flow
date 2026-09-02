@@ -33,7 +33,7 @@ import { WalkerEventBridge } from '../coordinator/walker-event-bridge.js';
 // ---------------------------------------------------------------------------
 
 const VALID_EXECUTORS = new Set<string>([
-  'claude-code', 'codex', 'codex-server', 'gemini', 'gemini-a2a', 'qwen', 'opencode', 'agent-sdk', 'pi',
+  'claude-code', 'codex', 'codex-server', 'gemini', 'gemini-a2a', 'qwen', 'opencode', 'agent-sdk', 'pi', 'grok',
 ]);
 
 // ---------------------------------------------------------------------------

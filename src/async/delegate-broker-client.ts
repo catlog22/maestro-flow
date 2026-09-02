@@ -54,6 +54,10 @@ export class DelegateBrokerClient implements DelegateBrokerApi {
     return this.broker.getJob(jobId);
   }
 
+  listJobs(): DelegateJobRecord[] {
+    return this.broker.listJobs();
+  }
+
   listJobEvents(jobId: string): DelegateJobEvent[] {
     return this.broker.listJobEvents(jobId);
   }
