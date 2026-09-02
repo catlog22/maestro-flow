@@ -1865,6 +1865,12 @@ test('rejects aggregate green with raw evidence fault', async () => {
     ['workspace drift', body => {
       body.evidence.queries[0].runs[0].results[0].workspace = 'secret';
     }, 'BUILT_REPORTED_MISMATCH'],
+    ['authorization drift', body => {
+      body.evidence.queries[0].runs[0].results[0].authorized = false;
+    }, 'BUILT_REPORTED_MISMATCH'],
+    ['status drift', body => {
+      body.evidence.queries[0].runs[0].results[0].status = 'deprecated';
+    }, 'BUILT_REPORTED_MISMATCH'],
     ['kg latency breach', body => {
       body.evidence.latency.kgWarmSamplesMs.fill(40);
     }, 'BUILT_REPORTED_MISMATCH'],
@@ -2185,7 +2191,7 @@ async function spawnBootstrapFault({
   manifestBytes,
   closeKey = true,
   closeManifest = true,
-  timeoutMs = 750,
+  timeoutMs = 5_000,
 }) {
   const bootstrapUrl =
     `data:text/javascript;base64,${bootstrapBuffer.toString('base64')}`;

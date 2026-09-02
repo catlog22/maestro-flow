@@ -671,7 +671,7 @@ addCheck(
 
 const wikiIndexer = read('dashboard/src/server/wiki/wiki-indexer.ts');
 const cacheVersion = Number(wikiIndexer?.match(/const\s+SEARCH_CACHE_VERSION\s*=\s*(\d+)\s*;/)?.[1] ?? Number.NaN);
-addCheck('cache.search.version', Number.isNaN(cacheVersion) ? null : cacheVersion, 6, cacheVersion === 6);
+addCheck('cache.search.version', Number.isNaN(cacheVersion) ? null : cacheVersion, 8, cacheVersion === 8);
 
 const protocolPath = 'src/run/protocol-schemas.ts';
 const legacyOperations = zodEnumMembers(protocolPath, 'runOperationSchema');

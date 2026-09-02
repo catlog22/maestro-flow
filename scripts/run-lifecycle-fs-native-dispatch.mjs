@@ -1268,25 +1268,31 @@ function patchNativeNonce(source) {
 }
 
 export function makeAggregateVerifierHermetic(source) {
-  if (source.includes("const YAML = require('yaml');")) return source;
   const importLine = "import YAML from 'yaml';";
+  const createRequireLine = "import { createRequire } from 'node:module';";
+  const requireLine = "const YAML = require('yaml');";
+  if (source.includes(requireLine)) {
+    if (source.includes(importLine) || !source.includes(createRequireLine)) {
+      fail('aggregate verifier hermetic transform is incomplete');
+    }
+    return source;
+  }
   if (!source.includes(importLine)) {
     fail('aggregate verifier does not contain the expected YAML import');
   }
-  let patched = source.replace(
-    importLine,
-    "import { createRequire } from 'node:module';",
-  );
-  const marker = "export function verifyNativeWorkflowDocument(source) {\n";
-  if (!patched.includes(marker)) {
-    fail('aggregate verifier does not expose verifyNativeWorkflowDocument');
+  let patched = source.replace(importLine, createRequireLine);
+  const marker = /export function verifyNativeWorkflowDocument\(source\) \{(\r?\n)/g;
+  const matches = [...patched.matchAll(marker)];
+  if (matches.length !== 1) {
+    fail('aggregate verifier does not expose exactly one verifyNativeWorkflowDocument');
   }
   patched = patched.replace(
     marker,
-    `${marker}  const require = createRequire(import.meta.url);\n  const YAML = require('yaml');\n`,
+    (_match, endOfLine) => `export function verifyNativeWorkflowDocument(source) {${endOfLine}  const require = createRequire(import.meta.url);${endOfLine}  ${requireLine}${endOfLine}`,
   );
   if (patched.includes(importLine)
-    || !patched.includes("const YAML = require('yaml');")) {
+    || !patched.includes(createRequireLine)
+    || !patched.includes(requireLine)) {
     fail('aggregate verifier hermetic transform is incomplete');
   }
   return patched;

@@ -582,10 +582,16 @@ test('loads aggregate verifier without a runtime yaml dependency', () => {
       resolve(dirname(SCRIPT), 'verify-lifecycle-fs-native-aggregate.mjs'),
       'utf8',
     );
-    const patched = makeAggregateVerifierHermetic(source);
-    assert.equal(patched.includes("import YAML from 'yaml';"), false);
-    assert.equal(patched.includes("const YAML = require('yaml');"), true);
-    writeFileSync(join(isolated, 'verify-lifecycle-fs-native-aggregate.mjs'), patched);
+    const lfPatched = makeAggregateVerifierHermetic(source.replace(/\r\n/g, '\n'));
+    const crlfPatched = makeAggregateVerifierHermetic(source.replace(/\r?\n/g, '\r\n'));
+    for (const patched of [lfPatched, crlfPatched]) {
+      assert.equal(patched.includes("import YAML from 'yaml';"), false);
+      assert.equal(patched.includes("const YAML = require('yaml');"), true);
+      assert.equal(makeAggregateVerifierHermetic(patched), patched);
+    }
+    assert.doesNotMatch(lfPatched, /\r\n/);
+    assert.doesNotMatch(crlfPatched, /(?<!\r)\n/);
+    writeFileSync(join(isolated, 'verify-lifecycle-fs-native-aggregate.mjs'), crlfPatched);
     writeFileSync(
       join(isolated, 'write-lifecycle-fs-native-receipt.mjs'),
       readFileSync(resolve(dirname(SCRIPT), 'write-lifecycle-fs-native-receipt.mjs')),

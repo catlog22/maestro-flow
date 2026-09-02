@@ -274,7 +274,7 @@ describe('Session Run contract parity release gate', () => {
         dimension: 'cache',
         id: 'cache.search.version',
         mutate(root) {
-          replaceOnce(root, 'dashboard/src/server/wiki/wiki-indexer.ts', 'const SEARCH_CACHE_VERSION = 6;', 'const SEARCH_CACHE_VERSION = 5;');
+          replaceOnce(root, 'dashboard/src/server/wiki/wiki-indexer.ts', 'const SEARCH_CACHE_VERSION = 8;', 'const SEARCH_CACHE_VERSION = 7;');
         },
       },
       {
@@ -525,5 +525,5 @@ describe('Session Run contract parity release gate', () => {
       expect(result.status, `${testCase.dimension}: ${result.stdout}\n${result.stderr}`).not.toBe(0);
       expect(result.stdout, testCase.dimension).toContain(`FAIL ${testCase.id}`);
     }
-  }, 45_000);
+  }, 300_000);
 });

@@ -116,7 +116,7 @@ test('declares five independent native receipt jobs and aggregate', () => {
 
 test('rejects incomplete native workflow', () => {
   const mutations = [
-    ['missing source_sha input', source => source.replace(/      source_sha:[\s\S]*?        type: string\n/, '')],
+    ['missing source_sha input', source => source.replace(/      source_sha:[\s\S]*?        type: string\r?\n/, '')],
     ['renamed dispatch_nonce input', source => source.replace('      dispatch_nonce:', '      reused_nonce:')],
     ['changed run-name', source => source.replace('native-lifecycle-${{ inputs.source_sha }}-${{ inputs.dispatch_nonce }}', 'native-lifecycle-broken')],
     ['invalid nonce regex', source => source.replace('attempt-[1-9][0-9]{0,5}$', 'attempt-[0-9]+$')],
@@ -129,16 +129,18 @@ test('rejects incomplete native workflow', () => {
     ['changed artifact staging path', source => source.replace('.workflow/native-artifacts/win32-x64', '.workflow/native-artifacts/unbound')],
     ['changed source_sha receipt binding', source => source.replace('--source-sha "${{ inputs.source_sha }}"', '--source-sha "0"')],
     ['changed job artifact upload', source => source.replace('name: lifecycle-fs-linux-x64-${{ inputs.source_sha }}', 'name: lifecycle-fs-linux-x64-latest')],
-    ['removed aggregate need', source => source.replace('      - darwin-arm64\n    runs-on: ubuntu-24.04', '    runs-on: ubuntu-24.04')],
+    ['removed aggregate need', source => source.replace(/      - darwin-arm64\r?\n    runs-on: ubuntu-24\.04/, '    runs-on: ubuntu-24.04')],
     ['changed aggregate download', source => source.replace('actions/download-artifact@v4', 'actions/download-artifact@v3')],
     ['added docs deploy behavior', source => `${source}\n# actions/deploy-pages@v4\n`],
     ['added docs build behavior', source => `${source}\n# working-directory: docs-site\n`],
     ['added publish permission', source => source.replace('  contents: read', '  contents: read\n  packages: write')],
-    ['added environment', source => source.replace('  aggregate:\n', '  aggregate:\n    environment: production\n')],
+    ['added environment', source => source.replace(/  aggregate:(\r?\n)/, (_match, endOfLine) => `  aggregate:${endOfLine}    environment: production${endOfLine}`)],
   ];
 
   for (const [label, mutate] of mutations) {
-    assertWorkflowRejected(mutate(workflowSource), label);
+    const mutated = mutate(workflowSource);
+    assert.notEqual(mutated, workflowSource, `${label} mutation must change the workflow fixture`);
+    assertWorkflowRejected(mutated, label);
   }
 });
 

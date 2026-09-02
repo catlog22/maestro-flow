@@ -1772,6 +1772,7 @@ export async function runBuiltAdapterChild({
   expected,
   certifiedArtifactsByPath,
   schemaSha256 = SCHEMA_SHA256,
+  timeoutMs = 600_000,
 } = {}) {
   if (!workspaceRoot || !isAbsolute(workspaceRoot)) {
     fail('INVALID_BUILT_WORKSPACE', 'built adapter workspace must be an absolute path');
@@ -1815,6 +1816,7 @@ export async function runBuiltAdapterChild({
       ...env,
       MAESTRO_PROJECT_ROOT: workspaceRoot,
     },
+    timeoutMs,
   });
   const body = result?.transcript?.rawEvidence;
   if (!body || typeof body !== 'object' || Array.isArray(body)) {
@@ -2041,31 +2043,32 @@ export function recomputeBuiltAggregates(report, {
   const metrics = aggregateMetrics(metricRows);
   const baselineComparison = compareMetricBaseline(metrics, baseline);
   const firstRunResults = report.evidence.queries.flatMap(query => query.runs[0].results);
+  const allEvidenceResults = report.evidence.queries.flatMap(query => (
+    query.runs.flatMap(run => run.results)
+  ));
   const deprecatedLeakIds = new Set();
   const unauthorizedWorkspaceIds = new Set();
   const provenanceLossIds = new Set();
-  for (const query of report.evidence.queries) {
-    for (const result of query.runs[0].results) {
-      const document = documentById.get(result.id);
-      const expectedStatus = document?.status === 'deprecated' ? 'deprecated' : 'active';
-      const expectedWorkspace = document?.workspace ?? null;
-      const expectedAuthorized = document?.authorized !== false;
-      const expectedProvenance = document?.provenance ?? null;
-      if (!document || result.status !== expectedStatus || expectedStatus === 'deprecated') {
-        deprecatedLeakIds.add(result.id);
-      }
-      if (!document
-          || result.authorized !== expectedAuthorized
-          || expectedAuthorized === false
-          || result.workspace !== expectedWorkspace
-          || result.workspaceFence !== expectedWorkspaceFence(expectedWorkspace)) {
-        unauthorizedWorkspaceIds.add(result.id);
-      }
-      if (!document
-          || expectedProvenance === null
-          || !sameJson(result.provenance, expectedProvenance)) {
-        provenanceLossIds.add(result.id);
-      }
+  for (const result of allEvidenceResults) {
+    const document = documentById.get(result.id);
+    const expectedStatus = document?.status === 'deprecated' ? 'deprecated' : 'active';
+    const expectedWorkspace = document?.workspace ?? null;
+    const expectedAuthorized = document?.authorized !== false;
+    const expectedProvenance = document?.provenance ?? null;
+    if (!document || result.status !== expectedStatus || expectedStatus === 'deprecated') {
+      deprecatedLeakIds.add(result.id);
+    }
+    if (!document
+        || result.authorized !== expectedAuthorized
+        || expectedAuthorized === false
+        || result.workspace !== expectedWorkspace
+        || result.workspaceFence !== expectedWorkspaceFence(expectedWorkspace)) {
+      unauthorizedWorkspaceIds.add(result.id);
+    }
+    if (!document
+        || expectedProvenance === null
+        || !sameJson(result.provenance, expectedProvenance)) {
+      provenanceLossIds.add(result.id);
     }
   }
   const countEvent = event => report.evidence.events
