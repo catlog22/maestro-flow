@@ -5,7 +5,7 @@
 
 | Store | Path | Format | Index |
 |-------|------|--------|-------|
-| `workflow` | `.workflow/knowhow/` | `{PREFIX}-*.md` (6 prefixes) | `.workflow/wiki-index.json` (unified, WikiIndexer) |
+| `workflow` | `.workflow/knowhow/` | `{PREFIX}-*.md` (9 compatible prefixes/types) | `.workflow/wiki-index.json` (unified, WikiIndexer) |
 | `system` | `~/.claude/projects/{project}/memory/` | `MEMORY.md` + topic `.md` files | None (flat files) |
 
 **System memory path detection:**
@@ -18,16 +18,19 @@
 
 ## Content Type Matrix
 
-Six types of knowhow, each with dedicated structure:
+Nine Knowhow types remain compatible:
 
 | Type | Prefix | Purpose | Trigger |
 |------|--------|---------|---------|
 | `session` | KNW- | Session state recovery | End of complex task, before context switch |
+| `tip` | TIP- | Quick note, snippet, reminder | Fleeting insight, debugging trick |
 | `template` | TPL- | Reusable code/config templates | Extracting a pattern, saving boilerplate |
 | `recipe` | RCP- | Step-by-step operational guide | Documenting a workflow, onboarding |
 | `reference` | REF- | External doc / API quick-reference | Importing docs, saving URL summaries |
 | `decision` | DCS- | Architecture Decision Record | Making non-trivial design choices |
-| `tip` | TIP- | Quick note, snippet, reminder | Fleeting insight, debugging trick |
+| `asset` | AST- | Code/design/API asset | Preserving a reusable concrete asset |
+| `blueprint` | BLP- | Architecture blueprint | Capturing a reusable system shape |
+| `document` | DOC- | General long-form knowledge | Material that does not fit a narrower type |
 
 All types share `WikiNodeType = 'knowhow'`. The `type` field distinguishes subtypes in wiki queries.
 
@@ -35,7 +38,7 @@ All types share `WikiNodeType = 'knowhow'`. The `type` field distinguishes subty
 
 ## Part A: KnowHow Management (direct document invocation)
 
-Operations: list, search, view, edit, delete, prune across both stores.
+Operations: list, search, view, edit, delete, prune across both stores. The MCP `store_knowhow` surface is separate and exposes exactly five operations: `add`, `search`, `supersede`, `history`, and `recover`.
 
 ### Step 1: Resolve Paths
 
@@ -55,7 +58,7 @@ Verify stores exist. Neither → E001.
 | `delete <id\|file>`, `删除`, `rm` | Delete mode |
 | `prune`, `清理`, `cleanup` | Prune mode |
 
-**Store auto-detection:** Arguments matching `KNW-*`, `TIP-*`, `TPL-*`, `RCP-*`, `REF-*`, `DCS-*` → workflow store. Other filenames → system store.
+**Store auto-detection:** Arguments matching `KNW-*`, `TIP-*`, `TPL-*`, `RCP-*`, `REF-*`, `DCS-*`, `AST-*`, `BLP-*`, or `DOC-*` → workflow store. Other filenames → system store.
 
 ### Step 3: List
 
@@ -82,7 +85,14 @@ MANDATORY: execute View/Edit/Delete/Prune/Integrity-Check logic per spec; REQUIR
 
 ## Part B: KnowHow Capture (/maestro-knowhow capture)
 
-Capture reusable knowledge into `.workflow/knowhow/`.
+Capture reusable knowledge into `.workflow/knowhow/` through the canonical writer. Ordinary creation has exactly three required knowledge parameters: `type`, `title`, `content`.
+
+```bash
+maestro knowhow add --type tip --title "Bounded retry" --content "Retry transient failures at most three times."
+# Long content: replace --content with --content-file <path>
+```
+
+Keywords, sourceRef, relatedPaths, appliesToRepoIds, language, decisionState, explicitId, and tool are advanced optional metadata. On the CLI, `--repo` selects the physical destination and repeatable `--applies-to-repo` records applicability. In host/MCP calls, omit `targetRepoId` for the current repository; pass it only when the user/workflow explicitly selects a linked physical write and the host provides the exact stable UUID plus live `knowhow` write capability. Never infer it from cwd, repository name, alias, or path; never persist alias/path as identity.
 
 ### Step 1: Detect Type from Intent
 
@@ -98,6 +108,9 @@ Capture reusable knowledge into `.workflow/knowhow/`.
 | `reference`, `ref`, `参考` | reference |
 | `decision`, `dcs`, `决策`, `adr` | decision |
 | `tip`, `note`, `技巧` | tip |
+| `asset`, `ast`, `资产` | asset |
+| `blueprint`, `blp`, `蓝图` | blueprint |
+| `document`, `doc`, `文档` | document |
 
 2. Otherwise infer from the intent, e.g.:
    - “决定/决策/选用 X 因为…” → decision
@@ -106,9 +119,11 @@ Capture reusable knowledge into `.workflow/knowhow/`.
    - “API/文档参考/速查…” → reference
    - “踩坑/技巧/小记/redis 管道…” → tip
    - “会话/压缩当前进度…” → session
-3. No clear signal → AskUserQuestion (6 options).
+3. No clear signal → AskUserQuestion with the nine compatible types.
 
-### Step 2: Generate Content by Type
+### Step 2: Generate Body-Only Content by Type
+
+The temporary content file contains **Markdown body only**. Do not emit YAML frontmatter, `title`, `type`, `keywords`, language, source, decision state, IDs, repository metadata, or generated filenames into it. The canonical writer owns frontmatter and identity; pass metadata only through the flags in Step 4.
 
 #### session (KNW-{YYYYMMDD}-{slug}.md)
 
@@ -134,211 +149,74 @@ Rules: VERBATIM plan, ABSOLUTE paths, decisions include reasoning.
 
 #### template (TPL-{YYYYMMDD}-{slug}.md)
 
-Reusable code or configuration pattern. Sections:
-
-```markdown
----
-title: {descriptive name}
-description: {one-line summary for search results}
-type: template
-lang: {typescript|python|bash|yaml|...}
-tags: [{comma-separated}]
-created: {ISO timestamp}
----
-
-# {title}
-
-## Usage
-When and how to use this template.
-
-## Parameters
-| Placeholder | Description | Default |
-|-------------|-------------|---------|
-| `{{name}}` | ... | ... |
-
-## Dependencies
-- package-list
-
-## Code
-```{lang}
-{copy-paste ready code}
-```
-
-## Notes
-Additional context.
-```
+Reusable code or configuration pattern. Body sections: `## Usage`, `## Parameters`, `## Dependencies`, `## Code`, and `## Notes`. Put the copy-paste-ready code in a fenced block. Pass its language with `--language`; do not add frontmatter or repeat the title in the body.
 
 #### recipe (RCP-{YYYYMMDD}-{slug}.md)
 
-Step-by-step operational guide. Sections:
-
-```markdown
----
-title: {goal summary}
-description: {one-line summary for search results}
-type: recipe
-tags: [{comma-separated}]
-created: {ISO timestamp}
----
-
-# {title}
-
-## Goal
-What this recipe accomplishes.
-
-## Prerequisites
-- Tool/access/config requirements
-
-## Steps
-1. First step
-2. Second step
-...
-
-## Expected Outcome
-What success looks like.
-
-## Common Pitfalls
-- Gotcha 1
-- Gotcha 2
-
-## Related
-- [[recipe-xxx]] — Related recipes
-- [[template-xxx]] — Templates used
-```
+Step-by-step operational guide. Body sections: `## Goal`, `## Prerequisites`, `## Steps`, `## Expected Outcome`, `## Common Pitfalls`, and `## Related`. No frontmatter or duplicate H1.
 
 #### reference (REF-{YYYYMMDD}-{slug}.md)
 
-External documentation digest. Sections:
-
-```markdown
----
-title: {reference title}
-description: {one-line summary for search results}
-type: reference
-source: {original URL}
-tags: [{comma-separated}]
-created: {ISO timestamp}
-last_verified: {ISO date}
----
-
-# {title}
-
-## Source
-{URL or document reference}
-
-## Key Points
-- Essential info point 1
-- Essential info point 2
-
-## Applicable Scenarios
-- When to consult this reference
-
-## Quick Examples
-```lang
-{copy-paste examples}
-```
-
-## Notes
-Additional context.
-```
+External documentation digest. Body sections: `## Source`, `## Key Points`, `## Applicable Scenarios`, `## Quick Examples`, and `## Notes`. Pass the source identity with `--source-ref` and any language with `--language`; the body may describe the source but must not contain frontmatter.
 
 #### decision (DCS-{YYYYMMDD}-{slug}.md)
 
-Architecture Decision Record. Sections:
-
-```markdown
----
-title: {decision summary}
-description: {one-line summary for search results}
-type: decision
-status: {proposed|accepted|superseded}
-tags: [{comma-separated}]
-created: {ISO timestamp}
----
-
-# {title}
-
-## Context
-Background and problem statement.
-
-## Decision
-What was decided.
-
-## Alternatives Considered
-| Alternative | Pros | Cons | Rejected Because |
-|-------------|------|------|------------------|
-| Option A | ... | ... | ... |
-| Option B | ... | ... | ... |
-
-## Rationale
-Why this choice over alternatives.
-
-## Consequences
-### Positive
-- Benefit 1
-
-### Negative
-- Trade-off 1
-
-## Related
-- [[spec-xxx]] — Affected spec
-- [[recipe-xxx]] — Implementation recipe
-```
+Architecture Decision Record. Body sections: `## Context`, `## Decision`, `## Alternatives Considered`, `## Rationale`, `## Consequences`, and `## Related`. Pass `proposed|accepted|superseded` via `--decision-state`; never encode it as frontmatter in the body.
 
 #### tip (TIP-{YYYYMMDD}-{slug}.md)
 
-Quick note. Minimal structure:
+Quick note. The body is the concise insight followed, when useful, by `## Context`. Pass detected files/modules through repeatable `--related-path` flags rather than frontmatter.
 
-```markdown
----
-title: {tip summary}
-description: {one-line summary for search results}
-type: tip
-tags: [{comma-separated}]
-created: {ISO timestamp}
----
+#### asset (AST-{YYYYMMDD}-{slug}.md)
 
-# {title}
+Reusable concrete code, design, data, API, or prompt asset. Body sections: `## Asset`, `## Usage`, `## Interface or Format`, `## Validation`, and `## Notes`. Put source files in repeatable `--related-path` flags.
 
-{content}
+#### blueprint (BLP-{YYYYMMDD}-{slug}.md)
 
-## Context
-{Auto-detected files/modules}
-```
+Reusable system or architecture shape. Body sections: `## Context`, `## Components`, `## Data Flow`, `## Constraints`, `## Extension Points`, and `## Validation`.
 
-### Step 3: Generate Tags (Language-Aware)
+#### document (DOC-{YYYYMMDD}-{slug}.md)
 
-Auto-generate 3-5 tags matching the **content language**:
+General long-form knowledge that does not fit a narrower type. Use descriptive body headings appropriate to the material; do not add frontmatter or duplicate the title.
 
-- **Chinese content** → Chinese tags (2-4 字词语，如 `认证`, `路由`, `状态管理`)
-- **English content** → English tags (lowercase, hyphenated, e.g. `auth`, `routing`, `state-mgmt`)
-- **Mixed content** → Bilingual tags (中英各半，如 `认证,auth,令牌,token`)
+### Step 3: Generate Canonical Keywords (Language-Aware)
 
-Tag quality rules:
+Auto-generate 3-5 keywords matching the **content language**:
+
+- **Chinese content** → Chinese keywords (2-4 字词语，如 `认证`, `路由`, `状态管理`)
+- **English content** → English keywords (lowercase, hyphenated, e.g. `auth`, `routing`, `state-mgmt`)
+- **Mixed content** → bilingual keywords (中英各半，如 `认证,auth,令牌,token`)
+
+Keyword quality rules:
 - Domain-specific terms users would naturally search for
 - Avoid generic words (代码/code, 文件/file, 函数/function)
-- Chinese tags: 2-4 characters, no punctuation
-- English tags: lowercase, hyphens for multi-word
+- Chinese keywords: 2-4 characters, no punctuation
+- English keywords: lowercase, hyphenated for multi-word terms
 
-### Step 4: Write File
+### Step 4: Write Through the Canonical CLI
 
-Write to `.workflow/knowhow/{PREFIX}-{YYYYMMDD}-{slug}.md`.
+Write the generated **body only** to a temporary file. Build the command from canonical flags (omit flags without a value):
 
-Frontmatter keys by type:
+```bash
+maestro knowhow add --type <type> --title "<title>" \
+  --content-file <temp-path> \
+  --keywords <kw1>,<kw2>,<kw3> \
+  [--source-ref <url-or-document-id>] \
+  [--related-path <project-relative-path>]... \
+  [--language <language>] \
+  [--decision-state proposed|accepted|superseded] \
+  [--applies-to-repo <selector>]... \
+  [--repo <selector>]
+```
 
-| Field | session | template | recipe | reference | decision | tip |
-|-------|:-------:|:--------:|:------:|:---------:|:--------:|:---:|
-| title | Y | Y | Y | Y | Y | Y |
-| description | Y | Y | Y | Y | Y | Y |
-| type | Y | Y | Y | Y | Y | Y |
-| tags | Y | Y | Y | Y | Y | Y |
-| created | Y | Y | Y | Y | Y | Y |
-| lang | | Y | | | | |
-| source | | | | Y | | |
-| status | | | | | Y | |
-| last_verified | | | | Y | | |
+Do not use deprecated `--body`, `--body-file`, `--lang`, `--tags`, `--status`, or `--source`. The CLI writes canonical frontmatter, derives the summary, chooses `.workflow/knowhow/{PREFIX}-{YYYYMMDD}-{slug}.md`, and resolves repository selectors.
 
-### Step 4: Report
+Repository option semantics:
+- CLI `--repo` selects the **physical destination repository**. `current` is the default; an ID, alias, or unique registered name is accepted and resolved by the CLI.
+- CLI repeatable `--applies-to-repo` records **applicability metadata**; it does not change the destination.
+- `targetRepoId` is not a CLI flag. It is a host/MCP field and must be the exact stable UUID supplied by the host for an explicitly selected linked write with live `knowhow` write capability. Never infer it from cwd/name/alias/path.
+
+### Step 5: Report
 
 Display confirmation with ID, type, file path, and type-specific summary line.
 
@@ -360,10 +238,17 @@ maestro knowhow list --type decision  # decisions only
 
 ### MCP
 
+`store_knowhow` supports all five canonical operations:
+
+```text
+store_knowhow { operation: "add", type: "template", title: "...", content: "...", keywords: ["..."] }
+store_knowhow { operation: "search", query: "deploy", limit: 20 }
+store_knowhow { operation: "supersede", oldId: "TIP-...", newId: "TIP-..." }
+store_knowhow { operation: "history", id: "TIP-..." }
+store_knowhow { operation: "recover" }
 ```
-store_knowhow { operation: "search", query: "deploy" }
-store_knowhow { operation: "add", type: "template", title: "...", description: "...", body: "..." }
-```
+
+For an ordinary current-repository MCP write, omit `targetRepoId`. A host may provide the exact stable UUID only for an explicitly selected linked physical write with a live matching-corpus capability.
 
 ### Type Label Reference
 
@@ -375,6 +260,9 @@ store_knowhow { operation: "add", type: "template", title: "...", description: "
 | knowhow | recipe | RCP- | Recipe |
 | knowhow | reference | REF- | Reference |
 | knowhow | decision | DCS- | Decision |
+| knowhow | asset | AST- | Asset |
+| knowhow | blueprint | BLP- | Blueprint |
+| knowhow | document | DOC- | Document |
 | spec | learning | — | Learning Insight (in `specs/learnings.md`) |
 
 ---

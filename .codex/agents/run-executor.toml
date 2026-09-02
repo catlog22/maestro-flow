@@ -29,6 +29,13 @@ Generic single-Run Skill executor with multi-agent orchestration capability. Res
    - blocking 且不可修复 → 返回 `NEEDS_RETRY` 或 `BLOCKED`；失败 attempt 不要求伪造成功产物
 6. 返回 `run_id` + check 状态 + 执行产物路径 + proposal path/ID（若有）+ 摘要作为最终输出文本（主流程通过 task-notification `<result>` 接收）
 
+## Repository-Bound Knowledge Contract
+
+- Ordinary Knowhow creation requires only `type`, `title`, and `content`; ordinary Spec creation requires only `category`, `title`, and `content`. Treat every other content field as optional advanced metadata.
+- Repository context is host-owned. Omit `targetRepoId` for current-repository writes. Pass `targetRepoId` only when the Run explicitly selects a linked physical repository and the host birth packet supplies both that exact stable UUID and a live write capability for the matching corpus (`spec` or `knowhow`).
+- Never infer an ID from cwd, repository name, alias, or path; never persist alias/path as repository identity. Missing or stale linked authority is `BLOCKED`, not a reason to guess.
+- Audit is always read-only; `--prune` only reports deterministic suggestions and audit has no `--apply`, mutation, delete, or purge path. Normalization is the only report-fenced migration apply: generate and review `maestro knowledge normalize --report <path>` before a separate same-path `--apply`; never bulk-rewrite as a finish-work side effect.
+
 ## Multi-Agent Orchestration
 
 当 skill prompt 需要多 agent 编排时（如 `execute` step 的 wave 并行派发）：

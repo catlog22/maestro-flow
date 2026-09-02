@@ -69,11 +69,15 @@ For each fragment in approved buckets — MANDATORY, NOT SUBSTITUTABLE by manual
 ```bash
 # run-source (LINKED_RUN present)
 maestro knowledge stage spec|knowhow "<title>" --content-file <tmpfile> --run {LINKED_RUN} \
-  --category <mapping> --evidence "<source-file>:<section>" [--signal cited --signal-ids <ids>]
+  --category <mapping> --evidence "<source-file>:<section>" [--signal cited --signal-ids <ids>] \
+  [--repo <host-authorized selector-or-UUID>]
 # session-source (no linked run; --evidence mandatory)
 maestro knowledge stage spec|knowhow "<title>" --content-file <tmpfile> \
-  --category <mapping> --evidence "<source-file>:<section>" [--session <session-id> | --channel <name>]
+  --category <mapping> --evidence "<source-file>:<section>" [--session <session-id> | --channel <name>] \
+  [--repo <host-authorized selector-or-UUID>]
 ```
+
+Canonical parameter contract: ordinary Knowhow requires only `type/title/content`; ordinary Spec requires only `category/title/content`. Finish-work adds evidence and other advanced fields only when the candidate actually needs them. For CLI staging, omit repository selection for the current repository; for an explicitly selected linked physical target, append `--repo <host-authorized selector-or-UUID>`. The host must authorize that selector/UUID and provide a live write capability for the matching corpus; never infer it from cwd/name/alias/path. `targetRepoId` is host/MCP-only, is not a CLI flag, and MUST NOT appear in a `maestro knowledge stage` CLI invocation. Never persist an alias/path as identity. Finish-work never normalizes the corpus; migration requires a separately reviewed `knowledge normalize --report` followed by explicit `--apply`.
 
 - Capture returned candidate IDs into `staged_candidates[]` (`{candidate_id, origin: run|session, kind}`).
 - Below confidence threshold: increment `skipped_count`, do nothing.

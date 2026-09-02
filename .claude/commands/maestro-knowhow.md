@@ -25,10 +25,15 @@ Intent-driven knowhow precipitation path (沉淀路径) — captures reusable kn
 | reference | `reference` / `ref` / 参考 | REF- |
 | decision | `decision` / `dcs` / `adr` / 决策 | DCS- |
 | tip | `tip` / `note` / 技巧 / 记录 | TIP- |
+| asset | `asset` / 资产 | AST- |
+| blueprint | `blueprint` / 蓝图 | BLP- |
+| document | `document` / doc / 文档 | DOC- |
 </purpose>
 
 <dispatch>
 Read `~/.maestro/workflows/knowhow.md` and follow the execution document directly. Do not create a Session or Run just to load this document.
 
-Pass the full `$ARGUMENTS` to the workflow as its intent (the first `capture` argument is implied). The workflow infers the content type, extracts the content, and writes the entry.
+Pass the full `$ARGUMENTS` to the workflow as its intent (the first `capture` argument is implied). The workflow infers one of the nine compatible types and writes through the canonical CLI.
+
+Minimal ordinary creation is `maestro knowhow add --type <type> --title "<title>" --content-file <path>`: type, title, and content are the only required knowledge parameters. Keywords, sourceRef, relatedPaths, applicability, language, decision state, explicit ID, and tool are advanced optional metadata. Repository authority is host-owned: omit `targetRepoId` for current-repository writes; pass the exact host-supplied stable UUID only for an explicitly selected linked write with live `knowhow` write capability. Never derive identity from cwd/name/alias/path or persist those values as identity.
 </dispatch>

@@ -79,15 +79,15 @@ $ARGUMENTS is free-form intent. Resolve scope / category / content:
 5. Category unclear → AskUserQuestion to pick; content empty → ask for the constraint text.
 ```
 
-### Step 2: Resolve Target File
+### Step 2: Read-Only Preflight
 
-Resolve directory from scope (see table above), then append `<target_file>` from category mapping.
+Resolve the expected target path from scope/category for the confirmation preview only. **Do not create or edit the file.** The canonical CLI owns directory initialization, file routing, stable IDs, formatting, and writes.
 
-If file does not exist, create it with a basic header.
+- If the scope is not initialized, stop and instruct the user to run the matching `maestro spec init --scope <scope>` command; do not create a header manually.
+- Check for near-duplicates without mutation:
 
-Check for near-duplicate entries:
 ```bash
-grep -i "<content_first_10_words>" <resolved_dir>/<target_file> | tail -5
+maestro spec search "<distinctive content terms>" --scope <scope> --json
 ```
 
 ### Step 3: Extract Keywords
@@ -105,29 +105,34 @@ Keyword quality rules:
 - English keywords: lowercase, no spaces (use hyphens for multi-word terms)
 - Prefer concrete nouns/verbs over abstract descriptions
 
-### Step 4: Format Entry
+### Step 4: Prepare Canonical Mutation
 
-```
-Entry format (closed-tag), date = YYYY-MM-DD, title = first meaningful phrase:
+Derive a concise title from the first meaningful phrase. Prepare, but **do not execute**, this canonical command:
 
-<spec-entry category="{category}" keywords="{kw1},{kw2},{kw3}" date="{YYYY-MM-DD}" sid="{S-YYYYMMDD-xxxx}" title="{title}" description="{one-line summary}">
-### {title}
-{content}
-</spec-entry>
+```bash
+maestro spec add <category> "<title>" "<content>" \
+  --keywords <kw1>,<kw2>,<kw3> --scope <scope> [--uid <uid>] --json
 ```
 
-`sid` (stable identity) 由 CLI 自动生成（`S-YYYYMMDD-xxxx`，base36 随机后缀），用于 supersession 演化链。
+The CLI generates the closed `<spec-entry>` block and stable `sid` (`S-YYYYMMDD-xxxx`), selects the canonical file, and performs the write. Never hand-format or append a `<spec-entry>`.
 
-### Step 5: Append to Target File
+### Step 5: Confirm Before Mutation (Mandatory)
 
-Read target file. Append the formatted `<spec-entry>` block at the end. Write file back.
+Show the user the resolved category, scope, expected target path, title, content, keywords, and exact command preview. Use `AskUserQuestion` to request explicit approval **before any mutation**. Do not treat the original request, inferred intent, or a previous confirmation as approval for this concrete write.
 
-CLI 调用时加 `--json` 可从输出中获取生成的 `sid`（supersession 流程需要）。
+- Approved → continue to Step 6.
+- Declined or changed → stop or revise the preview, then ask again.
+- Confirmation unavailable → report `BLOCKED`; do not write.
 
-### Step 6: Confirm
+### Step 6: Execute Canonical CLI
 
-Display: category, scope, target file path, keywords, sid, and verify command:
-```
+Run the approved `maestro spec add ... --json` command exactly once. Do not use Write/Edit/shell redirection against `.workflow/specs/` (or any other scoped spec directory).
+
+### Step 7: Report and Verify
+
+Use the CLI JSON result—not a predicted path—to display category, scope, actual target file path, keywords, and `sid`. Verify read-only:
+
+```bash
 maestro spec load --scope <scope> --keyword <kw1>
 ```
 

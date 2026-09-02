@@ -233,7 +233,7 @@ Dominant step = the step whose keyword appears first or carries the primary verb
 | UI design / design system / polish / impeccable | `/maestro-impeccable "<intent>" ...` (retained command) | Suggest exact slash command; user invokes it |
 | harvest / extract knowledge | `/maestro-knowledge "<intent>"` (retained command) | Suggest exact slash command; user invokes it |
 | fork / parallel dev | `/maestro-fork ...` (retained command) | Suggest exact slash command; user invokes it |
-| note / record observation during active Run | `maestro knowledge stage knowhow "<title>" "<content>" --run <run-id>` | Stage a reviewable candidate; do not direct-write project knowledge |
+| note / record observation during active Run | write content to a temp file, then `maestro knowledge stage knowhow "<title>" --content-file <path> --run <run-id>` | Stage a reviewable candidate; do not direct-write project knowledge |
 | promote / distill insights | `maestro knowledge review <session-id>` → `maestro knowledge promote ...` | Review candidate receipts and evidence before explicit promotion |
 
 **Auxiliary workflow clusters:**
