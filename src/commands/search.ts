@@ -14,6 +14,7 @@
  */
 
 import type { Command } from 'commander';
+import { existsSync } from 'node:fs';
 import { basename, extname, resolve } from 'node:path';
 
 import { truncate, extractSnippet, highlightTerms } from '../utils/cli-format.js';
@@ -525,7 +526,9 @@ export async function runUnifiedSearch(q: string, opts: UnifiedSearchOptions & {
     && buildWikiCandidatePool(filtered, applyCaps).length > explorationLimit;
   if (!readOnlyProbe
     && explorationPossible
-    && (opts.diversity ?? 'balanced') === 'balanced') {
+    && (opts.diversity ?? 'balanced') === 'balanced'
+    // Avoid loading the SQLite/KG module graph when no usage store exists.
+    && existsSync(resolve('.workflow', 'kg', 'maestro.db'))) {
     try {
       const { readKnowledgeUsageSignals } = await import('../graph/kg/knowledge-usage.js');
       const signals = readKnowledgeUsageSignals(
