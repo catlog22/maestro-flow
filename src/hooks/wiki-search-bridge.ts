@@ -54,7 +54,7 @@ let _indexerRoot: string | null = null;
 async function getIndexer(workflowRoot: string): Promise<WikiIndexer> {
   if (_indexer && _indexerRoot === workflowRoot) return _indexer;
   const { WikiIndexer: Cls } = await import('#maestro-dashboard/wiki/wiki-indexer.js');
-  _indexer = new Cls({ workflowRoot });
+  _indexer = new Cls({ workflowRoot, persistence: 'read-only' });
   _indexerRoot = workflowRoot;
   return _indexer;
 }

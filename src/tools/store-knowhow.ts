@@ -326,7 +326,7 @@ async function getSearchIndexer(): Promise<WikiIndexer> {
   const workflowRoot = join(getProjectRoot(), '.workflow');
   if (_searchIndexer && _searchIndexerRoot === workflowRoot) return _searchIndexer;
   const { WikiIndexer: Cls } = await import('#maestro-dashboard/wiki/wiki-indexer.js');
-  _searchIndexer = new Cls({ workflowRoot });
+  _searchIndexer = new Cls({ workflowRoot, persistence: 'read-only' });
   _searchIndexerRoot = workflowRoot;
   return _searchIndexer;
 }
