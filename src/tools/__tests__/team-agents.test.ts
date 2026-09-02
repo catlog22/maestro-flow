@@ -245,7 +245,8 @@ describe('team-agents', () => {
       });
 
       expect(result.success).toBe(true);
-      const data = result.result as { message: string };
+      const data = result.result as { status: string; message: string };
+      expect(data.status).toBe('cancelling');
       expect(data.message).toContain('pending cancel request');
     });
   });

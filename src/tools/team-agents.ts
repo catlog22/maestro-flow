@@ -236,7 +236,7 @@ function opShutdownAgent(params: {
       result: {
         job_id: member.job_id,
         role,
-        status: job.status,
+        status: 'cancelling',
         message: `Job ${member.job_id} already has a pending cancel request`,
       },
     };
