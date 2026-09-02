@@ -17,6 +17,17 @@ interface ChangelogEntry {
 
 const changelog: ChangelogEntry[] = [
   {
+    version: '0.5.84',
+    date: '2026-09',
+    changes: [
+      { type: 'feat', text_en: 'Repository identity is now a first-class host-owned authority across workspace resolution, agent delegation, MCP access, knowledge tools, and team operations, with stable repository manifests and explicit applicability checks instead of caller-supplied trust', text_zh: '仓库身份现已成为 workspace 解析、Agent 委派、MCP 访问、知识工具与团队操作中的一等主机权威：通过稳定 repository manifest 与显式适用性检查，取代对调用方输入的信任' },
+      { type: 'feat', text_en: 'Knowledge and Spec lifecycles now use canonical metadata, repository-aware loading and search, staged cross-repository promotion, read-only audit, and reviewed normalization; run ledgers preserve promotion evidence and repository boundaries end to end', text_zh: 'Knowledge 与 Spec 生命周期现采用规范元数据、仓库感知加载与搜索、跨仓库分阶段晋升、只读审计和经审查的归一化；Run ledger 端到端保留晋升证据与仓库边界' },
+      { type: 'feat', text_en: 'Search and wiki indexing enforce repository applicability while improving cache invalidation, daemon cleanup, embedding disposal, snapshot performance, result metadata integrity, and Windows reliability across source and packaged-install probes', text_zh: '搜索与 Wiki 索引现强制仓库适用性，同时改进缓存失效、守护进程清理、embedding 释放、快照性能、结果元数据完整性，以及源码和打包安装探针在 Windows 上的可靠性' },
+      { type: 'fix', text_en: 'UI codify now stages governed knowledge candidates, validates returned candidate IDs, reports failures explicitly, and defers linking until canonical promotion instead of writing predicted knowledge paths directly', text_zh: 'UI codify 现对受治理的知识候选进行暂存、校验返回的 candidate ID、显式报告失败，并将链接延后至规范晋升完成后，而不再直接写入预测的知识路径' },
+      { type: 'chore', text_en: 'The test harness is partitioned into normal, heavy, and Node lanes with environment cleanup and stronger release-machine verification, reducing process contention while preserving exhaustive release gates', text_zh: '测试框架拆分为 normal、heavy 与 Node 分道，并加入环境清理和更强的 release-machine 验证，在保持完整发布门禁的同时减少进程争用' },
+    ],
+  },
+  {
     version: '0.5.83',
     date: '2026-08',
     changes: [
