@@ -484,8 +484,9 @@ export interface CompleteNextSuggestion {
 
 export interface CheckRunOptions {
   /**
-   * Downgrade contract kind/schema/role/alias mismatches to warnings. Required outputs,
-   * artifact syntax, safe-path checks, and gates remain blocking.
+   * Diagnostic-only mode that downgrades contract kind/schema/role/alias mismatches
+   * to warnings. Required outputs, artifact syntax, safe-path checks, and gates remain
+   * blocking, and a bypassed check never authorizes completion.
    */
   skipArtifactMetadataValidation?: boolean;
 }
@@ -2979,7 +2980,12 @@ export function checkRun(
     if (run.status === 'created') run.status = 'running';
     tx.writeRun(run);
     writeKnowledgeReconciliation(store, tx, knowledgeReconciliation);
-    const clean = gates.blocking.length === 0 && scan.errors.length === 0;
+    // Metadata bypass is diagnostic-only. Even with no remaining errors, it must
+    // not create a clean receipt or route callers to completion because completion
+    // revalidates the artifact contract strictly.
+    const clean = gates.blocking.length === 0
+      && scan.errors.length === 0
+      && options.skipArtifactMetadataValidation !== true;
     // Write a .check_clean marker so `session done --check-clean` can skip
     // gate re-evaluation when outputs/ has not been modified since.
     if (clean) {

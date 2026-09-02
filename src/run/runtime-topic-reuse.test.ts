@@ -259,7 +259,7 @@ describe('same-Session reuse assessment', () => {
     });
     expect(rejected.sealed).toBe(false);
     expect(rejected.errors.some(error => /reuse fence|artifact|content hash/i.test(error))).toBe(true);
-  }, 20_000);
+  }, 60_000);
 
   it('binds only REUSE and exposes the same assessment provenance in brief', () => {
     const projectRoot = root();

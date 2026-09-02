@@ -156,12 +156,42 @@ interface ExecutionRunMutationOptions {
   ownerId?: string;
   ownerKind?: ExecutionOwnerKind;
   leaseEpoch?: number;
+  /** Shared with the legacy Session lease surface on alias commands. */
   leaseId?: string;
+  /** Legacy Session lease owner (never an Execution locator). */
+  executionOwner?: string;
+  /** Legacy Session lease epoch (never an Execution fence). */
+  ownerEpoch?: number;
+}
+
+/**
+ * The lease token is the only option shared by the Execution and legacy
+ * Session lease surfaces.  Keep the classification explicit: an
+ * Execution-exclusive option always wins; a token paired with a legacy owner
+ * or epoch stays on the legacy path; a token by itself is an incomplete
+ * Execution attempt and must fail closed rather than being treated as an
+ * unverified legacy claim.
+ */
+function hasExecutionExclusiveRunOption(opts: ExecutionRunMutationOptions): boolean {
+  return [opts.execution, opts.generation, opts.expectedExecutionRevision, opts.ownerId, opts.ownerKind, opts.leaseEpoch]
+    .some(value => value !== undefined);
+}
+
+function hasLegacyRunLeaseOption(opts: ExecutionRunMutationOptions): boolean {
+  return opts.executionOwner !== undefined || opts.ownerEpoch !== undefined;
+}
+
+function isLegacyRunLeaseMode(opts: ExecutionRunMutationOptions): boolean {
+  return !hasExecutionExclusiveRunOption(opts) && hasLegacyRunLeaseOption(opts)
+    && opts.leaseId !== undefined;
 }
 
 function isExecutionRunAttempt(opts: ExecutionRunMutationOptions): boolean {
-  return [opts.execution, opts.generation, opts.expectedExecutionRevision, opts.ownerId, opts.ownerKind, opts.leaseEpoch, opts.leaseId]
-    .some(value => value !== undefined);
+  if (hasExecutionExclusiveRunOption(opts)) return true;
+  // A bare shared token is ambiguous at the option surface but cannot be
+  // safely interpreted as a legacy claim.  Leave it as a partial Execution
+  // attempt so executionRunAuthority emits a redacted usage error.
+  return opts.leaseId !== undefined && !isLegacyRunLeaseMode(opts);
 }
 
 function executionRunAuthority(opts: ExecutionRunMutationOptions): {
@@ -446,7 +476,7 @@ export function registerRunCommand(program: Command): void {
     .option('--cmd <command>', 'single-run command to create')
     .option('--chain <commands...>', 'simple command chain, e.g. --chain learn odyssey-planex odyssey-review')
     .option('--chain-file <path>', 'advanced chain definition JSON; "-" reads stdin')
-    .option('--id <slug>', 'explicit Session ID/slug when creating a chain Session')
+    .option('--id <slug>', 'explicit Session ID/slug when creating a Session')
     .option('--session <id>', 'explicit Session ID for a single Run')
     .option('--execution <id>', 'exact Execution ID; otherwise resolve the unique current Execution')
     .option('--generation <n>', 'exact Execution generation', parsePositiveInteger)
@@ -506,6 +536,7 @@ export function registerRunCommand(program: Command): void {
         if (fileDefinition && (opts.chain?.length ?? 0) > 0) throw new Error('use either --chain or --chain-file, not both');
         const intent = intentParts.join(' ').trim() || fileDefinition?.intent || opts.topic || opts.cmd || opts.chain?.join(' -> ') || '';
         if (!intent) throw new Error('run start requires an intent, --cmd, --chain, or --chain-file');
+        if (opts.id && opts.session) throw new InvalidArgumentError('use either --id or --session, not both');
         const platform = opts.platform as TargetPlatform | undefined;
         if (platform && !VALID_PLATFORMS.includes(platform)) {
           throw new Error(`unknown platform "${platform}", valid: ${VALID_PLATFORMS.join(', ')}`);
@@ -732,8 +763,9 @@ export function registerRunCommand(program: Command): void {
           return;
         }
         if (!opts.cmd) throw new Error('single-run start requires --cmd <command> or --chain <commands...>');
+        const requestedSessionId = opts.session ?? (opts.id ? deriveSessionId(opts.id) : undefined);
         const result = createRun({
-          projectRoot, command: opts.cmd, sessionId: opts.session, intent,
+          projectRoot, command: opts.cmd, sessionId: requestedSessionId, intent,
           topic: opts.topic, platform, args: opts.arg,
         });
         if (result.session_created && opts.session) {
@@ -1477,7 +1509,9 @@ export function registerRunCommand(program: Command): void {
                   projectRoot,
                   result.session_id,
                   result.run_id,
-                  result.gates.blocking.length === 0 && result.errors.length === 0,
+                  result.gates.blocking.length === 0
+                    && result.errors.length === 0
+                    && opts.skipArtifactMetadataValidation !== true,
                   result.next,
                 )
               : inspectSessionContinuation(projectRoot, result.session_id, { runId: result.run_id }),

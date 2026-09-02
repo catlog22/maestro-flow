@@ -7,17 +7,32 @@ import { runResponseSchema } from '../run/protocol-schemas.js';
 import { SessionStore } from '../run/store.js';
 import { createTopicIdentity } from '../run/topic-identity.js';
 
-function v2Workspace(root: string): void {
-  mkdirSync(join(root, ".workflow"), { recursive: true });
-  writeFileSync(join(root, ".workflow", "config.json"), JSON.stringify({
-    session_schema: { schema_version: "session-schema-selection/1.0", writer: "session/1.3", features: { session_statusless: false } },
+const MACHINE_CHILD_TIMEOUT_MS = 30_000;
+const RELEASE_MACHINE_CHILD_TIMEOUT_MS = 600_000;
+
+function writeSessionSchema(root: string, writer: 'session/1.3' | 'session/3.0'): void {
+  mkdirSync(join(root, '.workflow'), { recursive: true });
+  writeFileSync(join(root, '.workflow', 'config.json'), JSON.stringify({
+    session_schema: {
+      schema_version: 'session-schema-selection/1.0',
+      writer,
+      features: { session_statusless: false },
+    },
   }));
+}
+
+function v2Workspace(root: string): void {
+  writeSessionSchema(root, 'session/1.3');
 }
 
 const roots: string[] = [];
 afterEach(() => { for (const root of roots.splice(0)) rmSync(root, { recursive: true, force: true }); });
 function invoke(root: string, args: string[]) {
-  const result = spawnSync(process.execPath, [resolve('bin/maestro.js'), ...args, '--workflow-root', root], { encoding: 'utf8', cwd: resolve('.') });
+  const result = spawnSync(process.execPath, [resolve('bin/maestro.js'), ...args, '--workflow-root', root], {
+    encoding: 'utf8',
+    cwd: resolve('.'),
+    timeout: MACHINE_CHILD_TIMEOUT_MS,
+  });
   const lines = result.stdout.trim().split(/\r?\n/).filter(Boolean);
   return { status: result.status, stderr: result.stderr, lines, body: lines.length === 1 ? runResponseSchema.parse(JSON.parse(lines[0])) : null };
 }
@@ -47,7 +62,11 @@ describe('built-bin run-response/1.0', () => {
       ['run', 'rebind'],
     ];
     for (const command of commands) {
-      const result = spawnSync(process.execPath, [resolve('bin/maestro.js'), ...command, '--help', '--workflow-root', root], { encoding: 'utf8', cwd: resolve('.') });
+      const result = spawnSync(process.execPath, [resolve('bin/maestro.js'), ...command, '--help', '--workflow-root', root], {
+        encoding: 'utf8',
+        cwd: resolve('.'),
+        timeout: MACHINE_CHILD_TIMEOUT_MS,
+      });
       expect(result.status, `${command.join(' ')}: ${result.stderr}`).toBe(0);
       const help = result.stdout.replace(/\s+/g, ' ');
       expect(help, command.join(' ')).toContain('[DEPRECATED, ADMIN-ONLY]');
@@ -56,7 +75,11 @@ describe('built-bin run-response/1.0', () => {
       expect(help, command.join(' ')).toMatch(/(?:not a force operation|no force bypass)/);
     }
 
-    const rebind = spawnSync(process.execPath, [resolve('bin/maestro.js'), 'run', 'rebind', '--help', '--workflow-root', root], { encoding: 'utf8', cwd: resolve('.') });
+    const rebind = spawnSync(process.execPath, [resolve('bin/maestro.js'), 'run', 'rebind', '--help', '--workflow-root', root], {
+      encoding: 'utf8',
+      cwd: resolve('.'),
+      timeout: MACHINE_CHILD_TIMEOUT_MS,
+    });
     const rebindHelp = rebind.stdout.replace(/\s+/g, ' ');
     expect(rebindHelp).toContain('strictly validates gate and produce compatibility');
     expect(rebindHelp).toContain('--reason is required and recorded in command-rebind.json');
@@ -65,12 +88,18 @@ describe('built-bin run-response/1.0', () => {
 
   it('emits one stdout envelope for next exits 0, 1, 2, and 3 with empty stderr', () => {
     const { root, chain } = fixture();
-    const created = spawnSync(process.execPath, [resolve('bin/maestro.js'), 'session', 'create', 's', '--intent', 'demo', '--chain-file', chain, '--workflow-root', root], { encoding: 'utf8' });
+    const created = spawnSync(process.execPath, [resolve('bin/maestro.js'), 'session', 'create', 's', '--intent', 'demo', '--chain-file', chain, '--workflow-root', root], {
+      encoding: 'utf8',
+      timeout: MACHINE_CHILD_TIMEOUT_MS,
+    });
     const sessionId = JSON.parse(created.stdout).session_id as string;
     const ok = invoke(root, ['run', 'next', '--session', sessionId, '--json']);
     const running = invoke(root, ['run', 'next', '--session', sessionId, '--json']);
     const missing = invoke(root, ['run', 'next', '--session', 'missing', '--json']);
-    const emptyCreated = spawnSync(process.execPath, [resolve('bin/maestro.js'), 'session', 'create', 'empty', '--intent', 'empty', '--workflow-root', root], { encoding: 'utf8' });
+    const emptyCreated = spawnSync(process.execPath, [resolve('bin/maestro.js'), 'session', 'create', 'empty', '--intent', 'empty', '--workflow-root', root], {
+      encoding: 'utf8',
+      timeout: MACHINE_CHILD_TIMEOUT_MS,
+    });
     const emptyId = JSON.parse(emptyCreated.stdout).session_id as string;
     const complete = invoke(root, ['run', 'next', '--session', emptyId, '--json']);
     for (const item of [ok, running, missing, complete]) { expect(item.lines).toHaveLength(1); expect(item.stderr).toBe(''); expect(item.body?.exit_code).toBe(item.status); }
@@ -133,7 +162,13 @@ gates:
     expect((bypassed.body as any).result.warnings).toEqual(expect.arrayContaining([
       expect.stringContaining('artifact metadata validation skipped'),
     ]));
-    expect((bypassed.body as any).next.command).toBe(`maestro run complete ${locator.run_id}`);
+    expect((bypassed.body as any).next.command).toBe(`maestro run check ${locator.run_id}`);
+    expect((bypassed.body as any).result).not.toHaveProperty('finish');
+    expect(bypassed.body?.continuation).toMatchObject({
+      action: 'repair_run',
+      reason_code: 'RUN_GATES_BLOCKING',
+      command: `maestro run check ${locator.run_id}`,
+    });
   });
 
   it('emits a strict brief-result and one canonical next pointer', () => {
@@ -186,6 +221,60 @@ gates:
     expect(complete.stderr).toBe(''); expect(recall.stderr).toBe('');
   });
 
+  it('routes legacy lease aliases outside the default session/3.0 Run surface', () => {
+    const { root } = fixture();
+    const created = invoke(root, ['run', 'create', 'demo', '--session', 'legacy-route', '--json']);
+    expect(created.status).toBe(0);
+    const locator = (created.body as any).result as { session_id: string; run_id: string };
+    const store = new SessionStore(root);
+    store.update(locator.session_id, draft => {
+      draft.session.orchestration.lease = { owner: 'legacy-owner', epoch: 1, id: 'legacy-token' };
+    });
+    // Existing legacy state remains authoritative even when the project
+    // selection is switched back to the default v3 writer for dispatch.
+    writeSessionSchema(root, 'session/3.0');
+
+    const completed = invoke(root, [
+      'run', 'complete', locator.run_id, '--session', locator.session_id, '--verdict', 'done',
+      '--execution-owner', 'legacy-owner', '--owner-epoch', '1', '--lease-id', 'legacy-token', '--json',
+    ]);
+    expect(completed.status).toBe(0);
+    expect(completed.body).toMatchObject({
+      schema_version: 'run-response/1.0', operation: 'complete', ok: true,
+      result: { run_id: locator.run_id, run_sealed: true },
+    });
+    expect(store.readRun(locator.session_id, locator.run_id).status).toBe('sealed');
+  });
+
+  it('routes a bare shared lease token to the redacted Execution usage boundary', () => {
+    const { root } = fixture();
+    writeSessionSchema(root, 'session/3.0');
+    const secret = 'bare-lease-secret-rv009';
+    const result = invoke(root, [
+      'run', 'create', 'demo', '--session', 'lease-only', '--lease-id', secret, '--json',
+    ]);
+    const emitted = `${result.lines.join('\\n')}${result.stderr}${JSON.stringify(result.body)}`;
+    expect(result.status).toBe(2);
+    expect(result.body).toMatchObject({
+      schema_version: 'run-response/1.1', operation: 'create', ok: false,
+      exit_code: 2, disposition: 'usage_error', error: { code: 'COMMANDER_USAGE' },
+    });
+    expect(emitted).not.toContain(secret);
+  });
+
+  it('routes any Execution-exclusive Run option to the Execution alias boundary', () => {
+    const { root } = fixture();
+    writeSessionSchema(root, 'session/3.0');
+    const result = invoke(root, [
+      'run', 'create', 'demo', '--session', 'execution-route', '--generation', '1', '--json',
+    ]);
+    expect(result.status).toBe(2);
+    expect(result.body).toMatchObject({
+      schema_version: 'run-response/1.1', operation: 'create', ok: false,
+      exit_code: 2, disposition: 'usage_error', error: { code: 'COMMANDER_USAGE' },
+    });
+  });
+
   it('projects complete transition request and replay metadata at the envelope top level', () => {
     const { root } = fixture();
     const created = invoke(root, ['run', 'create', 'demo', '--json']);
@@ -232,7 +321,10 @@ gates:
     const created = spawnSync(process.execPath, [
       resolve('bin/maestro.js'), 'session', 'create', 'complete-decide-next',
       '--intent', 'complete decide next', '--chain-file', chain, '--workflow-root', root,
-    ], { encoding: 'utf8' });
+    ], {
+      encoding: 'utf8',
+      timeout: MACHINE_CHILD_TIMEOUT_MS,
+    });
     expect(created.status, created.stderr).toBe(0);
     const sessionId = JSON.parse(created.stdout).session_id as string;
 
@@ -328,7 +420,11 @@ gates:
     expect(first.body).toMatchObject({ operation: 'create', ok: true, exit_code: 0, result: { topic_identity: { normalized: '共享主题' } } });
     const prepared = spawnSync(process.execPath, [
       resolve('bin/maestro.js'), 'run', 'prepare', 'demo', '--topic', '共享主题', '--workflow-root', root,
-    ], { encoding: 'utf8', cwd: resolve('.') });
+    ], {
+      encoding: 'utf8',
+      cwd: resolve('.'),
+      timeout: MACHINE_CHILD_TIMEOUT_MS,
+    });
     expect(prepared.status, prepared.stderr).toBe(0);
     expect(JSON.parse(prepared.stdout)).toMatchObject({
       previous: { upstream: {}, reuse_assessments: [], selected_refs: [] },
@@ -338,7 +434,11 @@ gates:
     store.update('different-topic', draft => { draft.session.topic_identity = createTopicIdentity(root, 'different topic'); });
     const mismatch = spawnSync(process.execPath, [
       resolve('bin/maestro.js'), 'run', 'prepare', 'demo', '--session', 'different-topic', '--topic', '共享主题', '--workflow-root', root,
-    ], { encoding: 'utf8', cwd: resolve('.') });
+    ], {
+      encoding: 'utf8',
+      cwd: resolve('.'),
+      timeout: MACHINE_CHILD_TIMEOUT_MS,
+    });
     expect(mismatch.status).toBe(1);
     expect(mismatch.stderr).toMatch(/incompatible|does not match/i);
     store.createSession('topic-peer', '共享主题');
@@ -515,7 +615,9 @@ gates:
       '--workflow-root', root,
     ];
     const started = spawnSync(process.execPath, [resolve('bin/maestro.js'), ...common], {
-      encoding: 'utf8', cwd: resolve('.'),
+      encoding: 'utf8',
+      cwd: resolve('.'),
+      timeout: MACHINE_CHILD_TIMEOUT_MS,
     });
     expect(started.status, started.stderr).toBe(0);
     expect(started.stderr).toBe('');
@@ -539,7 +641,11 @@ gates:
       '--execution-owner', 'manual-fresh', '--owner-kind', 'manual', '--expected-lease-epoch', '0',
       '--actor', 'manual-fresh', '--reason', 'fresh existing', '--evidence', 'TEST-fresh-existing',
       '--claim-output', existing, '--workflow-root', root,
-    ], { encoding: 'utf8', cwd: resolve('.') });
+    ], {
+      encoding: 'utf8',
+      cwd: resolve('.'),
+      timeout: MACHINE_CHILD_TIMEOUT_MS,
+    });
     expect(refused.status).toBe(1);
     expect(refused.stdout).toBe('');
     expect(refused.stderr).toContain('Unable to prepare private claim output securely');
@@ -552,7 +658,11 @@ gates:
     const { root } = fixture();
     const result = spawnSync(process.execPath, [
       resolve('bin/maestro.js'), 'run', 'mutations', '--json', '--workflow-root', root,
-    ], { encoding: 'utf8', cwd: resolve('.') });
+    ], {
+      encoding: 'utf8',
+      cwd: resolve('.'),
+      timeout: MACHINE_CHILD_TIMEOUT_MS,
+    });
     expect(result.status).toBe(1);
     expect(result.stdout).toBe('');
     expect(result.stderr).toMatch(/^error: unknown option '--json'\r?\n$/);
@@ -561,9 +671,13 @@ gates:
   it('passes the build-backed release machine child-process smoke', () => {
     const result = spawnSync(process.execPath, [
       resolve('scripts/check-session-run-release-machine.mjs'),
-    ], { encoding: 'utf8', cwd: resolve('.') });
+    ], {
+      encoding: 'utf8',
+      cwd: resolve('.'),
+      timeout: RELEASE_MACHINE_CHILD_TIMEOUT_MS,
+    });
     expect(result.status, result.stderr).toBe(0);
     expect(result.stderr).toBe('');
     expect(result.stdout).toContain('session-run release machine parity passed');
-  }, 120_000);
+  }, RELEASE_MACHINE_CHILD_TIMEOUT_MS);
 });

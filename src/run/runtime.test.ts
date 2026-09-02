@@ -1085,6 +1085,9 @@ gates:
       expect.stringContaining('artifact metadata validation skipped: outputs/result.json: _meta.role'),
       expect.stringContaining('artifact metadata validation skipped: outputs/result.json: _meta.alias'),
     ]));
+    expect(bypassed.next?.command).toBe(`maestro run check ${created.run_id}`);
+    expect(bypassed.finish).toBeUndefined();
+    expect(existsSync(join(runDir, '.check_clean'))).toBe(false);
 
     rmSync(join(runDir, 'outputs', 'result.json'));
     const missingRequired = checkRun(projectRoot, created.run_id, created.session_id, {

@@ -145,18 +145,43 @@ const v3RunMachineSubcommands = new Set([
   'next', 'create', 'complete', 'transition', 'cancel', 'seal', 'brief', 'check', 'decide', 'recall',
 ]);
 const artifactMachineMode = requestedCommand === 'artifact' && argv.includes('--json');
+const hasOption = (args: readonly string[], option: string): boolean => args.some(token => (
+  token === option || token.startsWith(`${option}=`)
+));
+
+// `--lease-id` is shared by the retired Session lease aliases and the formal
+// Execution protocol.  Keep the routing decision in lockstep with
+// src/commands/run.ts: an Execution-exclusive option always wins; a shared
+// token accompanied by a legacy owner/epoch stays on the legacy command; a
+// bare token is an incomplete Execution attempt and is routed there so its
+// usage error can be redacted.
+const executionExclusiveRunFlags = [
+  '--execution', '--generation', '--expected-execution-revision', '--owner-id', '--owner-kind', '--lease-epoch',
+];
+const legacyExclusiveRunFlags = ['--execution-owner', '--owner-epoch'];
+const hasExecutionExclusiveRunFlag = executionExclusiveRunFlags.some(flag => hasOption(argv, flag));
+const hasLegacyExclusiveRunFlag = legacyExclusiveRunFlags.some(flag => hasOption(argv, flag));
+const hasSharedRunLeaseFlag = hasOption(argv, '--lease-id');
+const legacyRunLeaseMode = requestedCommand === 'run'
+  && !hasExecutionExclusiveRunFlag
+  && hasSharedRunLeaseFlag
+  && hasLegacyExclusiveRunFlag;
+const executionAwareRunMode = requestedCommand === 'run'
+  && !legacyRunLeaseMode
+  && (hasExecutionExclusiveRunFlag || hasSharedRunLeaseFlag);
+const legacyRunCompatibilityMode = requestedCommand === 'run'
+  && !hasExecutionExclusiveRunFlag
+  && hasLegacyExclusiveRunFlag;
+const v3RunRegistrationMode = v3WriterMode
+  && !executionAwareRunMode
+  && !legacyRunCompatibilityMode;
 const v3MachineMode = argv.includes('--json') && v3WriterMode && (
   (requestedCommand === 'session' && v3SessionMachineSubcommands.has(requestedSubcommand ?? ''))
-  || (requestedCommand === 'run' && v3RunMachineSubcommands.has(requestedSubcommand ?? ''))
+  || (requestedCommand === 'run' && v3RunRegistrationMode && v3RunMachineSubcommands.has(requestedSubcommand ?? ''))
   || requestedCommand === 'execution'
   || requestedCommand === 'artifact'
 );
-const executionRunFlags = [
-  '--execution', '--generation', '--expected-execution-revision', '--owner-id', '--owner-kind', '--lease-epoch',
-  '--lease-id',
-];
-const executionAwareRunMode = requestedCommand === 'run' && executionRunFlags.some(flag => argv.includes(flag));
-const executionAwareAliasMode = requestedCommand === 'session' && argv.includes('--execution');
+const executionAwareAliasMode = requestedCommand === 'session' && hasOption(argv, '--execution');
 const statuslessSessionMachineMode = requestedCommand === 'session'
   && (requestedSubcommand === 'archive' || requestedSubcommand === 'unarchive');
 const executionMachineMode = argv.includes('--json') && (
@@ -281,7 +306,7 @@ if (runMachineMode || executionMachineMode || v3MachineMode || artifactMachineMo
 }
 
 async function requestedRegistration(name: string): Promise<(p: Command) => void> {
-  if (v3WriterMode && name === 'run') return (await import('./commands/run-v3.js')).registerRunV3Command;
+  if (v3RunRegistrationMode && name === 'run') return (await import('./commands/run-v3.js')).registerRunV3Command;
   if (v3WriterMode && name === 'session') return (await import('./commands/session-v3.js')).registerSessionV3Command;
   if (v3WriterMode && name === 'execution') {
     return (await import('./commands/execution-v3-retired.js')).registerExecutionV3RetiredCommand;

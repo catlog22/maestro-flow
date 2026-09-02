@@ -73,9 +73,10 @@ describe('maestro run durable context CLI', () => {
       .toBe('Session metadata only (not passed to the command or Run input.args)');
     expect(create?.options.find(option => option.long === '--arg')?.description)
       .toBe('command input stored in Run input.args (repeatable)');
-    expect(create?.helpInformation()).toContain('--intent <text>');
-    expect(create?.helpInformation()).toContain('not passed to the command');
-    expect(create?.helpInformation()).toContain('command input stored in Run input.args (repeatable)');
+    const help = create?.helpInformation().replace(/\s+/g, ' ');
+    expect(help).toContain('--intent <text>');
+    expect(help).toContain('not passed to the command');
+    expect(help).toContain('command input stored in Run input.args (repeatable)');
   });
 
   it('starts a chain Session from command names and edits pending steps in place', async () => {
@@ -220,12 +221,13 @@ describe('maestro run durable context CLI', () => {
       'done alias',
       '--cmd',
       'cli-context',
-      '--session',
+      '--id',
       'done-session',
       '--workflow-root',
       projectRoot,
     );
     const started = JSON.parse(logs.at(-1)!) as { session_id: string; run_id: string };
+    expect(started.session_id).toMatch(/^done-session-\d{8}-\d{6}$/);
 
     await run(
       'done',
