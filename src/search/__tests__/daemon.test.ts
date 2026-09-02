@@ -5,6 +5,7 @@ import { join } from 'node:path';
 import type { Server } from 'node:net';
 
 const indexer = vi.hoisted(() => ({
+  get: vi.fn(),
   rebuild: vi.fn(),
   searchWithMeta: vi.fn(),
   invalidate: vi.fn(),
@@ -14,6 +15,7 @@ const indexer = vi.hoisted(() => ({
 
 vi.mock('#maestro-dashboard/wiki/wiki-indexer.js', () => ({
   WikiIndexer: class {
+    get = indexer.get;
     rebuild = indexer.rebuild;
     searchWithMeta = indexer.searchWithMeta;
     invalidate = indexer.invalidate;
@@ -63,6 +65,7 @@ function currentInfo(root: string): DaemonInfoV2 {
 }
 
 beforeEach(() => {
+  indexer.get.mockReset().mockResolvedValue({});
   indexer.rebuild.mockReset().mockResolvedValue({});
   indexer.searchWithMeta.mockReset().mockResolvedValue({
     results: [],
@@ -85,9 +88,9 @@ afterEach(async () => {
 });
 
 describe.sequential('search daemon lifecycle state machine', () => {
-  it('publishes a starting descriptor before rebuild and allows authenticated cancellation', async () => {
-    let finishRebuild!: (value: object) => void;
-    indexer.rebuild.mockImplementationOnce(() => new Promise(resolve => { finishRebuild = resolve; }));
+  it('publishes a starting descriptor before cache-aware load and allows authenticated cancellation', async () => {
+    let finishLoad!: (value: object) => void;
+    indexer.get.mockImplementationOnce(() => new Promise(resolve => { finishLoad = resolve; }));
     const root = workflowRoot();
 
     const starting = startDaemon(root, { workflowRoot: root });
@@ -104,7 +107,7 @@ describe.sequential('search daemon lifecycle state machine', () => {
     expect(health).toMatchObject({ ok: true, state: 'starting' });
     await expect(stopDaemon(root)).resolves.toBe(true);
 
-    finishRebuild({});
+    finishLoad({});
     await expect(starting).rejects.toThrow(/cancelled|draining/);
     await waitUntil(() => !existsSync(getDaemonPath(root)), 'cancelled descriptor was not removed');
   });
@@ -162,8 +165,9 @@ describe.sequential('search daemon lifecycle state machine', () => {
     indexer.rebuild.mockImplementationOnce(() => new Promise(resolve => { releaseRebuild = resolve; }));
 
     await expect(invalidateSearchIndex(root, { timeoutMs: 100 })).resolves.toBeUndefined();
+    expect(indexer.get).toHaveBeenCalledTimes(1);
     expect(indexer.invalidate).toHaveBeenCalledTimes(1);
-    expect(indexer.rebuild).toHaveBeenCalledTimes(2);
+    expect(indexer.rebuild).toHaveBeenCalledTimes(1);
 
     releaseRebuild({});
   });

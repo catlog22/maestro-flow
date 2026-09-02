@@ -372,7 +372,10 @@ export async function startDaemon(
   releaseSpawnLock();
 
   try {
-    await indexer.rebuild();
+    // Consume a valid persisted cache when one exists. Explicit invalidation
+    // still rebuilds, but startup must not duplicate the foreground fallback's
+    // just-completed whole-corpus work.
+    await indexer.get();
     startupSettled = true;
     if (state !== 'starting') {
       maybeFinalize();
