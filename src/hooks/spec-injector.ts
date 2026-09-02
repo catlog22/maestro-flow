@@ -20,6 +20,7 @@ import { truncateMaestroContext, wrapMaestroContext, type ContextSection } from 
 import { loadGlossary, type DomainTerm } from '../tools/domain-loader.js';
 import { loadWorkspaceConfig, resolveWorkspaceLinks } from '../config/index.js';
 import { join, resolve } from 'node:path';
+import { resolveRepositoryContext } from '../repository/context.js';
 
 // ---------------------------------------------------------------------------
 // Content → compact lines helper
@@ -78,7 +79,7 @@ export interface SpecInjectionResult {
 
 const AGENT_CATEGORY_MAP: Record<string, SpecCategory[]> = {
   // Execution agents → coding specs
-  'code-developer':      ['coding', 'learning', 'ui'],
+  'code-developer':      ['coding', 'ui'],
   'tdd-developer':       ['coding', 'test'],
   'workflow-executor':   ['coding', 'learning', 'ui'],
   'universal-executor':  ['coding', 'ui'],
@@ -165,13 +166,28 @@ export function evaluateSpecInjection(
 
   const resolvedUid = uid ?? resolveUidSafe();
   const kwFilters = resolveKeywordFilters(agentType, config);
+  let currentRepoId: string | null = null;
+  try {
+    currentRepoId = resolveRepositoryContext('current', { projectRoot: projectPath }).repoId;
+  } catch {
+    // A legacy repository has no canonical ID. Scoped new knowledge must fail closed;
+    // historical unscoped content remains visible through the loader rules.
+  }
 
   // Resolve linked workspace specs for cross-workspace injection
   const wsConfig = loadWorkspaceConfig(projectPath);
   const resolvedLinks = resolveWorkspaceLinks(projectPath, wsConfig);
   const linkedSpecs = resolvedLinks
-    .filter(lw => lw.valid && lw.share.includes('spec'))
-    .map(lw => ({ name: lw.name, specsDir: join(lw.workflowRoot, 'specs') }));
+    .filter(lw => lw.valid && (lw.share.includes('spec') || lw.share.includes('knowhow')))
+    .map(lw => ({
+      name: lw.name,
+      specsDir: join(lw.workflowRoot, 'specs'),
+      includeSpecs: lw.share.includes('spec'),
+      knowhowDir: lw.share.includes('knowhow') ? join(lw.workflowRoot, 'knowhow') : undefined,
+      repoId: lw.repoId,
+      repoName: lw.repoName,
+      workspaceFence: lw.repoId ? `repo:${lw.repoId}` : `linked:${lw.name}`,
+    }));
 
   const ctxSections: ContextSection[] = [];
   const allCategories: string[] = [];
@@ -182,7 +198,7 @@ export function evaluateSpecInjection(
 
   for (const category of categories) {
     // Build loader options with keyword filters and extra spec files
-    const loaderOpts: LoadSpecsOptions = {};
+    const loaderOpts: LoadSpecsOptions = { applicableRepoId: currentRepoId };
     if (kwFilters.include?.length) loaderOpts.includeKeywords = kwFilters.include;
     if (kwFilters.exclude?.length) loaderOpts.excludeKeywords = kwFilters.exclude;
     if (linkedSpecs.length > 0) loaderOpts.linkedWorkspaces = linkedSpecs;
@@ -200,7 +216,7 @@ export function evaluateSpecInjection(
 
     // Load category-level extra documents
     if (catDocConfig?.docs?.length) {
-      const docsResult = loadExtraDocs(projectPath, catDocConfig.docs);
+      const docsResult = loadExtraDocs(projectPath, catDocConfig.docs, { applicableRepoId: currentRepoId });
       if (docsResult.content) {
         ctxSections.push({ label: `docs[${category}]`, lines: markdownToLines(docsResult.content) });
         totalCount += docsResult.count;
@@ -208,7 +224,7 @@ export function evaluateSpecInjection(
     }
 
     // Wiki category knowledge injection
-    const wikiResult = selectWikiByCategory(wikiIndex, category);
+    const wikiResult = selectWikiByCategory(wikiIndex, category, currentRepoId);
     if (wikiResult) {
       ctxSections.push({ label: `wiki[${category}]`, lines: markdownToLines(wikiResult.content) });
       totalCount += wikiResult.entryCount;
@@ -218,7 +234,7 @@ export function evaluateSpecInjection(
   // Agent-specific extra documents
   const agentExtras = config?.mapping?.[agentType]?.extras;
   if (agentExtras?.length) {
-    const extrasResult = loadExtraDocs(projectPath, agentExtras);
+    const extrasResult = loadExtraDocs(projectPath, agentExtras, { applicableRepoId: currentRepoId });
     if (extrasResult.content) {
       ctxSections.push({ label: 'extras', lines: markdownToLines(extrasResult.content) });
       totalCount += extrasResult.count;
@@ -239,7 +255,7 @@ export function evaluateSpecInjection(
 
     // Always-inject documents
     if (always.docs?.length) {
-      const alwaysResult = loadExtraDocs(projectPath, always.docs);
+      const alwaysResult = loadExtraDocs(projectPath, always.docs, { applicableRepoId: currentRepoId });
       if (alwaysResult.content) {
         ctxSections.push({ label: 'always-docs', lines: markdownToLines(alwaysResult.content) });
         totalCount += alwaysResult.count;
@@ -248,7 +264,11 @@ export function evaluateSpecInjection(
 
     // Always-inject keyword-matched entries (load from all specs, filter by keywords)
     if (always.keywords?.length) {
-      const kwOpts: LoadSpecsOptions = { includeKeywords: always.keywords };
+      const kwOpts: LoadSpecsOptions = {
+        includeKeywords: always.keywords,
+        applicableRepoId: currentRepoId,
+        ...(linkedSpecs.length > 0 ? { linkedWorkspaces: linkedSpecs } : {}),
+      };
       const kwResult = loadSpecs(projectPath, undefined, resolvedUid, undefined, undefined, kwOpts);
       if (kwResult.content) {
         ctxSections.push({ label: `always-keyword[${always.keywords.join(',')}]`, lines: markdownToLines(kwResult.content) });
@@ -260,7 +280,10 @@ export function evaluateSpecInjection(
     if (always.categories?.length) {
       for (const cat of always.categories) {
         if (allCategories.includes(cat)) continue; // Already loaded above
-        const catResult = loadSpecs(projectPath, cat as SpecCategory, resolvedUid);
+        const catResult = loadSpecs(projectPath, cat as SpecCategory, resolvedUid, undefined, undefined, {
+          applicableRepoId: currentRepoId,
+          ...(linkedSpecs.length > 0 ? { linkedWorkspaces: linkedSpecs } : {}),
+        });
         if (catResult.content) {
           ctxSections.push({ label: `always-specs[${cat}]`, lines: markdownToLines(catResult.content) });
           totalCount += catResult.totalLoaded;

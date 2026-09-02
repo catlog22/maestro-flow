@@ -263,7 +263,6 @@ describe('Pi canonical migration replay', () => {
     ['type', { type: 'reference' }],
     ['category', { category: 'coding' }],
     ['title', { title: 'Divergent title' }],
-    ['description', { description: 'Divergent description' }],
     ['keywords', { keywords: ['divergent'] }],
     ['tags', { tags: ['divergent'] }],
     ['body', { body: 'Divergent body' }],

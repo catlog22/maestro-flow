@@ -220,6 +220,26 @@ export function releaseDaemonSpawnLock(workflowRoot: string, token: string | und
   } catch { return false; }
 }
 
+/**
+ * Once a v2 descriptor is atomically owned, it safely supersedes every spawn
+ * arbitration artifact: all other contenders must observe the live descriptor
+ * before spawning or fail their own descriptor `wx` claim.
+ */
+export function deleteDaemonSpawnLocksIfOwned(
+  workflowRoot: string,
+  owner: Pick<DaemonInfoV2, 'instanceId' | 'workflowRoot'>,
+): boolean {
+  const current = readDaemonInfo(workflowRoot);
+  if (!current || !isDaemonInfoV2(current, workflowRoot)) return false;
+  if (current.instanceId !== owner.instanceId || current.workflowRoot !== owner.workflowRoot) return false;
+  let removed = false;
+  for (const path of [getDaemonSpawnLockPath(workflowRoot), `${getDaemonSpawnLockPath(workflowRoot)}.reclaim`]) {
+    try { unlinkSync(path); removed = true; }
+    catch { /* already absent or concurrently owner-cleaned */ }
+  }
+  return removed;
+}
+
 function validateIdentityFields(value: Record<string, unknown>, required: boolean): string | null {
   const present = value.protocol !== undefined || value.instanceId !== undefined || value.workflowRoot !== undefined;
   if (!required && !present) return null;
@@ -234,7 +254,10 @@ function validateIdentityFields(value: Record<string, unknown>, required: boolea
 function validateFilters(value: unknown): string | null {
   if (value === undefined) return null;
   if (!isRecord(value)) return 'filters must be an object';
-  const allowed = new Set(['type', 'category', 'tag', 'keyword', 'workspace', 'includeDeprecated']);
+  const allowed = new Set([
+    'type', 'category', 'tag', 'keyword', 'workspace',
+    'repoId', 'repoAlias', 'applicableRepoId', 'includeDeprecated',
+  ]);
   for (const [key, field] of Object.entries(value)) {
     if (!allowed.has(key)) return `unknown filter: ${key}`;
     if (key === 'includeDeprecated') {

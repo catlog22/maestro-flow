@@ -15,7 +15,9 @@ import { truncate } from '../utils/cli-format.js';
 import { isDeprecatedKnowledgeEntry } from '../utils/knowledge-lifecycle.js';
 import type { WikiIndexer } from '#maestro-dashboard/wiki/wiki-indexer.js';
 import type { WikiEntry, WikiIndex } from '#maestro-dashboard/wiki/wiki-types.js';
+import { isRepositoryApplicable } from '../repository/applicability.js';
 import { loadWorkspaceConfig, resolveWorkspaceLinks } from '../config/index.js';
+import { resolveRepositoryContext, type RepositoryContext } from '../repository/context.js';
 
 const VALID_TYPES = ['spec', 'knowhow', 'note', 'domain', 'issue', 'project', 'roadmap', 'session', 'scratch'] as const;
 type LoadType = (typeof VALID_TYPES)[number];
@@ -37,8 +39,26 @@ async function getIndexer(projectRoot?: string): Promise<WikiIndexer> {
   const resolved = resolveWorkspaceLinks(projectPath, wsConfig);
   const linkedWorkspaces = resolved
     .filter(lw => lw.valid)
-    .map(lw => ({ name: lw.name, workflowRoot: lw.workflowRoot, shareTypes: lw.share }));
-  _indexer = new Cls({ workflowRoot, linkedWorkspaces, persistence: 'read-only' });
+    .map(lw => ({
+      name: lw.name,
+      workflowRoot: lw.workflowRoot,
+      shareTypes: lw.share,
+      repoId: lw.repoId,
+      repoName: lw.repoName,
+      workspaceFence: lw.repoId ? `repo:${lw.repoId}` : `linked:${lw.name}`,
+    }));
+  const current = resolveRepositoryContext('current', { projectRoot: root });
+  _indexer = new Cls({
+    workflowRoot,
+    linkedWorkspaces,
+    repository: {
+      repoId: current.repoId,
+      repoName: current.repoName,
+      alias: current.alias,
+      workspaceFence: current.repoId ? `repo:${current.repoId}` : 'local',
+    },
+    persistence: 'read-only',
+  });
   return _indexer;
 }
 
@@ -122,6 +142,11 @@ function entryToJson(e: WikiEntry, brief: boolean): Record<string, unknown> {
   const base: Record<string, unknown> = {
     id: e.id, type: e.type, title: e.title,
     category: e.category, updated: e.updated,
+    repoId: e.repoId ?? e.source.repoId ?? null,
+    repoName: e.repoName ?? e.source.repoName ?? null,
+    alias: e.alias ?? e.source.alias ?? null,
+    workspaceFence: e.workspaceFence ?? e.source.workspaceFence ?? null,
+    appliesToRepoIds: e.appliesToRepoIds ?? null,
   };
   if (brief) {
     base.summary = e.summary;
@@ -197,6 +222,7 @@ export function registerLoadCommand(program: Command): void {
     .option('--tag <tag>', 'Filter entries by exact tag match')
     .option('--list', 'List matching entries (compact, no body)')
     .option('--scope <scope>', 'Spec scope: project|global|team|personal (default: project)')
+    .option('--repo <selector>', 'Target repository (current, ID, linked alias, or unique name)')
     .option('--limit <n>', 'Max entries (default: 20 for --list, 10 for load)', '')
     .option('--include-deprecated', 'Include deprecated/superseded entries')
     .option('--json', 'Output as JSON')
@@ -213,11 +239,19 @@ export function registerLoadCommand(program: Command): void {
 
       const isList = opts.list === true;
       const includeDeprecated = opts.includeDeprecated === true;
+      let targetRepository: RepositoryContext;
+      try {
+        targetRepository = resolveRepositoryContext(opts.repo ?? 'current', { projectRoot: process.cwd() });
+      } catch (error) {
+        console.error(`Error: ${(error as Error).message}`);
+        process.exitCode = 1;
+        return;
+      }
       const ids: string[] = opts.id ? opts.id.split(',').map((s: string) => s.trim()).filter(Boolean) : [];
 
       // --type spec (non-list, no specific IDs): delegate to spec-loader
       if (type === 'spec' && !isList && ids.length === 0) {
-        await loadBySpecCategory(opts);
+        await loadBySpecCategory(opts, targetRepository);
         return;
       }
 
@@ -230,11 +264,15 @@ export function registerLoadCommand(program: Command): void {
 
       if (ids.length > 0) {
         entries = ids
-          .map(id => findEntry(index, id, type))
-          .filter((e): e is WikiEntry => e !== null && (includeDeprecated || !isDeprecatedKnowledgeEntry(e)));
+          .map(id => findEntryForRepository(index, id, type, targetRepository, Boolean(opts.repo)))
+          .filter((e): e is WikiEntry => e !== null
+            && (includeDeprecated || !isDeprecatedKnowledgeEntry(e))
+            && entryMatchesRepository(e, targetRepository, Boolean(opts.repo)));
         const missing = ids.filter(id => {
-          const entry = findEntry(index, id, type);
-          return !entry || (!includeDeprecated && isDeprecatedKnowledgeEntry(entry));
+          const entry = findEntryForRepository(index, id, type, targetRepository, Boolean(opts.repo));
+          return !entry
+            || (!includeDeprecated && isDeprecatedKnowledgeEntry(entry))
+            || !entryMatchesRepository(entry, targetRepository, Boolean(opts.repo));
         });
         if (missing.length > 0) {
           const suffix = includeDeprecated ? '' : ' (use --include-deprecated to load retired entries)';
@@ -242,7 +280,9 @@ export function registerLoadCommand(program: Command): void {
         }
       } else {
         let pool = index.entries.filter(e =>
-          matchesType(e, type) && (includeDeprecated || !isDeprecatedKnowledgeEntry(e))
+          matchesType(e, type)
+          && (includeDeprecated || !isDeprecatedKnowledgeEntry(e))
+          && entryMatchesRepository(e, targetRepository, Boolean(opts.repo))
         );
 
         if (opts.category) {
@@ -307,17 +347,63 @@ export function registerLoadCommand(program: Command): void {
     });
 }
 
-async function loadBySpecCategory(opts: Record<string, unknown>): Promise<void> {
+function findEntryForRepository(
+  index: WikiIndex,
+  id: string,
+  type: LoadType,
+  target: RepositoryContext,
+  originExplicit: boolean,
+): WikiEntry | null {
+  const direct = findEntry(index, id, type);
+  if (direct && entryMatchesRepository(direct, target, originExplicit)) return direct;
+  if (!originExplicit) return direct;
+  const lower = id.toLowerCase();
+  return index.entries.find(entry => {
+    if (!entryMatchesRepository(entry, target, true) || !matchesType(entry, type)) return false;
+    const entryId = entry.id.toLowerCase();
+    return entryId === lower || entryId.endsWith(`:${lower}`);
+  }) ?? null;
+}
+
+function entryMatchesRepository(
+  entry: WikiEntry,
+  target: RepositoryContext,
+  originExplicit: boolean,
+): boolean {
+  if (!isRepositoryApplicable(entry, target.repoId)) return false;
+  if (!originExplicit) return true;
+  if (target.repoId) return (entry.repoId ?? entry.source.repoId) === target.repoId;
+  return (entry.alias ?? entry.source.alias) === target.alias;
+}
+
+async function loadBySpecCategory(
+  opts: Record<string, unknown>,
+  targetRepository: RepositoryContext,
+): Promise<void> {
   const { loadSpecs } = await import('../tools/spec-loader.js');
   const projectPath = process.cwd();
   const wsConfig = loadWorkspaceConfig(projectPath);
   const resolved = resolveWorkspaceLinks(projectPath, wsConfig);
+  const explicitRepo = typeof opts.repo === 'string';
   const linkedSpecs = resolved
-    .filter(lw => lw.valid && lw.share.includes('spec'))
-    .map(lw => ({ name: lw.name, specsDir: join(lw.workflowRoot, 'specs') }));
+    .filter(lw => lw.valid && (lw.share.includes('spec') || lw.share.includes('knowhow')))
+    .filter(lw => !explicitRepo
+      || (targetRepository.repoId ? lw.repoId === targetRepository.repoId : lw.name === targetRepository.alias))
+    .map(lw => ({
+      name: lw.name,
+      specsDir: join(lw.workflowRoot, 'specs'),
+      includeSpecs: lw.share.includes('spec'),
+      knowhowDir: lw.share.includes('knowhow') ? join(lw.workflowRoot, 'knowhow') : undefined,
+      repoId: lw.repoId,
+      repoName: lw.repoName,
+      workspaceFence: lw.repoId ? `repo:${lw.repoId}` : `linked:${lw.name}`,
+    }));
   const loaderOpts = {
     ...(linkedSpecs.length > 0 ? { linkedWorkspaces: linkedSpecs } : {}),
     includeDeprecated: opts.includeDeprecated === true,
+    applicableRepoId: targetRepository.repoId,
+    includeProject: !explicitRepo || targetRepository.relation === 'current',
+    includeGlobal: !explicitRepo || targetRepository.relation === 'current',
   };
 
   const scope = (opts.scope as string | undefined) ?? 'project';

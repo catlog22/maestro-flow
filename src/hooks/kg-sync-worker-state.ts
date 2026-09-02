@@ -23,6 +23,7 @@ export const KG_SYNC_WORKER_MARKER_MAX_BYTES = 4 * 1024;
 const KG_SYNC_WORKER_MAX_FUTURE_SKEW_MS = 60_000;
 const INVALID_MARKER_GRACE_MS = 5_000;
 const MUTATION_GUARD_WAIT_MS = 2_000;
+const MUTATION_GUARD_INITIALIZATION_GRACE_MS = 100;
 const MUTATION_GUARD_OWNER_MAX_BYTES = 1_024;
 const MUTATION_GUARD_NAME = '.kg-sync-worker-mutation.lock';
 const MUTATION_GUARD_OWNER_NAME = 'owner.json';
@@ -560,6 +561,7 @@ function withWorkerMarkerMutationGuard<T>(paths: SafeWorkerMarkerPaths, fn: () =
 
 function acquireMutationGuard(paths: SafeWorkerMarkerPaths): MutationGuard {
   const deadline = Date.now() + MUTATION_GUARD_WAIT_MS;
+  let initializingSince: number | null = null;
   for (;;) {
     assertStableWorkerMarkerParent(paths);
     const token = randomUUID();
@@ -586,13 +588,25 @@ function acquireMutationGuard(paths: SafeWorkerMarkerPaths): MutationGuard {
     }
 
     const state = inspectMutationGuard(paths.guardPath);
-    if (state === 'unsafe') {
-      throw new UnsafeKgSyncWorkerMarkerError(
-        paths.guardPath,
-        'mutation guard is malformed or requires manual cleanup',
-      );
+    const now = Date.now();
+    if (state === 'initializing') {
+      initializingSince ??= now;
+      if (now - initializingSince >= MUTATION_GUARD_INITIALIZATION_GRACE_MS) {
+        throw new UnsafeKgSyncWorkerMarkerError(
+          paths.guardPath,
+          'mutation guard is malformed or requires manual cleanup',
+        );
+      }
+    } else {
+      initializingSince = null;
+      if (state === 'unsafe') {
+        throw new UnsafeKgSyncWorkerMarkerError(
+          paths.guardPath,
+          'mutation guard is malformed or requires manual cleanup',
+        );
+      }
     }
-    if (Date.now() >= deadline) throw new KgSyncWorkerMutationBusyError(paths.guardPath);
+    if (now >= deadline) throw new KgSyncWorkerMutationBusyError(paths.guardPath);
     sleepSync(10);
   }
 }
@@ -615,17 +629,26 @@ function releaseMutationGuard(paths: SafeWorkerMarkerPaths, guard: MutationGuard
   assertStableWorkerMarkerParent(paths);
 }
 
-function inspectMutationGuard(path: string): 'busy' | 'unsafe' {
+function inspectMutationGuard(path: string): 'busy' | 'initializing' | 'unsafe' {
+  let stat: Stats;
   try {
-    const stat = lstatSync(path);
-    if (stat.isSymbolicLink() || !stat.isDirectory()) return 'unsafe';
+    stat = lstatSync(path);
+  } catch {
+    return 'unsafe';
+  }
+  if (stat.isSymbolicLink() || !stat.isDirectory()) return 'unsafe';
+
+  try {
     const owner = parseMutationGuardOwner(readBoundedRegularFile(
       join(path, MUTATION_GUARD_OWNER_NAME),
       MUTATION_GUARD_OWNER_MAX_BYTES,
     ).raw);
     return owner ? 'busy' : 'unsafe';
-  } catch {
-    return 'unsafe';
+  } catch (error) {
+    // mkdir and owner.json creation cannot be atomic. A contender may observe
+    // the directory in that tiny window; retry it briefly without treating a
+    // persistently ownerless or malformed guard as reclaimable.
+    return (error as NodeJS.ErrnoException).code === 'ENOENT' ? 'initializing' : 'unsafe';
   }
 }
 

@@ -1,10 +1,11 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createServer, type Server } from 'node:net';
-import { existsSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 import {
+  claimSpawnLock,
   invalidateSearchIndex,
   queryDaemon,
   stopDaemon,
@@ -13,6 +14,8 @@ import {
   SEARCH_DAEMON_PROTOCOL,
   canonicalWorkflowRoot,
   getDaemonPath,
+  getDaemonSpawnLockPath,
+  releaseDaemonSpawnLock,
 } from '../daemon-types.js';
 import type { DaemonInfoV2, DaemonSearchRequest } from '../daemon-types.js';
 
@@ -70,6 +73,41 @@ function descriptor(root: string, port: number): DaemonInfoV2 {
 }
 
 describe('daemon client protocol boundaries', () => {
+  it('serializes stale lock reclamation and releases only its own token', () => {
+    const root = workflowRoot();
+    const lockPath = getDaemonSpawnLockPath(root);
+    writeFileSync(lockPath, '0:1:stale-primary');
+
+    const token = claimSpawnLock(root);
+    expect(token).not.toBeNull();
+    expect(readFileSync(lockPath, 'utf-8')).toBe(token);
+    expect(existsSync(`${lockPath}.reclaim`)).toBe(false);
+    expect(releaseDaemonSpawnLock(root, token!)).toBe(true);
+    expect(existsSync(lockPath)).toBe(false);
+  });
+
+  it('never deletes a primary lock while another live reclaimer owns arbitration', () => {
+    const root = workflowRoot();
+    const lockPath = getDaemonSpawnLockPath(root);
+    const stalePrimary = '0:1:stale-primary';
+    writeFileSync(lockPath, stalePrimary);
+    writeFileSync(`${lockPath}.reclaim`, `${Date.now()}:2:live-reclaimer`);
+
+    expect(claimSpawnLock(root)).toBeNull();
+    expect(readFileSync(lockPath, 'utf-8')).toBe(stalePrimary);
+  });
+
+  it('falls back to descriptor arbitration when a crashed reclaimer is stale', () => {
+    const root = workflowRoot();
+    const lockPath = getDaemonSpawnLockPath(root);
+    const stalePrimary = '0:1:stale-primary';
+    writeFileSync(lockPath, stalePrimary);
+    writeFileSync(`${lockPath}.reclaim`, '0:2:stale-reclaimer');
+
+    expect(claimSpawnLock(root)).not.toBeNull();
+    expect(readFileSync(lockPath, 'utf-8')).toBe(stalePrimary);
+  });
+
   it('serializes facet filters in the search request', async () => {
     let received: DaemonSearchRequest | null = null;
     const port = await listenWithHandler(socket => {

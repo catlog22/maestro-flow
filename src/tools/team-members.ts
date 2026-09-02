@@ -19,7 +19,7 @@ import {
   readdirSync,
   writeFileSync,
 } from 'node:fs';
-import { join } from 'node:path';
+import { dirname, isAbsolute, join, resolve } from 'node:path';
 import { hostname } from 'node:os';
 import { execSync } from 'node:child_process';
 
@@ -59,10 +59,48 @@ function getMemberFilePath(uid: string): string {
  * Returns null if either is missing or git is unavailable.
  */
 export function readGitIdentity(): { name: string; email: string } | null {
+  // Hooks call this on every status refresh. Read repository-local identity
+  // directly first so a contended git subprocess cannot consume the hook's
+  // entire latency budget. Fall back to Git for global/includes/worktree cases.
+  const local = readLocalGitIdentity();
+  if (local) return local;
   const name = tryGitConfig('user.name');
   const email = tryGitConfig('user.email');
   if (!name || !email) return null;
   return { name, email };
+}
+
+function readLocalGitIdentity(): { name: string; email: string } | null {
+  try {
+    const root = getProjectRoot();
+    const dotGit = join(root, '.git');
+    let configPath = join(dotGit, 'config');
+    if (existsSync(dotGit)) {
+      try {
+        const pointer = readFileSync(dotGit, 'utf8').trim();
+        const match = /^gitdir:\s*(.+)$/i.exec(pointer);
+        if (match) {
+          const gitDir = isAbsolute(match[1]) ? match[1] : resolve(dirname(dotGit), match[1]);
+          configPath = join(gitDir, 'config');
+        }
+      } catch {
+        // A directory cannot be read as a file; use .git/config.
+      }
+    }
+    if (!existsSync(configPath)) return null;
+    const config = readFileSync(configPath, 'utf8');
+    const userSection = /(?:^|\r?\n)\s*\[user\]\s*\r?\n([\s\S]*?)(?=\r?\n\s*\[|$)/i.exec(config)?.[1];
+    if (!userSection) return null;
+    const clean = (value: string | undefined): string | null => {
+      const normalized = value?.trim().replace(/^(?:"([\s\S]*)"|'([\s\S]*)')$/, '$1$2') ?? '';
+      return normalized || null;
+    };
+    const name = clean(/^\s*name\s*=\s*(.+)$/mi.exec(userSection)?.[1]);
+    const email = clean(/^\s*email\s*=\s*(.+)$/mi.exec(userSection)?.[1]);
+    return name && email ? { name, email } : null;
+  } catch {
+    return null;
+  }
 }
 
 function tryGitConfig(key: string): string | null {

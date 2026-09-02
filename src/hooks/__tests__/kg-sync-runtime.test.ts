@@ -60,7 +60,24 @@ describe('KG sync runtime', () => {
   }
 
   afterEach(() => {
-    for (const value of roots.splice(0)) rmSync(value, { recursive: true, force: true });
+    const cleanupErrors: unknown[] = [];
+    for (const value of roots.splice(0)) {
+      // Windows can briefly retain a just-closed SQLite file. Retry boundedly,
+      // but keep persistent cleanup errors visible and attempt every root.
+      try {
+        rmSync(value, {
+          recursive: true,
+          force: true,
+          maxRetries: process.platform === 'win32' ? 10 : 0,
+          retryDelay: 25,
+        });
+      } catch (error) {
+        cleanupErrors.push(error);
+      }
+    }
+    if (cleanupErrors.length > 0) {
+      throw new AggregateError(cleanupErrors, 'Failed to clean KG sync runtime fixtures');
+    }
   });
 
   it('parses modified, untracked, deleted, copy and both rename paths from NUL porcelain', () => {
@@ -579,7 +596,12 @@ describe('KG sync runtime', () => {
     expect(existsSync(kgSyncWorkerMarkerPath(project))).toBe(true);
     expect(releaseKgSyncWorkerToken({
       ...first.token,
-      generation: { ...first.token.generation, inode: first.token.generation.inode + 1 },
+      generation: {
+        ...first.token.generation,
+        // Windows file IDs can exceed Number.MAX_SAFE_INTEGER, where +1 may
+        // round back to the same value. Use a guaranteed-distinct sentinel.
+        inode: first.token.generation.inode === 0 ? 1 : 0,
+      },
     })).toBe(false);
     expect(existsSync(kgSyncWorkerMarkerPath(project))).toBe(true);
     expect(releaseKgSyncWorkerToken(first.token)).toBe(true);
@@ -643,6 +665,13 @@ describe('KG sync runtime', () => {
     });
     expect(getSyncStateHealth(project)).toMatchObject({ status: 'error', stale: true });
     expect(kgSyncGuard.shouldRun(cooldownKey)).toBe(true);
+
+    // A failed worker open must release DatabaseSync before callers delete a
+    // broken database and retry. Keeping this assertion inside the test makes
+    // a leaked handle the primary failure rather than an afterEach EBUSY.
+    const dbPath = join(project, '.workflow', 'kg', 'maestro.db');
+    rmSync(dbPath);
+    writeFileSync(dbPath, 'retry-fixture');
   });
 
   it('waits for a live owner without deleting its marker', async () => {

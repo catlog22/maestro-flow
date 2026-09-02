@@ -6,6 +6,7 @@ vi.mock('../search/daemon-client.js', () => ({
     results: [],
     embeddingUsed: false,
     embeddingDocs: 0,
+    filtersApplied: true,
   })),
   stopDaemon: vi.fn(),
   spawnDaemon: vi.fn(async () => {}),

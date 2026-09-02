@@ -261,6 +261,7 @@ interface FieldPosting {
 
 const CJK_RUN = /[一-鿿㐀-䶿]+/g;
 const HAS_CJK = /[一-鿿㐀-䶿]/;
+const CAMEL_BOUNDARY = /[a-z][A-Z]|[A-Z]+[A-Z][a-z]/;
 
 function cjkNgrams(run: string): string[] {
   const out: string[] = [];
@@ -295,23 +296,23 @@ export function tokenize(text: string): string[] {
         if (lr.length >= 2 && !STOP_WORDS.has(lr)) out.push(lr);
       }
     } else {
+      // Most prose tokens cannot contain either camel-case boundary. Avoid
+      // allocating two replacement strings and an array for that common case.
+      if (!CAMEL_BOUNDARY.test(raw)) {
+        if (lower.length >= 2 && !STOP_WORDS.has(lower)) out.push(lower);
+        continue;
+      }
       // CamelCase split: "DetailedTopologySVG" → ["Detailed","Topology","SVG"]
       const camelParts = raw
         .replace(/([a-z])([A-Z])/g, '$1\x00$2')
         .replace(/([A-Z]+)([A-Z][a-z])/g, '$1\x00$2')
         .split('\x00');
-      if (camelParts.length > 1) {
-        for (const cp of camelParts) {
-          const lc = cp.toLowerCase();
-          if (lc.length >= 2 && !STOP_WORDS.has(lc)) out.push(lc);
-        }
-        // Keep full joined form for exact identifier matching
-        if (lower.length >= 2 && !STOP_WORDS.has(lower)) out.push(lower);
-      } else {
-        if (lower.length < 2) continue;
-        if (STOP_WORDS.has(lower)) continue;
-        out.push(lower);
+      for (const cp of camelParts) {
+        const lc = cp.toLowerCase();
+        if (lc.length >= 2 && !STOP_WORDS.has(lc)) out.push(lc);
       }
+      // Keep full joined form for exact identifier matching
+      if (lower.length >= 2 && !STOP_WORDS.has(lower)) out.push(lower);
     }
   }
   return out;
@@ -360,13 +361,34 @@ function getFieldConfigs(entry: WikiEntry): Record<FieldName, FieldConfig> {
 // Index building
 // ---------------------------------------------------------------------------
 
+const INDEX_FIELDS: readonly FieldName[] = ['title', 'summary', 'tags', 'body'];
+
+interface TokenStats {
+  length: number;
+  /** Terms remain in first-occurrence order to preserve posting order. */
+  frequencies: Array<readonly [string, number]>;
+}
+
 export function buildInvertedIndex(entries: WikiEntry[]): InvertedIndex {
   const fieldPostings = new Map<string, FieldPosting[]>();
   const fieldLengths = new Map<string, FieldLengths>();
   const docConfigKeys = new Map<string, FieldConfigKey>();
 
   const totalFieldLengths: FieldLengths = { title: 0, summary: 0, tags: 0, body: 0 };
-  const fields: FieldName[] = ['title', 'summary', 'tags', 'body'];
+  // KG projections commonly share identical tag/category strings across
+  // thousands of nodes. Cache exact build-local token statistics: every index
+  // remains cold and independent, while duplicate field text is tokenized once.
+  const tokenStatsCache = new Map<string, TokenStats>();
+  const tokenStats = (text: string): TokenStats => {
+    const cached = tokenStatsCache.get(text);
+    if (cached) return cached;
+    const tokens = tokenize(text);
+    const counts = new Map<string, number>();
+    for (const term of tokens) counts.set(term, (counts.get(term) ?? 0) + 1);
+    const stats = { length: tokens.length, frequencies: [...counts.entries()] };
+    tokenStatsCache.set(text, stats);
+    return stats;
+  };
 
   for (const entry of entries) {
     const texts = extractFieldTexts(entry);
@@ -374,39 +396,35 @@ export function buildInvertedIndex(entries: WikiEntry[]): InvertedIndex {
     const configs = FIELD_CONFIG_MAP[configKey];
     docConfigKeys.set(entry.id, configKey);
 
-    const perField: Record<FieldName, Map<string, number>> = {
-      title: new Map(), summary: new Map(), tags: new Map(), body: new Map(),
-    };
+    const termFields = new Map<string, FieldLengths>();
     const lengths: FieldLengths = { title: 0, summary: 0, tags: 0, body: 0 };
 
-    for (const f of fields) {
+    for (const f of INDEX_FIELDS) {
       if (configs[f].boost === 0) continue;
-      const tokens = tokenize(texts[f]);
-      lengths[f] = tokens.length;
-      totalFieldLengths[f] += tokens.length;
-      for (const t of tokens) {
-        perField[f].set(t, (perField[f].get(t) ?? 0) + 1);
+      const stats = tokenStats(texts[f]);
+      lengths[f] = stats.length;
+      totalFieldLengths[f] += stats.length;
+      for (const [term, count] of stats.frequencies) {
+        let frequencies = termFields.get(term);
+        if (!frequencies) {
+          frequencies = { title: 0, summary: 0, tags: 0, body: 0 };
+          termFields.set(term, frequencies);
+        }
+        frequencies[f] += count;
       }
     }
 
     fieldLengths.set(entry.id, lengths);
 
-    const allTerms = new Set<string>();
-    for (const f of fields) {
-      for (const t of perField[f].keys()) allTerms.add(t);
-    }
-    for (const term of allTerms) {
+    // Build each document's postings from one term map. The previous shape
+    // allocated four field maps plus a union Set per entry even when a field
+    // was disabled (KG nodes disable summary/body). Cold Wiki builds project
+    // thousands of KG nodes, so those short-lived containers amplified GC
+    // pauses without contributing any searchable state.
+    for (const [term, fieldTfs] of termFields) {
       let list = fieldPostings.get(term);
       if (!list) { list = []; fieldPostings.set(term, list); }
-      list.push({
-        docId: entry.id,
-        fieldTfs: {
-          title: perField.title.get(term) ?? 0,
-          summary: perField.summary.get(term) ?? 0,
-          tags: perField.tags.get(term) ?? 0,
-          body: perField.body.get(term) ?? 0,
-        },
-      });
+      list.push({ docId: entry.id, fieldTfs });
     }
   }
 

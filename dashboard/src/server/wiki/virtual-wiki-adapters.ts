@@ -288,7 +288,10 @@ function kgCategory(nodeType: string): string {
   return KG_NODE_TYPE_CATEGORY[nodeType] ?? 'arch';
 }
 
+const NORMALIZED_KG_ID = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
+
 function stableKgId(raw: string): string {
+  if (NORMALIZED_KG_ID.test(raw)) return raw;
   return raw.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
 }
 
@@ -302,17 +305,22 @@ function shortStableHash(raw: string): string {
 }
 
 function buildKgIdMap(rawIds: Iterable<string>, prefix = 'kg'): Map<string, string> {
-  const ids = [...new Set(rawIds)];
+  const seen = new Set<string>();
+  const normalized: Array<{ raw: string; base: string }> = [];
   const baseCounts = new Map<string, number>();
-  for (const raw of ids) {
+  for (const raw of rawIds) {
+    if (seen.has(raw)) continue;
+    seen.add(raw);
     const base = stableKgId(raw) || 'node';
+    normalized.push({ raw, base });
     baseCounts.set(base, (baseCounts.get(base) ?? 0) + 1);
   }
-  return new Map(ids.map(raw => {
-    const base = stableKgId(raw) || 'node';
+  const result = new Map<string, string>();
+  for (const { raw, base } of normalized) {
     const suffix = (baseCounts.get(base) ?? 0) > 1 ? `-${shortStableHash(raw)}` : '';
-    return [raw, `${prefix}-${base}${suffix}`];
-  }));
+    result.set(raw, `${prefix}-${base}${suffix}`);
+  }
+  return result;
 }
 
 export function adaptKnowledgeGraph(
@@ -466,31 +474,44 @@ export function adaptKnowledgeGraphFromDb(
 ): WikiEntry[] {
   const db = new DatabaseSync(dbPath, { readOnly: true });
   try {
-    const nodes = db.prepare(`
+    // Preserve the canonical non-codegraph-first ordering without sorting an
+    // expression across the entire node table. Both branches can use existing
+    // source/name indexes and together are exactly equivalent to the prior
+    // `source_type != 'codegraph' DESC, name` ordering.
+    const knowledgeNodes = db.prepare(`
       SELECT id, kind, name, file_path, source_type, definition, body, category, updated_at
       FROM nodes
-      ORDER BY source_type != 'codegraph' DESC, name
+      WHERE source_type != 'codegraph'
+      ORDER BY name
       LIMIT 5000
     `).all() as unknown as MaestroGraphWikiRow[];
+    const remaining = 5000 - knowledgeNodes.length;
+    const codeNodes = remaining > 0
+      ? db.prepare(`
+          SELECT id, kind, name, file_path, source_type, definition, body, category, updated_at
+          FROM nodes
+          WHERE source_type = 'codegraph'
+          ORDER BY name
+          LIMIT ?
+        `).all(remaining) as unknown as MaestroGraphWikiRow[]
+      : [];
+    const nodes = [...knowledgeNodes, ...codeNodes];
     if (nodes.length === 0) return [];
 
     const idMap = buildKgIdMap(nodes.map(node => node.id));
-    const selectedIds = new Set(idMap.keys());
+    // Pass the already selected IDs into SQLite instead of repeating the
+    // ordered 5,000-node projection in an edge CTE. json_each keeps this a
+    // single bounded parameter and both joins retain the previous membership.
     const projectedEdges = db.prepare(`
-      WITH selected AS (
-        SELECT id FROM nodes
-        ORDER BY source_type != 'codegraph' DESC, name
-        LIMIT 5000
-      )
+      WITH selected(id) AS (SELECT value FROM json_each(?))
       SELECT e.source, e.target, e.kind
       FROM edges e
       JOIN selected source_node ON source_node.id = e.source
       JOIN selected target_node ON target_node.id = e.target
       LIMIT 20000
-    `).all() as unknown as Array<{ source: string; target: string; kind: string }>;
+    `).all(JSON.stringify([...idMap.keys()])) as unknown as Array<{ source: string; target: string; kind: string }>;
     const outgoing = new Map<string, Array<{ target: string; kind: string }>>();
     for (const edge of projectedEdges) {
-      if (!selectedIds.has(edge.source) || !selectedIds.has(edge.target)) continue;
       const list = outgoing.get(edge.source) ?? [];
       list.push({ target: edge.target, kind: edge.kind });
       outgoing.set(edge.source, list);

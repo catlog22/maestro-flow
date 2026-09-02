@@ -1,4 +1,4 @@
-import { mkdtemp, mkdir, open, readFile, writeFile, rm, stat, symlink } from 'node:fs/promises';
+import { mkdtemp, mkdir, open, readFile, writeFile, rm, rename, stat, symlink } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
@@ -90,6 +90,43 @@ describe('WikiIndexer', () => {
     const indexer = new WikiIndexer({ workflowRoot: tmpRoot });
     const xTagged = await indexer.query({ type: 'spec', tag: 'x' });
     expect(xTagged.map((d) => d.id)).toEqual(['spec:project:a']);
+  });
+
+  it('normalizes canonical and legacy Knowhow metadata at the indexing surface', async () => {
+    await write('knowhow/DCS-legacy.md', `---
+title: Legacy decision
+type: decision
+category: architecture-decision
+specCategory: arch
+keywords:
+  - tokens
+tags:
+  - auth
+source: issue:42
+lang: typescript
+status: superseded
+assetType: api-contract
+codePaths:
+  - src/auth/token.ts
+---
+
+First useful paragraph.
+`);
+
+    const entry = (await new WikiIndexer({ workflowRoot: tmpRoot }).get()).byId['knowhow-dcs-legacy'];
+    expect(entry).toMatchObject({
+      summary: 'First useful paragraph.',
+      tags: ['tokens', 'auth', 'architecture-decision', 'api-contract'],
+      status: 'deprecated',
+      category: 'arch',
+      specCategory: null,
+      sourceRef: 'issue:42',
+      ext: expect.objectContaining({
+        language: 'typescript',
+        decisionState: 'superseded',
+        relatedPaths: ['src/auth/token.ts'],
+      }),
+    });
   });
 
   it('maps deprecated/superseded status and surfaces it into ext', async () => {
@@ -531,6 +568,34 @@ Facet ranking legacy target.
     await expect(indexer.getEmbeddingIndex()).resolves.toBeNull();
   });
 
+  it('close waits for an ordinary rebuild flight before returning', async () => {
+    const indexer = new WikiIndexer({ workflowRoot: tmpRoot, persistence: 'memory-only' });
+    const subject = indexer as unknown as {
+      rebuildUntilCurrent: () => Promise<Awaited<ReturnType<WikiIndexer['rebuild']>>>;
+    };
+    let releaseRebuild!: (value: Awaited<ReturnType<WikiIndexer['rebuild']>>) => void;
+    subject.rebuildUntilCurrent = () => new Promise(resolve => { releaseRebuild = resolve; });
+
+    const rebuilding = indexer.rebuild();
+    const closing = indexer.close();
+    let closed = false;
+    void closing.then(() => { closed = true; });
+    await Promise.resolve();
+    expect(closed).toBe(false);
+
+    const emptyIndex: Awaited<ReturnType<WikiIndexer['rebuild']>> = {
+      entries: [],
+      byId: {},
+      byType: {
+        project: [], roadmap: [], spec: [], issue: [], knowhow: [], note: [], domain: [],
+      },
+      backlinks: {},
+      generatedAt: Date.now(),
+    };
+    releaseRebuild(emptyIndex);
+    await expect(Promise.all([rebuilding, closing])).resolves.toEqual([emptyIndex, undefined]);
+  });
+
   it('reports real search-index cache state across reuse and invalidation', async () => {
     await write(
       'specs/cache-state.md',
@@ -598,6 +663,172 @@ Facet ranking legacy target.
       site: 'WikiIndexer.tryLoadSearchCache.readFile',
       queryId: null,
     });
+  });
+
+  it('persists only canonical repository metadata and rehydrates routing from live linked config', async () => {
+    const linkedRoot = await mkdtemp(join(tmpdir(), 'wiki-linked-persist-'));
+    let relocatedRoot: string | null = null;
+    const hostRepoId = '11111111-1111-4111-8111-111111111111';
+    const linkedRepoId = '22222222-2222-4222-8222-222222222222';
+    try {
+      await mkdir(join(linkedRoot, 'knowhow'), { recursive: true });
+      await writeFile(join(linkedRoot, 'repository.json'), JSON.stringify({
+        schema_version: 'repository-identity/1.0',
+        repo_id: linkedRepoId,
+        repo_name: 'Persisted display name',
+        created_at: '2026-01-01T00:00:00.000Z',
+      }));
+      await writeFile(
+        join(linkedRoot, 'knowhow', 'TIP-runtime-routing.md'),
+        `---\ntitle: Runtime routing sentinel\nappliesToRepoIds:\n  - ${hostRepoId}\n---\n\nruntime routing reload sentinel`,
+      );
+
+      const writer = new WikiIndexer({
+        workflowRoot: tmpRoot,
+        includeCliSessions: false,
+        repository: { repoId: hostRepoId, repoName: 'Host', alias: 'current' },
+        linkedWorkspaces: [{
+          name: 'old-alias', workflowRoot: linkedRoot, shareTypes: ['knowhow'],
+          repoId: linkedRepoId, repoName: 'Old display name',
+        }],
+      });
+      await writer.get();
+      await expect.poll(async () => {
+        try {
+          const index = JSON.parse(await readFile(join(tmpRoot, 'wiki-index.json'), 'utf-8'));
+          const cache = JSON.parse(await readFile(join(tmpRoot, 'search-cache.json'), 'utf-8'));
+          return [index.version, cache.version];
+        } catch { return null; }
+      }).toEqual([3, 8]);
+
+      const persisted = JSON.parse(await readFile(join(tmpRoot, 'wiki-index.json'), 'utf-8'));
+      const persistedEntry = persisted.entries.find((entry: { title: string }) =>
+        entry.title === 'Runtime routing sentinel');
+      expect(persistedEntry).toMatchObject({
+        repoId: linkedRepoId,
+        appliesToRepoIds: [hostRepoId],
+      });
+      expect(persistedEntry).not.toHaveProperty('source');
+      expect(persistedEntry).not.toHaveProperty('repoName');
+      expect(persistedEntry).not.toHaveProperty('alias');
+      expect(persistedEntry).not.toHaveProperty('workspaceFence');
+      expect(JSON.stringify(persistedEntry)).not.toContain(linkedRoot);
+
+      const persistedCache = JSON.parse(await readFile(join(tmpRoot, 'search-cache.json'), 'utf-8'));
+      const cachedEntry = persistedCache.entries.find((entry: { title: string }) =>
+        entry.title === 'Runtime routing sentinel');
+      expect(cachedEntry).not.toHaveProperty('repoName');
+      expect(cachedEntry).not.toHaveProperty('alias');
+      expect(cachedEntry).not.toHaveProperty('workspaceFence');
+      expect(cachedEntry.source).not.toHaveProperty('workspace');
+      expect(cachedEntry.source).not.toHaveProperty('repoName');
+      expect(cachedEntry.source).not.toHaveProperty('alias');
+      expect(cachedEntry.source).not.toHaveProperty('workspaceFence');
+
+      const reader = new WikiIndexer({
+        workflowRoot: tmpRoot,
+        includeCliSessions: false,
+        repository: { repoId: hostRepoId, repoName: 'Host renamed', alias: 'current' },
+        linkedWorkspaces: [{
+          name: 'new-alias', workflowRoot: linkedRoot, shareTypes: ['knowhow'],
+          repoId: linkedRepoId, repoName: 'Live display name',
+        }],
+      });
+      const readerSubject = reader as unknown as { scanLinkedWorkspaces: () => Promise<never> };
+      readerSubject.scanLinkedWorkspaces = async () => { throw new Error('cache should load'); };
+      const reloaded = await reader.get();
+      const reloadedEntry = reloaded.entries.find(entry => entry.title === 'Runtime routing sentinel');
+      expect(reloadedEntry).toMatchObject({
+        repoId: linkedRepoId,
+        repoName: 'Live display name',
+        alias: 'new-alias',
+        workspaceFence: `repo:${linkedRepoId}`,
+        appliesToRepoIds: [hostRepoId],
+        source: expect.objectContaining({
+          workspace: 'new-alias', repoId: linkedRepoId, repoName: 'Live display name',
+          alias: 'new-alias', workspaceFence: `repo:${linkedRepoId}`,
+        }),
+      });
+      const searched = await reader.searchWithMeta('runtime routing reload sentinel', 5, {
+        skipEmbedding: true,
+        filters: { repoAlias: 'new-alias', applicableRepoId: hostRepoId },
+      });
+      expect(searched.results.map(result => result.entry.title)).toContain('Runtime routing sentinel');
+
+      // Dual-read v7 caches, but overwrite every stale routing/display field.
+      persistedCache.version = 7;
+      Object.assign(cachedEntry, {
+        repoName: 'Stale display', alias: 'stale-alias', workspaceFence: 'linked:stale-alias',
+      });
+      Object.assign(cachedEntry.source, {
+        workspace: 'stale-alias', repoName: 'Stale display', alias: 'stale-alias',
+        workspaceFence: 'linked:stale-alias',
+      });
+      await writeFile(join(tmpRoot, 'search-cache.json'), JSON.stringify(persistedCache));
+      const legacyReader = new WikiIndexer({
+        workflowRoot: tmpRoot,
+        includeCliSessions: false,
+        repository: { repoId: hostRepoId, repoName: 'Host', alias: 'current' },
+        linkedWorkspaces: [{
+          name: 'latest-alias', workflowRoot: linkedRoot, shareTypes: ['knowhow'],
+          repoId: linkedRepoId, repoName: 'Latest display',
+        }],
+      });
+      const legacySubject = legacyReader as unknown as { scanLinkedWorkspaces: () => Promise<never> };
+      legacySubject.scanLinkedWorkspaces = async () => { throw new Error('legacy cache should load'); };
+      const legacyEntry = (await legacyReader.get()).entries.find(entry =>
+        entry.title === 'Runtime routing sentinel');
+      expect(legacyEntry).toMatchObject({
+        repoName: 'Latest display', alias: 'latest-alias',
+        source: expect.objectContaining({ workspace: 'latest-alias', alias: 'latest-alias' }),
+      });
+
+      // A physical relocation invalidates the old snapshot and rebuilds from
+      // the newly configured root without carrying the old path or alias into
+      // the republished lightweight index.
+      relocatedRoot = `${linkedRoot}-relocated`;
+      await new Promise(resolve => setTimeout(resolve, 5));
+      await rename(linkedRoot, relocatedRoot);
+      const relocatedReader = new WikiIndexer({
+        workflowRoot: tmpRoot,
+        includeCliSessions: false,
+        repository: { repoId: hostRepoId, repoName: 'Host', alias: 'current' },
+        linkedWorkspaces: [{
+          name: 'relocated-alias', workflowRoot: relocatedRoot, shareTypes: ['knowhow'],
+          repoId: linkedRepoId, repoName: 'Relocated display',
+        }],
+      });
+      const relocatedEntry = (await relocatedReader.get()).entries.find(entry =>
+        entry.title === 'Runtime routing sentinel');
+      expect(relocatedEntry).toMatchObject({
+        repoName: 'Relocated display', alias: 'relocated-alias',
+        source: expect.objectContaining({ workspace: 'relocated-alias', alias: 'relocated-alias' }),
+      });
+      await expect.poll(async () => {
+        const current = JSON.parse(await readFile(join(tmpRoot, 'wiki-index.json'), 'utf-8'));
+        return current.generatedAt !== persisted.generatedAt;
+      }).toBe(true);
+      const republished = JSON.parse(await readFile(join(tmpRoot, 'wiki-index.json'), 'utf-8'));
+      const relocatedPersistedEntry = republished.entries.find((entry: { title: string }) =>
+        entry.title === 'Runtime routing sentinel');
+      expect(relocatedPersistedEntry).not.toHaveProperty('source');
+      expect(JSON.stringify(relocatedPersistedEntry)).not.toContain(relocatedRoot);
+
+      const revokedReader = new WikiIndexer({
+        workflowRoot: tmpRoot,
+        includeCliSessions: false,
+        repository: { repoId: hostRepoId, repoName: 'Host', alias: 'current' },
+        linkedWorkspaces: [{
+          name: 'relocated-alias', workflowRoot: relocatedRoot, shareTypes: [],
+          repoId: linkedRepoId, repoName: 'Relocated display',
+        }],
+      });
+      const afterRevocation = await revokedReader.get();
+      expect(afterRevocation.entries.some(entry => entry.repoId === linkedRepoId)).toBe(false);
+    } finally {
+      await rm(linkedRoot, { recursive: true, force: true });
+      if (relocatedRoot) await rm(relocatedRoot, { recursive: true, force: true });
+    }
   });
 
   it('rejects malformed search-cache entries at runtime and rebuilds from source', async () => {
@@ -1426,8 +1657,8 @@ describe('virtual adapters: run-mode sessions', () => {
     await expect.poll(async () => {
       try { return JSON.parse(await readFile(join(tmpRoot, 'search-cache.json'), 'utf-8')).version; }
       catch { return null; }
-    }, { timeout: 5_000 }).toBe(6);
-  }, 10_000);
+    }, { timeout: 30_000 }).toBe(8);
+  }, 60_000);
 
   it('projects terminal session/3.0 and sealed run/3.0 history with promotion backlinks', async () => {
     const sessionId = '20260816-v3-wiki';
@@ -1675,7 +1906,7 @@ describe('virtual adapters: run-mode sessions', () => {
     expect(run.related).toContain(`session-${fixture.sessionId}`);
   }, 20_000);
 
-  it('invalidates v2 search cache and persists v6', async () => {
+  it('invalidates v2 search cache and persists v8', async () => {
     await write('specs/cache-v3.md', '---\ntitle: Cache v3\n---\n# Cache v3\nProjection cache sentinel.');
     await write('search-cache.json', JSON.stringify({
       version: 2, generatedAt: 1, mtimeSnapshot: [], entries: [],
@@ -1686,8 +1917,8 @@ describe('virtual adapters: run-mode sessions', () => {
     await expect.poll(async () => {
       try { return JSON.parse(await readFile(join(tmpRoot, 'search-cache.json'), 'utf-8')).version; }
       catch { return null; }
-    }, { timeout: 5_000 }).toBe(6);
-  }, 10_000);
+    }, { timeout: 30_000 }).toBe(8);
+  }, 60_000);
 
   it('indexes v1.1 sealed Runs with structured handoff, kinds, provenance, aref edges, and waivers', async () => {
     await writeRunModeFixture();

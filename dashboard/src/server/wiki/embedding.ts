@@ -650,6 +650,7 @@ const CACHE_FILE = 'embedding-index.json';
 
 let _pipeline: any = null;
 let _pipelineInflight: Promise<any> | null = null;
+let _pipelineDisposeInflight: Promise<void> | null = null;
 let _available: boolean | null = null;
 
 async function configureProxy(): Promise<void> {
@@ -712,6 +713,26 @@ async function getPipeline(): Promise<any> {
   } finally {
     if (_pipelineInflight === flight) _pipelineInflight = null;
   }
+}
+
+/** Release the process-global Transformers/ONNX pipeline in a dedicated owner process. */
+export function disposeEmbeddingPipeline(): Promise<void> {
+  if (_pipelineDisposeInflight) return _pipelineDisposeInflight;
+  let disposal!: Promise<void>;
+  disposal = (async () => {
+    const loading = _pipelineInflight;
+    if (loading) await loading.catch(() => undefined);
+    const pipeline = _pipeline;
+    _pipeline = null;
+    _progressCallback = null;
+    if (pipeline && typeof pipeline.dispose === 'function') {
+      await pipeline.dispose();
+    }
+  })().finally(() => {
+    if (_pipelineDisposeInflight === disposal) _pipelineDisposeInflight = null;
+  });
+  _pipelineDisposeInflight = disposal;
+  return disposal;
 }
 
 let _unavailableReason: string | null = null;

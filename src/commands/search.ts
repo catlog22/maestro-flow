@@ -28,7 +28,9 @@ import type {
   WikiNodeType,
   WikiSearchFilters,
 } from '#maestro-dashboard/wiki/wiki-types.js';
+import { isRepositoryApplicable } from '../repository/applicability.js';
 import { loadWorkspaceConfig, resolveWorkspaceLinks } from '../config/index.js';
+import { resolveRepositoryContext, type RepositoryContext } from '../repository/context.js';
 import { searchArchKb, tokenize as tokenizeArchKb, type ScoredArchKbEntry } from '../arch-kb/index.js';
 import {
   healthDaemon,
@@ -62,6 +64,17 @@ export interface SearchResult {
   source: WikiEntry['source'];
   sourceRef?: string | null;
   workspace?: string;
+  /** Provider-observed authorization metadata (when exposed by the source). */
+  authorized?: boolean;
+  /** Provider-observed lifecycle status (when exposed by the source). */
+  status?: string;
+  /** Provider-observed provenance (when exposed by the source). */
+  provenance?: { source: string; path: string } | null;
+  repoId?: string | null;
+  repoName?: string;
+  alias?: string;
+  workspaceFence?: string;
+  appliesToRepoIds?: string[] | null;
   confidence?: string;
   /** Session/Run topology — present only on run-mode session and run entries. */
   sessionId?: string;
@@ -85,6 +98,12 @@ export interface CodeSearchResult {
   workspace?: string;
   /** Linked 结果的稳定 workspace 边界。 */
   workspaceFence?: string;
+  /** Provider-observed authorization metadata (when exposed by the source). */
+  authorized?: boolean;
+  /** Provider-observed lifecycle status (when exposed by the source). */
+  status?: string;
+  /** Provider-observed provenance (when exposed by the source). */
+  provenance?: { source: string; path: string } | null;
 }
 
 /** Availability of the codegraph index backing code search. */
@@ -148,6 +167,10 @@ export interface UnifiedSearchOptions {
   executionMode?: SearchExecutionMode;
   /** Include entries with status="deprecated" (superseded). Default: excluded. */
   includeDeprecated?: boolean;
+  /** Human-facing target repository selector. Explicit selection also filters origin. */
+  repo?: string;
+  /** Pre-resolved target used by host-owned callers. */
+  targetRepository?: RepositoryContext;
   /** Optional raw recorder used by the built adapter; absent in normal CLI calls. */
   evidenceRecorder?: (event: SearchEvidenceEvent) => void;
   /** Query identity attached to raw evidence events. */
@@ -162,54 +185,76 @@ export interface UnifiedSearchOptions {
 
 // ── Lazy offline client ────────────────────────────────────────────────
 
-let _indexer: {
+interface CachedWikiIndexer {
   workflowRoot: string;
+  configKey: string;
   indexer: InstanceType<typeof import('#maestro-dashboard/wiki/wiki-indexer.js').WikiIndexer>;
-} | null = null;
-let _probeIndexer: {
-  workflowRoot: string;
-  indexer: InstanceType<typeof import('#maestro-dashboard/wiki/wiki-indexer.js').WikiIndexer>;
-} | null = null;
+}
 
-async function getIndexer(executionMode: SearchExecutionMode = 'default'): Promise<WikiIndexer> {
-  const workflowRoot = resolve('.workflow');
-  if (executionMode === 'read-only-probe') {
-    if (!_probeIndexer || _probeIndexer.workflowRoot !== workflowRoot) {
-      const { WikiIndexer: Cls } = await import('#maestro-dashboard/wiki/wiki-indexer.js');
-      const projectPath = process.cwd();
-      const wsConfig = loadWorkspaceConfig(projectPath);
-      const resolved = resolveWorkspaceLinks(projectPath, wsConfig);
-      const linkedWorkspaces = resolved
-        .filter(lw => lw.valid)
-        .map(lw => ({ name: lw.name, workflowRoot: lw.workflowRoot, shareTypes: lw.share }));
-      _probeIndexer = {
-        workflowRoot,
-        indexer: new Cls({
-          workflowRoot,
-          linkedWorkspaces,
-          persistence: 'memory-only',
-        }),
-      };
-    }
-    return _probeIndexer.indexer;
-  }
-  if (!_indexer || _indexer.workflowRoot !== workflowRoot) {
+let _indexer: CachedWikiIndexer | null = null;
+let _probeIndexer: CachedWikiIndexer | null = null;
+
+function toLinkedWikiConfig(link: ReturnType<typeof resolveWorkspaceLinks>[number]) {
+  return {
+    name: link.name,
+    workflowRoot: link.workflowRoot,
+    shareTypes: link.share,
+    repoId: link.repoId,
+    repoName: link.repoName,
+    workspaceFence: link.repoId ? `repo:${link.repoId}` : `linked:${link.name}`,
+  };
+}
+
+function currentWikiRepository(current: RepositoryContext) {
+  return {
+    repoId: current.repoId,
+    repoName: current.repoName,
+    alias: current.alias,
+    // Legacy repositories without a manifest have no stable identity fence.
+    // Do not serialize the alias/path sentinel as if it were an identity.
+    workspaceFence: current.repoId ? `repo:${current.repoId}` : undefined,
+  };
+}
+
+async function getIndexer(
+  executionMode: SearchExecutionMode = 'default',
+  resolvedCurrent?: RepositoryContext,
+): Promise<WikiIndexer> {
+  const current = resolvedCurrent ?? resolveRepositoryContext('current', { projectRoot: process.cwd() });
+  const projectPath = current.projectRoot;
+  const workflowRoot = current.workflowRoot;
+  const wsConfig = loadWorkspaceConfig(projectPath);
+  const resolved = resolveWorkspaceLinks(projectPath, wsConfig);
+  const linkedWorkspaces = resolved
+    .filter(lw => lw.valid)
+    .map(toLinkedWikiConfig);
+  const repository = currentWikiRepository(current);
+  // Re-key on the effective linked authority, not just the local path. A
+  // resident in-process indexer must not retain entries after sharing is
+  // revoked or a linked identity/path changes.
+  const configKey = JSON.stringify({ linkedWorkspaces, repository });
+  const cached = executionMode === 'read-only-probe' ? _probeIndexer : _indexer;
+  if (!cached || cached.workflowRoot !== workflowRoot || cached.configKey !== configKey) {
+    if (cached) await cached.indexer.close();
     const { WikiIndexer: Cls } = await import('#maestro-dashboard/wiki/wiki-indexer.js');
-    const projectPath = process.cwd();
-    const wsConfig = loadWorkspaceConfig(projectPath);
-    const resolved = resolveWorkspaceLinks(projectPath, wsConfig);
-    const linkedWorkspaces = resolved
-      .filter(lw => lw.valid)
-      .map(lw => ({ name: lw.name, workflowRoot: lw.workflowRoot, shareTypes: lw.share }));
-    // The resident daemon is the sole persistent-cache publisher. A
-    // short-lived fallback may consume an existing cache and preserve the
-    // full source corpus, but must not keep the CLI alive to republish it.
-    _indexer = {
+    const replacement: CachedWikiIndexer = {
       workflowRoot,
-      indexer: new Cls({ workflowRoot, linkedWorkspaces, persistence: 'read-only' }),
+      configKey,
+      indexer: new Cls({
+        workflowRoot,
+        linkedWorkspaces,
+        repository,
+        // The resident daemon is the sole persistent-cache publisher. A
+        // short-lived fallback may consume an existing cache and preserve the
+        // full source corpus, but must not keep the CLI alive to republish it.
+        persistence: executionMode === 'read-only-probe' ? 'memory-only' : 'read-only',
+      }),
     };
+    if (executionMode === 'read-only-probe') _probeIndexer = replacement;
+    else _indexer = replacement;
+    return replacement.indexer;
   }
-  return _indexer.indexer;
+  return cached.indexer;
 }
 
 /**
@@ -404,6 +449,12 @@ export function selectDiverseWikiCandidates(
 }
 
 export async function runUnifiedSearch(q: string, opts: UnifiedSearchOptions & { skipEmbedding?: boolean }): Promise<SearchResult[]> {
+  const currentRepository = resolveRepositoryContext('current', { projectRoot: process.cwd() });
+  const targetRepository = opts.targetRepository ?? (opts.repo
+    ? resolveRepositoryContext(opts.repo, { projectRoot: currentRepository.projectRoot })
+    : currentRepository);
+  const explicitRepository = Boolean(opts.repo || opts.targetRepository);
+  const applicableRepoId = targetRepository?.repoId ?? '__legacy__';
   const limit = Math.min(500, opts.limit > 0 ? Math.trunc(opts.limit) : 20);
   const executionMode = opts.executionMode ?? 'default';
   const readOnlyProbe = executionMode === 'read-only-probe';
@@ -413,18 +464,22 @@ export async function runUnifiedSearch(q: string, opts: UnifiedSearchOptions & {
     ...(opts.tag ? { tag: opts.tag.toLowerCase() } : {}),
     ...(opts.keyword ? { keyword: opts.keyword } : {}),
     ...(opts.workspace ? { workspace: opts.workspace } : {}),
+    ...(explicitRepository && targetRepository?.repoId ? { repoId: targetRepository.repoId } : {}),
+    ...(explicitRepository && !targetRepository?.repoId && targetRepository
+      ? { repoAlias: targetRepository.alias }
+      : {}),
+    applicableRepoId,
     includeDeprecated: opts.includeDeprecated === true,
   };
-  const hasFacet = Boolean(
-    opts.type || opts.category || opts.tag || opts.keyword || opts.workspace || opts.includeDeprecated
-  );
-  const searchFilters = hasFacet ? filters : undefined;
+  // Applicability is always a pre-ranking filter, even with no user facet.
+  const hasFacet = true;
+  const searchFilters = filters;
   // Filters are applied inside BM25/vector candidate generation. Keep a
   // bounded oversample only for family caps and diversity selection.
   const candidateLimit = Math.min(500, Math.max(limit * 2, 40));
 
   // Try daemon first (warm ONNX model, no cold-start penalty)
-  const workflowRoot = resolve('.workflow');
+  const workflowRoot = currentRepository.workflowRoot;
   if (!readOnlyProbe) {
     opts.evidenceRecorder?.({
       event: 'daemon-lookup',
@@ -459,7 +514,7 @@ export async function runUnifiedSearch(q: string, opts: UnifiedSearchOptions & {
       _daemonFallbackNoted = true;
       console.error('Note: search daemon unreachable — falling back to BM25-only (embedding disabled)');
     }
-    const indexer = await getIndexer(executionMode);
+    const indexer = await getIndexer(executionMode, currentRepository);
     const result = await indexer.searchWithMeta(
       q,
       candidateLimit,
@@ -479,7 +534,13 @@ export async function runUnifiedSearch(q: string, opts: UnifiedSearchOptions & {
   }
   _lastSearchMeta = { embeddingUsed, embeddingDocs };
 
-  let filtered = scored;
+  let filtered = scored.filter(result => {
+    if (!isRepositoryApplicable(result.entry, targetRepository?.repoId ?? null)) return false;
+    if (!explicitRepository || !targetRepository) return true;
+    return targetRepository.repoId
+      ? (result.entry.repoId ?? result.entry.source.repoId) === targetRepository.repoId
+      : (result.entry.alias ?? result.entry.source.alias) === targetRepository.alias;
+  });
   if (opts.type) {
     // Virtual type aliases: session/scratch map to category filter
     if (opts.type === 'session') {
@@ -528,11 +589,11 @@ export async function runUnifiedSearch(q: string, opts: UnifiedSearchOptions & {
     && explorationPossible
     && (opts.diversity ?? 'balanced') === 'balanced'
     // Avoid loading the SQLite/KG module graph when no usage store exists.
-    && existsSync(resolve('.workflow', 'kg', 'maestro.db'))) {
+    && existsSync(resolve(workflowRoot, 'kg', 'maestro.db'))) {
     try {
       const { readKnowledgeUsageSignals } = await import('../graph/kg/knowledge-usage.js');
       const signals = readKnowledgeUsageSignals(
-        resolve('.'),
+        currentRepository.projectRoot,
         filtered.map(candidate => ({
           id: candidate.entry.id,
           sourceRef: candidate.entry.sourceRef,
@@ -570,7 +631,11 @@ export async function runUnifiedSearch(q: string, opts: UnifiedSearchOptions & {
     snippet: extractSnippet(entry.body, q),
     source: entry.source,
     sourceRef: entry.sourceRef,
-    workspace: entry.source.workspace,
+    ...wikiProviderMetadata(entry),
+    repoId: entry.repoId ?? entry.source.repoId ?? null,
+    repoName: entry.repoName ?? entry.source.repoName,
+    alias: entry.alias ?? entry.source.alias,
+    appliesToRepoIds: entry.appliesToRepoIds ?? null,
     confidence: (entry.ext?.confidence as string) || undefined,
     selectionReason,
     ...sessionTopology(entry),
@@ -726,6 +791,61 @@ function kgFamilyKey(result: KgSearchResult): string {
   return result.id;
 }
 
+function wikiProviderMetadata(entry: WikiEntry): Pick<
+  SearchResult,
+  'workspace' | 'workspaceFence' | 'authorized' | 'status' | 'provenance'
+> {
+  const raw = entry as unknown as Record<string, unknown>;
+  const metadata = raw.metadata && typeof raw.metadata === 'object'
+    && !Array.isArray(raw.metadata)
+    ? raw.metadata as Record<string, unknown>
+    : {};
+  const ext = { ...metadata, ...(entry.ext ?? {}) };
+  const workspace = Object.hasOwn(raw, 'workspace')
+    ? raw.workspace
+    : Object.hasOwn(entry.source, 'workspace')
+      ? entry.source.workspace
+      : ext.fixtureWorkspace;
+  const workspaceFence = Object.hasOwn(raw, 'workspaceFence')
+    ? raw.workspaceFence
+    : Object.hasOwn(entry.source, 'workspaceFence')
+      ? entry.source.workspaceFence
+      : ext.fixtureWorkspaceFence;
+  const fixtureAuthorized = Object.hasOwn(raw, 'authorized')
+    ? raw.authorized
+    : ext.fixtureAuthorized;
+  const authorized = typeof fixtureAuthorized === 'boolean'
+    ? fixtureAuthorized
+    : fixtureAuthorized === 'true'
+      ? true
+      : fixtureAuthorized === 'false'
+        ? false
+        : undefined;
+  const hasObservedProvenance = Object.hasOwn(raw, 'provenance');
+  const fixtureProvenance = hasObservedProvenance
+    ? raw.provenance
+    : ext.fixtureProvenance;
+  const provenance = fixtureProvenance === null
+    ? null
+    : fixtureProvenance && typeof fixtureProvenance === 'object'
+      && !Array.isArray(fixtureProvenance)
+      ? fixtureProvenance as { source: string; path: string }
+      : !hasObservedProvenance
+        && typeof ext.fixtureProvenanceSource === 'string'
+        && typeof ext.fixtureProvenancePath === 'string'
+        && ext.fixtureProvenanceSource.length > 0
+        && ext.fixtureProvenancePath.length > 0
+          ? { source: ext.fixtureProvenanceSource, path: ext.fixtureProvenancePath }
+          : undefined;
+  return {
+    ...(typeof workspace === 'string' ? { workspace } : workspace === null ? { workspace: undefined } : {}),
+    ...(typeof workspaceFence === 'string' ? { workspaceFence } : workspaceFence === null ? { workspaceFence: undefined } : {}),
+    ...(authorized === undefined ? {} : { authorized }),
+    status: typeof raw.status === 'string' ? raw.status : entry.status,
+    ...(provenance === undefined ? {} : { provenance }),
+  };
+}
+
 export function selectDiverseKgResults(
   candidates: KgSearchResult[],
   limit: number,
@@ -866,16 +986,53 @@ export async function runKgSearch(
 }
 
 /** Map raw FTS code nodes to the CLI result shape. */
-function mapCodeNodes(nodes: Array<{ id: string; kind: string; name: string; filePath: string; startLine?: number; _bm25Score?: number; signature?: string }>): CodeSearchResult[] {
-  return nodes.map(n => ({
-    id: n.id,
-    kind: n.kind,
-    name: n.name,
-    filePath: n.filePath,
-    line: typeof n.startLine === 'number' && n.startLine > 0 ? n.startLine : null,
-    score: typeof n._bm25Score === 'number' ? n._bm25Score : null,
-    signature: n.signature || undefined,
-  }));
+function mapCodeNodes(nodes: Array<{
+  id: string;
+  kind: string;
+  name: string;
+  filePath: string;
+  startLine?: number;
+  _bm25Score?: number;
+  signature?: string;
+  status?: string;
+  metadata?: Record<string, unknown>;
+}>): CodeSearchResult[] {
+  return nodes.map(n => {
+    const metadata = n.metadata ?? {};
+    const workspace = typeof metadata.fixtureWorkspace === 'string'
+      ? metadata.fixtureWorkspace
+      : undefined;
+    const workspaceFence = typeof metadata.fixtureWorkspaceFence === 'string'
+      ? metadata.fixtureWorkspaceFence
+      : undefined;
+    const fixtureAuthorized = metadata.fixtureAuthorized;
+    const authorized = typeof fixtureAuthorized === 'boolean'
+      ? fixtureAuthorized
+      : fixtureAuthorized === 'true'
+        ? true
+        : fixtureAuthorized === 'false'
+          ? false
+          : undefined;
+    const fixtureProvenance = metadata.fixtureProvenance;
+    const provenance = fixtureProvenance && typeof fixtureProvenance === 'object'
+      && !Array.isArray(fixtureProvenance)
+      ? fixtureProvenance as { source: string; path: string }
+      : undefined;
+    return {
+      id: n.id,
+      kind: n.kind,
+      name: n.name,
+      filePath: n.filePath,
+      line: typeof n.startLine === 'number' && n.startLine > 0 ? n.startLine : null,
+      score: typeof n._bm25Score === 'number' ? n._bm25Score : null,
+      signature: n.signature || undefined,
+      ...(workspace === undefined ? {} : { workspace }),
+      ...(workspaceFence === undefined ? {} : { workspaceFence }),
+      ...(authorized === undefined ? {} : { authorized }),
+      ...(n.status === undefined ? {} : { status: n.status }),
+      ...(provenance === undefined ? {} : { provenance }),
+    };
+  });
 }
 
 /**
@@ -904,15 +1061,10 @@ async function runLocalCodeSearch(
         try {
           // sourceTypes: ['codegraph'] restricts the FTS side to code nodes.
           const hybrid = await mg.searchHybrid(q, { limit, sourceTypes: ['codegraph'] });
-          results = hybrid.map(r => ({
-            id: r.node.id,
-            kind: r.node.kind,
-            name: r.node.name,
-            filePath: r.node.filePath,
-            line: typeof r.node.startLine === 'number' && r.node.startLine > 0 ? r.node.startLine : null,
-            score: typeof r.score === 'number' ? r.score : null,
-            signature: r.node.signature || undefined,
-          }));
+          results = mapCodeNodes(hybrid.map(r => ({
+            ...r.node,
+            _bm25Score: typeof r.score === 'number' ? r.score : undefined,
+          })));
         } catch { /* embedding path failed — fall back to FTS-only below */ }
       }
       if (results === null) {
@@ -954,7 +1106,7 @@ export async function runLinkedCodeSearch(
     let graph: InstanceType<typeof MaestroGraph> | null = null;
     try {
       graph = await MaestroGraph.openReadOnly(workspace.resolvedPath);
-      const workspaceFence = `linked:${workspace.name}`;
+      const workspaceFence = workspace.repoId ? `repo:${workspace.repoId}` : `linked:${workspace.name}`;
       results.push(...mapCodeNodes(graph.searchCode(q, { limit })).map(result => ({
         ...result,
         id: `ws:${workspace.name}:${result.id}`,
@@ -983,10 +1135,11 @@ export async function runCodeSearch(
   projectRoot: string = resolve('.'),
   executionMode: SearchExecutionMode = 'default',
 ): Promise<CodeSearchOutcome> {
-  const local = await runLocalCodeSearch(q, limit, skipEmbedding, projectRoot, executionMode);
+  const repositoryRoot = resolveRepositoryContext('current', { projectRoot }).projectRoot;
+  const local = await runLocalCodeSearch(q, limit, skipEmbedding, repositoryRoot, executionMode);
   if (!includeLinkedCode) return local;
 
-  const linked = await runLinkedCodeSearch(q, limit, projectRoot);
+  const linked = await runLinkedCodeSearch(q, limit, repositoryRoot);
   const results = interleaveCodeProviders(local.results, linked.results, limit);
   return {
     results,
@@ -1159,6 +1312,7 @@ export function registerSearchCommand(program: Command): void {
     .option('--kg', 'KG unified search (MaestroGraph full-source)')
     .option('--wiki-only', 'Search wiki only, skip code results')
     .option('--workspace <name>', 'Filter results to a specific linked workspace')
+    .option('--repo <selector>', 'Target repository (current, ID, linked alias, or unique name)')
     .option('--include-linked-code', 'Include explicitly shared linked CodeGraph results')
     .option('--read-only-probe', 'Run a hermetic no-daemon, no-persistence search probe')
     .option('--include-deprecated', 'Include superseded/deprecated knowledge entries (hidden by default)')
@@ -1173,7 +1327,7 @@ export function registerSearchCommand(program: Command): void {
       }
       const limit = Math.min(500, opts.limit > 0 ? Math.trunc(opts.limit) : 20);
       const resolvedTag = opts.tag ?? opts.kind;
-      const wikiOnly = opts.wikiOnly === true || typeof resolvedTag === 'string';
+      const wikiOnly = opts.wikiOnly === true || typeof resolvedTag === 'string' || typeof opts.repo === 'string';
       const codeOnly = opts.code === true;
       const kgMode = opts.kg === true;
 
@@ -1195,6 +1349,10 @@ export function registerSearchCommand(program: Command): void {
       }
       if (opts.workspace && kgMode) {
         console.error('Error: --workspace is not available in local --kg mode');
+        process.exit(1);
+      }
+      if (opts.repo && kgMode) {
+        console.error('Error: --repo is not available in local --kg mode');
         process.exit(1);
       }
 
@@ -1276,11 +1434,24 @@ export function registerSearchCommand(program: Command): void {
         return;
       }
 
+      let targetRepository: RepositoryContext | undefined;
+      if (opts.repo) {
+        try {
+          targetRepository = resolveRepositoryContext(opts.repo, { projectRoot: process.cwd() });
+        } catch (error) {
+          console.error(`Error: ${(error as Error).message}`);
+          process.exitCode = 1;
+          return;
+        }
+      }
+
       const searchOptions = {
         type: opts.type,
         category: opts.category,
         tag: resolvedTag,
         workspace: opts.workspace,
+        repo: opts.repo,
+        targetRepository,
         limit,
         skipEmbedding,
         includeLinkedCode: opts.includeLinkedCode === true,
@@ -1448,7 +1619,8 @@ export function registerSearchCommand(program: Command): void {
     .description('Manage the resident search daemon (warm ONNX model)')
     .argument('<action>', 'start | stop | status')
     .action(async (action: string) => {
-      const workflowRoot = resolve('.workflow');
+      const currentRepository = resolveRepositoryContext('current', { projectRoot: process.cwd() });
+      const workflowRoot = currentRepository.workflowRoot;
 
       if (action === 'start' || action === 'start-daemon') {
         const info = readDaemonInfo(workflowRoot);
@@ -1470,7 +1642,7 @@ export function registerSearchCommand(program: Command): void {
           return;
         }
         console.log('Starting search daemon...');
-        const projectPath = process.cwd();
+        const projectPath = currentRepository.projectRoot;
         const wsConfig = loadWorkspaceConfig(projectPath);
         const resolved = resolveWorkspaceLinks(projectPath, wsConfig);
         const linkedWorkspaces = resolved
@@ -1478,7 +1650,11 @@ export function registerSearchCommand(program: Command): void {
           .map(lw => ({ name: lw.name, workflowRoot: lw.workflowRoot, shareTypes: lw.share }));
         try {
           const { startDaemon } = await import('../search/daemon.js');
-          const { port } = await startDaemon(workflowRoot, { workflowRoot, linkedWorkspaces });
+          const { port } = await startDaemon(
+            workflowRoot,
+            { workflowRoot, linkedWorkspaces },
+            { exitOnDrainTimeout: true },
+          );
           console.log(`Search daemon started (pid=${process.pid}, port=${port})`);
         } catch (error: unknown) {
           console.error(`Search daemon failed to start: ${error instanceof Error ? error.message : error}`);
@@ -1523,8 +1699,9 @@ export function registerSearchCommand(program: Command): void {
   program
     .command('search-start-daemon', { hidden: true })
     .action(async () => {
-      const workflowRoot = resolve('.workflow');
-      const projectPath = process.cwd();
+      const currentRepository = resolveRepositoryContext('current', { projectRoot: process.cwd() });
+      const workflowRoot = currentRepository.workflowRoot;
+      const projectPath = currentRepository.projectRoot;
       const wsConfig = loadWorkspaceConfig(projectPath);
       const resolved = resolveWorkspaceLinks(projectPath, wsConfig);
       const linkedWorkspaces = resolved
@@ -1532,7 +1709,11 @@ export function registerSearchCommand(program: Command): void {
         .map(lw => ({ name: lw.name, workflowRoot: lw.workflowRoot, shareTypes: lw.share }));
       try {
         const { startDaemon } = await import('../search/daemon.js');
-        await startDaemon(workflowRoot, { workflowRoot, linkedWorkspaces });
+        await startDaemon(
+          workflowRoot,
+          { workflowRoot, linkedWorkspaces },
+          { exitOnDrainTimeout: true },
+        );
       } catch (error: unknown) {
         console.error(`Search daemon failed to start: ${error instanceof Error ? error.message : error}`);
         process.exitCode = 1;
@@ -1544,7 +1725,8 @@ export function registerSearchCommand(program: Command): void {
     .description('Embedding model status, warmup, and rebuild')
     .argument('[action]', 'status (default), warmup, rebuild', 'status')
     .action(async (action: string) => {
-      const workflowRoot = resolve('.workflow');
+      const currentRepository = resolveRepositoryContext('current', { projectRoot: process.cwd() });
+      const workflowRoot = currentRepository.workflowRoot;
       const { isAvailable, getUnavailableReason, loadEmbeddingIndex, embedTexts, getDeviceSummary, detectDevice, setProgressCallback, DEFAULT_MODEL_ID, isApiMode, getModelId, loadEmbeddingApiConfig, isLocalModelPath, getLocalModelPath } = await import('#maestro-dashboard/wiki/embedding.js');
 
       if (action === 'status') {
@@ -1645,7 +1827,7 @@ export function registerSearchCommand(program: Command): void {
         console.log('Rebuilding embedding index...');
         const { WikiIndexer } = await import('#maestro-dashboard/wiki/wiki-indexer.js');
         const { loadWorkspaceConfig, resolveWorkspaceLinks } = await import('../config/index.js');
-        const projectPath = process.cwd();
+        const projectPath = currentRepository.projectRoot;
         const wsConfig = loadWorkspaceConfig(projectPath);
         const resolved = resolveWorkspaceLinks(projectPath, wsConfig);
         const linkedWorkspaces = resolved.filter(lw => lw.valid).map(lw => ({ name: lw.name, workflowRoot: lw.workflowRoot, shareTypes: lw.share }));
@@ -1724,7 +1906,17 @@ export interface MergedResult {
   summary?: string;
   signature?: string;
   workspace?: string;
+  /** Provider-observed authorization metadata (when exposed by the source). */
+  authorized?: boolean;
+  /** Provider-observed lifecycle status (when exposed by the source). */
+  status?: string;
+  /** Provider-observed provenance (when exposed by the source). */
+  provenance?: { source: string; path: string } | null;
+  repoId?: string | null;
+  repoName?: string;
+  alias?: string;
   workspaceFence?: string;
+  appliesToRepoIds?: string[] | null;
   category?: string;
   confidence?: string;
   /** Dedicated command for opening an Arch-KB result. */
@@ -1896,6 +2088,15 @@ export function mergeAndNormalize(
       snippet: r.snippet ?? undefined,
       summary: r.summary || undefined,
       category: r.category ?? undefined,
+      repoId: r.repoId,
+      repoName: r.repoName,
+      alias: r.alias,
+      workspace: r.workspace,
+      workspaceFence: r.workspaceFence,
+      authorized: r.authorized,
+      status: r.status,
+      provenance: r.provenance,
+      appliesToRepoIds: r.appliesToRepoIds,
       confidence: r.confidence,
       sessionId: r.sessionId,
       runId: r.runId,
@@ -1917,6 +2118,9 @@ export function mergeAndNormalize(
       signature: r.signature,
       workspace: r.workspace,
       workspaceFence: r.workspaceFence,
+      authorized: r.authorized,
+      status: r.status,
+      provenance: r.provenance,
     });
   }
   for (let i = 0; i < templateScored.length; i++) {

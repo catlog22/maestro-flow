@@ -36,7 +36,10 @@ describe('wiki search bridge lifecycle filtering', () => {
       'knowledge',
       10,
       true,
-      { timeoutMs: 700 },
+      {
+        timeoutMs: 700,
+        filters: { applicableRepoId: '__legacy__' },
+      },
     );
   });
 
@@ -57,7 +60,10 @@ describe('wiki search bridge lifecycle filtering', () => {
       'knowledge',
       10,
       false,
-      { timeoutMs: 75 },
+      {
+        timeoutMs: 75,
+        filters: { applicableRepoId: '__legacy__' },
+      },
     );
   });
 

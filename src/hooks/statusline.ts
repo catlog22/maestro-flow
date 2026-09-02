@@ -11,9 +11,10 @@
  */
 
 import { readFileSync, readdirSync, statSync, existsSync, writeFileSync } from 'node:fs';
-import { join, basename } from 'node:path';
+import { join, basename, resolve } from 'node:path';
 import { homedir, tmpdir } from 'node:os';
 import { execSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import {
   AUTO_COMPACT_BUFFER_PCT,
   BRIDGE_PREFIX,
@@ -463,7 +464,12 @@ const TEAM_MAX_INLINE = 3;
 interface TeamCacheFile { ts: number; segment: string; }
 
 function teamCachePath(session: string): string {
-  return join(tmpdir(), `maestro-team-statusline-${session}.json`);
+  // Session IDs are only repository-local. Fence the process-shared temp cache
+  // by physical project root so identical IDs cannot leak stale teammate state
+  // across repositories or concurrent test/worktree invocations.
+  const projectRoot = resolve(process.env.MAESTRO_PROJECT_ROOT || process.cwd());
+  const rootFence = createHash('sha256').update(projectRoot).digest('hex').slice(0, 16);
+  return join(tmpdir(), `maestro-team-statusline-${rootFence}-${session}.json`);
 }
 
 function writeTeamCache(path: string, segment: string): string {

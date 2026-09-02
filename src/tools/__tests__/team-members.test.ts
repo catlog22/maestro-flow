@@ -11,6 +11,7 @@ import {
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { execSync } from 'node:child_process';
+import * as teamMembers from '../team-members.js';
 
 // ---------------------------------------------------------------------------
 // Fixture helpers
@@ -18,10 +19,8 @@ import { execSync } from 'node:child_process';
 //
 // These tests isolate the project root via MAESTRO_PROJECT_ROOT so that
 // getProjectRoot() from path-validator points at a fresh tmp dir per test.
-// The module is re-imported inside each test via dynamic import AFTER the
-// env var is set; dynamic import with a cache-busting query string gives us
-// a clean module cache between tests so the constants resolved inside the
-// module (if any) are picked up fresh each time.
+// team-members resolves that environment variable when its functions are
+// called, so a static import is safe and compatible with Vitest workers.
 // ---------------------------------------------------------------------------
 
 let tmpDir: string;
@@ -63,16 +62,8 @@ function cdBack(): void {
   process.chdir(prevCwd);
 }
 
-// ---------------------------------------------------------------------------
-// Module loader (cache-busted per test so internal state is fresh)
-// ---------------------------------------------------------------------------
-
-async function loadModule() {
-  // Bust ESM cache by appending a unique query. Vitest/tsx both honor this.
-  const mod = await import(
-    `../team-members.js?t=${Date.now()}-${Math.random()}`
-  );
-  return mod as typeof import('../team-members.js');
+function loadModule(): typeof teamMembers {
+  return teamMembers;
 }
 
 // ---------------------------------------------------------------------------

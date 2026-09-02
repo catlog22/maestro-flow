@@ -15,6 +15,7 @@ import { loadGlossary, type DomainTerm } from '../tools/domain-loader.js';
 import { matchDomainTerms, collectRewriteHints } from '../tools/domain-matcher.js';
 import { searchWiki, type WikiSearchHit } from './wiki-search-bridge.js';
 import { buildKgContextSections } from './kg-context-injector.js';
+import { resolveRepositoryContext } from '../repository/context.js';
 
 // ============================================================================
 // Types
@@ -84,6 +85,10 @@ export async function evaluateKeywordInjection(
   const sections: ContextSection[] = [];
 
   const workflowRoot = join(projectPath, '.workflow');
+  let currentRepoId: string | null = null;
+  try {
+    currentRepoId = resolveRepositoryContext('current', { projectRoot: projectPath }).repoId;
+  } catch { /* scoped content fails closed; legacy unscoped content remains visible */ }
 
   // ── Domain context (always evaluated) ──────────────────────────────
   const domainSections = buildDomainSections(prompt, projectPath);
@@ -96,7 +101,7 @@ export async function evaluateKeywordInjection(
   let matchedKws: string[] = [];
 
   if (promptKeywords.length > 0) {
-    const index = buildKeywordIndex(projectPath);
+    const index = buildKeywordIndex(projectPath, currentRepoId);
     if (index.size > 0) {
       const matchedAll = lookupKeywords(index, promptKeywords);
       if (matchedAll.length > 0) {
@@ -121,7 +126,10 @@ export async function evaluateKeywordInjection(
   let wikiSource: 'daemon' | 'indexer' | 'keyword' | 'none' = 'none';
   if (toInject.length > 0) wikiSource = 'keyword';
   try {
-    const { hits, source } = await searchWiki(workflowRoot, prompt, { limit: 3 });
+    const { hits, source } = await searchWiki(workflowRoot, prompt, {
+      limit: 3,
+      applicableRepoId: currentRepoId,
+    });
     if (source !== 'none') wikiSource = source;
     if (hits.length > 0) {
       const wikiEntries = hits.map(h => ({ id: h.id, keywords: [] as string[] }));

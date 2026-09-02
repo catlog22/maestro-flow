@@ -1,8 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { existsSync, mkdtempSync, rmSync } from 'node:fs';
+import { existsSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import type { Server } from 'node:net';
+import { connect, type Server } from 'node:net';
 
 const indexer = vi.hoisted(() => ({
   get: vi.fn(),
@@ -35,6 +35,7 @@ import {
 import {
   daemonIdentityRequest,
   getDaemonPath,
+  getDaemonSpawnLockPath,
   isDaemonInfoV2,
   readDaemonInfo,
 } from '../daemon-types.js';
@@ -112,6 +113,36 @@ describe.sequential('search daemon lifecycle state machine', () => {
     await waitUntil(() => !existsSync(getDaemonPath(root)), 'cancelled descriptor was not removed');
   });
 
+  it('converges concurrent starts to one descriptor owner', async () => {
+    const root = workflowRoot();
+    const attempts = await Promise.allSettled([
+      startDaemon(root, { workflowRoot: root }),
+      startDaemon(root, { workflowRoot: root }),
+    ]);
+    const started = attempts.filter(
+      (attempt): attempt is PromiseFulfilledResult<Awaited<ReturnType<typeof startDaemon>>> =>
+        attempt.status === 'fulfilled',
+    );
+    const rejected = attempts.filter(attempt => attempt.status === 'rejected');
+
+    expect(started).toHaveLength(1);
+    expect(rejected).toHaveLength(1);
+    expect(currentInfo(root).pid).toBe(process.pid);
+    running.push({ root, server: started[0].value.server });
+  });
+
+  it('cleans stale spawn artifacts after atomically claiming the descriptor', async () => {
+    const root = workflowRoot();
+    const lockPath = getDaemonSpawnLockPath(root);
+    writeFileSync(lockPath, '0:1:stale-primary');
+    writeFileSync(`${lockPath}.reclaim`, '0:2:stale-reclaimer');
+
+    const started = await startDaemon(root, { workflowRoot: root });
+    running.push({ root, server: started.server });
+    expect(existsSync(lockPath)).toBe(false);
+    expect(existsSync(`${lockPath}.reclaim`)).toBe(false);
+  });
+
   it('rejects malformed and out-of-bound search requests before indexer work', async () => {
     const root = workflowRoot();
     const started = await startDaemon(root, { workflowRoot: root });
@@ -164,12 +195,149 @@ describe.sequential('search daemon lifecycle state machine', () => {
     let releaseRebuild!: (value: object) => void;
     indexer.rebuild.mockImplementationOnce(() => new Promise(resolve => { releaseRebuild = resolve; }));
 
-    await expect(invalidateSearchIndex(root, { timeoutMs: 100 })).resolves.toBeUndefined();
+    await expect(Promise.all(Array.from(
+      { length: 5 },
+      () => invalidateSearchIndex(root, { timeoutMs: 100 }),
+    ))).resolves.toEqual([undefined, undefined, undefined, undefined, undefined]);
     expect(indexer.get).toHaveBeenCalledTimes(1);
-    expect(indexer.invalidate).toHaveBeenCalledTimes(1);
+    expect(indexer.invalidate).toHaveBeenCalledTimes(5);
     expect(indexer.rebuild).toHaveBeenCalledTimes(1);
 
     releaseRebuild({});
+  });
+
+  it('aborts an in-flight search when its client disconnects', async () => {
+    const root = workflowRoot();
+    const started = await startDaemon(root, { workflowRoot: root });
+    running.push({ root, server: started.server });
+    const descriptor = currentInfo(root);
+    let observedSignal: AbortSignal | undefined;
+    indexer.searchWithMeta.mockImplementationOnce((...args: unknown[]) => {
+      observedSignal = (args[2] as { signal?: AbortSignal } | undefined)?.signal;
+      return new Promise((_resolve, reject) => {
+        observedSignal?.addEventListener('abort', () => reject(observedSignal?.reason), { once: true });
+      });
+    });
+
+    const socket = connect(descriptor.port, '127.0.0.1');
+    await new Promise<void>((resolve, reject) => {
+      socket.once('connect', resolve);
+      socket.once('error', reject);
+    });
+    socket.write(JSON.stringify({
+      action: 'search',
+      query: 'disconnect',
+      limit: 1,
+      ...daemonIdentityRequest(descriptor),
+    }) + '\n');
+    await waitUntil(() => observedSignal !== undefined, 'search did not receive an abort signal');
+
+    socket.destroy();
+    await waitUntil(() => observedSignal?.aborted === true, 'disconnected search was not aborted');
+  });
+
+  it('rejects excess work while preserving lifecycle requests', async () => {
+    const root = workflowRoot();
+    const started = await startDaemon(
+      root,
+      { workflowRoot: root },
+      { maxActiveRequests: 1 },
+    );
+    running.push({ root, server: started.server });
+    let releaseSearch!: (value: { results: never[]; embeddingUsed: boolean; embeddingDocs: number }) => void;
+    indexer.searchWithMeta.mockImplementationOnce(() => new Promise(resolve => { releaseSearch = resolve; }));
+
+    const first = tryDaemonSearch(root, 'first', 1, true);
+    await waitUntil(() => indexer.searchWithMeta.mock.calls.length === 1, 'first search did not start');
+    await expect(tryDaemonSearch(root, 'second', 1, true)).resolves.toMatchObject({
+      ok: false,
+      error: 'too many active requests',
+    });
+    await expect(healthDaemon(root)).resolves.toMatchObject({ ok: true, state: 'ready' });
+
+    releaseSearch({ results: [], embeddingUsed: false, embeddingDocs: 0 });
+    await expect(first).resolves.toMatchObject({ ok: true });
+  });
+
+  it('tracks and closes sockets rejected by the connection cap', async () => {
+    const root = workflowRoot();
+    const started = await startDaemon(
+      root,
+      { workflowRoot: root },
+      { maxConnections: 1 },
+    );
+    running.push({ root, server: started.server });
+    const descriptor = currentInfo(root);
+    const blocker = connect(descriptor.port, '127.0.0.1');
+    await new Promise<void>((resolve, reject) => {
+      blocker.once('connect', resolve);
+      blocker.once('error', reject);
+    });
+    blocker.write('{"action":');
+
+    await expect(queryDaemon(descriptor.port, {
+      action: 'search', query: 'over cap', limit: 1,
+    })).resolves.toMatchObject({ ok: false, error: 'too many connections' });
+
+    blocker.destroy();
+    await new Promise(resolve => setTimeout(resolve, 20));
+    await expect(stopDaemon(root)).resolves.toBe(true);
+  });
+
+  it('finalizes descriptor cleanup when indexer close rejects', async () => {
+    const root = workflowRoot();
+    const started = await startDaemon(root, { workflowRoot: root });
+    running.push({ root, server: started.server });
+    indexer.close.mockRejectedValueOnce(new Error('close failed'));
+
+    await expect(stopDaemon(root)).resolves.toBe(true);
+    await waitUntil(() => !existsSync(getDaemonPath(root)), 'failed close retained daemon ownership');
+  });
+
+  it('destroys stuck sockets but retains ownership for embedded callers until cleanup settles', async () => {
+    const root = workflowRoot();
+    const started = await startDaemon(
+      root,
+      { workflowRoot: root },
+      { drainTimeoutMs: 30 },
+    );
+    running.push({ root, server: started.server });
+    let releaseClose!: () => void;
+    indexer.close.mockImplementationOnce(() => new Promise<void>(resolve => { releaseClose = resolve; }));
+    const descriptor = currentInfo(root);
+    const socket = connect(descriptor.port, '127.0.0.1');
+    await new Promise<void>((resolve, reject) => {
+      socket.once('connect', resolve);
+      socket.once('error', reject);
+    });
+    socket.write('{"action":');
+
+    await expect(stopDaemon(root)).resolves.toBe(true);
+    await waitUntil(() => socket.destroyed, 'drain deadline did not destroy open sockets');
+    expect(existsSync(getDaemonPath(root))).toBe(true);
+
+    releaseClose();
+    await waitUntil(() => !existsSync(getDaemonPath(root)), 'settled cleanup retained daemon ownership');
+  });
+
+  it('hard-exits a dedicated daemon only after synchronously releasing ownership', async () => {
+    const root = workflowRoot();
+    const exit = vi.spyOn(process, 'exit').mockImplementation((() => undefined) as typeof process.exit);
+    try {
+      const started = await startDaemon(
+        root,
+        { workflowRoot: root },
+        { drainTimeoutMs: 30, exitOnDrainTimeout: true },
+      );
+      running.push({ root, server: started.server });
+      indexer.close.mockImplementationOnce(() => new Promise<void>(() => {}));
+
+      await expect(stopDaemon(root)).resolves.toBe(true);
+      await waitUntil(() => exit.mock.calls.length === 1, 'dedicated daemon did not hard-exit');
+      expect(existsSync(getDaemonPath(root))).toBe(false);
+    } finally {
+      exit.mockRestore();
+    }
   });
 
   it('joins indexer background shutdown before releasing the descriptor', async () => {
@@ -180,7 +348,7 @@ describe.sequential('search daemon lifecycle state machine', () => {
     indexer.close.mockImplementationOnce(() => new Promise<void>(resolve => { releaseClose = resolve; }));
 
     await expect(stopDaemon(root)).resolves.toBe(true);
-    expect(indexer.close).toHaveBeenCalledTimes(1);
+    expect(indexer.close).toHaveBeenCalledWith({ disposeEmbeddingPipeline: true });
     expect(existsSync(getDaemonPath(root))).toBe(true);
 
     releaseClose();

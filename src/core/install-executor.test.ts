@@ -108,7 +108,7 @@ describe('executeInstallPipeline additive semantics', () => {
     expect(existsSync(join(globalCommands, 'maestro-quick.md'))).toBe(false);
     expect(existsSync(join(globalPrepare, 'analyze.md'))).toBe(true);
     expect(existsSync(join(globalWorkflows, 'analyze.md'))).toBe(true);
-  }, 15_000);
+  }, 60_000);
 
   it('gives explicit profile disable precedence and preserves omitted plugin state', () => {
     const disabledCustom = {

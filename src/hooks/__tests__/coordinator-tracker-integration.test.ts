@@ -1,17 +1,21 @@
 /**
- * Integration tests for coordinator-tracker using mock workspace fixtures.
+ * Integration tests for coordinator-tracker using an isolated mock workspace.
  *
- * Fixtures at: ./fixtures/mock-workspace/
- *   .workflow/.maestro/session-abc123/status.json     — A类 (maestro/maestro-coordinate)
- *   .workflow/.maestro/coord-.../walker-state.json — B类 (link-coordinate)
- *   chains/full-lifecycle.json                         — chain graph for next-node resolution
- *
- * Fixtures at: ./fixtures/coordinate-cli-output.json   — simulated Bash CLI output
+ * The `.workflow` files are created at runtime because repository `.workflow`
+ * state is intentionally gitignored. The chain graph and coordinate CLI output
+ * remain tracked source fixtures under ./fixtures/.
  */
 
-import { describe, it } from 'vitest';
+import { afterAll, beforeAll, describe, it } from 'vitest';
 import assert from 'node:assert';
-import { readFileSync, rmSync, existsSync } from 'node:fs';
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
@@ -30,7 +34,72 @@ import {
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 const FIXTURES = join(__dirname, 'fixtures');
-const MOCK_WS = join(FIXTURES, 'mock-workspace');
+let MOCK_WS: string;
+
+function writeJson(path: string, value: unknown): void {
+  mkdirSync(dirname(path), { recursive: true });
+  writeFileSync(path, JSON.stringify(value, null, 2), 'utf8');
+}
+
+beforeAll(() => {
+  MOCK_WS = mkdtempSync(join(tmpdir(), 'coordinator-tracker-test-'));
+
+  const chainDir = join(MOCK_WS, 'chains');
+  mkdirSync(chainDir, { recursive: true });
+  writeFileSync(
+    join(chainDir, 'full-lifecycle.json'),
+    readFileSync(join(FIXTURES, 'mock-workspace', 'chains', 'full-lifecycle.json'), 'utf8'),
+    'utf8',
+  );
+
+  writeJson(
+    join(MOCK_WS, '.workflow', '.maestro', 'session-abc123', 'status.json'),
+    {
+      session_id: 'session-abc123',
+      intent: 'implement OAuth2 authentication with refresh tokens',
+      chain_name: 'full-lifecycle',
+      phase: 2,
+      current_step: 2,
+      status: 'paused',
+      steps: [
+        { index: 0, skill: 'maestro-plan', args: '2', status: 'completed' },
+        { index: 1, skill: 'maestro-execute', args: '2', status: 'completed' },
+        { index: 2, skill: 'quality-review', args: '2', status: 'paused' },
+        { index: 3, skill: 'quality-test', args: '2', status: 'pending' },
+        { index: 4, skill: 'maestro-milestone-audit', args: '', status: 'pending' },
+        { index: 5, skill: 'maestro-milestone-complete', args: '', status: 'pending' },
+      ],
+    },
+  );
+
+  writeJson(
+    join(
+      MOCK_WS,
+      '.workflow',
+      '.maestro',
+      'coord-1744668285953-d428',
+      'walker-state.json',
+    ),
+    {
+      graph_id: 'full-lifecycle',
+      intent: 'implement OAuth2 authentication with refresh tokens',
+      current_node: 'review',
+      status: 'step_paused',
+      context: { project: { current_phase: 2 } },
+      history: [
+        { node_id: 'plan', node_type: 'command', outcome: 'success' },
+        { node_id: 'execute', node_type: 'command', outcome: 'success' },
+        { node_id: 'review', node_type: 'command', outcome: 'success' },
+      ],
+    },
+  );
+});
+
+afterAll(() => {
+  if (MOCK_WS && existsSync(MOCK_WS)) {
+    rmSync(MOCK_WS, { recursive: true, force: true });
+  }
+});
 
 // ---------------------------------------------------------------------------
 // Scenario A: /maestro & /maestro-coordinate — status.json tracking
@@ -138,7 +207,7 @@ describe('Scenario B: link-coordinate Bash output capture', () => {
 
     assert.ok(hint.includes('## Coordinator Session Active'));
     assert.ok(hint.includes('step_paused'));
-    assert.ok(hint.includes('/maestro-link-coordinate -c coord-1744668285953-d428'));
+    assert.ok(hint.includes('maestro coordinate -c coord-1744668285953-d428'));
   });
 });
 
@@ -192,10 +261,10 @@ describe('Scenario D: bridge file + session merge', () => {
     assert.strictEqual(read.session_id, testSession);
     assert.strictEqual(read.chain_name, 'full-lifecycle');
     assert.strictEqual(read.steps_total, 6);
-    assert.strictEqual(read.steps_completed, 3);
+    assert.strictEqual(read.steps_completed, 2);
     assert.strictEqual(read.current_step?.skill, 'quality-review');
     assert.strictEqual(read.next_step?.skill, 'quality-test');
-    assert.strictEqual(read.remaining_steps.length, 2);
+    assert.strictEqual(read.remaining_steps.length, 3);
     assert.strictEqual(read.status, 'paused');
 
     // Cleanup

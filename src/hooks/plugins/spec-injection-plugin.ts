@@ -9,6 +9,7 @@ import { loadSpecInjectionConfig } from '../../config/index.js';
 import { resolveSelf } from '../../tools/team-members.js';
 import { evaluateKeywordInjection } from '../keyword-spec-injector.js';
 import { logInjectionEvent } from '../spec-analytics.js';
+import { resolveRepositoryContext } from '../../repository/context.js';
 
 /**
  * In-process plugin for `maestro coordinate` — injects relevant specs
@@ -34,7 +35,12 @@ export class SpecInjectionPlugin implements MaestroPlugin {
       const category = inferCategory(prompt);
       const uid = resolveUidSafe();
 
-      const loaderOpts: LoadSpecsOptions = {};
+      let currentRepoId: string | null = null;
+      try {
+        currentRepoId = resolveRepositoryContext('current', { projectRoot: this.projectPath }).repoId;
+      } catch { /* legacy/unmanaged repositories expose only unscoped knowledge */ }
+
+      const loaderOpts: LoadSpecsOptions = { applicableRepoId: currentRepoId };
       if (config.keywordFilters?.include?.length) loaderOpts.includeKeywords = config.keywordFilters.include;
       if (config.keywordFilters?.exclude?.length) loaderOpts.excludeKeywords = config.keywordFilters.exclude;
 
@@ -48,25 +54,35 @@ export class SpecInjectionPlugin implements MaestroPlugin {
 
       // Load category-level extra documents
       if (catDocConfig?.docs?.length) {
-        const docsResult = loadExtraDocs(this.projectPath, catDocConfig.docs);
+        const docsResult = loadExtraDocs(this.projectPath, catDocConfig.docs, { applicableRepoId: currentRepoId });
         if (docsResult.content) parts.push(docsResult.content);
       }
 
       // Always-inject (session start): docs, keyword-matched entries, categories
       if (config.always) {
         if (config.always.docs?.length) {
-          const alwaysResult = loadExtraDocs(this.projectPath, config.always.docs);
+          const alwaysResult = loadExtraDocs(this.projectPath, config.always.docs, { applicableRepoId: currentRepoId });
           if (alwaysResult.content) parts.push(alwaysResult.content);
         }
         if (config.always.keywords?.length) {
-          const kwOpts: LoadSpecsOptions = { includeKeywords: config.always.keywords };
+          const kwOpts: LoadSpecsOptions = {
+            includeKeywords: config.always.keywords,
+            applicableRepoId: currentRepoId,
+          };
           const kwResult = loadSpecs(this.projectPath, undefined, uid, undefined, undefined, kwOpts);
           if (kwResult.content) parts.push(kwResult.content);
         }
         if (config.always.categories?.length) {
           for (const cat of config.always.categories) {
             if (cat === category) continue;
-            const catRes = loadSpecs(this.projectPath, cat as import('../../tools/spec-loader.js').SpecCategory, uid);
+            const catRes = loadSpecs(
+              this.projectPath,
+              cat as import('../../tools/spec-loader.js').SpecCategory,
+              uid,
+              undefined,
+              undefined,
+              { applicableRepoId: currentRepoId },
+            );
             if (catRes.content) parts.push(catRes.content);
           }
         }

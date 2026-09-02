@@ -21,9 +21,10 @@ import {
   unlinkSync,
   readFileSync,
 } from 'node:fs';
-import { join } from 'node:path';
+import { join, resolve } from 'node:path';
 import { tmpdir } from 'node:os';
 import { execSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
 
 import { buildTeamSegment } from '../statusline.js';
 
@@ -40,7 +41,9 @@ let prevRoot: string | undefined;
 let prevCwd: string;
 
 function cachePath(session: string = SESSION_ID): string {
-  return join(tmpdir(), `maestro-team-statusline-${session}.json`);
+  const projectRoot = resolve(process.env.MAESTRO_PROJECT_ROOT || process.cwd());
+  const rootFence = createHash('sha256').update(projectRoot).digest('hex').slice(0, 16);
+  return join(tmpdir(), `maestro-team-statusline-${rootFence}-${session}.json`);
 }
 
 function clearCache(session: string = SESSION_ID): void {

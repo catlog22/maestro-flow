@@ -102,6 +102,7 @@ function buildCurrentSourceStore(): void {
     cwd: repoRoot,
     encoding: 'utf8',
     windowsHide: true,
+    timeout: 60_000,
     maxBuffer: 16 * 1024 * 1024,
   });
   if (result.error) throw result.error;
@@ -122,9 +123,37 @@ function buildCurrentSourceStore(): void {
   sourceBuildStoreSha256 = sha(sourceBuildStore);
 }
 
+const children = new Set<ChildProcess>();
+const closedChildren = new WeakSet<ChildProcess>();
+
+function trackChild(child: ChildProcess): ChildProcess {
+  children.add(child);
+  child.once('close', () => {
+    closedChildren.add(child);
+    children.delete(child);
+  });
+  return child;
+}
+
+async function killAndWait(child: ChildProcess): Promise<void> {
+  if (!closedChildren.has(child) && child.exitCode === null && child.signalCode === null) {
+    try { child.kill('SIGKILL'); } catch { /* already exited */ }
+  }
+  if (closedChildren.has(child) || child.exitCode !== null || child.signalCode !== null) {
+    children.delete(child);
+    return;
+  }
+  await new Promise<void>(resolveClose => child.once('close', () => resolveClose()));
+  children.delete(child);
+}
+
+async function stopTrackedChildren(): Promise<void> {
+  await Promise.all([...children].map(child => killAndWait(child)));
+}
+
 function runChild(args: string[], timeoutMs = 20_000): Promise<ChildResult> {
   return new Promise(resolveResult => {
-    const child = spawn(process.execPath, [childFixture, ...args], {
+    const child = trackChild(spawn(process.execPath, [childFixture, ...args], {
       cwd: repoRoot,
       env: {
         ...process.env,
@@ -135,7 +164,7 @@ function runChild(args: string[], timeoutMs = 20_000): Promise<ChildResult> {
       },
       windowsHide: true,
       stdio: ['ignore', 'pipe', 'pipe'],
-    });
+    }));
     let stdout = '';
     let stderr = '';
     let timedOut = false;
@@ -143,7 +172,7 @@ function runChild(args: string[], timeoutMs = 20_000): Promise<ChildResult> {
     child.stderr.on('data', chunk => { stderr += String(chunk); });
     const timer = setTimeout(() => {
       timedOut = true;
-      child.kill('SIGKILL');
+      void killAndWait(child);
     }, timeoutMs);
     child.on('close', (code, signal) => {
       clearTimeout(timer);
@@ -152,22 +181,36 @@ function runChild(args: string[], timeoutMs = 20_000): Promise<ChildResult> {
   });
 }
 
-function waitForReady(child: ChildProcess, timeoutMs = 10_000): Promise<string> {
-  return new Promise((resolveReady, reject) => {
-    let stdout = '';
-    const timer = setTimeout(() => reject(new Error(`child ready timeout; stdout=${stdout}`)), timeoutMs);
-    child.stdout?.on('data', chunk => {
-      stdout += String(chunk);
-      if (stdout.includes('\n')) {
+async function waitForReady(child: ChildProcess, timeoutMs = 10_000): Promise<string> {
+  try {
+    return await new Promise<string>((resolveReady, reject) => {
+      let stdout = '';
+      const onData = (chunk: unknown) => {
+        stdout += String(chunk);
+        if (stdout.includes('\n')) finish(resolveReady, stdout);
+      };
+      const onClose = (code: number | null, signal: NodeJS.Signals | null) => {
+        finish(reject, new Error(`child exited before ready (code=${code}, signal=${signal}); stdout=${stdout}`));
+      };
+      const onError = (error: Error) => finish(reject, error);
+      const finish = <T>(settle: (value: T) => void, value: T) => {
         clearTimeout(timer);
-        resolveReady(stdout);
-      }
+        child.stdout?.off('data', onData);
+        child.off('close', onClose);
+        child.off('error', onError);
+        settle(value);
+      };
+      const timer = setTimeout(() => {
+        finish(reject, new Error(`child ready timeout; stdout=${stdout}`));
+      }, timeoutMs);
+      child.stdout?.on('data', onData);
+      child.once('close', onClose);
+      child.once('error', onError);
     });
-    child.once('error', error => {
-      clearTimeout(timer);
-      reject(error);
-    });
-  });
+  } catch (error) {
+    await killAndWait(child);
+    throw error;
+  }
 }
 
 function sha(path: string): string {
@@ -233,11 +276,13 @@ beforeAll(() => {
   buildCurrentSourceStore();
 }, 60_000);
 
-afterEach(() => {
+afterEach(async () => {
+  await stopTrackedChildren();
   for (const root of roots.splice(0)) rmSync(root, { recursive: true, force: true });
 });
 
-afterAll(() => {
+afterAll(async () => {
+  await stopTrackedChildren();
   if (sourceBuildRoot) rmSync(sourceBuildRoot, { recursive: true, force: true });
 });
 
@@ -267,58 +312,67 @@ describe('SessionStore multi-process and crash durability', () => {
   it('INV-01 refuses a live child owner while its lock is young', async () => {
     const root = createRoot();
     const store = new SessionStore(root);
-    const child = spawn(process.execPath, [childFixture, 'hold-lock', root], {
+    const child = trackChild(spawn(process.execPath, [childFixture, 'hold-lock', root], {
       cwd: repoRoot,
       windowsHide: true,
       stdio: ['ignore', 'pipe', 'pipe'],
-    });
-    await waitForReady(child);
-    let entered = false;
-    let error: unknown;
-    try { store.withLock(() => { entered = true; }); } catch (caught) { error = caught; }
-    child.kill('SIGKILL');
+    }));
+    try {
+      await waitForReady(child);
+      let entered = false;
+      let error: unknown;
+      try { store.withLock(() => { entered = true; }); } catch (caught) { error = caught; }
 
-    expect({ entered, error: error instanceof Error ? error.message : null })
-      .toEqual({ entered: false, error: expect.stringContaining('SessionStore locked by PID') });
+      expect({ entered, error: error instanceof Error ? error.message : null })
+        .toEqual({ entered: false, error: expect.stringContaining('SessionStore locked by PID') });
+    } finally {
+      await killAndWait(child);
+    }
   }, 15_000);
 
   it('INV-01 never steals an aged lock from a still-live child owner', async () => {
     const root = createRoot();
     const store = new SessionStore(root);
-    const child = spawn(process.execPath, [childFixture, 'hold-lock', root], {
+    const child = trackChild(spawn(process.execPath, [childFixture, 'hold-lock', root], {
       cwd: repoRoot,
       windowsHide: true,
       stdio: ['ignore', 'pipe', 'pipe'],
-    });
-    await waitForReady(child);
-    const lock = join(store.sessionsRoot, '.session-store.lock');
-    const old = new Date(Date.now() - 60_000);
-    utimesSync(lock, old, old);
-    let entered = false;
-    let error: unknown;
-    try { store.withLock(() => { entered = true; }); } catch (caught) { error = caught; }
-    child.kill('SIGKILL');
+    }));
+    try {
+      await waitForReady(child);
+      const lock = join(store.sessionsRoot, '.session-store.lock');
+      const old = new Date(Date.now() - 60_000);
+      utimesSync(lock, old, old);
+      let entered = false;
+      let error: unknown;
+      try { store.withLock(() => { entered = true; }); } catch (caught) { error = caught; }
 
-    expect({ entered, error: error instanceof Error ? error.message : null }, 'parent displaced a live child solely because mtime exceeded 30s')
-      .toEqual({ entered: false, error: expect.stringContaining('SessionStore locked by PID') });
+      expect({ entered, error: error instanceof Error ? error.message : null }, 'parent displaced a live child solely because mtime exceeded 30s')
+        .toEqual({ entered: false, error: expect.stringContaining('SessionStore locked by PID') });
+    } finally {
+      await killAndWait(child);
+    }
   }, 15_000);
 
   it('INV-02 reclaims a recent lock after the child owner is dead', async () => {
     const root = createRoot();
     const store = new SessionStore(root);
-    const child = spawn(process.execPath, [childFixture, 'hold-lock', root], {
+    const child = trackChild(spawn(process.execPath, [childFixture, 'hold-lock', root], {
       cwd: repoRoot,
       windowsHide: true,
       stdio: ['ignore', 'pipe', 'pipe'],
-    });
-    await waitForReady(child);
-    child.kill('SIGKILL');
-    await new Promise<void>(resolveClose => child.once('close', () => resolveClose()));
-    let entered = false;
+    }));
+    try {
+      await waitForReady(child);
+      await killAndWait(child);
+      let entered = false;
 
-    store.withLock(() => { entered = true; });
+      store.withLock(() => { entered = true; });
 
-    expect(entered).toBe(true);
+      expect(entered).toBe(true);
+    } finally {
+      await killAndWait(child);
+    }
   });
 
   it('INV-01/04 serializes deterministic high-frequency writers without lock races or loss', async () => {
@@ -339,14 +393,26 @@ describe('SessionStore multi-process and crash durability', () => {
       mkdirSync(barrierDir, { recursive: true });
       const lock = join(store.sessionsRoot, '.session-store.lock');
       const monitor = startLockLifecycleMonitor(lock, store.sessionsRoot);
+      let lifecycle: ReturnType<typeof monitor.stop> | undefined;
+      const stopMonitor = (): ReturnType<typeof monitor.stop> => {
+        lifecycle ??= monitor.stop();
+        return lifecycle!;
+      };
+      try {
       const started = Date.now();
       const pending = Array.from({ length: writers }, (_, writer) =>
         runChild(['update-counter-stress', root, barrierDir, String(seed), String(writer)], 30_000)
           .then(result => ({ writer, result })));
-      const readyWaitMs = await waitForReadyFiles(barrierDir, writers);
+      let readyWaitMs: number;
+      try {
+        readyWaitMs = await waitForReadyFiles(barrierDir, writers);
+      } catch (error) {
+        await stopTrackedChildren();
+        throw error;
+      }
       writeFileSync(join(barrierDir, 'release'), JSON.stringify({ round, seed, released_at: Date.now() }), { flag: 'wx' });
       const results = await Promise.all(pending);
-      const lifecycle = monitor.stop();
+      const lifecycleStats = stopMonitor();
       expectedCounter += writers;
 
       let observedCounter: number | null = null;
@@ -386,14 +452,17 @@ describe('SessionStore multi-process and crash durability', () => {
         authority_unchanged: JSON.stringify(authorityAfter) === JSON.stringify(authorityBefore),
         lock_absent_after: !existsSync(lock),
         transaction_intent_absent_after: !existsSync(join(store.sessionsRoot, '.session-store-transaction.json')),
-        lock_watch_events: lifecycle.watchEvents,
-        lock_present_transitions: lifecycle.presentTransitions,
-        lock_absent_transitions: lifecycle.absentTransitions,
-        lock_tokens_observed: lifecycle.tokens.length,
-        observer_errors: lifecycle.errors,
+        lock_watch_events: lifecycleStats.watchEvents,
+        lock_present_transitions: lifecycleStats.presentTransitions,
+        lock_absent_transitions: lifecycleStats.absentTransitions,
+        lock_tokens_observed: lifecycleStats.tokens.length,
+        observer_errors: lifecycleStats.errors,
       };
       rounds.push(summary);
       console.log(`DURABILITY_STRESS_ROUND ${JSON.stringify(summary)}`);
+      } finally {
+        stopMonitor();
+      }
     }
 
     const failedRounds = rounds.filter(round => (

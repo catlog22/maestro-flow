@@ -23,8 +23,15 @@ export interface WikiSource {
   path: string;
   /** 1-based line number for virtual JSONL rows. */
   line?: number;
-  /** Name of the linked workspace this entry originates from. Undefined for local entries. */
+  /** Legacy linked alias. Undefined for local entries. */
   workspace?: string;
+  /** Canonical physical repository origin. Null denotes a legacy repository without identity. */
+  repoId?: string | null;
+  repoName?: string;
+  /** `current` for the host repository, otherwise the configured linked alias. */
+  alias?: string;
+  /** Stable read fence. Identity-backed repositories use `repo:<repoId>`. */
+  workspaceFence?: string;
 }
 
 export interface WikiEntry {
@@ -52,6 +59,14 @@ export interface WikiEntry {
    */
   ext: Record<string, unknown>;
 
+  /** Canonical repository origin, duplicated from source for result serialization. */
+  repoId?: string | null;
+  repoName?: string;
+  alias?: string;
+  workspaceFence?: string;
+  /** Null/undefined means historical unscoped content and preserves legacy visibility. */
+  appliesToRepoIds?: string[] | null;
+
   // ── Enrichment fields ────────────────────────────────────────────────
   /** Spec scope: project (default), global, team, personal. Null for non-spec types. */
   scope: WikiScope | null;
@@ -65,6 +80,32 @@ export interface WikiEntry {
   sourceRef: string | null;
   /** Parent entry ID for hierarchical relationships (child→parent). */
   parent: string | null;
+}
+
+export function isWikiEntryApplicable(
+  entry: Pick<WikiEntry, 'appliesToRepoIds' | 'ext'>,
+  targetRepoId: string | null | undefined,
+): boolean {
+  const explicit = entry.appliesToRepoIds;
+  const fallback = Array.isArray(entry.ext?.appliesToRepoIds)
+    ? entry.ext.appliesToRepoIds.filter((value): value is string => typeof value === 'string')
+    : undefined;
+  const appliesToRepoIds = explicit ?? fallback;
+  // Historical entries had no applicability field. They retain legacy visibility.
+  if (appliesToRepoIds === undefined || appliesToRepoIds === null) return true;
+  if (!targetRepoId || targetRepoId === '__legacy__') return false;
+  return appliesToRepoIds.includes(targetRepoId);
+}
+
+export function matchesWikiRepository(
+  entry: Pick<WikiEntry, 'repoId' | 'alias' | 'source'>,
+  filters: Pick<WikiSearchFilters, 'repoId' | 'repoAlias' | 'applicableRepoId'>,
+): boolean {
+  if (filters.repoId && (entry.repoId ?? entry.source.repoId) !== filters.repoId) return false;
+  if (filters.repoAlias && (entry.alias ?? entry.source.alias) !== filters.repoAlias) return false;
+  if (filters.applicableRepoId !== undefined
+    && !isWikiEntryApplicable(entry as WikiEntry, filters.applicableRepoId)) return false;
+  return true;
 }
 
 export interface WikiIndex {
@@ -83,6 +124,12 @@ export interface WikiSearchFilters {
   tag?: string;
   keyword?: string;
   workspace?: string;
+  /** Canonical physical-origin repository filter. */
+  repoId?: string;
+  /** Origin alias filter, including `current` and legacy linked aliases. */
+  repoAlias?: string;
+  /** Applicability target. `__legacy__` represents a target without persisted identity. */
+  applicableRepoId?: string;
   includeDeprecated?: boolean;
 }
 
@@ -102,6 +149,9 @@ export interface WikiFilters {
   tool?: boolean;
   /** Filter by source workspace name. */
   workspace?: string;
+  repoId?: string;
+  repoAlias?: string;
+  applicableRepoId?: string;
 }
 
 export const recallSnapshotSchema = z.object({
@@ -130,7 +180,11 @@ export type RecallSnapshot = z.infer<typeof recallSnapshotSchema>;
 
 // ── Persisted index (written to .workflow/wiki-index.json) ────────────
 
-/** Lightweight entry for the persisted index (no body/raw/ext). */
+/**
+ * Lightweight canonical entry written by current indexers. Runtime routing and
+ * display data (source descriptors, aliases, names, and fences) is deliberately
+ * absent; consumers must resolve it from the live repository configuration.
+ */
 export interface PersistedEntry {
   id: string;
   type: WikiNodeType;
@@ -147,16 +201,34 @@ export interface PersistedEntry {
   sourceRef: string | null;
   parent: string | null;
   related: string[];
-  source: WikiSource;
+  /** Canonical physical-repository attribution. */
+  repoId?: string | null;
+  /** Canonical applicability; absent/null retains historical unscoped visibility. */
+  appliesToRepoIds?: string[] | null;
 }
 
-export interface PersistedWikiIndex {
-  version: 2;
+/** Version 2 remains readable by lightweight consumers during migration. */
+export interface LegacyPersistedEntry extends PersistedEntry {
+  source: WikiSource;
+  repoName?: string;
+  alias?: string;
+  workspaceFence?: string;
+}
+
+interface PersistedWikiGraph {
+  forwardLinks: Record<string, string[]>;
+  backlinks: Record<string, string[]>;
+}
+
+export type PersistedWikiIndex = {
+  version: 3;
   generatedAt: number;
   entries: PersistedEntry[];
-  graph?: {
-    forwardLinks: Record<string, string[]>;
-    backlinks: Record<string, string[]>;
-  };
-}
+  graph?: PersistedWikiGraph;
+} | {
+  version: 2;
+  generatedAt: number;
+  entries: LegacyPersistedEntry[];
+  graph?: PersistedWikiGraph;
+};
 import { z } from 'zod';

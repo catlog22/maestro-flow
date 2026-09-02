@@ -1,6 +1,5 @@
 ---
 title: Pi skills canonical generation from Maestro sources
-description: Generate Pi skills and agents from canonical Maestro .claude sources into .pi outputs without hand-maintained mirrors.
 type: recipe
 category: arch
 explicitId: rcp-20260723-pi-skills-canonical-generation
@@ -11,11 +10,10 @@ keywords:
   - buildPiSkills
   - buildPiAgents
   - generated-assets
-tags:
-  - pi
   - skills
   - agents
   - generation
+lifecycleStatus: active
 supersedes: ["knowhow-rcp-20260716-pi-maestro-flow-cli"]
 ---
 

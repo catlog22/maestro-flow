@@ -11,6 +11,8 @@ import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import type { WikiIndexer } from '#maestro-dashboard/wiki/wiki-indexer.js';
 import { isDeprecatedKnowledgeEntry } from '../utils/knowledge-lifecycle.js';
+import { loadWorkspaceConfig, resolveWorkspaceLinks } from '../config/index.js';
+import { resolveRepositoryContext } from '../repository/context.js';
 
 export interface WikiSearchHit {
   id: string;
@@ -54,7 +56,29 @@ let _indexerRoot: string | null = null;
 async function getIndexer(workflowRoot: string): Promise<WikiIndexer> {
   if (_indexer && _indexerRoot === workflowRoot) return _indexer;
   const { WikiIndexer: Cls } = await import('#maestro-dashboard/wiki/wiki-indexer.js');
-  _indexer = new Cls({ workflowRoot, persistence: 'read-only' });
+  const projectRoot = join(workflowRoot, '..');
+  const current = resolveRepositoryContext('current', { projectRoot });
+  const linkedWorkspaces = resolveWorkspaceLinks(projectRoot, loadWorkspaceConfig(projectRoot))
+    .filter(link => link.valid)
+    .map(link => ({
+      name: link.name,
+      workflowRoot: link.workflowRoot,
+      shareTypes: link.share,
+      repoId: link.repoId,
+      repoName: link.repoName,
+      workspaceFence: link.repoId ? `repo:${link.repoId}` : `linked:${link.name}`,
+    }));
+  _indexer = new Cls({
+    workflowRoot,
+    linkedWorkspaces,
+    repository: {
+      repoId: current.repoId,
+      repoName: current.repoName,
+      alias: current.alias,
+      workspaceFence: current.repoId ? `repo:${current.repoId}` : 'local',
+    },
+    persistence: 'read-only',
+  });
   _indexerRoot = workflowRoot;
   return _indexer;
 }
@@ -66,7 +90,8 @@ interface RawHit {
     title?: string;
     summary?: string;
     status?: string;
-    ext?: { status?: string };
+    ext?: { status?: string; appliesToRepoIds?: string[] };
+    appliesToRepoIds?: string[] | null;
   };
   score: number;
 }
@@ -93,11 +118,27 @@ function adaptiveMinScore(raw: RawHit[], embeddingUsed?: boolean): number {
   return normalized ? HYBRID_RELATIVE_FACTOR * top : DEFAULT_MIN_SCORE;
 }
 
-function toHits(raw: RawHit[], limit: number, minScore: number): WikiSearchHit[] {
+function isApplicable(
+  entry: RawHit['entry'],
+  targetRepoId: string | null | undefined,
+): boolean {
+  const appliesToRepoIds = entry.appliesToRepoIds ?? entry.ext?.appliesToRepoIds;
+  if (appliesToRepoIds === undefined || appliesToRepoIds === null) return true;
+  if (targetRepoId === undefined) return true;
+  return targetRepoId !== null && appliesToRepoIds.includes(targetRepoId);
+}
+
+function toHits(
+  raw: RawHit[],
+  limit: number,
+  minScore: number,
+  applicableRepoId?: string | null,
+): WikiSearchHit[] {
   return raw
     .filter((r) =>
       ALLOWED_TYPES.has(r.entry.type)
       && !isDeprecatedKnowledgeEntry(r.entry)
+      && isApplicable(r.entry, applicableRepoId)
       && r.score >= minScore
     )
     .slice(0, limit)
@@ -122,7 +163,13 @@ function hasPersistedSearchIndex(workflowRoot: string): boolean {
 export async function searchWiki(
   workflowRoot: string,
   query: string,
-  opts?: { limit?: number; minScore?: number; daemonTimeoutMs?: number; skipEmbedding?: boolean },
+  opts?: {
+    limit?: number;
+    minScore?: number;
+    daemonTimeoutMs?: number;
+    skipEmbedding?: boolean;
+    applicableRepoId?: string | null;
+  },
 ): Promise<{ hits: WikiSearchHit[]; source: WikiSearchSource }> {
   const limit = opts?.limit ?? DEFAULT_LIMIT;
   const daemonTimeoutMs = opts?.daemonTimeoutMs ?? DEFAULT_HOOK_DAEMON_TIMEOUT_MS;
@@ -141,12 +188,15 @@ export async function searchWiki(
         query,
         INTERNAL_LIMIT,
         skipEmbedding,
-        { timeoutMs: daemonTimeoutMs },
+        {
+          timeoutMs: daemonTimeoutMs,
+          filters: { applicableRepoId: opts?.applicableRepoId ?? '__legacy__' },
+        },
       );
       if (daemonResult?.ok && daemonResult.results) {
         const raw = daemonResult.results as RawHit[];
         const minScore = opts?.minScore ?? adaptiveMinScore(raw, daemonResult.embeddingUsed);
-        return { hits: toHits(raw, limit, minScore), source: 'daemon' };
+        return { hits: toHits(raw, limit, minScore, opts?.applicableRepoId), source: 'daemon' };
       }
     } catch {
       // Daemon unavailable — fall through to direct search
@@ -169,12 +219,15 @@ export async function searchWiki(
     // allowed to run unmetered on the prompt hot path.
     const indexer = await getIndexer(workflowRoot);
     const results = await withTimeout(
-      indexer.searchWithMeta(query, INTERNAL_LIMIT, { skipEmbedding: true }).then(r => r.results),
+      indexer.searchWithMeta(query, INTERNAL_LIMIT, {
+        skipEmbedding: true,
+        filters: { applicableRepoId: opts?.applicableRepoId ?? '__legacy__' },
+      }).then(r => r.results),
       DEFAULT_INDEXER_TIMEOUT_MS,
     );
     if (!results) return { hits: [], source: 'none' };
     const minScore = opts?.minScore ?? DEFAULT_MIN_SCORE;
-    return { hits: toHits(results as RawHit[], limit, minScore), source: 'indexer' };
+    return { hits: toHits(results as RawHit[], limit, minScore, opts?.applicableRepoId), source: 'indexer' };
   } catch {
     return { hits: [], source: 'none' };
   }

@@ -466,6 +466,7 @@ function graphNode(document: RankingDocument): UnifiedNode {
     metadata: {
       fixtureProvenance: document.provenance ?? null,
       fixtureWorkspace: document.workspace ?? 'local',
+      fixtureAuthorized: document.authorized !== false,
     },
     updatedAt: 0,
   };
@@ -504,6 +505,10 @@ async function projectWikiSourceFiles(
       `summary: ${JSON.stringify(document.summary)}`,
       `status: ${document.status === 'deprecated' ? 'deprecated' : 'active'}`,
       `sourceRef: ${JSON.stringify(document.id)}`,
+      `fixtureWorkspace: ${JSON.stringify(document.workspace ?? 'local')}`,
+      `fixtureAuthorized: ${document.authorized !== false}`,
+      `fixtureProvenanceSource: ${JSON.stringify(document.provenance?.source ?? '')}`,
+      `fixtureProvenancePath: ${JSON.stringify(document.provenance?.path ?? '')}`,
       'tags:',
       tags,
       '---',

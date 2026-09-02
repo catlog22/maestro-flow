@@ -3,6 +3,7 @@ import { once } from 'node:events';
 import { finished } from 'node:stream/promises';
 import { basename, dirname, extname, join, relative, resolve, sep } from 'node:path';
 import { toForwardSlash } from '../../shared/utils.js';
+import { normalizeCanonicalKnowledgeContent } from '../../../../shared/knowledge-content.js';
 import { parseFrontmatter } from './frontmatter-util.js';
 import { parseSpecEntries, parseKnowhowEntries } from './spec-entry-parser.js';
 import {
@@ -36,11 +37,18 @@ import type {
   PersistedWikiIndex,
   PersistedEntry,
 } from './wiki-types.js';
-import { recallSnapshotSchema, type RecallSnapshot } from './wiki-types.js';
+import {
+  isWikiEntryApplicable,
+  matchesWikiRepository,
+  recallSnapshotSchema,
+  type RecallSnapshot,
+} from './wiki-types.js';
 import { resolveAllowedDirectSourcePath, resolveAllowedSourcePath } from './source-path.js';
 
-// v6: session/3.0 + run/3.0 terminal history is projected into Wiki entries.
-const SEARCH_CACHE_VERSION = 6;
+// v8: persist only canonical repository attribution and rehydrate live routing metadata.
+// v7 remains dual-readable so existing caches can be rebuilt without losing compatibility.
+const SEARCH_CACHE_VERSION = 8;
+const LEGACY_SEARCH_CACHE_VERSION = 7;
 const SEARCH_PARENT_CAP = 2;
 const MAX_SEARCH_CACHE_BYTES = 128 * 1024 * 1024;
 const MAX_SEARCH_CACHE_ENTRIES = 1_000_000;
@@ -57,6 +65,87 @@ export interface WikiSearchOptions {
   skipEmbedding?: boolean;
   credibilityFactors?: Map<string, number>;
   filters?: WikiSearchFilters;
+  /** Cancels this caller's wait and query embedding without aborting shared cache builds. */
+  signal?: AbortSignal;
+}
+
+export interface WikiIndexerCloseOptions {
+  /** Only dedicated owner processes should tear down the process-global pipeline. */
+  disposeEmbeddingPipeline?: boolean;
+}
+
+function searchAbortError(signal: AbortSignal): Error {
+  return signal.reason instanceof Error ? signal.reason : new Error('wiki search aborted');
+}
+
+function throwIfSearchAborted(signal?: AbortSignal): void {
+  if (signal?.aborted) throw searchAbortError(signal);
+}
+
+function awaitWithSearchAbort<T>(work: Promise<T>, signal?: AbortSignal): Promise<T> {
+  if (!signal) return work;
+  if (signal.aborted) return Promise.reject(searchAbortError(signal));
+  return new Promise<T>((resolveWork, rejectWork) => {
+    const onAbort = (): void => {
+      cleanup();
+      rejectWork(searchAbortError(signal));
+    };
+    const cleanup = (): void => signal.removeEventListener('abort', onAbort);
+    signal.addEventListener('abort', onAbort, { once: true });
+    work.then(
+      value => { cleanup(); resolveWork(value); },
+      error => { cleanup(); rejectWork(error); },
+    );
+  });
+}
+
+interface WikiRepositoryOrigin {
+  repoId: string | null;
+  repoName: string;
+  alias: string;
+  workspaceFence?: string;
+}
+
+function readRepositoryOrigin(workflowRoot: string, alias: string): WikiRepositoryOrigin {
+  let repoId: string | null = null;
+  let repoName = basename(dirname(workflowRoot));
+  try {
+    const value = JSON.parse(readFileSync(join(workflowRoot, 'repository.json'), 'utf-8')) as Record<string, unknown>;
+    if (typeof value.repo_id === 'string' && value.repo_id) repoId = value.repo_id;
+    if (typeof value.repo_name === 'string' && value.repo_name.trim()) repoName = value.repo_name.trim();
+  } catch { /* legacy repository remains readable without inventing an identity fence */ }
+  return {
+    repoId,
+    repoName,
+    alias,
+    workspaceFence: repoId ? `repo:${repoId}` : (alias === 'current' ? undefined : `linked:${alias}`),
+  };
+}
+
+function applyRepositoryOriginToEntry(
+  entry: WikiEntry,
+  origin: WikiRepositoryOrigin,
+  linkedAlias?: string,
+): void {
+  entry.repoId = origin.repoId;
+  entry.repoName = origin.repoName;
+  entry.alias = origin.alias;
+  entry.workspaceFence = origin.workspaceFence;
+  if (linkedAlias === undefined) delete entry.source.workspace;
+  else entry.source.workspace = linkedAlias;
+  entry.source.repoId = origin.repoId;
+  entry.source.repoName = origin.repoName;
+  entry.source.alias = origin.alias;
+  if (origin.workspaceFence === undefined) delete entry.source.workspaceFence;
+  else entry.source.workspaceFence = origin.workspaceFence;
+}
+
+function applyRepositoryOrigin(
+  entries: WikiEntry[],
+  origin: WikiRepositoryOrigin,
+  linkedAlias?: string,
+): void {
+  for (const entry of entries) applyRepositoryOriginToEntry(entry, origin, linkedAlias);
 }
 
 function prefixLinkedEntries(entries: WikiEntry[], idPrefix: string, workspace: string): void {
@@ -90,11 +179,15 @@ export interface LinkedWorkspaceConfig {
   name: string;
   workflowRoot: string;
   shareTypes: Array<'spec' | 'knowhow' | 'domain' | 'codebase' | 'session'>;
+  repoId?: string | null;
+  repoName?: string;
+  workspaceFence?: string;
 }
 
 export interface WikiIndexerConfig {
   workflowRoot: string;
   linkedWorkspaces?: LinkedWorkspaceConfig[];
+  repository?: { repoId: string | null; repoName: string; alias?: string; workspaceFence?: string };
   /**
    * filesystem: read and publish persistent caches;
    * read-only: read caches and user-level sources without publishing;
@@ -137,6 +230,7 @@ function matchesSearchFilters(entry: WikiEntry, filters: WikiSearchFilters): boo
       && !entry.body.toLowerCase().includes(keyword)) return false;
   }
   if (filters.workspace && entry.source.workspace !== filters.workspace) return false;
+  if (!matchesWikiRepository(entry, filters)) return false;
   return true;
 }
 
@@ -194,10 +288,12 @@ export class WikiIndexer {
   private readonly persistence: 'filesystem' | 'read-only' | 'memory-only';
   private readonly evidenceRecorder: ((event: WikiEvidenceEvent) => void) | undefined;
   private readonly includeCliSessions: boolean;
+  private readonly currentRepository: WikiRepositoryOrigin;
   private readonly linkedWorkspaces: Array<{
     name: string;
     workflowRoot: string;
     shareTypes: Set<string>;
+    origin: WikiRepositoryOrigin;
   }>;
   private cache: WikiIndex | null = null;
   private graphCache: WikiGraph | null = null;
@@ -224,11 +320,32 @@ export class WikiIndexer {
     this.persistence = config.persistence ?? 'filesystem';
     this.evidenceRecorder = config.evidenceRecorder;
     this.includeCliSessions = config.includeCliSessions ?? true;
-    this.linkedWorkspaces = (config.linkedWorkspaces ?? []).map(lw => ({
-      name: lw.name,
-      workflowRoot: resolve(lw.workflowRoot),
-      shareTypes: new Set(lw.shareTypes),
-    }));
+    const detectedCurrent = readRepositoryOrigin(this.workflowRoot, config.repository?.alias ?? 'current');
+    this.currentRepository = config.repository
+      ? {
+        repoId: config.repository.repoId,
+        repoName: config.repository.repoName,
+        alias: config.repository.alias ?? 'current',
+        workspaceFence: config.repository.workspaceFence
+          ?? (config.repository.repoId ? `repo:${config.repository.repoId}` : undefined),
+      }
+      : detectedCurrent;
+    this.linkedWorkspaces = (config.linkedWorkspaces ?? []).map(lw => {
+      const workflowRoot = resolve(lw.workflowRoot);
+      const detected = readRepositoryOrigin(workflowRoot, lw.name);
+      return {
+        name: lw.name,
+        workflowRoot,
+        shareTypes: new Set(lw.shareTypes),
+        origin: {
+          repoId: lw.repoId === undefined ? detected.repoId : lw.repoId,
+          repoName: lw.repoName ?? detected.repoName,
+          alias: lw.name,
+          workspaceFence: lw.workspaceFence
+            ?? (lw.repoId ? `repo:${lw.repoId}` : detected.workspaceFence),
+        },
+      };
+    });
   }
 
   getWorkflowRoot(): string {
@@ -251,7 +368,10 @@ export class WikiIndexer {
     return this.rebuild();
   }
 
-  private async hasSourceChanges(snapshot = this.mtimeSnapshot): Promise<boolean> {
+  private async hasSourceChanges(
+    snapshot = this.mtimeSnapshot,
+    recordedPaths = this.lastSnapshotPaths,
+  ): Promise<boolean> {
     if (snapshot.size === 0) return true;
     // Warm-path fast check: re-stat only the paths recorded in the last
     // snapshot instead of re-running the full recursive scan. Every source
@@ -261,33 +381,45 @@ export class WikiIndexer {
     // tracks WAL-mode graph commits. readdirSync is disproportionately
     // expensive on some Windows setups (~1.5ms per call), which made the
     // full scan dominate warm query latency.
-    const recordedPaths = this.lastSnapshotPaths;
     if (recordedPaths === null) {
       return !snapshotsEqual(snapshot, await this.captureSourceSnapshot());
     }
-    for (const path of recordedPaths) {
+    // Issue all bounded re-stat probes together. Serial synchronous stats are
+    // fast on an idle machine but accumulate scheduler and filesystem stalls
+    // on shared Windows hosts; concurrent libuv probes preserve the same
+    // fingerprints while keeping both warm queries and publication fencing
+    // deterministic under contention.
+    const changes = await Promise.all(recordedPaths.map(async path => {
       const previous = snapshot.get(path);
       if (previous === undefined) return true;
       if (previous === 'm') {
         try {
-          lstatSync(path);
+          await lstat(path);
           return true;
         } catch {
-          continue;
+          return false;
         }
       }
-      let current: ReturnType<typeof statSync>;
+      if (previous === 'z') {
+        try {
+          return (await stat(path)).size > 0;
+        } catch {
+          return false;
+        }
+      }
       try {
-        current = statSync(path);
+        const current = await stat(path);
+        return [
+          current.isDirectory() ? 'd' : 'f',
+          current.size,
+          current.mtimeMs,
+          current.ctimeMs,
+        ].join(':') !== previous;
       } catch {
         return true;
       }
-      if ([current.isDirectory() ? 'd' : 'f', current.size, current.mtimeMs, current.ctimeMs]
-        .join(':') !== previous) {
-        return true;
-      }
-    }
-    return false;
+    }));
+    return changes.some(Boolean);
   }
 
   /** Capture every source family the indexer can read, after realpath fencing. */
@@ -331,6 +463,27 @@ export class WikiIndexer {
         return realPath;
       } catch {
         return null;
+      }
+    };
+    const addWal = (candidate: string, allowedRoot: string): void => {
+      const realPath = resolveAllowedSourcePath(candidate, allowedRoot, 'file');
+      if (realPath) {
+        try {
+          const sourceStat = statSync(realPath);
+          if (sourceStat.size === 0) snapshot.set(realPath, 'z');
+          else record(realPath, sourceStat);
+        } catch { /* a concurrent removal is represented on the next capture */ }
+        return;
+      }
+      const resolvedCandidate = resolve(candidate);
+      try {
+        // Existing but fenced paths remain unreadable and untracked.
+        lstatSync(resolvedCandidate);
+      } catch {
+        // Read-only SQLite opens may create an empty WAL. Treat missing and
+        // empty as the same source state; any committed (>0 byte) WAL fails
+        // the publication fence and triggers a rebuild.
+        snapshot.set(resolvedCandidate, 'z');
       }
     };
     const scan = (
@@ -381,6 +534,7 @@ export class WikiIndexer {
       }
     };
 
+    add(join(this.workflowRoot, 'repository.json'), this.workflowRoot);
     add(join(this.workflowRoot, 'config.json'), this.workflowRoot);
     add(join(this.workflowRoot, 'project.md'), this.workflowRoot);
     add(join(this.workflowRoot, 'roadmap.md'), this.workflowRoot);
@@ -395,7 +549,7 @@ export class WikiIndexer {
     // state that the indexer's own read-only graph probes churn on every
     // open, so including it makes the snapshot unstable across a build and
     // forces the rebuild loop to spin.
-    add(join(this.workflowRoot, 'kg', 'maestro.db-wal'), this.workflowRoot);
+    addWal(join(this.workflowRoot, 'kg', 'maestro.db-wal'), this.workflowRoot);
     scan(
       join(this.workflowRoot, 'sessions'),
       this.workflowRoot,
@@ -413,6 +567,7 @@ export class WikiIndexer {
     }
 
     for (const lw of this.linkedWorkspaces) {
+      add(join(lw.workflowRoot, 'repository.json'), lw.workflowRoot);
       if (lw.shareTypes.has('spec')) {
         scan(join(lw.workflowRoot, 'specs'), lw.workflowRoot, name => name.toLowerCase().endsWith('.md'), false);
       }
@@ -426,7 +581,7 @@ export class WikiIndexer {
         add(join(lw.workflowRoot, 'codebase', 'doc-index.json'), lw.workflowRoot);
         add(join(lw.workflowRoot, 'codebase', 'knowledge-graph.json'), lw.workflowRoot);
         add(join(lw.workflowRoot, 'kg', 'maestro.db'), lw.workflowRoot);
-        add(join(lw.workflowRoot, 'kg', 'maestro.db-wal'), lw.workflowRoot);
+        addWal(join(lw.workflowRoot, 'kg', 'maestro.db-wal'), lw.workflowRoot);
       }
       if (lw.shareTypes.has('session')) {
         scan(join(lw.workflowRoot, 'sessions'), lw.workflowRoot, name =>
@@ -476,9 +631,9 @@ export class WikiIndexer {
       ]);
       const cached = validateSearchCache(JSON.parse(raw));
       if (!cached) return false;
-      const persistedIndex = JSON.parse(indexRaw);
+      const persistedIndex = JSON.parse(indexRaw) as unknown;
       if (!persistedIndex || typeof persistedIndex !== 'object' || Array.isArray(persistedIndex)) return false;
-      const persistedRecord = persistedIndex;
+      const persistedRecord = persistedIndex as Record<string, unknown>;
       // Both files are one logical publication. Refuse a torn/stale companion
       // so the filesystem owner rebuilds and repairs the pair before ready.
       if (persistedRecord.version !== 3
@@ -490,7 +645,8 @@ export class WikiIndexer {
         || await this.hasSourceChanges(snapshot)
         || generation !== this.rebuildGeneration) return false;
 
-      const entries = cached.entries;
+      const entries = this.rehydrateCachedEntries(cached.entries, cached.version);
+      if (!entries) return false;
       const byId = Object.create(null) as Record<string, WikiEntry>;
       const byType = {
         project: [], roadmap: [], spec: [], issue: [],
@@ -511,6 +667,63 @@ export class WikiIndexer {
     } catch {
       return false;
     }
+  }
+
+  /**
+   * Replace cache-era routing/display fields with the current constructor
+   * authority. Version 7 is intentionally dual-read: its persisted alias is
+   * used only to identify identity-less legacy links, never as result metadata.
+   */
+  private rehydrateCachedEntries(entries: WikiEntry[], cacheVersion: number): WikiEntry[] | null {
+    const linkedByRepoId = new Map<string, typeof this.linkedWorkspaces[number]>();
+    for (const linked of this.linkedWorkspaces) {
+      if (linked.origin.repoId) linkedByRepoId.set(linked.origin.repoId, linked);
+    }
+
+    for (const entry of entries) {
+      const repoId = entry.repoId ?? entry.source.repoId ?? null;
+      let linked: typeof this.linkedWorkspaces[number] | undefined;
+      if (repoId && repoId !== this.currentRepository.repoId) {
+        linked = linkedByRepoId.get(repoId);
+        // A cached entry from a repository that is no longer shared must never
+        // survive merely because its old source path still exists.
+        if (!linked) return null;
+      } else if (!repoId && entry.scope === 'linked') {
+        if (cacheVersion !== LEGACY_SEARCH_CACHE_VERSION) return null;
+        const legacyAlias = entry.source.workspace;
+        linked = legacyAlias
+          ? this.linkedWorkspaces.find(candidate => candidate.name === legacyAlias
+            && candidate.origin.repoId === null)
+          : undefined;
+        if (!linked) return null;
+      } else if (repoId !== this.currentRepository.repoId) {
+        return null;
+      }
+
+      if (linked) {
+        if (!this.linkedEntryIsShared(entry, linked.shareTypes)) return null;
+        applyRepositoryOriginToEntry(entry, linked.origin, linked.name);
+        if (entry.ext.sharedVia === 'explicit-session-share') {
+          entry.ext.workspaceFence = linked.origin.workspaceFence ?? `linked:${linked.name}`;
+        }
+      } else {
+        applyRepositoryOriginToEntry(entry, this.currentRepository);
+        if (entry.ext.sharedVia === 'explicit-session-share') delete entry.ext.workspaceFence;
+      }
+    }
+    return entries;
+  }
+
+  private linkedEntryIsShared(entry: WikiEntry, shareTypes: ReadonlySet<string>): boolean {
+    const sourcePath = entry.source.path.replace(/\\/g, '/');
+    if (sourcePath.startsWith('sessions/')) return shareTypes.has('session');
+    if (sourcePath.startsWith('specs/')) return shareTypes.has('spec');
+    if (sourcePath.startsWith('knowhow/')) return shareTypes.has('knowhow');
+    if (sourcePath.startsWith('domain/')) return shareTypes.has('domain');
+    if (sourcePath.startsWith('codebase/') || sourcePath.startsWith('kg/')) {
+      return shareTypes.has('codebase');
+    }
+    return false;
   }
 
   private async prepareSearchCache(
@@ -537,12 +750,21 @@ export class WikiIndexer {
       for (let i = 0; i < index.entries.length; i++) {
         if (i > 0) await writeChunk(',');
         const entry = index.entries[i];
+        const persistedExt = { ...entry.ext };
+        delete persistedExt.workspaceFence;
         await writeChunk(JSON.stringify({
           id: entry.id, type: entry.type, title: entry.title, summary: entry.summary,
           tags: entry.tags, status: entry.status, created: entry.created, updated: entry.updated,
-          related: entry.related, source: entry.source, body: entry.body, ext: entry.ext,
+          related: entry.related,
+          source: {
+            kind: entry.source.kind,
+            path: entry.source.path,
+            ...(entry.source.line === undefined ? {} : { line: entry.source.line }),
+          },
+          body: entry.body, ext: persistedExt,
           scope: entry.scope, category: entry.category, specCategory: entry.specCategory,
           createdBy: entry.createdBy, sourceRef: entry.sourceRef, parent: entry.parent,
+          repoId: entry.repoId, appliesToRepoIds: entry.appliesToRepoIds,
         }));
       }
       stream.end(']}');
@@ -577,6 +799,8 @@ export class WikiIndexer {
         this.scanVirtual(),
         this.scanLinkedWorkspaces(),
       ]);
+      applyRepositoryOrigin(fileEntries, this.currentRepository);
+      applyRepositoryOrigin(virtualEntries, this.currentRepository);
       const entries = [...fileEntries, ...virtualEntries, ...linkedEntries];
 
       // Sort entries by id first, then by source priority (file > virtual >
@@ -586,109 +810,124 @@ export class WikiIndexer {
         e.source.workspace ? 2 : e.source.kind === 'virtual' ? 1 : 0;
       entries.sort((a, b) => a.id.localeCompare(b.id) || sourcePriority(a) - sourcePriority(b));
 
-      const entriesByOriginalId = new Map<string, WikiEntry[]>();
-      for (const entry of entries) {
-        const group = entriesByOriginalId.get(entry.id) ?? [];
-        group.push(entry);
-        entriesByOriginalId.set(entry.id, group);
+      // IDs are normally unique (notably for prefixed KG projections). Detect
+      // the rare duplicate case from the sorted sequence before allocating
+      // grouping arrays, maps, and rewritten edge objects for every entry.
+      let hasCollisions = false;
+      for (let index = 1; index < entries.length; index++) {
+        if (entries[index - 1].id === entries[index].id) {
+          hasCollisions = true;
+          break;
+        }
       }
-      const seen = new Map<string, number>();
       const debugCollisions = process.env.MAESTRO_DEBUG === '1';
       let collisionCount = 0;
-      for (const d of entries) {
-        const original = d.id;
-        const n = seen.get(original) ?? 0;
-        if (n > 0) {
-          if (debugCollisions) {
-            // eslint-disable-next-line no-console
-            console.warn(`[wiki-indexer] id collision '${original}' — suffixing to ${original}-${n + 1}`);
-          }
-          d.id = `${original}-${n + 1}`;
-          collisionCount++;
+      let resolveCollisionRef = (_owner: WikiEntry, target: string): string => target;
+      if (hasCollisions) {
+        const entriesByOriginalId = new Map<string, WikiEntry[]>();
+        for (const entry of entries) {
+          const group = entriesByOriginalId.get(entry.id) ?? [];
+          group.push(entry);
+          entriesByOriginalId.set(entry.id, group);
         }
-        seen.set(original, n + 1);
-      }
-      const resolveCollisionRef = (owner: WikiEntry, target: string): string => {
-        const candidates = entriesByOriginalId.get(target);
-        if (!candidates || candidates.length === 0) return target;
-        if (candidates.length === 1) return candidates[0].id;
-        const sameWorkspace = candidates.filter(candidate => candidate.source.workspace === owner.source.workspace);
-        const sameSource = sameWorkspace.find(candidate => candidate.source.path === owner.source.path);
-        return sameSource?.id ?? sameWorkspace[0]?.id ?? candidates[0].id;
-      };
-      for (const entry of entries) {
-        entry.related = entry.related.map(target => resolveCollisionRef(entry, target));
-        if (entry.parent) entry.parent = resolveCollisionRef(entry, entry.parent);
-        const kgEdges = entry.ext?.kgEdges;
-        if (Array.isArray(kgEdges)) {
-          entry.ext.kgEdges = kgEdges.map(edge => {
-            if (!edge || typeof edge !== 'object') return edge;
-            const typed = edge as Record<string, unknown>;
-            const target = typeof typed.target === 'string'
-              ? resolveCollisionRef(entry, typed.target)
-              : typed.target;
-            return { ...typed, target };
-          });
+        const seen = new Map<string, number>();
+        for (const d of entries) {
+          const original = d.id;
+          const n = seen.get(original) ?? 0;
+          if (n > 0) {
+            if (debugCollisions) {
+              // eslint-disable-next-line no-console
+              console.warn(`[wiki-indexer] id collision '${original}' — suffixing to ${original}-${n + 1}`);
+            }
+            d.id = `${original}-${n + 1}`;
+            collisionCount++;
+          }
+          seen.set(original, n + 1);
+        }
+        resolveCollisionRef = (owner: WikiEntry, target: string): string => {
+          const candidates = entriesByOriginalId.get(target);
+          if (!candidates || candidates.length === 0) return target;
+          if (candidates.length === 1) return candidates[0].id;
+          const sameWorkspace = candidates.filter(candidate => candidate.source.workspace === owner.source.workspace);
+          const sameSource = sameWorkspace.find(candidate => candidate.source.path === owner.source.path);
+          return sameSource?.id ?? sameWorkspace[0]?.id ?? candidates[0].id;
+        };
+        for (const entry of entries) {
+          entry.related = entry.related.map(target => resolveCollisionRef(entry, target));
+          if (entry.parent) entry.parent = resolveCollisionRef(entry, entry.parent);
+          const kgEdges = entry.ext?.kgEdges;
+          if (Array.isArray(kgEdges)) {
+            entry.ext.kgEdges = kgEdges.map(edge => {
+              if (!edge || typeof edge !== 'object') return edge;
+              const typed = edge as Record<string, unknown>;
+              const target = typeof typed.target === 'string'
+                ? resolveCollisionRef(entry, typed.target)
+                : typed.target;
+              return { ...typed, target };
+            });
+          }
         }
       }
 
       // Session lifecycle promotion refs are projected by the virtual adapter.
-      // Reconcile both directions only after collision references have settled,
-      // so the promoted target and source session use final deterministic IDs.
-      const entriesByResolvedId = new Map(entries.map(entry => [entry.id, entry]));
-      const resolvePromotedEntry = (owner: WikiEntry, ref: string): WikiEntry | null => {
-        const value = ref.trim();
-        const directId = resolveCollisionRef(owner, value);
-        const direct = entriesByResolvedId.get(directId);
-        if (
-          direct
-          && direct.source.workspace === owner.source.workspace
-          && (direct.type === 'spec' || direct.type === 'knowhow')
-        ) return direct;
+      // Avoid the resolved-ID map and promotion machinery for the overwhelmingly
+      // common session-free corpus.
+      const sessionEntries = entries.filter(entry => entry.ext?.virtualKind === 'session');
+      if (sessionEntries.length > 0) {
+        const entriesByResolvedId = new Map(entries.map(entry => [entry.id, entry]));
+        const resolvePromotedEntry = (owner: WikiEntry, ref: string): WikiEntry | null => {
+          const value = ref.trim();
+          const directId = resolveCollisionRef(owner, value);
+          const direct = entriesByResolvedId.get(directId);
+          if (
+            direct
+            && direct.source.workspace === owner.source.workspace
+            && (direct.type === 'spec' || direct.type === 'knowhow')
+          ) return direct;
 
-        const typedRef = value.match(/^(spec|knowhow):(.+)$/);
-        if (typedRef) {
-          const [, type, payload] = typedRef;
-          const candidates = entries.filter(entry =>
-            entry.type === type
-            && entry.source.workspace === owner.source.workspace
-            && entry.ext?.virtualKind !== 'session'
-            && entry.ext?.virtualKind !== 'session-run'
-            && (entry.sourceRef === payload
-              || entry.id === payload
-              || entry.ext?.sid === payload
-              || entry.ext?.explicitId === payload));
-          if (candidates.length > 0) {
-            const sameSource = candidates.find(candidate => candidate.source.path === owner.source.path);
-            return sameSource ?? candidates[0];
+          const typedRef = value.match(/^(spec|knowhow):(.+)$/);
+          if (typedRef) {
+            const [, type, payload] = typedRef;
+            const candidates = entries.filter(entry =>
+              entry.type === type
+              && entry.source.workspace === owner.source.workspace
+              && entry.ext?.virtualKind !== 'session'
+              && entry.ext?.virtualKind !== 'session-run'
+              && (entry.sourceRef === payload
+                || entry.id === payload
+                || entry.ext?.sid === payload
+                || entry.ext?.explicitId === payload));
+            if (candidates.length > 0) {
+              const sameSource = candidates.find(candidate => candidate.source.path === owner.source.path);
+              return sameSource ?? candidates[0];
+            }
           }
-        }
 
-        const fallbackId = promotedRefToWikiId(value);
-        if (!fallbackId) return null;
-        const fallback = entriesByResolvedId.get(resolveCollisionRef(owner, fallbackId));
-        return fallback
-          && fallback.source.workspace === owner.source.workspace
-          && (fallback.type === 'spec' || fallback.type === 'knowhow')
-          ? fallback
-          : null;
-      };
-      for (const sessionEntry of entries) {
-        if (sessionEntry.ext?.virtualKind !== 'session') continue;
-        const sessionId = sessionEntry.ext.sessionId;
-        const promotedRefs = sessionEntry.ext.promotedRefs;
-        if (typeof sessionId !== 'string' || !Array.isArray(promotedRefs)) continue;
+          const fallbackId = promotedRefToWikiId(value);
+          if (!fallbackId) return null;
+          const fallback = entriesByResolvedId.get(resolveCollisionRef(owner, fallbackId));
+          return fallback
+            && fallback.source.workspace === owner.source.workspace
+            && (fallback.type === 'spec' || fallback.type === 'knowhow')
+            ? fallback
+            : null;
+        };
+        for (const sessionEntry of sessionEntries) {
+          const sessionId = sessionEntry.ext?.sessionId;
+          const promotedRefs = sessionEntry.ext?.promotedRefs;
+          if (typeof sessionId !== 'string' || !Array.isArray(promotedRefs)) continue;
 
-        const sourceSessionId = resolveCollisionRef(sessionEntry, `session-${slugify(sessionId)}`);
-        for (const promotedRef of promotedRefs) {
-          if (typeof promotedRef !== 'string') continue;
-          const promotedEntry = resolvePromotedEntry(sessionEntry, promotedRef);
-          if (!promotedEntry) continue;
-          if (!sessionEntry.related.includes(promotedEntry.id)) {
-            sessionEntry.related.push(promotedEntry.id);
-          }
-          if (!promotedEntry.related.includes(sourceSessionId)) {
-            promotedEntry.related.push(sourceSessionId);
+          const sourceSessionId = resolveCollisionRef(sessionEntry, `session-${slugify(sessionId)}`);
+          for (const promotedRef of promotedRefs) {
+            if (typeof promotedRef !== 'string') continue;
+            const promotedEntry = resolvePromotedEntry(sessionEntry, promotedRef);
+            if (!promotedEntry) continue;
+            if (!sessionEntry.related.includes(promotedEntry.id)) {
+              sessionEntry.related.push(promotedEntry.id);
+            }
+            if (!promotedEntry.related.includes(sourceSessionId)) {
+              promotedEntry.related.push(sourceSessionId);
+            }
           }
         }
       }
@@ -728,11 +967,17 @@ export class WikiIndexer {
     for (;;) {
       if (this.closing) throw new Error('wiki indexer is closing');
       const generation = this.rebuildGeneration;
-      const before = await this.captureSourceSnapshot();
-      const index = await this.buildIndexCandidate();
       const snapshot = await this.captureSourceSnapshot();
+      const index = await this.buildIndexCandidate();
       if (this.closing) throw new Error('wiki indexer is closing');
-      if (generation !== this.rebuildGeneration || !snapshotsEqual(before, snapshot)) continue;
+      // Re-stat the securely resolved manifest captured before the build.
+      // Directory fingerprints detect membership changes and negative
+      // sentinels detect newly created optional roots, avoiding a second full
+      // realpath/enumeration pass without weakening publication fencing.
+      if (
+        generation !== this.rebuildGeneration
+        || await this.hasSourceChanges(snapshot, [...snapshot.keys()])
+      ) continue;
 
       this.mtimeSnapshot = snapshot;
       this.lastSnapshotPaths = [...snapshot.keys()];
@@ -831,22 +1076,23 @@ export class WikiIndexer {
   }
 
   /** Abort and join background index work before a daemon releases ownership. */
-  async close(): Promise<void> {
-    if (this.closing) {
-      await Promise.allSettled([
-        this.embeddingInflight ?? Promise.resolve(null),
-        this.persistenceInflight ?? Promise.resolve(),
-      ]);
-      return;
+  async close(options?: WikiIndexerCloseOptions): Promise<void> {
+    if (!this.closing) {
+      this.closing = true;
+      this.pendingPersistence = null;
+      this.rebuildGeneration++;
+      this.embeddingGeneration++;
+      this.embeddingAbort?.abort();
     }
-    this.closing = true;
-    this.pendingPersistence = null;
-    this.embeddingGeneration++;
-    this.embeddingAbort?.abort();
     await Promise.allSettled([
+      this.inflight ?? Promise.resolve(null),
       this.embeddingInflight ?? Promise.resolve(null),
       this.persistenceInflight ?? Promise.resolve(),
     ]);
+    if (options?.disposeEmbeddingPipeline) {
+      const { disposeEmbeddingPipeline } = await import('./embedding.js');
+      await disposeEmbeddingPipeline();
+    }
   }
 
   async query(filters: WikiFilters): Promise<WikiEntry[]> {
@@ -935,7 +1181,8 @@ export class WikiIndexer {
         score_bp: Math.max(0, Math.round(result.score * 10_000)),
         raw_bm25: result.score,
         source_workspace: entry.source.workspace ?? null,
-        workspace_fence: entry.source.workspace ? `linked:${entry.source.workspace}` : 'local',
+        workspace_fence: entry.workspaceFence ?? entry.source.workspaceFence
+          ?? (entry.source.workspace ? `linked:${entry.source.workspace}` : null),
         fork_authorized: false as const,
         resume_authorized: false as const,
       }))
@@ -957,15 +1204,19 @@ export class WikiIndexer {
     embeddingUsed: boolean;
     embeddingDocs: number;
   }> {
-    const index = await this.get();
+    const signal = options?.signal;
+    throwIfSearchAborted(signal);
+    const index = await awaitWithSearchAbort(this.get(), signal);
 
-    // Parallel: BM25 index build + embedding index load
+    // Parallel: BM25 index build + embedding index load. Cache/index flights remain
+    // shared, but a disconnected caller no longer retains its request lifecycle.
     const [bm25, embIdx] = await Promise.all([
-      this.getSearchIndex(),
+      awaitWithSearchAbort(this.getSearchIndex(), signal),
       options?.skipEmbedding || this.persistence !== 'filesystem'
         ? null
-        : this.getEmbeddingIndex(),
+        : awaitWithSearchAbort(this.getEmbeddingIndex(), signal),
     ]);
+    throwIfSearchAborted(signal);
     const internalLimit = Math.min(500, Math.max(limit * 3, 60));
     const allowedDocIds = options?.filters
       ? new Set(index.entries
@@ -983,10 +1234,15 @@ export class WikiIndexer {
     if (embIdx && embIdx.docIds.length > 0) {
       try {
         const { embedQuery, vectorSearch, vectorSearchZvec, mergeHybrid } = await import('./embedding.js');
-        const qVec = await embedQuery(query);
+        const qVec = await embedQuery(query, signal);
+        throwIfSearchAborted(signal);
+        // zvec exposes no cancellation primitive. Keep this native query
+        // attached to the request so daemon drain cannot release descriptor
+        // ownership while the collection is still live.
         let rawVecResults = allowedDocIds
           ? vectorSearch(qVec, embIdx, internalLimit, allowedDocIds)
           : await vectorSearchZvec(qVec, this.workflowRoot, internalLimit);
+        throwIfSearchAborted(signal);
         if (rawVecResults.length === 0 && !allowedDocIds) {
           rawVecResults = vectorSearch(qVec, embIdx, internalLimit);
         }
@@ -1022,12 +1278,14 @@ export class WikiIndexer {
           embeddingDocs: embIdx.docIds.length,
         };
       } catch (e: unknown) {
+        if (signal?.aborted) throw searchAbortError(signal);
         if (process.env.MAESTRO_DEBUG === '1') {
           console.error(`[embedding] query failed: ${e instanceof Error ? e.message : e}`);
         }
       }
     }
 
+    throwIfSearchAborted(signal);
     return {
       results: finalizeSearchResults(
         index,
@@ -1279,19 +1537,20 @@ export class WikiIndexer {
               title: se.title,
               summary: se.description || se.content.slice(0, 240).replace(/\s+/g, ' '),
               tags: se.keywords,
-              status: 'active',
+              status: se.lifecycleStatus ?? 'active',
               created: container.created,
               updated: container.updated,
               related,
               source: container.source,
               body: se.content,
-              ext: { entryType: se.type, timestamp: se.timestamp, ...(se.ref ? { ref: se.ref } : {}), ...(se.confidence ? { confidence: se.confidence } : {}), ...(se.conflictNote ? { conflictNote: se.conflictNote } : {}), ...(se.status ? { status: se.status } : {}), ...(se.supersededBy ? { supersededBy: se.supersededBy } : {}), ...(se.sid ? { sid: se.sid } : {}), ...(se.supersedes ? { supersedes: se.supersedes } : {}) },
+              ext: { entryType: se.type, timestamp: se.timestamp, ...(se.ref ? { ref: se.ref } : {}), ...(se.confidence ? { confidence: se.confidence } : {}), ...(se.conflictNote ? { conflictNote: se.conflictNote } : {}), ...(se.lifecycleStatus ? { lifecycleStatus: se.lifecycleStatus } : {}), ...(se.status ? { status: se.status } : {}), ...(se.relatedPaths ? { relatedPaths: se.relatedPaths } : {}), ...(se.appliesToRepoIds ? { appliesToRepoIds: se.appliesToRepoIds } : {}), ...(se.language ? { language: se.language } : {}), ...(se.decisionState ? { decisionState: se.decisionState } : {}), ...(se.supersededBy ? { supersededBy: se.supersededBy } : {}), ...(se.sid ? { sid: se.sid } : {}), ...(se.supersedes ? { supersedes: se.supersedes } : {}) },
               scope,
               category: se.category || container.category,
               specCategory: container.specCategory,
               createdBy: container.createdBy,
-              sourceRef: container.sourceRef,
+              sourceRef: se.sourceRef ?? container.sourceRef,
               parent: container.id,
+              appliesToRepoIds: se.appliesToRepoIds ?? container.appliesToRepoIds,
             };
           });
           return [container, ...sub] as WikiEntry[];
@@ -1341,19 +1600,20 @@ export class WikiIndexer {
             title: se.title,
             summary: se.description || se.content.slice(0, 240).replace(/\s+/g, ' '),
             tags: se.keywords,
-            status: 'active' as const,
+            status: se.lifecycleStatus ?? 'active' as const,
             created: entry.created,
             updated: entry.updated,
             related,
             source: entry.source,
             body: se.content,
-            ext: { entryType: se.type, timestamp: se.timestamp, ...(se.ref ? { ref: se.ref } : {}) },
+            ext: { entryType: se.type, timestamp: se.timestamp, ...(se.ref ? { ref: se.ref } : {}), ...(se.relatedPaths ? { relatedPaths: se.relatedPaths } : {}), ...(se.appliesToRepoIds ? { appliesToRepoIds: se.appliesToRepoIds } : {}), ...(se.language ? { language: se.language } : {}), ...(se.decisionState ? { decisionState: se.decisionState } : {}) },
             scope: null,
             category: se.category || entry.category,
             specCategory: entry.specCategory,
             createdBy: entry.createdBy,
-            sourceRef: entry.sourceRef,
+            sourceRef: se.sourceRef ?? entry.sourceRef,
             parent: entry.id,
+            appliesToRepoIds: se.appliesToRepoIds ?? entry.appliesToRepoIds,
           });
         }
       }
@@ -1703,6 +1963,7 @@ export class WikiIndexer {
     name: string;
     workflowRoot: string;
     shareTypes: Set<string>;
+    origin: WikiRepositoryOrigin;
   }): Promise<WikiEntry[]> {
     const out: WikiEntry[] = [];
     const idPrefix = `ws:${lw.name}:`;
@@ -1731,19 +1992,20 @@ export class WikiIndexer {
             title: se.title,
             summary: se.description || se.content.slice(0, 240).replace(/\s+/g, ' '),
             tags: se.keywords,
-            status: 'active',
+            status: se.lifecycleStatus ?? 'active',
             created: entry.created,
             updated: entry.updated,
             related: [],
             source: { kind: 'file', path: `specs/${name}`, workspace: lw.name },
             body: se.content,
-            ext: { entryType: se.type, timestamp: se.timestamp, ...(se.confidence ? { confidence: se.confidence } : {}), ...(se.conflictNote ? { conflictNote: se.conflictNote } : {}), ...(se.status ? { status: se.status } : {}), ...(se.supersededBy ? { supersededBy: se.supersededBy } : {}), ...(se.sid ? { sid: se.sid } : {}), ...(se.supersedes ? { supersedes: se.supersedes } : {}) },
+            ext: { entryType: se.type, timestamp: se.timestamp, ...(se.confidence ? { confidence: se.confidence } : {}), ...(se.conflictNote ? { conflictNote: se.conflictNote } : {}), ...(se.lifecycleStatus ? { lifecycleStatus: se.lifecycleStatus } : {}), ...(se.status ? { status: se.status } : {}), ...(se.relatedPaths ? { relatedPaths: se.relatedPaths } : {}), ...(se.appliesToRepoIds ? { appliesToRepoIds: se.appliesToRepoIds } : {}), ...(se.language ? { language: se.language } : {}), ...(se.decisionState ? { decisionState: se.decisionState } : {}), ...(se.supersededBy ? { supersededBy: se.supersededBy } : {}), ...(se.sid ? { sid: se.sid } : {}), ...(se.supersedes ? { supersedes: se.supersedes } : {}) },
             scope: 'linked',
             category: se.category || entry.category,
             specCategory: entry.specCategory,
             createdBy: entry.createdBy,
-            sourceRef: entry.sourceRef,
+            sourceRef: se.sourceRef ?? entry.sourceRef,
             parent: entry.id,
+            appliesToRepoIds: se.appliesToRepoIds ?? entry.appliesToRepoIds,
           });
         }
       }
@@ -1817,7 +2079,7 @@ export class WikiIndexer {
         for (const entry of entries) {
           entry.ext = {
             ...entry.ext,
-            workspaceFence: `linked:${lw.name}`,
+            workspaceFence: lw.origin.workspaceFence ?? `linked:${lw.name}`,
             sharedVia: 'explicit-session-share',
             forkAuthorized: false,
             resumeAuthorized: false,
@@ -1828,6 +2090,7 @@ export class WikiIndexer {
       }
     }
 
+    applyRepositoryOrigin(out, lw.origin, lw.name);
     return out;
   }
 
@@ -1853,21 +2116,35 @@ export class WikiIndexer {
     const fileName = basename(realPath);
     const stem = basename(fileName, extname(fileName));
 
-    const title = asString(data.title) || firstHeading(content) || stem;
-    const summary = asString(data.description) || asString(data.summary) || firstParagraph(content);
-    const tags = extractTags(data);
-    const status = asStatus(data.status) ?? inferStatus(type);
+    const canonicalSurface = type === 'knowhow' || type === 'spec';
+    const normalized = normalizeCanonicalKnowledgeContent({ ...data, content });
+    const title = normalized.title || firstHeading(content) || stem;
+    const summary = canonicalSurface
+      ? normalized.summary
+      : (asString(data.description) || asString(data.summary) || firstParagraph(content));
+    const tags = canonicalSurface ? normalized.keywords : extractTags(data);
+    const status = canonicalSurface
+      ? normalized.lifecycleStatus
+      : (asStatus(data.status) ?? inferStatus(type));
     const related = normalizeRelated(data.related);
     const ext = extractExt(data);
+    if (normalized.relatedPaths.length) ext.relatedPaths = normalized.relatedPaths;
+    if (normalized.appliesToRepoIds.length) ext.appliesToRepoIds = normalized.appliesToRepoIds;
+    if (normalized.language) ext.language = normalized.language;
+    if (normalized.decisionState) ext.decisionState = normalized.decisionState;
+    if (normalized.auditMarkers.length) ext.canonicalAudit = normalized.auditMarkers;
     // Surface deprecated into ext.status — the CLI search deprecated-filter
     // reads ext.status (like spec sub-entries), not the top-level field.
     if (status === 'deprecated') ext.status = 'deprecated';
 
-    const category = asString(data.category) || null;
-    const specCategory = asString(data.specCategory) || null;
+    const category = canonicalSurface ? normalized.category : (asString(data.category) || null);
+    const specCategory = canonicalSurface ? null : (asString(data.specCategory) || null);
     const createdBy = asString(data.createdBy) || null;
-    const sourceRef = asString(data.sourceRef) || null;
+    const sourceRef = canonicalSurface ? normalized.sourceRef : (asString(data.sourceRef) || null);
     const parent = asString(data.parent) || null;
+    const appliesToRepoIds = Object.prototype.hasOwnProperty.call(data, 'appliesToRepoIds')
+      ? normalized.appliesToRepoIds
+      : undefined;
 
     const rel = toForwardSlash(relative(wsWorkflowRoot, realPath));
     const id = `${type}-${slugify(stem)}`;
@@ -1891,6 +2168,7 @@ export class WikiIndexer {
       createdBy,
       sourceRef,
       parent,
+      appliesToRepoIds,
     };
   }
 
@@ -2019,22 +2297,36 @@ export class WikiIndexer {
     const fileName = basename(realPath);
     const stem = basename(fileName, extname(fileName));
 
-    const title = asString(data.title) || firstHeading(content) || stem;
-    const summary = asString(data.description) || asString(data.summary) || firstParagraph(content);
-    const tags = extractTags(data);
-    const status = asStatus(data.status) ?? inferStatus(type);
+    const canonicalSurface = type === 'knowhow' || type === 'spec';
+    const normalized = normalizeCanonicalKnowledgeContent({ ...data, content });
+    const title = normalized.title || firstHeading(content) || stem;
+    const summary = canonicalSurface
+      ? normalized.summary
+      : (asString(data.description) || asString(data.summary) || firstParagraph(content));
+    const tags = canonicalSurface ? normalized.keywords : extractTags(data);
+    const status = canonicalSurface
+      ? normalized.lifecycleStatus
+      : (asStatus(data.status) ?? inferStatus(type));
     const related = normalizeRelated(data.related);
     const ext = extractExt(data);
+    if (normalized.relatedPaths.length) ext.relatedPaths = normalized.relatedPaths;
+    if (normalized.appliesToRepoIds.length) ext.appliesToRepoIds = normalized.appliesToRepoIds;
+    if (normalized.language) ext.language = normalized.language;
+    if (normalized.decisionState) ext.decisionState = normalized.decisionState;
+    if (normalized.auditMarkers.length) ext.canonicalAudit = normalized.auditMarkers;
     // Surface deprecated into ext.status — the CLI search deprecated-filter
     // reads ext.status (like spec sub-entries), not the top-level field.
     if (status === 'deprecated') ext.status = 'deprecated';
 
-    // Enrichment fields from frontmatter
-    const category = asString(data.category) || null;
-    const specCategory = asString(data.specCategory) || null;
+    // Enrichment fields from canonical/legacy frontmatter.
+    const category = canonicalSurface ? normalized.category : (asString(data.category) || null);
+    const specCategory = canonicalSurface ? null : (asString(data.specCategory) || null);
     const createdBy = asString(data.createdBy) || null;
-    const sourceRef = asString(data.sourceRef) || null;
+    const sourceRef = canonicalSurface ? normalized.sourceRef : (asString(data.sourceRef) || null);
     const parent = asString(data.parent) || null;
+    const appliesToRepoIds = Object.prototype.hasOwnProperty.call(data, 'appliesToRepoIds')
+      ? normalized.appliesToRepoIds
+      : undefined;
 
     const rel = toForwardSlash(relative(this.workflowRoot, realPath));
     // Knowhow files use prefix-<slug>.md naming (KNW-, TIP-, TPL-, etc.).
@@ -2062,6 +2354,7 @@ export class WikiIndexer {
       createdBy,
       sourceRef,
       parent,
+      appliesToRepoIds,
     };
   }
 
@@ -2069,6 +2362,11 @@ export class WikiIndexer {
     entries: WikiEntry[],
     byId: Record<string, WikiEntry>,
   ): Record<string, string[]> {
+    // Avoid lowercasing every title and running a regex across every body when
+    // the corpus has neither explicit relations nor wiki-link syntax.
+    if (!entries.some(entry => entry.related.length > 0 || entry.body.includes('[['))) {
+      return {};
+    }
     const blSets = new Map<string, Set<string>>();
     const titleIndex = new Map<string, string>();
     for (const d of entries) titleIndex.set(d.title.toLowerCase(), d.id);
@@ -2083,7 +2381,7 @@ export class WikiIndexer {
 
     for (const d of entries) {
       for (const rel of d.related) push(rel, d.id);
-      if (d.body) {
+      if (d.body.includes('[[')) {
         const linkRe = /\[\[([^\]]+)\]\]/g;
         let m: RegExpExecArray | null;
         while ((m = linkRe.exec(d.body))) push(m[1], d.id);
@@ -2101,7 +2399,7 @@ export class WikiIndexer {
    */
   private async prepareIndex(index: WikiIndex): Promise<string> {
     const persisted: PersistedWikiIndex = {
-      version: 2,
+      version: 3,
       generatedAt: index.generatedAt,
       entries: index.entries.map((e): PersistedEntry => {
         const isKg = typeof e.ext?.virtualKind === 'string'
@@ -2122,7 +2420,8 @@ export class WikiIndexer {
           sourceRef: e.sourceRef,
           parent: e.parent,
           related: isKg ? e.related.slice(0, 8) : e.related,
-          source: e.source,
+          repoId: e.repoId,
+          appliesToRepoIds: e.appliesToRepoIds,
         };
       }),
     };
@@ -2246,7 +2545,17 @@ function isRuntimeWikiEntry(value: unknown): value is WikiEntry {
   if ((source.kind !== 'file' && source.kind !== 'virtual')
     || typeof source.path !== 'string'
     || (source.line !== undefined && (!Number.isSafeInteger(source.line) || (source.line as number) < 1))
-    || (source.workspace !== undefined && typeof source.workspace !== 'string')) return false;
+    || (source.workspace !== undefined && typeof source.workspace !== 'string')
+    || (source.repoId !== undefined && !isNullableString(source.repoId))
+    || (source.repoName !== undefined && typeof source.repoName !== 'string')
+    || (source.alias !== undefined && typeof source.alias !== 'string')
+    || (source.workspaceFence !== undefined && typeof source.workspaceFence !== 'string')) return false;
+  if (value.repoId !== undefined && !isNullableString(value.repoId)) return false;
+  if (value.repoName !== undefined && typeof value.repoName !== 'string') return false;
+  if (value.alias !== undefined && typeof value.alias !== 'string') return false;
+  if (value.workspaceFence !== undefined && typeof value.workspaceFence !== 'string') return false;
+  if (value.appliesToRepoIds !== undefined && value.appliesToRepoIds !== null
+    && !isStringArray(value.appliesToRepoIds)) return false;
   return (value.scope === null || WIKI_SCOPES.has(value.scope as WikiScope))
     && isNullableString(value.category)
     && isNullableString(value.specCategory)
@@ -2265,7 +2574,7 @@ interface ValidatedSearchCache {
 
 function validateSearchCache(value: unknown): ValidatedSearchCache | null {
   if (!isRecord(value)
-    || value.version !== SEARCH_CACHE_VERSION
+    || (value.version !== SEARCH_CACHE_VERSION && value.version !== LEGACY_SEARCH_CACHE_VERSION)
     || !Number.isFinite(value.generatedAt)
     || typeof value.sourceFingerprint !== 'string'
     || !/^[0-9a-f]{64}$/.test(value.sourceFingerprint)
@@ -2293,7 +2602,7 @@ function validateSearchCache(value: unknown): ValidatedSearchCache | null {
     entries.push(entry);
   }
   return {
-    version: SEARCH_CACHE_VERSION,
+    version: value.version as number,
     generatedAt: value.generatedAt as number,
     sourceFingerprint: value.sourceFingerprint,
     mtimeSnapshot: snapshot,
@@ -2443,6 +2752,7 @@ export function filterEntries(entries: WikiEntry[], filters: WikiFilters): WikiE
     if (filters.createdBy && d.createdBy !== filters.createdBy) return false;
     if (filters.tool && d.ext?.tool !== true && d.ext?.tool !== 'true') return false;
     if (filters.workspace && d.source.workspace !== filters.workspace) return false;
+    if (!matchesWikiRepository(d, filters)) return false;
     if (filters.q) {
       const q = filters.q.toLowerCase();
       if (!d.title.toLowerCase().includes(q) && !d.summary.toLowerCase().includes(q)) {

@@ -32,6 +32,7 @@ import {
   canonicalWorkflowRoot,
   deleteDaemonInfoIfOwned,
   deleteDaemonInfoIfStale,
+  deleteDaemonSpawnLocksIfOwned,
   getDaemonPath,
   isDaemonAlive,
   isDaemonInfoV2,
@@ -48,8 +49,23 @@ import type {
 
 const IDLE_TIMEOUT_MS = 30 * 60 * 1000;
 const SOCKET_TIMEOUT_MS = 10_000;
+const DRAIN_TIMEOUT_MS = 15_000;
 const MAX_CONNECTIONS = 32;
+const MAX_ACTIVE_REQUESTS = 8;
 const SPAWN_TOKEN_ENV = 'MAESTRO_SEARCH_DAEMON_SPAWN_TOKEN';
+
+export interface SearchDaemonRuntimeOptions {
+  socketTimeoutMs?: number;
+  drainTimeoutMs?: number;
+  maxConnections?: number;
+  maxActiveRequests?: number;
+  /** Dedicated daemon commands may hard-exit after cleanup exceeds its deadline. */
+  exitOnDrainTimeout?: boolean;
+}
+
+function positiveInteger(value: number | undefined, fallback: number): number {
+  return Number.isSafeInteger(value) && value! > 0 ? value! : fallback;
+}
 
 function startupDescriptorCheck(workflowRoot: string): void {
   const path = getDaemonPath(workflowRoot);
@@ -99,6 +115,7 @@ function isAuthenticatedRequest(request: DaemonSearchRequest, info: DaemonInfoV2
 export async function startDaemon(
   workflowRoot: string,
   config: WikiIndexerConfig,
+  runtime?: SearchDaemonRuntimeOptions,
 ): Promise<{ port: number; server: Server }> {
   startupDescriptorCheck(workflowRoot);
 
@@ -107,27 +124,52 @@ export async function startDaemon(
   const startedAt = new Date().toISOString();
   const indexer = new WikiIndexer(config);
   const closeIndexer = async (): Promise<void> => {
-    const close = (indexer as unknown as { close?: () => Promise<void> }).close;
-    if (typeof close === 'function') await close.call(indexer);
+    const close = (indexer as unknown as {
+      close?: (options?: { disposeEmbeddingPipeline?: boolean }) => Promise<void>;
+    }).close;
+    if (typeof close === 'function') {
+      await close.call(indexer, { disposeEmbeddingPipeline: true });
+    }
   };
   const spawnToken = process.env[SPAWN_TOKEN_ENV];
+  const socketTimeoutMs = positiveInteger(runtime?.socketTimeoutMs, SOCKET_TIMEOUT_MS);
+  const drainTimeoutMs = positiveInteger(runtime?.drainTimeoutMs, DRAIN_TIMEOUT_MS);
+  const maxConnections = positiveInteger(runtime?.maxConnections, MAX_CONNECTIONS);
+  const maxActiveRequests = positiveInteger(runtime?.maxActiveRequests, MAX_ACTIVE_REQUESTS);
 
   let info: DaemonInfoV2 | null = null;
   let state: DaemonState = 'starting';
   let activeConnections = 0;
   let activeRequests = 0;
+  let activeWorkRequests = 0;
   let idleTimer: ReturnType<typeof setTimeout> | null = null;
+  let drainTimer: ReturnType<typeof setTimeout> | null = null;
   let startupSettled = false;
   let serverClosed = false;
   let backgroundSettled = false;
   let finalized = false;
+  let invalidationTask: Promise<void> | null = null;
   const backgroundTasks = new Set<Promise<void>>();
+  const sockets = new Set<Socket>();
+  const requestControllers = new Set<AbortController>();
+  const requestIdleWaiters = new Set<() => void>();
   let resolveStopped!: () => void;
   const stopped = new Promise<void>(resolve => { resolveStopped = resolve; });
 
   const clearIdle = (): void => {
     if (idleTimer) clearTimeout(idleTimer);
     idleTimer = null;
+  };
+
+  const waitForRequestsIdle = (): Promise<void> => {
+    if (activeRequests === 0) return Promise.resolve();
+    return new Promise<void>(resolve => { requestIdleWaiters.add(resolve); });
+  };
+
+  const resolveRequestIdle = (): void => {
+    if (activeRequests !== 0) return;
+    for (const resolve of requestIdleWaiters) resolve();
+    requestIdleWaiters.clear();
   };
 
   const trackBackground = (work: Promise<unknown>): void => {
@@ -145,12 +187,37 @@ export async function startDaemon(
 
   let beginDrain: (reason: string) => void = () => {};
   const server = createServer((socket: Socket) => {
+    const requestAbort = new AbortController();
+    let buffer = Buffer.alloc(0);
+    let handled = false;
+    let requestStarted = false;
+    const abortRequest = (message: string): void => {
+      if (!requestAbort.signal.aborted) requestAbort.abort(new Error(message));
+    };
+
+    activeConnections++;
+    sockets.add(socket);
+    socket.setTimeout(socketTimeoutMs);
+    socket.on('timeout', () => {
+      abortRequest('search daemon socket timed out');
+      socket.destroy();
+    });
+    socket.on('error', () => {
+      abortRequest('search daemon socket failed');
+      socket.destroy();
+    });
+    socket.on('close', () => {
+      sockets.delete(socket);
+      activeConnections = Math.max(0, activeConnections - 1);
+      if (requestStarted) abortRequest('search daemon client disconnected');
+    });
+
     if (!info) {
       socket.destroy();
       return;
     }
-    if (activeConnections >= MAX_CONNECTIONS) {
-      socket.end(JSON.stringify({
+    if (activeConnections > maxConnections) {
+      const rejection = JSON.stringify({
         ok: false,
         error: 'too many connections',
         protocol: SEARCH_DAEMON_PROTOCOL,
@@ -158,14 +225,10 @@ export async function startDaemon(
         workflowRoot: info.workflowRoot,
         pid: info.pid,
         state,
-      } satisfies DaemonSearchResponse) + '\n');
+      } satisfies DaemonSearchResponse) + '\n';
+      socket.end(rejection, () => { socket.destroy(); });
       return;
     }
-
-    activeConnections++;
-    socket.setTimeout(SOCKET_TIMEOUT_MS);
-    let buffer = Buffer.alloc(0);
-    let handled = false;
 
     const identityResponse = (response: DaemonSearchResponse): DaemonSearchResponse => ({
       ...response,
@@ -177,6 +240,7 @@ export async function startDaemon(
       state,
     });
     const sendResponse = (response: DaemonSearchResponse): void => {
+      if (socket.destroyed) return;
       let serialized: string;
       try { serialized = JSON.stringify(response); }
       catch { serialized = JSON.stringify(identityResponse({ ok: false, error: 'response serialization failed' })); }
@@ -188,10 +252,14 @@ export async function startDaemon(
 
     const finishRequest = (): void => {
       activeRequests = Math.max(0, activeRequests - 1);
+      resolveRequestIdle();
       if (state === 'ready' && activeRequests === 0) scheduleIdle();
     };
 
-    const dispatch = async (request: DaemonSearchRequest): Promise<DaemonSearchResponse> => {
+    const dispatch = async (
+      request: DaemonSearchRequest,
+      signal: AbortSignal,
+    ): Promise<DaemonSearchResponse> => {
       const authenticated = isAuthenticatedRequest(request, info!);
       // Search/invalidate without identity remain accepted for older clients.
       // Lifecycle requests always require the v2 descriptor nonce.
@@ -221,10 +289,17 @@ export async function startDaemon(
         return identityResponse({ ok: false, error: `daemon is ${state}` });
       }
       if (request.action === 'search') {
+        // Keep root compilation compatible with the last built dashboard
+        // declaration while dashboard compilation publishes the new signal field.
+        const searchOptions = {
+          skipEmbedding: request.skipEmbedding,
+          filters: request.filters,
+          signal,
+        };
         const { results, embeddingUsed, embeddingDocs } = await indexer.searchWithMeta(
           request.query!,
           request.limit!,
-          { skipEmbedding: request.skipEmbedding, filters: request.filters },
+          searchOptions,
         );
         return identityResponse({
           ok: true,
@@ -236,31 +311,53 @@ export async function startDaemon(
       }
 
       indexer.invalidate();
-      trackBackground((async () => {
-        await indexer.rebuild();
-        if (state === 'ready') await indexer.getEmbeddingIndex();
-      })());
+      if (!invalidationTask) {
+        let work!: Promise<void>;
+        work = (async () => {
+          await indexer.rebuild();
+          if (state === 'ready') await indexer.getEmbeddingIndex();
+        })().finally(() => {
+          if (invalidationTask === work) invalidationTask = null;
+        });
+        invalidationTask = work;
+        trackBackground(work);
+      }
       return identityResponse({ ok: true });
     };
 
     const processLine = async (line: string): Promise<void> => {
+      let raw: unknown;
+      try { raw = JSON.parse(line); }
+      catch { raw = null; }
+      const validation = validateDaemonRequest(raw);
+      if (!validation.ok) {
+        sendResponse(identityResponse({ ok: false, error: validation.error }));
+        return;
+      }
+
+      const workRequest = validation.request.action === 'search'
+        || validation.request.action === 'invalidate';
+      if (workRequest && activeWorkRequests >= maxActiveRequests) {
+        sendResponse(identityResponse({ ok: false, error: 'too many active requests' }));
+        return;
+      }
+
       clearIdle();
+      requestStarted = true;
+      requestControllers.add(requestAbort);
       activeRequests++;
+      if (workRequest) activeWorkRequests++;
       let response: DaemonSearchResponse;
       try {
-        let raw: unknown;
-        try { raw = JSON.parse(line); }
-        catch { raw = null; }
-        const validation = validateDaemonRequest(raw);
-        response = validation.ok
-          ? await dispatch(validation.request)
-          : identityResponse({ ok: false, error: validation.error });
+        response = await dispatch(validation.request, requestAbort.signal);
       } catch (error: unknown) {
         response = identityResponse({
           ok: false,
           error: error instanceof Error ? error.message : String(error),
         });
       } finally {
+        requestControllers.delete(requestAbort);
+        if (workRequest) activeWorkRequests = Math.max(0, activeWorkRequests - 1);
         finishRequest();
       }
       sendResponse(response);
@@ -285,13 +382,11 @@ export async function startDaemon(
       socket.pause();
       void processLine(buffer.subarray(0, newline).toString('utf-8'));
     });
-    socket.on('timeout', () => { socket.destroy(); });
-    socket.on('error', () => { socket.destroy(); });
-    socket.on('close', () => { activeConnections = Math.max(0, activeConnections - 1); });
   });
 
   const releaseSpawnLock = (): void => {
     releaseDaemonSpawnLock(workflowRoot, spawnToken);
+    if (info) deleteDaemonSpawnLocksIfOwned(workflowRoot, info);
   };
   const onSignal = (): void => { beginDrain('signal'); };
   const finalize = (): void => {
@@ -299,6 +394,8 @@ export async function startDaemon(
     finalized = true;
     state = 'stopped';
     clearIdle();
+    if (drainTimer) clearTimeout(drainTimer);
+    drainTimer = null;
     if (info) deleteDaemonInfoIfOwned(workflowRoot, info);
     releaseSpawnLock();
     process.off('SIGTERM', onSignal);
@@ -311,20 +408,48 @@ export async function startDaemon(
     if (serverClosed && startupSettled && backgroundSettled) finalize();
   };
   const markServerClosed = (): void => {
+    if (serverClosed) return;
     serverClosed = true;
     maybeFinalize();
+  };
+  const forceDrain = (): void => {
+    for (const controller of requestControllers) {
+      if (!controller.signal.aborted) controller.abort(new Error('search daemon drain timed out'));
+    }
+    for (const socket of sockets) socket.destroy();
+    markServerClosed();
+    if (runtime?.exitOnDrainTimeout) {
+      // Dedicated daemon processes terminate all native/index/cache work after
+      // synchronously releasing their descriptor. Embedded callers retain
+      // ownership until their cleanup really settles, preventing overlap.
+      finalize();
+      process.exit(0);
+    }
   };
   beginDrain = (_reason: string): void => {
     if (state === 'draining' || state === 'stopped') return;
     state = 'draining';
     clearIdle();
+    // Keep the deadline referenced: a pending Promise alone does not keep the
+    // Node event loop alive, and exiting early would leave a stale descriptor.
+    drainTimer = setTimeout(forceDrain, drainTimeoutMs);
     void (async () => {
-      await closeIndexer();
-      while (backgroundTasks.size > 0) {
-        await Promise.allSettled([...backgroundTasks]);
+      try {
+        // Let already accepted requests settle before disposing their shared
+        // ONNX pipeline. The drain deadline remains the hard upper bound.
+        await waitForRequestsIdle();
+        await closeIndexer();
+        while (backgroundTasks.size > 0) {
+          await Promise.allSettled([...backgroundTasks]);
+        }
+      } catch (error: unknown) {
+        if (process.env.MAESTRO_DEBUG === '1') {
+          console.error(`[daemon] shutdown cleanup failed: ${error instanceof Error ? error.message : error}`);
+        }
+      } finally {
+        backgroundSettled = true;
+        maybeFinalize();
       }
-      backgroundSettled = true;
-      maybeFinalize();
     })();
     try { server.close(markServerClosed); }
     catch { markServerClosed(); }

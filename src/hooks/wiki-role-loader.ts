@@ -25,7 +25,12 @@ export interface WikiIndexEntry {
   updated: string;
   status?: string;
   tags?: string[];
-  ext?: { virtualKind?: string; status?: string };
+  ext?: { virtualKind?: string; status?: string; appliesToRepoIds?: string[] };
+  repoId?: string | null;
+  repoName?: string;
+  alias?: string;
+  workspaceFence?: string;
+  appliesToRepoIds?: string[] | null;
 }
 
 export interface ParsedWikiIndex {
@@ -98,13 +103,18 @@ function isKgVirtual(e: WikiIndexEntry): boolean {
  * Returns formatted title+summary content for injection, or null if
  * no matching entries exist.
  */
-export function selectWikiByCategory(index: ParsedWikiIndex | null, category: string): WikiCategoryResult | null {
+export function selectWikiByCategory(
+  index: ParsedWikiIndex | null,
+  category: string,
+  applicableRepoId?: string | null,
+): WikiCategoryResult | null {
   if (!index?.entries?.length) return null;
 
   const matched = index.entries
     .filter(e =>
       !isKgVirtual(e)
       && !isDeprecatedKnowledgeEntry(e)
+      && isApplicable(e, applicableRepoId)
       && (e.category === category || e.specCategory === category)
     )
     .sort((a, b) => b.updated.localeCompare(a.updated))
@@ -122,6 +132,18 @@ export function selectWikiByCategory(index: ParsedWikiIndex | null, category: st
  * Load wiki entries matching a given category from the persisted index.
  * Thin wrapper over loadWikiIndex + selectWikiByCategory.
  */
-export function loadWikiByCategory(projectPath: string, category: string): WikiCategoryResult | null {
-  return selectWikiByCategory(loadWikiIndex(projectPath), category);
+export function loadWikiByCategory(
+  projectPath: string,
+  category: string,
+  applicableRepoId?: string | null,
+): WikiCategoryResult | null {
+  return selectWikiByCategory(loadWikiIndex(projectPath), category, applicableRepoId);
+}
+
+function isApplicable(entry: WikiIndexEntry, targetRepoId: string | null | undefined): boolean {
+  const appliesToRepoIds = entry.appliesToRepoIds ?? entry.ext?.appliesToRepoIds;
+  if (appliesToRepoIds === undefined || appliesToRepoIds === null) return true;
+  // Undefined means an older caller that has not opted into repository scoping.
+  if (targetRepoId === undefined) return true;
+  return targetRepoId !== null && appliesToRepoIds.includes(targetRepoId);
 }

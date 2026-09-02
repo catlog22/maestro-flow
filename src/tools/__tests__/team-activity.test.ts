@@ -35,10 +35,7 @@ function teardown(): void {
 }
 
 async function loadModule() {
-  const mod = await import(
-    `../team-activity.js?t=${Date.now()}-${Math.random()}`
-  );
-  return mod as typeof import('../team-activity.js');
+  return import('../team-activity.js');
 }
 
 function isoMinutesAgo(minutes: number): string {

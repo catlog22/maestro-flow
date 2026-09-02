@@ -53,6 +53,7 @@ import type {
 
 const DEFAULT_DAEMON_TIMEOUT_MS = 5000;
 const SPAWN_LOCK_TTL_MS = 60_000;
+const SPAWN_RECLAIM_SUFFIX = '.reclaim';
 const SPAWN_TOKEN_ENV = 'MAESTRO_SEARCH_DAEMON_SPAWN_TOKEN';
 
 export interface DaemonQueryOptions {
@@ -105,6 +106,7 @@ export function queryDaemon(
         const parsed: unknown = JSON.parse(Buffer.concat(chunks, responseBytes).toString('utf-8').trim());
         if (!isDaemonResponse(parsed)) throw new Error('bad response');
         settled = true;
+        socket.destroy();
         resolve(parsed);
       } catch {
         fail(new Error('bad response'));
@@ -189,11 +191,12 @@ export async function stopDaemon(workflowRoot: string): Promise<boolean> {
 
 /**
  * Claim the right to spawn a daemon, or return null if someone else holds it.
- * The opaque token makes both immediate spawn failure and child cleanup
- * owner-aware; one process cannot remove a successor's lock.
+ * A short-lived reclaim lock serializes stale-primary removal so a contender
+ * can never unlink a fresh successor lock between its read and unlink.
  */
-function claimSpawnLock(workflowRoot: string): string | null {
+export function claimSpawnLock(workflowRoot: string): string | null {
   const lockPath = getDaemonSpawnLockPath(workflowRoot);
+  const reclaimPath = `${lockPath}${SPAWN_RECLAIM_SUFFIX}`;
   const token = `${Date.now()}:${process.pid}:${randomUUID()}`;
   const take = (): boolean => {
     try {
@@ -202,14 +205,43 @@ function claimSpawnLock(workflowRoot: string): string | null {
       return true;
     } catch { return false; }
   };
+  const ageOf = (path: string): number | null => {
+    try {
+      const createdAt = Number.parseInt(readFileSync(path, 'utf-8').split(':', 1)[0], 10);
+      const age = Date.now() - createdAt;
+      return Number.isFinite(age) ? age : null;
+    } catch { return null; }
+  };
+  const releaseOwned = (path: string, owner: string): void => {
+    try {
+      if (readFileSync(path, 'utf-8') === owner) unlinkSync(path);
+    } catch { /* ownership changed or path already removed */ }
+  };
+
   if (take()) return token;
+  const primaryAge = ageOf(lockPath);
+  if (primaryAge !== null && primaryAge >= 0 && primaryAge < SPAWN_LOCK_TTL_MS) return null;
+
+  const reclaimToken = `${Date.now()}:${process.pid}:${randomUUID()}`;
   try {
-    const age = Date.now() - Number.parseInt(readFileSync(lockPath, 'utf-8').split(':', 1)[0], 10);
-    if (age >= 0 && age < SPAWN_LOCK_TTL_MS) return null;
-  } catch { /* unreadable — treat as stale */ }
-  // Stale lock: only unlinking is racy, so immediately re-race with `wx`.
-  try { unlinkSync(lockPath); } catch { /* another caller may have changed it */ }
-  return take() ? token : null;
+    const fd = openSync(reclaimPath, 'wx');
+    try { writeFileSync(fd, reclaimToken); } finally { closeSync(fd); }
+  } catch {
+    const reclaimAge = ageOf(reclaimPath);
+    if (reclaimAge !== null && reclaimAge >= 0 && reclaimAge < SPAWN_LOCK_TTL_MS) return null;
+    // A crashed reclaimer must not block startup forever. Fall back to the
+    // descriptor's atomic `wx` arbitration without deleting either lock.
+    return token;
+  }
+
+  try {
+    const guardedAge = ageOf(lockPath);
+    if (guardedAge !== null && guardedAge >= 0 && guardedAge < SPAWN_LOCK_TTL_MS) return null;
+    try { unlinkSync(lockPath); } catch { return null; }
+    return take() ? token : null;
+  } finally {
+    releaseOwned(reclaimPath, reclaimToken);
+  }
 }
 
 /** Return true when an existing descriptor must not be replaced. */
@@ -258,6 +290,9 @@ export async function spawnDaemon(workflowRoot: string): Promise<void> {
       child.once('spawn', resolveSpawn);
       child.once('error', rejectSpawn);
     });
+    // If the child fails before it publishes a descriptor and releases the
+    // token itself, clean up while this parent is still alive.
+    child.once('exit', () => { releaseDaemonSpawnLock(workflowRoot, token); });
     child.unref();
   } catch (error) {
     releaseDaemonSpawnLock(workflowRoot, token);

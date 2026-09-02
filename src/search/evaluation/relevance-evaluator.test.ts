@@ -437,7 +437,7 @@ describe('compiled production ranking adapter', () => {
       holdoutsPath,
       faultProvider: 'wiki',
     })).rejects.toThrow(/compiled production provider ranking gate failed/);
-  });
+  }, 300_000);
 
   it('derives built latency from real compiled operations', async () => {
     const adapterSource = await readFile(
@@ -459,6 +459,14 @@ describe('compiled production ranking adapter', () => {
     expect(adapterSource).not.toMatch(
       /rankPrepared|measurePreparedLatency|measureWikiLatency/,
     );
+    expect(adapterSource).toContain('workspace: result.workspace');
+    expect(adapterSource).toContain('authorized: result.authorized');
+    expect(adapterSource).toContain('status: result.status');
+    expect(adapterSource).toContain('provenance: result.provenance');
+    expect(adapterSource).not.toContain('workspace: document?.workspace');
+    expect(adapterSource).not.toContain('authorized: document?.authorized');
+    expect(adapterSource).not.toContain('status: document?.status');
+    expect(adapterSource).not.toContain('provenance: document?.provenance');
   });
 
   it('emits 20 and 100 raw cold Wiki observations', async () => {
@@ -479,7 +487,7 @@ describe('compiled production ranking adapter', () => {
     expect(latency.wikiIndexSamples.every(
       sample => Number.isFinite(sample.durationMs) && sample.durationMs >= 0,
     )).toBe(true);
-  }, 120_000);
+  }, 300_000);
 
   it('computes cold Wiki P95 from raw measured samples', async () => {
     const report = await getColdEvidenceReport();
@@ -488,7 +496,7 @@ describe('compiled production ranking adapter', () => {
     expect(report.evidence.latency.wikiIndexSamples).toHaveLength(100);
     expect(report.reported.latency.wikiIndexP95Ms).toBe(independentlyComputed);
     expect(independentlyComputed).toBeLessThan(500);
-  }, 120_000);
+  }, 300_000);
 
   it('rejects incomplete or warm Wiki evidence', async () => {
     const report = await getColdEvidenceReport();

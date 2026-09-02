@@ -94,10 +94,7 @@ function writeState(current_phase?: number, current_task_id?: string): void {
 }
 
 async function loadModule() {
-  const mod = await import(
-    `../team-monitor.js?t=${Date.now()}-${Math.random()}`
-  );
-  return mod as typeof import('../team-monitor.js');
+  return import('../team-monitor.js');
 }
 
 function readActivityLines(): Record<string, unknown>[] {
