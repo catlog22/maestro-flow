@@ -12,6 +12,7 @@ import { runUnifiedSearch } from './search.js';
 
 vi.mock('../search/daemon-client.js', () => ({
   tryDaemonSearch: vi.fn(async () => null),
+  tryDaemonLoad: vi.fn(async () => null),
   spawnDaemon: vi.fn(async () => undefined),
   stopDaemon: vi.fn(() => false),
   readDaemonInfo: vi.fn(() => null),

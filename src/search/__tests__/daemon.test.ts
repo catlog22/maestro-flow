@@ -30,6 +30,7 @@ import {
   invalidateSearchIndex,
   queryDaemon,
   stopDaemon,
+  tryDaemonLoad,
   tryDaemonSearch,
 } from '../daemon-client.js';
 import {
@@ -167,6 +168,93 @@ describe.sequential('search daemon lifecycle state machine', () => {
       state: 'ready',
     });
     expect(indexer.searchWithMeta).toHaveBeenCalledTimes(1);
+  });
+
+  it('serves the warm full index to authenticated load clients', async () => {
+    const root = workflowRoot();
+    const entry = {
+      id: 'knowhow-fast-load', type: 'knowhow', title: 'Fast load', summary: '',
+      tags: [], status: 'active', created: '', updated: '', related: [],
+      source: { kind: 'file', path: 'knowhow/fast-load.md' }, body: 'warm body',
+      ext: {}, scope: 'project', category: 'performance', specCategory: null,
+      createdBy: null, sourceRef: null, parent: null,
+    };
+    indexer.get.mockResolvedValue({ entries: [entry], generatedAt: 42 });
+    const started = await startDaemon(root, { workflowRoot: root });
+    running.push({ root, server: started.server });
+
+    await expect(tryDaemonLoad(root)).resolves.toMatchObject({
+      ok: true,
+      entries: [{ id: 'knowhow-fast-load', body: 'warm body' }],
+      generatedAt: 42,
+      state: 'ready',
+    });
+    expect(indexer.searchWithMeta).not.toHaveBeenCalled();
+  });
+
+  it('drains an authenticated daemon whose repository authority is stale', async () => {
+    const root = workflowRoot();
+    const started = await startDaemon(root, {
+      workflowRoot: root,
+      repository: { repoId: 'old-repo', repoName: 'old', alias: 'current' },
+    });
+    running.push({ root, server: started.server });
+
+    await expect(tryDaemonLoad(root, { authorityKey: 'new-authority' })).resolves.toMatchObject({
+      ok: false,
+      error: 'daemon authority mismatch',
+      state: 'draining',
+    });
+    await waitUntil(() => !existsSync(getDaemonPath(root)), 'stale-authority daemon retained its descriptor');
+  });
+
+  it('releases a timed-out load request while tracking its shared index work', async () => {
+    const root = workflowRoot();
+    let finishLoad!: (value: { entries: never[]; generatedAt: number }) => void;
+    indexer.get
+      .mockResolvedValueOnce({})
+      .mockImplementationOnce(() => new Promise(resolve => { finishLoad = resolve; }));
+    const started = await startDaemon(
+      root,
+      { workflowRoot: root },
+      { maxActiveRequests: 1 },
+    );
+    running.push({ root, server: started.server });
+    const descriptor = currentInfo(root);
+
+    await expect(queryDaemon(
+      descriptor.port,
+      { action: 'load', ...daemonIdentityRequest(descriptor) },
+      { timeoutMs: 25 },
+    )).rejects.toThrow(/timeout/);
+    await new Promise(resolve => setTimeout(resolve, 50));
+    await expect(tryDaemonSearch(root, 'slot released', 1, true)).resolves.toMatchObject({
+      ok: true,
+    });
+
+    finishLoad({ entries: [], generatedAt: 1 });
+  });
+
+  it('reports configurable retention without letting health probes extend it', async () => {
+    const root = workflowRoot();
+    const started = await startDaemon(
+      root,
+      { workflowRoot: root },
+      { idleTimeoutMs: 1_000 },
+    );
+    running.push({ root, server: started.server });
+
+    const first = await healthDaemon(root);
+    await new Promise(resolve => setTimeout(resolve, 10));
+    const second = await healthDaemon(root);
+    expect(first).toMatchObject({ ok: true, idleTimeoutMs: 1_000 });
+    expect(second?.idleDeadline).toBe(first?.idleDeadline);
+
+    await tryDaemonSearch(root, 'refresh work activity', 1, true);
+    const refreshed = await healthDaemon(root);
+    expect(Date.parse(refreshed?.idleDeadline ?? '')).toBeGreaterThan(
+      Date.parse(first?.idleDeadline ?? ''),
+    );
   });
 
   it('drains an in-flight search before deleting its owned descriptor', async () => {

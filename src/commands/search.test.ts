@@ -75,6 +75,34 @@ describe('search tag facet', () => {
     expect(search?.options.some(option => option.long === '--tag')).toBe(true);
     expect(search?.options.some(option => option.long === '--kind')).toBe(true);
     expect(search?.options.some(option => option.long === '--wiki-only')).toBe(true);
+    expect(search?.options.some(option => option.long === '--semantic')).toBe(true);
+  });
+});
+
+describe('daemon latency fallback', () => {
+  beforeEach(() => {
+    daemonSearch.mockReset();
+  });
+
+  it('uses BM25 first and keeps it when semantic lookup times out', async () => {
+    daemonSearch
+      .mockResolvedValueOnce({
+        ok: true,
+        embeddingUsed: false,
+        embeddingDocs: 0,
+        filtersApplied: true,
+        results: [{ entry: wikiEntry('fast-bm25', ['performance']), score: 5 }],
+      })
+      .mockResolvedValueOnce(null);
+
+    const results = await runUnifiedSearch('searchable', { limit: 1 });
+
+    expect(results.map(result => result.id)).toEqual(['fast-bm25']);
+    expect(daemonSearch).toHaveBeenCalledTimes(2);
+    expect(daemonSearch.mock.calls[0][3]).toBe(true);
+    expect(daemonSearch.mock.calls[0][4]).toMatchObject({ timeoutMs: 1_000 });
+    expect(daemonSearch.mock.calls[1][3]).toBe(false);
+    expect(daemonSearch.mock.calls[1][4]).toMatchObject({ timeoutMs: 600 });
   });
 });
 

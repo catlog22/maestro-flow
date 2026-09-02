@@ -59,6 +59,8 @@ const SPAWN_TOKEN_ENV = 'MAESTRO_SEARCH_DAEMON_SPAWN_TOKEN';
 export interface DaemonQueryOptions {
   timeoutMs?: number;
   filters?: DaemonSearchRequest['filters'];
+  /** Effective repository/link authority expected by this caller. */
+  authorityKey?: string;
   /** Tests and memory-sensitive callers may lower, but never raise, the hard cap. */
   maxResponseBytes?: number;
 }
@@ -153,6 +155,29 @@ export async function healthDaemon(
   return queryVerifiedDaemon(info, { action: 'health' }, opts);
 }
 
+async function rejectStaleAuthority(
+  workflowRoot: string,
+  info: DaemonInfoV2,
+  expectedAuthorityKey: string | undefined,
+): Promise<DaemonSearchResponse | null> {
+  if (!expectedAuthorityKey || info.authorityKey === expectedAuthorityKey) return null;
+  // Drain only the exact authenticated instance. The caller safely falls back
+  // to a live-authority local index and its normal spawn path starts a fresh
+  // daemon once this descriptor is released.
+  await stopDaemon(workflowRoot).catch(() => false);
+  return {
+    ok: false,
+    error: 'daemon authority mismatch',
+    protocol: info.protocol,
+    instanceId: info.instanceId,
+    workflowRoot: info.workflowRoot,
+    pid: info.pid,
+    startedAt: info.startedAt,
+    state: 'draining',
+    authorityKey: info.authorityKey,
+  };
+}
+
 export async function tryDaemonSearch(
   workflowRoot: string,
   query: string,
@@ -164,6 +189,8 @@ export async function tryDaemonSearch(
   // Legacy descriptors are deliberately stale/unverified. Connecting by their
   // PID+port would reintroduce PID-reuse and cross-workflow confusion.
   if (!info || !isDaemonInfoV2(info, workflowRoot) || !isDaemonAlive(info)) return null;
+  const mismatch = await rejectStaleAuthority(workflowRoot, info, opts?.authorityKey);
+  if (mismatch) return mismatch;
   return queryVerifiedDaemon(info, {
     action: 'search',
     query,
@@ -171,6 +198,18 @@ export async function tryDaemonSearch(
     skipEmbedding,
     filters: opts?.filters,
   }, opts);
+}
+
+/** Retrieve the daemon's warm full-text index for `maestro load`. */
+export async function tryDaemonLoad(
+  workflowRoot: string,
+  opts?: DaemonQueryOptions,
+): Promise<DaemonSearchResponse | null> {
+  const info = readDaemonInfo(workflowRoot);
+  if (!info || !isDaemonInfoV2(info, workflowRoot) || !isDaemonAlive(info)) return null;
+  const mismatch = await rejectStaleAuthority(workflowRoot, info, opts?.authorityKey);
+  if (mismatch) return mismatch;
+  return queryVerifiedDaemon(info, { action: 'load' }, opts);
 }
 
 /**

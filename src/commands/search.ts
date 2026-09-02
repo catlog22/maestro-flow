@@ -216,23 +216,31 @@ function currentWikiRepository(current: RepositoryContext) {
   };
 }
 
+function resolveWikiAuthority(current: RepositoryContext) {
+  const linkedWorkspaces = resolveWorkspaceLinks(
+    current.projectRoot,
+    loadWorkspaceConfig(current.projectRoot),
+  )
+    .filter(lw => lw.valid)
+    .map(toLinkedWikiConfig);
+  const repository = currentWikiRepository(current);
+  return {
+    linkedWorkspaces,
+    repository,
+    configKey: JSON.stringify({ linkedWorkspaces, repository }),
+  };
+}
+
 async function getIndexer(
   executionMode: SearchExecutionMode = 'default',
   resolvedCurrent?: RepositoryContext,
 ): Promise<WikiIndexer> {
   const current = resolvedCurrent ?? resolveRepositoryContext('current', { projectRoot: process.cwd() });
-  const projectPath = current.projectRoot;
   const workflowRoot = current.workflowRoot;
-  const wsConfig = loadWorkspaceConfig(projectPath);
-  const resolved = resolveWorkspaceLinks(projectPath, wsConfig);
-  const linkedWorkspaces = resolved
-    .filter(lw => lw.valid)
-    .map(toLinkedWikiConfig);
-  const repository = currentWikiRepository(current);
+  const { linkedWorkspaces, repository, configKey } = resolveWikiAuthority(current);
   // Re-key on the effective linked authority, not just the local path. A
   // resident in-process indexer must not retain entries after sharing is
   // revoked or a linked identity/path changes.
-  const configKey = JSON.stringify({ linkedWorkspaces, repository });
   const cached = executionMode === 'read-only-probe' ? _probeIndexer : _indexer;
   if (!cached || cached.workflowRoot !== workflowRoot || cached.configKey !== configKey) {
     if (cached) await cached.indexer.close();
@@ -273,6 +281,10 @@ export function getLastSearchMeta(): SearchMeta { return _lastSearchMeta; }
 
 // One-shot attribution when a supposedly-running daemon can't be reached (G-C12).
 let _daemonFallbackNoted = false;
+// Semantic searches obtain a BM25 safety net before spending their bounded
+// inference budget; BM25 remains the low-latency default for the CLI.
+const DAEMON_SEMANTIC_BUDGET_MS = 600;
+const DAEMON_BM25_BUDGET_MS = 1_000;
 
 interface ScoredWikiCandidate {
   entry: WikiEntry;
@@ -480,6 +492,7 @@ export async function runUnifiedSearch(q: string, opts: UnifiedSearchOptions & {
 
   // Try daemon first (warm ONNX model, no cold-start penalty)
   const workflowRoot = currentRepository.workflowRoot;
+  const { configKey: authorityKey } = resolveWikiAuthority(currentRepository);
   if (!readOnlyProbe) {
     opts.evidenceRecorder?.({
       event: 'daemon-lookup',
@@ -487,26 +500,58 @@ export async function runUnifiedSearch(q: string, opts: UnifiedSearchOptions & {
       queryId: opts.evidenceQueryId ?? null,
     });
   }
-  const daemonResult = readOnlyProbe
-    ? null
-    : await tryDaemonSearch(
+  let daemonResult: Awaited<ReturnType<typeof tryDaemonSearch>> = null;
+  const daemonResultUsable = (result: typeof daemonResult): boolean => Boolean(
+    result?.ok === true
+    && Array.isArray(result.results)
+    && (!hasFacet || result.filtersApplied === true),
+  );
+  if (!readOnlyProbe) {
+    // BM25 is both the default path and the semantic safety net. Establish a
+    // fast result first; only a successful resident BM25 response may proceed
+    // to the bounded semantic request. This keeps semantic failures from
+    // falling through to the local cold index.
+    const bm25Result = await tryDaemonSearch(
+      workflowRoot,
+      q,
+      candidateLimit,
+      true,
+      {
+        filters: searchFilters,
+        timeoutMs: DAEMON_BM25_BUDGET_MS,
+        authorityKey,
+      },
+    );
+    daemonResult = bm25Result;
+    if (opts.skipEmbedding !== true && daemonResultUsable(bm25Result)) {
+      const semanticResult = await tryDaemonSearch(
         workflowRoot,
         q,
         candidateLimit,
-        opts.skipEmbedding,
-        { filters: searchFilters },
+        false,
+        {
+          filters: searchFilters,
+          timeoutMs: DAEMON_SEMANTIC_BUDGET_MS,
+          authorityKey,
+        },
       );
+      if (daemonResultUsable(semanticResult)) daemonResult = semanticResult;
+    }
+  }
   let scored: Array<{ entry: WikiEntry; score: number }>;
   let embeddingUsed: boolean;
   let embeddingDocs: number;
+  const usableDaemonResult = !readOnlyProbe
+    && daemonResult?.ok === true
+    && Array.isArray(daemonResult.results)
+    && (!hasFacet || daemonResult.filtersApplied === true)
+      ? daemonResult
+      : null;
 
-  if (!readOnlyProbe
-    && daemonResult?.ok
-    && daemonResult.results
-    && (!hasFacet || daemonResult.filtersApplied === true)) {
-    scored = daemonResult.results;
-    embeddingUsed = daemonResult.embeddingUsed ?? false;
-    embeddingDocs = daemonResult.embeddingDocs ?? 0;
+  if (usableDaemonResult) {
+    scored = usableDaemonResult.results!;
+    embeddingUsed = usableDaemonResult.embeddingUsed ?? false;
+    embeddingDocs = usableDaemonResult.embeddingDocs ?? 0;
   } else {
     // Daemon unavailable — use BM25-only to avoid ONNX cold-start (~1800ms).
     // Spawn daemon in background so future searches get embedding.
@@ -1316,7 +1361,8 @@ export function registerSearchCommand(program: Command): void {
     .option('--include-linked-code', 'Include explicitly shared linked CodeGraph results')
     .option('--read-only-probe', 'Run a hermetic no-daemon, no-persistence search probe')
     .option('--include-deprecated', 'Include superseded/deprecated knowledge entries (hidden by default)')
-    .option('--no-emb', 'Skip embedding, use BM25 only')
+    .option('--semantic', 'Enable semantic embedding reranking (BM25 is the low-latency default)')
+    .option('--no-emb', 'Skip embedding, use BM25 only (backward-compatible explicit form)')
     .option('--json', 'Output as JSON')
     .option('--limit <n>', 'Max results', '20')
     .option('--workflow-root <path>', 'project root containing .workflow', process.cwd())
@@ -1356,7 +1402,7 @@ export function registerSearchCommand(program: Command): void {
         process.exit(1);
       }
 
-      const skipEmbedding = opts.emb === false;
+      const skipEmbedding = opts.emb === false || opts.semantic !== true;
       const isTTY = process.stdout.isTTY === true;
       const qTerms = q.toLowerCase().split(/\s+/).filter(Boolean);
       const isDevelopmentQuery = /(?:\b(?:implement|implementation|develop|development|build|feature|refactor|fix|bug|api|class|function|code)\b|组件|开发|实现|功能|重构|修复|代码|接口)/i.test(q);
@@ -1642,17 +1688,12 @@ export function registerSearchCommand(program: Command): void {
           return;
         }
         console.log('Starting search daemon...');
-        const projectPath = currentRepository.projectRoot;
-        const wsConfig = loadWorkspaceConfig(projectPath);
-        const resolved = resolveWorkspaceLinks(projectPath, wsConfig);
-        const linkedWorkspaces = resolved
-          .filter(lw => lw.valid)
-          .map(lw => ({ name: lw.name, workflowRoot: lw.workflowRoot, shareTypes: lw.share }));
+        const { linkedWorkspaces, repository } = resolveWikiAuthority(currentRepository);
         try {
           const { startDaemon } = await import('../search/daemon.js');
           const { port } = await startDaemon(
             workflowRoot,
-            { workflowRoot, linkedWorkspaces },
+            { workflowRoot, linkedWorkspaces, repository },
             { exitOnDrainTimeout: true },
           );
           console.log(`Search daemon started (pid=${process.pid}, port=${port})`);
@@ -1684,7 +1725,12 @@ export function registerSearchCommand(program: Command): void {
         const health = await healthDaemon(workflowRoot, { timeoutMs: 1000 });
         if (health?.ok) {
           const stateTag = health.state && health.state !== 'ready' ? ` (${health.state})` : '';
-          console.log(`Search daemon: running${stateTag}  pid=${info.pid}  port=${info.port}  started=${info.startedAt}`);
+          const idleTag = health.idleTimeoutMs === 0
+            ? '  idle=disabled'
+            : typeof health.idleTimeoutMs === 'number'
+              ? `  idle=${Math.round(health.idleTimeoutMs / 60_000)}m  deadline=${health.idleDeadline ?? 'pending'}`
+              : '';
+          console.log(`Search daemon: running${stateTag}  pid=${info.pid}  port=${info.port}  started=${info.startedAt}${idleTag}`);
         } else {
           const staleReason = isDaemonAlive(info) ? 'unreachable/unverified' : 'pid dead';
           console.log(`Search daemon: stale (${staleReason})  pid=${info.pid}  port=${info.port}  started=${info.startedAt}`);
@@ -1701,17 +1747,12 @@ export function registerSearchCommand(program: Command): void {
     .action(async () => {
       const currentRepository = resolveRepositoryContext('current', { projectRoot: process.cwd() });
       const workflowRoot = currentRepository.workflowRoot;
-      const projectPath = currentRepository.projectRoot;
-      const wsConfig = loadWorkspaceConfig(projectPath);
-      const resolved = resolveWorkspaceLinks(projectPath, wsConfig);
-      const linkedWorkspaces = resolved
-        .filter(lw => lw.valid)
-        .map(lw => ({ name: lw.name, workflowRoot: lw.workflowRoot, shareTypes: lw.share }));
+      const { linkedWorkspaces, repository } = resolveWikiAuthority(currentRepository);
       try {
         const { startDaemon } = await import('../search/daemon.js');
         await startDaemon(
           workflowRoot,
-          { workflowRoot, linkedWorkspaces },
+          { workflowRoot, linkedWorkspaces, repository },
           { exitOnDrainTimeout: true },
         );
       } catch (error: unknown) {

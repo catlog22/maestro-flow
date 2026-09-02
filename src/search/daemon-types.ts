@@ -42,12 +42,14 @@ export interface DaemonInfoV2 extends LegacyDaemonInfo {
   instanceId: string;
   /** Canonical absolute workflow root; this fences descriptors by workspace. */
   workflowRoot: string;
+  /** Effective repository/link authority captured when this daemon started. */
+  authorityKey?: string;
 }
 
 export type DaemonInfo = LegacyDaemonInfo | DaemonInfoV2;
 
 export interface DaemonSearchRequest {
-  action: 'search' | 'invalidate' | 'ping' | 'health' | 'shutdown';
+  action: 'search' | 'load' | 'invalidate' | 'ping' | 'health' | 'shutdown';
   query?: string;
   limit?: number;
   skipEmbedding?: boolean;
@@ -60,6 +62,9 @@ export interface DaemonSearchRequest {
 export interface DaemonSearchResponse {
   ok: boolean;
   results?: Array<{ entry: WikiEntry; score: number }>;
+  /** Full warm index used by `maestro load`; oversized indexes fall back locally. */
+  entries?: WikiEntry[];
+  generatedAt?: number;
   embeddingUsed?: boolean;
   embeddingDocs?: number;
   /** True only when the daemon applied request filters before ranking truncation. */
@@ -73,6 +78,9 @@ export interface DaemonSearchResponse {
   startedAt?: string;
   activeRequests?: number;
   activeConnections?: number;
+  idleTimeoutMs?: number;
+  idleDeadline?: string | null;
+  authorityKey?: string;
 }
 
 /** Starting/draining health is observable but is never startup readiness. */
@@ -275,11 +283,14 @@ export function validateDaemonRequest(value: unknown): DaemonRequestValidation {
     return { ok: false, error: 'request must be an object with an action' };
   }
   const action = value.action;
-  if (!['search', 'invalidate', 'ping', 'health', 'shutdown'].includes(action)) {
+  if (!['search', 'load', 'invalidate', 'ping', 'health', 'shutdown'].includes(action)) {
     return { ok: false, error: 'unknown action' };
   }
 
-  const identityError = validateIdentityFields(value, action === 'ping' || action === 'health' || action === 'shutdown');
+  const identityError = validateIdentityFields(
+    value,
+    action === 'load' || action === 'ping' || action === 'health' || action === 'shutdown',
+  );
   if (identityError) return { ok: false, error: identityError };
 
   const commonKeys = new Set(['action', 'protocol', 'instanceId', 'workflowRoot']);

@@ -3,7 +3,7 @@
  *
  * Protocol: one line-delimited JSON request per TCP connection on localhost.
  * Descriptor: .workflow/search-daemon.json (authenticated protocol v2 identity).
- * Idle timeout: gracefully drain after 30 min of completed-request inactivity.
+ * Idle timeout: gracefully drain after a configurable period of work inactivity.
  */
 
 import { randomUUID } from 'node:crypto';
@@ -47,7 +47,7 @@ import type {
   DaemonState,
 } from './daemon-types.js';
 
-const IDLE_TIMEOUT_MS = 30 * 60 * 1000;
+const DEFAULT_IDLE_TIMEOUT_MS = 4 * 60 * 60 * 1000;
 const SOCKET_TIMEOUT_MS = 10_000;
 const DRAIN_TIMEOUT_MS = 15_000;
 const MAX_CONNECTIONS = 32;
@@ -59,12 +59,33 @@ export interface SearchDaemonRuntimeOptions {
   drainTimeoutMs?: number;
   maxConnections?: number;
   maxActiveRequests?: number;
+  /** 0 disables idle shutdown; otherwise the daemon drains after this work-idle period. */
+  idleTimeoutMs?: number;
   /** Dedicated daemon commands may hard-exit after cleanup exceeds its deadline. */
   exitOnDrainTimeout?: boolean;
 }
 
 function positiveInteger(value: number | undefined, fallback: number): number {
   return Number.isSafeInteger(value) && value! > 0 ? value! : fallback;
+}
+
+function configuredIdleTimeoutMs(override: number | undefined): number {
+  if (Number.isSafeInteger(override) && override! >= 0) return override!;
+  const configured = Number.parseInt(process.env.MAESTRO_SEARCH_DAEMON_IDLE_MS ?? '', 10);
+  return Number.isSafeInteger(configured) && configured >= 0
+    ? configured
+    : DEFAULT_IDLE_TIMEOUT_MS;
+}
+
+function awaitAbortable<T>(work: Promise<T>, signal: AbortSignal): Promise<T> {
+  if (signal.aborted) return Promise.reject(signal.reason);
+  return new Promise<T>((resolve, reject) => {
+    const onAbort = (): void => { reject(signal.reason); };
+    signal.addEventListener('abort', onAbort, { once: true });
+    work.then(resolve, reject).finally(() => {
+      signal.removeEventListener('abort', onAbort);
+    });
+  });
 }
 
 function startupDescriptorCheck(workflowRoot: string): void {
@@ -122,6 +143,10 @@ export async function startDaemon(
   const canonicalRoot = canonicalWorkflowRoot(workflowRoot);
   const instanceId = randomUUID();
   const startedAt = new Date().toISOString();
+  const authorityKey = JSON.stringify({
+    linkedWorkspaces: config.linkedWorkspaces ?? [],
+    repository: config.repository ?? null,
+  });
   const indexer = new WikiIndexer(config);
   const closeIndexer = async (): Promise<void> => {
     const close = (indexer as unknown as {
@@ -136,12 +161,15 @@ export async function startDaemon(
   const drainTimeoutMs = positiveInteger(runtime?.drainTimeoutMs, DRAIN_TIMEOUT_MS);
   const maxConnections = positiveInteger(runtime?.maxConnections, MAX_CONNECTIONS);
   const maxActiveRequests = positiveInteger(runtime?.maxActiveRequests, MAX_ACTIVE_REQUESTS);
+  const idleTimeoutMs = configuredIdleTimeoutMs(runtime?.idleTimeoutMs);
 
   let info: DaemonInfoV2 | null = null;
   let state: DaemonState = 'starting';
   let activeConnections = 0;
   let activeRequests = 0;
   let activeWorkRequests = 0;
+  let idleRefreshPending = false;
+  let idleDeadlineMs: number | null = null;
   let idleTimer: ReturnType<typeof setTimeout> | null = null;
   let drainTimer: ReturnType<typeof setTimeout> | null = null;
   let startupSettled = false;
@@ -159,6 +187,7 @@ export async function startDaemon(
   const clearIdle = (): void => {
     if (idleTimer) clearTimeout(idleTimer);
     idleTimer = null;
+    idleDeadlineMs = null;
   };
 
   const waitForRequestsIdle = (): Promise<void> => {
@@ -238,6 +267,9 @@ export async function startDaemon(
       pid: info!.pid,
       startedAt: info!.startedAt,
       state,
+      idleTimeoutMs,
+      idleDeadline: idleDeadlineMs === null ? null : new Date(idleDeadlineMs).toISOString(),
+      authorityKey,
     });
     const sendResponse = (response: DaemonSearchResponse): void => {
       if (socket.destroyed) return;
@@ -253,7 +285,10 @@ export async function startDaemon(
     const finishRequest = (): void => {
       activeRequests = Math.max(0, activeRequests - 1);
       resolveRequestIdle();
-      if (state === 'ready' && activeRequests === 0) scheduleIdle();
+      if (state === 'ready' && activeRequests === 0 && idleRefreshPending) {
+        idleRefreshPending = false;
+        scheduleIdle();
+      }
     };
 
     const dispatch = async (
@@ -279,6 +314,8 @@ export async function startDaemon(
           ok: state === 'starting' || state === 'ready' || state === 'draining',
           activeRequests,
           activeConnections,
+          idleTimeoutMs,
+          idleDeadline: idleDeadlineMs === null ? null : new Date(idleDeadlineMs).toISOString(),
         });
       }
       if (request.action === 'shutdown') {
@@ -287,6 +324,24 @@ export async function startDaemon(
       }
       if (state !== 'ready') {
         return identityResponse({ ok: false, error: `daemon is ${state}` });
+      }
+      if (request.action === 'load') {
+        const loadWork = indexer.get();
+        let index: Awaited<ReturnType<typeof indexer.get>>;
+        try {
+          index = await awaitAbortable(loadWork, signal);
+        } catch (error) {
+          // A disconnected load client must release its active-request slot.
+          // The shared rebuild continues as tracked work so drain either joins
+          // it or applies the dedicated daemon's hard cleanup deadline.
+          if (signal.aborted) trackBackground(loadWork);
+          throw error;
+        }
+        return identityResponse({
+          ok: true,
+          entries: index.entries,
+          generatedAt: index.generatedAt,
+        });
       }
       if (request.action === 'search') {
         // Keep root compilation compatible with the last built dashboard
@@ -336,13 +391,17 @@ export async function startDaemon(
       }
 
       const workRequest = validation.request.action === 'search'
+        || validation.request.action === 'load'
         || validation.request.action === 'invalidate';
       if (workRequest && activeWorkRequests >= maxActiveRequests) {
         sendResponse(identityResponse({ ok: false, error: 'too many active requests' }));
         return;
       }
 
-      clearIdle();
+      if (workRequest) {
+        clearIdle();
+        idleRefreshPending = true;
+      }
       requestStarted = true;
       requestControllers.add(requestAbort);
       activeRequests++;
@@ -456,8 +515,9 @@ export async function startDaemon(
   };
   const scheduleIdle = (): void => {
     clearIdle();
-    if (state !== 'ready' || activeRequests !== 0) return;
-    idleTimer = setTimeout(() => { beginDrain('idle'); }, IDLE_TIMEOUT_MS);
+    if (state !== 'ready' || activeRequests !== 0 || idleTimeoutMs === 0) return;
+    idleDeadlineMs = Date.now() + idleTimeoutMs;
+    idleTimer = setTimeout(() => { beginDrain('idle'); }, idleTimeoutMs);
   };
 
   let port: number;
@@ -470,6 +530,7 @@ export async function startDaemon(
       pid: process.pid,
       port,
       startedAt,
+      authorityKey,
     };
     // Claim before the expensive rebuild. Competing starts either observe this
     // starting instance or lose the atomic create; neither can become orphaned.

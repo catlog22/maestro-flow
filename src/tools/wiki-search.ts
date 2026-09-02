@@ -1,5 +1,5 @@
 /**
- * Wiki Search Tool — MCP tool exposing hybrid BM25 + semantic embedding search.
+ * Wiki Search Tool — MCP tool exposing low-latency BM25 with opt-in semantic reranking.
  *
  * Fast path: tries the search daemon first (no heavy imports).
  * Fallback: lazy-imports WikiIndexer for direct search.
@@ -48,9 +48,7 @@ function currentWikiRepository(current: RepositoryContext) {
   };
 }
 
-async function getIndexer(projectRoot: string): Promise<WikiIndexer> {
-  const current = resolveRepositoryContext('current', { projectRoot });
-  const workflowRoot = current.workflowRoot;
+function resolveWikiAuthority(current: RepositoryContext) {
   const linkedWorkspaces = resolveWorkspaceLinks(
     current.projectRoot,
     loadWorkspaceConfig(current.projectRoot),
@@ -58,10 +56,20 @@ async function getIndexer(projectRoot: string): Promise<WikiIndexer> {
     .filter(link => link.valid)
     .map(toLinkedWikiConfig);
   const repository = currentWikiRepository(current);
+  return {
+    linkedWorkspaces,
+    repository,
+    configKey: JSON.stringify({ linkedWorkspaces, repository }),
+  };
+}
+
+async function getIndexer(projectRoot: string): Promise<WikiIndexer> {
+  const current = resolveRepositoryContext('current', { projectRoot });
+  const workflowRoot = current.workflowRoot;
+  const { linkedWorkspaces, repository, configKey } = resolveWikiAuthority(current);
   // Re-key on live effective authority, not only the local workflow path. A
   // resident MCP process must discard cached linked entries when sharing is
   // revoked or a linked path/identity changes.
-  const configKey = JSON.stringify({ linkedWorkspaces, repository });
   if (!_indexer || _indexer.workflowRoot !== workflowRoot || _indexer.configKey !== configKey) {
     if (_indexer) await _indexer.indexer.close();
     const { WikiIndexer: Cls } = await import('#maestro-dashboard/wiki/wiki-indexer.js');
@@ -81,7 +89,7 @@ async function getIndexer(projectRoot: string): Promise<WikiIndexer> {
 export const schema: ToolSchema = {
   name: 'maestro_wiki_search',
   description:
-    'Search wiki knowledge base (specs, knowhow, domains, issues) with BM25 + semantic embedding hybrid search.',
+    'Search wiki knowledge base (specs, knowhow, domains, issues) with low-latency BM25 and optional semantic reranking.',
   inputSchema: {
     type: 'object',
     properties: {
@@ -93,9 +101,13 @@ export const schema: ToolSchema = {
         type: 'number',
         description: 'Max results (default 20)',
       },
+      semantic: {
+        type: 'boolean',
+        description: 'Enable slower semantic embedding reranking (default false)',
+      },
       skipEmbedding: {
         type: 'boolean',
-        description: 'Skip embedding search, use BM25 only',
+        description: 'Legacy control: true uses BM25 only; explicit false enables semantic reranking',
       },
       repo: {
         type: 'string',
@@ -137,20 +149,23 @@ export async function handler(params: Record<string, unknown>): Promise<CcwToolR
   }
 
   const limit = typeof params.limit === 'number' ? params.limit : 20;
-  const skipEmbedding = params.skipEmbedding === true;
+  const semanticRequested = params.semantic === true || params.skipEmbedding === false;
+  const skipEmbedding = params.skipEmbedding === true || !semanticRequested;
 
   const projectRoot = resolve(getProjectRoot());
   const workflowRoot = resolve(projectRoot, '.workflow');
+  let currentRepository: RepositoryContext;
   let targetRepository: RepositoryContext;
   try {
-    targetRepository = resolveRepositoryContext(
-      typeof params.repo === 'string' ? params.repo : 'current',
-      { projectRoot },
-    );
+    currentRepository = resolveRepositoryContext('current', { projectRoot });
+    targetRepository = typeof params.repo === 'string'
+      ? resolveRepositoryContext(params.repo, { projectRoot: currentRepository.projectRoot })
+      : currentRepository;
   } catch (error) {
     return { success: false, error: `Repository resolution failed: ${(error as Error).message}` };
   }
   const explicitRepository = typeof params.repo === 'string';
+  const { configKey: authorityKey } = resolveWikiAuthority(currentRepository);
   const filters = {
     ...(explicitRepository && targetRepository.repoId ? { repoId: targetRepository.repoId } : {}),
     ...(explicitRepository && !targetRepository.repoId ? { repoAlias: targetRepository.alias } : {}),
@@ -171,7 +186,7 @@ export async function handler(params: Record<string, unknown>): Promise<CcwToolR
       query,
       limit,
       skipEmbedding,
-      { filters },
+      { filters, authorityKey },
     );
 
     if (daemonResult?.ok && daemonResult.results) {

@@ -52,10 +52,9 @@ const HYBRID_SCALE_CUTOFF = 1.5;
 
 let _indexer: WikiIndexer | null = null;
 let _indexerRoot: string | null = null;
+let _indexerAuthorityKey: string | null = null;
 
-async function getIndexer(workflowRoot: string): Promise<WikiIndexer> {
-  if (_indexer && _indexerRoot === workflowRoot) return _indexer;
-  const { WikiIndexer: Cls } = await import('#maestro-dashboard/wiki/wiki-indexer.js');
+function resolveWikiAuthority(workflowRoot: string) {
   const projectRoot = join(workflowRoot, '..');
   const current = resolveRepositoryContext('current', { projectRoot });
   const linkedWorkspaces = resolveWorkspaceLinks(projectRoot, loadWorkspaceConfig(projectRoot))
@@ -68,18 +67,31 @@ async function getIndexer(workflowRoot: string): Promise<WikiIndexer> {
       repoName: link.repoName,
       workspaceFence: link.repoId ? `repo:${link.repoId}` : `linked:${link.name}`,
     }));
+  const repository = {
+    repoId: current.repoId,
+    repoName: current.repoName,
+    alias: current.alias,
+    workspaceFence: current.repoId ? `repo:${current.repoId}` : undefined,
+  };
+  return {
+    linkedWorkspaces,
+    repository,
+    authorityKey: JSON.stringify({ linkedWorkspaces, repository }),
+  };
+}
+
+async function getIndexer(workflowRoot: string): Promise<WikiIndexer> {
+  const { linkedWorkspaces, repository, authorityKey } = resolveWikiAuthority(workflowRoot);
+  if (_indexer && _indexerRoot === workflowRoot && _indexerAuthorityKey === authorityKey) return _indexer;
+  const { WikiIndexer: Cls } = await import('#maestro-dashboard/wiki/wiki-indexer.js');
   _indexer = new Cls({
     workflowRoot,
     linkedWorkspaces,
-    repository: {
-      repoId: current.repoId,
-      repoName: current.repoName,
-      alias: current.alias,
-      workspaceFence: current.repoId ? `repo:${current.repoId}` : 'local',
-    },
+    repository,
     persistence: 'read-only',
   });
   _indexerRoot = workflowRoot;
+  _indexerAuthorityKey = authorityKey;
   return _indexer;
 }
 
@@ -176,6 +188,12 @@ export async function searchWiki(
   const skipEmbedding = opts?.skipEmbedding ?? true;
 
   try {
+    let authorityKey: string | undefined;
+    try {
+      authorityKey = resolveWikiAuthority(workflowRoot).authorityKey;
+    } catch {
+      // Tests and other callers may not have a real workspace to resolve.
+    }
     // Fast path: try search daemon (no heavy imports)
     let daemonLive = false;
     try {
@@ -191,6 +209,7 @@ export async function searchWiki(
         {
           timeoutMs: daemonTimeoutMs,
           filters: { applicableRepoId: opts?.applicableRepoId ?? '__legacy__' },
+          ...(authorityKey !== undefined ? { authorityKey } : {}),
         },
       );
       if (daemonResult?.ok && daemonResult.results) {

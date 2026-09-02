@@ -211,7 +211,7 @@ During index building, WikiIndexer automatically selects the corresponding BM25F
 
 ### CLI Session Transcripts
 
-Claude Code and Codex JSONL transcripts are parsed into lightweight note entries (category `session`), filterable with `--type session`; mixed search caps each source at 3 results to prevent low-value spam. The daemon monitors CLI session directories at startup and discovers new sessions automatically.
+Claude Code and Codex JSONL transcripts are parsed into lightweight note entries (category `session`), filterable with `--type session`; mixed search caps each source at 3 results to prevent low-value spam. The daemon checks source snapshots on search/load work and on invalidation notifications from knowledge-write hooks; it is not a continuous file watcher.
 
 ### Run-mode Session/Run Entries
 
@@ -249,18 +249,18 @@ This hook is enabled by default in the standard hook collection, no manual confi
 
 | Optimization | Improvement | Description |
 |--------------|-------------|-------------|
-| Cold start optimization | ~3200ms → ~280ms | daemon hot path + BM25-only fallback + background daemon startup |
+| Cold start optimization | Amortized by project size in a resident process | daemon hot path + low-latency BM25 default + background daemon startup |
 | Backlinks construction | O(n²) → O(1) | Using Set instead of Array.includes |
 | Inverted index | Pre-built | Built on first load, reused subsequently |
 | Candidate set pruning | 3x limit | Search candidates are 3x limit, filtered before return |
 | Workspace filtering | Applied before limit | Filters before truncation to avoid losing valid entries |
-| Embedding skip | Auto-skip for non-embedding queries | Falls back to BM25-only when daemon unavailable, avoiding ONNX cold start penalty |
+| Embedding skip | BM25 by default, semantic search is explicit | `--semantic` waits for embeddings; slow semantic requests have a bounded BM25 fallback |
 
 ---
 
 ## Search Daemon (Resident Process)
 
-Search daemon is a resident background process that keeps WikiIndexer and ONNX embedding model hot-cached, avoiding cold start overhead for each search.
+Search daemon is a resident background process that keeps WikiIndexer and the ONNX embedding model hot-cached. It serves both `maestro search` and `maestro load`, avoiding a full source-snapshot validation in every CLI process.
 
 ### Basic Operations
 
@@ -279,23 +279,27 @@ maestro search-daemon status
 
 - **Protocol**: TCP localhost, line-delimited JSON
 - **Lock file**: `.workflow/search-daemon.json` (records PID + port)
-- **Idle timeout**: Auto-shuts down after 30 minutes of no requests
-- **ONNX hot cache**: Daemon pre-loads embedding model at startup, subsequent searches don't need to reload
+- **Idle timeout**: Auto-shuts down after 4 hours without search/load/invalidate work; set `MAESTRO_SEARCH_DAEMON_IDLE_MS`, or `0` to disable idle shutdown
+- **Health checks**: ping/health do not refresh the work-idle deadline, so monitoring cannot pin the service accidentally
+- **ONNX hot cache**: Daemon pre-loads the embedding model; only `--semantic` requests semantic reranking
 
 ### Automatic Fallback Strategy
 
-When daemon is unavailable, search command automatically falls back:
+The search command uses a bounded fallback strategy:
 
-1. Uses BM25-only mode (skips embedding) to avoid ONNX cold start (~1800ms)
-2. Automatically spawns daemon in background, so subsequent searches get embedding acceleration
+1. Use the daemon's BM25 hot path by default, keeping ONNX inference out of interactive latency
+2. If an explicit `--semantic` request exceeds its short budget, retry BM25 in the same daemon
+3. If the daemon is unavailable, fall back to local BM25 and spawn the daemon in the background
 
 ```bash
-# When daemon available: hot path, includes embedding
-maestro search "query"          # ~280ms
+# Recommended: daemon BM25 hot path
+maestro search "query"
 
-# When daemon unavailable: falls back to BM25-only
-maestro search "query"          # ~280ms (BM25-only)
-maestro search "query" --no-emb # Explicitly skip embedding
+# Explicit semantic reranking, still with bounded fallback
+maestro search "query" --semantic
+
+# Backward-compatible explicit BM25 form
+maestro search "query" --no-emb
 ```
 
 ---
@@ -452,7 +456,7 @@ If an entry has abnormally high score, it may be due to:
 
 ```bash
 # Unified search (recommended)
-maestro search <query> [--type <type>] [--category <cat>] [--kind <kind>] [--code] [--kg] [--no-emb] [--json]
+maestro search <query> [--type <type>] [--category <cat>] [--kind <kind>] [--code] [--kg] [--semantic|--no-emb] [--json]
 
 # Wiki system search
 maestro wiki search <query> [--json]

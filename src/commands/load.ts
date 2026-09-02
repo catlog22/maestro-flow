@@ -18,26 +18,20 @@ import type { WikiEntry, WikiIndex } from '#maestro-dashboard/wiki/wiki-types.js
 import { isRepositoryApplicable } from '../repository/applicability.js';
 import { loadWorkspaceConfig, resolveWorkspaceLinks } from '../config/index.js';
 import { resolveRepositoryContext, type RepositoryContext } from '../repository/context.js';
+import { spawnDaemon, tryDaemonLoad } from '../search/daemon-client.js';
 
 const VALID_TYPES = ['spec', 'knowhow', 'note', 'domain', 'issue', 'project', 'roadmap', 'session', 'scratch'] as const;
 type LoadType = (typeof VALID_TYPES)[number];
 
 let _indexer: WikiIndexer | null = null;
 let _indexerRoot: string | null = null;
+let _indexerAuthorityKey: string | null = null;
 
-async function getIndexer(projectRoot?: string): Promise<WikiIndexer> {
-  const root = resolve(projectRoot ?? '.');
-  if (_indexer && _indexerRoot === root) return _indexer;
-  if (_indexerRoot !== root) {
-    _indexer = null;
-    _indexerRoot = root;
-  }
-  const { WikiIndexer: Cls } = await import('#maestro-dashboard/wiki/wiki-indexer.js');
-  const workflowRoot = resolve(root, '.workflow');
-  const projectPath = root;
-  const wsConfig = loadWorkspaceConfig(projectPath);
-  const resolved = resolveWorkspaceLinks(projectPath, wsConfig);
-  const linkedWorkspaces = resolved
+function resolveWikiAuthority(current: RepositoryContext) {
+  const linkedWorkspaces = resolveWorkspaceLinks(
+    current.projectRoot,
+    loadWorkspaceConfig(current.projectRoot),
+  )
     .filter(lw => lw.valid)
     .map(lw => ({
       name: lw.name,
@@ -47,16 +41,32 @@ async function getIndexer(projectRoot?: string): Promise<WikiIndexer> {
       repoName: lw.repoName,
       workspaceFence: lw.repoId ? `repo:${lw.repoId}` : `linked:${lw.name}`,
     }));
-  const current = resolveRepositoryContext('current', { projectRoot: root });
-  _indexer = new Cls({
-    workflowRoot,
+  const repository = {
+    repoId: current.repoId,
+    repoName: current.repoName,
+    alias: current.alias,
+    workspaceFence: current.repoId ? `repo:${current.repoId}` : undefined,
+  };
+  return {
     linkedWorkspaces,
-    repository: {
-      repoId: current.repoId,
-      repoName: current.repoName,
-      alias: current.alias,
-      workspaceFence: current.repoId ? `repo:${current.repoId}` : 'local',
-    },
+    repository,
+    authorityKey: JSON.stringify({ linkedWorkspaces, repository }),
+  };
+}
+
+async function getIndexer(projectRoot?: string): Promise<WikiIndexer> {
+  const root = resolve(projectRoot ?? '.');
+  const current = resolveRepositoryContext('current', { projectRoot: root });
+  const { linkedWorkspaces, repository, authorityKey } = resolveWikiAuthority(current);
+  if (_indexer && _indexerRoot === root && _indexerAuthorityKey === authorityKey) return _indexer;
+  _indexer = null;
+  _indexerRoot = root;
+  _indexerAuthorityKey = authorityKey;
+  const { WikiIndexer: Cls } = await import('#maestro-dashboard/wiki/wiki-indexer.js');
+  _indexer = new Cls({
+    workflowRoot: current.workflowRoot,
+    linkedWorkspaces,
+    repository,
     persistence: 'read-only',
   });
   return _indexer;
@@ -211,6 +221,24 @@ export async function recordLoadedKnowledge(entries: WikiEntry[]): Promise<void>
   }
 }
 
+const DAEMON_LOAD_BUDGET_MS = 1_500;
+
+function wikiIndexFromDaemon(entries: WikiEntry[], generatedAt?: number): WikiIndex {
+  const byId = Object.create(null) as Record<string, WikiEntry>;
+  const byType = Object.create(null) as WikiIndex['byType'];
+  for (const entry of entries) {
+    byId[entry.id] = entry;
+    (byType[entry.type] ??= []).push(entry);
+  }
+  return {
+    entries,
+    byId,
+    byType,
+    backlinks: Object.create(null) as Record<string, string[]>,
+    generatedAt: Number.isFinite(generatedAt) ? generatedAt! : Date.now(),
+  };
+}
+
 export function registerLoadCommand(program: Command): void {
   program
     .command('load')
@@ -239,9 +267,13 @@ export function registerLoadCommand(program: Command): void {
 
       const isList = opts.list === true;
       const includeDeprecated = opts.includeDeprecated === true;
+      let currentRepository: RepositoryContext;
       let targetRepository: RepositoryContext;
       try {
-        targetRepository = resolveRepositoryContext(opts.repo ?? 'current', { projectRoot: process.cwd() });
+        currentRepository = resolveRepositoryContext('current', { projectRoot: process.cwd() });
+        targetRepository = opts.repo
+          ? resolveRepositoryContext(opts.repo, { projectRoot: currentRepository.projectRoot })
+          : currentRepository;
       } catch (error) {
         console.error(`Error: ${(error as Error).message}`);
         process.exitCode = 1;
@@ -255,8 +287,22 @@ export function registerLoadCommand(program: Command): void {
         return;
       }
 
-      const indexer = await getIndexer();
-      const index = await indexer.get();
+      const { authorityKey } = resolveWikiAuthority(currentRepository);
+      const daemonResult = await tryDaemonLoad(
+        currentRepository.workflowRoot,
+        { timeoutMs: DAEMON_LOAD_BUDGET_MS, authorityKey },
+      );
+      let index: WikiIndex;
+      if (daemonResult?.ok && Array.isArray(daemonResult.entries)) {
+        index = wikiIndexFromDaemon(daemonResult.entries, daemonResult.generatedAt);
+      } else {
+        const indexer = await getIndexer();
+        index = await indexer.get();
+        // `load` used to remain permanently cold because only `search` spawned
+        // the resident indexer. Warm future load/search calls after this safe
+        // read-only fallback; spawn arbitration keeps concurrent callers single.
+        spawnDaemon(currentRepository.workflowRoot).catch(() => {});
+      }
       const defaultLimit = isList ? 20 : 10;
       const parsedLimit = opts.limit ? Number.parseInt(opts.limit, 10) : defaultLimit;
       const limit = Math.max(1, Math.min(Number.isFinite(parsedLimit) ? parsedLimit : defaultLimit, 500));

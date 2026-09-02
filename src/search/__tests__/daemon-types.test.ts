@@ -122,14 +122,24 @@ describe('daemon request validation', () => {
       .toMatchObject({ ok: true });
   });
 
-  it('requires protocol identity for lifecycle actions', () => {
+  it('requires protocol identity for lifecycle and load actions', () => {
     expect(validateDaemonRequest({ action: 'shutdown' })).toMatchObject({
+      ok: false,
+      error: 'invalid daemon protocol',
+    });
+    expect(validateDaemonRequest({ action: 'load' })).toMatchObject({
       ok: false,
       error: 'invalid daemon protocol',
     });
     const descriptor = info(root());
     expect(validateDaemonRequest({
       action: 'health',
+      protocol: descriptor.protocol,
+      instanceId: descriptor.instanceId,
+      workflowRoot: descriptor.workflowRoot,
+    })).toMatchObject({ ok: true });
+    expect(validateDaemonRequest({
+      action: 'load',
       protocol: descriptor.protocol,
       instanceId: descriptor.instanceId,
       workflowRoot: descriptor.workflowRoot,

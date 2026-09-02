@@ -211,7 +211,7 @@ WikiIndexer 会自动索引以下数据源：
 
 ### CLI 会话转写
 
-Claude Code 和 Codex 的 JSONL 会话转写被解析为轻量 note 条目（category `session`），支持按 `--type session` 过滤；混合搜索时每源上限 3 条，防止低价值来源刷屏。daemon 启动时监控 CLI 会话目录，自动发现新会话。
+Claude Code 和 Codex 的 JSONL 会话转写被解析为轻量 note 条目（category `session`），支持按 `--type session` 过滤；混合搜索时每源上限 3 条，防止低价值来源刷屏。daemon 在 search/load 请求和知识写入 hook 失效通知时检查源快照，从而发现新会话；它不是持续文件 watcher。
 
 ### Run-mode Session/Run 条目
 
@@ -249,18 +249,18 @@ Claude Code 和 Codex 的 JSONL 会话转写被解析为轻量 note 条目（cat
 
 | 优化项 | 改进 | 说明 |
 |--------|------|------|
-| 冷启动优化 | ~3200ms → ~280ms | daemon 热路径 + BM25-only 降级 + 后台 daemon 启动 |
+| 冷启动优化 | 按项目规模摊销到常驻进程 | daemon 热路径 + BM25 默认低延迟 + 后台 daemon 启动 |
 | Backlinks 构建 | O(n²) → O(1) | 使用 Set 替代 Array.includes |
 | 倒排索引 | 预构建 | 首次加载时构建，后续复用 |
 | 候选集裁剪 | 3x limit | 搜索候选集为 limit 的 3 倍，过滤后返回 |
 | 工作区过滤 | limit 前应用 | 在截断结果前过滤，避免丢失有效条目 |
-| Embedding 跳过 | 非 embedding 查询自动跳过 | daemon 不可用时降级为 BM25-only，避免 ONNX 冷启动惩罚 |
+| Embedding 跳过 | 默认 BM25，语义检索显式启用 | `--semantic` 才等待 embedding；慢语义请求有界并回退 BM25 |
 
 ---
 
 ## Search Daemon（常驻进程）
 
-Search daemon 是一个常驻后台进程，保持 WikiIndexer 和 ONNX embedding 模型热缓存，避免每次搜索的冷启动开销。
+Search daemon 是一个常驻后台进程，保持 WikiIndexer 和 ONNX embedding 模型热缓存，并同时为 `maestro search` 与 `maestro load` 提供热路径，避免每个 CLI 进程重复校验完整源快照。
 
 ### 基本操作
 
@@ -279,23 +279,27 @@ maestro search-daemon status
 
 - **协议**：TCP localhost，行分隔 JSON
 - **锁文件**：`.workflow/search-daemon.json`（记录 PID + 端口）
-- **空闲超时**：30 分钟无请求后自动关闭
-- **ONNX 热缓存**：daemon 启动时预加载 embedding 模型，后续搜索无需重新加载
+- **空闲超时**：默认 4 小时无 search/load/invalidate 工作后自动关闭；`MAESTRO_SEARCH_DAEMON_IDLE_MS` 可调整，设为 `0` 表示不因空闲自动退出
+- **健康检查**：ping/health 不刷新工作空闲期限，避免监控探针意外永久保活
+- **ONNX 热缓存**：daemon 启动时预加载 embedding 模型；仅 `--semantic` 请求执行语义重排
 
 ### 自动降级策略
 
 当 daemon 不可用时，搜索命令会自动降级：
 
-1. 使用 BM25-only 模式（跳过 embedding）避免 ONNX 冷启动（~1800ms）
-2. 后台自动启动 daemon，使后续搜索获得 embedding 加速
+1. 默认使用 daemon 的 BM25 热路径，避免把 ONNX 推理成本放入每次交互延迟
+2. 显式 `--semantic` 请求若超出短预算，会在同一 daemon 内重试 BM25
+3. daemon 不可用时，本地 BM25-only 安全降级并在后台自动启动 daemon
 
 ```bash
-# daemon 可用时：热路径，包含 embedding
-maestro search "query"          # ~280ms
+# 推荐：daemon BM25 热路径
+maestro search "query"
 
-# daemon 不可用时：降级为 BM25-only
-maestro search "query"          # ~280ms（BM25-only）
-maestro search "query" --no-emb # 显式跳过 embedding
+# 需要语义重排时显式启用；仍有有界回退
+maestro search "query" --semantic
+
+# 兼容旧脚本的显式 BM25 写法
+maestro search "query" --no-emb
 ```
 
 ---
@@ -454,7 +458,7 @@ CJK 分词为 bigram + trigram 级别，短查询（2 字以下）可能匹配�
 
 ```bash
 # 统一搜索（推荐）
-maestro search <query> [--type <type>] [--category <cat>] [--kind <kind>] [--code] [--kg] [--no-emb] [--json]
+maestro search <query> [--type <type>] [--category <cat>] [--kind <kind>] [--code] [--kg] [--semantic|--no-emb] [--json]
 
 # Wiki 系统搜索
 maestro wiki search <query> [--json]
