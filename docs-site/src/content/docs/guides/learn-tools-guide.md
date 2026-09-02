@@ -3,7 +3,7 @@ title: "学习工具集指南"
 icon: "📖"
 ---
 
-Maestro 学习工具集的完整使用手册，涵盖 5 个 `/maestro-learn` 子命令的原理、用法和协作模式。
+Maestro 学习工具集的完整使用手册，涵盖 4 个 `/maestro-learn` 子命令的原理、用法和协作模式。
 
 ---
 

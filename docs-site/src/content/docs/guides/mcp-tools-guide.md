@@ -30,7 +30,7 @@ Maestro MCP 服务器暴露 9 个工具，供 Claude Code、Codex 等 AI 智能�
 | `team_mailbox` | 团队协作 | 邮箱式消息投递与签收 |
 | `team_task` | 团队协作 | 任务 CRUD 与状态机管理 |
 | `team_agent` | 团队协作 | 智能体生命周期管理 (spawn/shutdown) |
-| `store_knowhow` | 知识复用 | 知识复用条目存储 (6 种类型) |
+| `store_knowhow` | 知识复用 | 知识存储与生命周期（9 种类型、5 种操作） |
 
 ---
 
@@ -248,17 +248,21 @@ Maestro MCP 服务器暴露 9 个工具，供 Claude Code、Codex 等 AI 智能�
 
 ### store_knowhow
 
-项目级知识复用，存储于 `.workflow/knowhow/`。6 种类型: session(KNW-)、tip(TIP-)、template(TPL-)、recipe(RCP-)、reference(REF-)、decision(DCS-)。WikiIndexer 自动索引为 `type=knowhow`。
+项目级知识复用，存储于 `.workflow/knowhow/`。9 种类型: session(KNW-)、tip(TIP-)、template(TPL-)、recipe(RCP-)、reference(REF-)、decision(DCS-)、asset(AST-)、blueprint(BLP-)、document(DOC-)。WikiIndexer 自动索引为 `type=knowhow`。
 
 | 参数 | 类型 | 必填 | 说明 |
 |------|------|------|------|
-| `operation` | add/search | 是 | 操作类型 |
-| `type` | string | add | session/tip/template/recipe/reference/decision |
-| `title` / `body` | string | add | 标题 / 正文 (markdown) |
-| `tags` | string[] | 否 | 分类标签 |
-| `lang` | string | 否 | [template] 编程语言 |
-| `source` | string | 否 | [reference] 原始 URL |
-| `status` | string | 否 | [decision] proposed/accepted/superseded |
+| `operation` | add/search/supersede/history/recover | 是 | 五种受支持操作之一 |
+| `type` | string | add | session/tip/template/recipe/reference/decision/asset/blueprint/document |
+| `title` / `content` | string | add | 最小 ordinary add 的标题 / 正文 |
+| `keywords` | string[] | 否 | 检索关键词 |
+| `language` | string | 否 | 内容/编程语言 |
+| `sourceRef` | string | 否 | 来源 URL 或文档 ID |
+| `relatedPaths` | string[] | 否 | project-relative 关联路径 |
+| `category` | string | 否 | canonical 分类 |
+| `decisionState` | string | 否 | proposed/accepted/superseded |
+| `appliesToRepoIds` | string[] | 否 | exact stable repository UUID applicability |
+| `targetRepoId` | string | 否 | 仅 host 授权的显式 linked physical write exact UUID |
 | `query` | string | search | 搜索关键词 |
 | `limit` | number | 否 | 最大结果数 (默认 20) |
 
@@ -267,15 +271,20 @@ Maestro MCP 服务器暴露 9 个工具，供 Claude Code、Codex 等 AI 智能�
 
 ```jsonc
 { "operation": "add", "type": "template", "title": "React Hook Form",
-  "body": "import { useForm } from 'react-hook-form'; ...",
-  "lang": "typescript", "tags": ["react", "form"] }
+  "content": "import { useForm } from 'react-hook-form'; ...",
+  "language": "typescript", "keywords": ["react", "form"] }
 { "operation": "add", "type": "decision", "title": "Use PostgreSQL",
-  "body": "ADR: PostgreSQL as primary database...",
-  "status": "accepted", "tags": ["database", "architecture"] }
+  "content": "ADR: PostgreSQL as primary database...",
+  "decisionState": "accepted", "keywords": ["database", "architecture"] }
 { "operation": "search", "query": "authentication middleware" }
+{ "operation": "supersede", "oldId": "TIP-...", "newId": "TIP-..." }
+{ "operation": "history", "id": "TIP-..." }
+{ "operation": "recover" }
 ```
 
 </details>
+
+当前仓库 MCP 写省略 `targetRepoId`。仅当 host 给出显式 linked target 的 exact stable UUID 与 live `knowhow` write capability 时 Agent 才传它；禁止从 cwd/name/alias/path 推导或持久化 identity。CLI 不接收 `targetRepoId`：`--repo` 接受 selector 并选择物理写入目标，repeatable `--applies-to-repo` 只记录适用范围，不改变写入目标。Legacy alias 只读兼容，audit 不改写；迁移必须 report-first normalize。
 
 ---
 

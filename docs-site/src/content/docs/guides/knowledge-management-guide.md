@@ -5,6 +5,10 @@ icon: "📚"
 
 Maestro 知识沉淀分两种：**约束**和**积累**。约束是编码规范、架构决策、质量规则——规定"不能做什么"。积累是操作步骤、设计资产、调试经验——记录"怎么做过"。前者需要强制加载，后者需要按需检索。
 
+普通 Knowhow 的最小参数只有 `type/title/content`；普通 Spec 只有 `category/title/content`。九种 Knowhow 类型保持 `session|tip|template|recipe|reference|decision|asset|blueprint|document`。CLI `--repo` 选择物理写入目标，repeatable `--applies-to-repo` 只记录适用范围。host/MCP `targetRepoId` 不是 CLI flag：当前仓库写省略它；仅当 host 为显式 linked physical write 提供 exact stable UUID 与 live corpus write capability 时 Agent 才传。禁止从 cwd/name/alias/path 推导或持久化 identity。
+
+`maestro knowledge audit --scope all --json` 只读报告 legacy 字段、unscoped entries、missing manifest、linked ID/capabilities 与 pending cross-repo promotion。规范化必须先 `maestro knowledge normalize --report .workflow/knowledge-normalize.json`，审阅后再以同一路径显式 `--apply`；源或 repo_id 变化会 fail closed。
+
 <details>
 <summary>产物目录结构</summary>
 
@@ -90,7 +94,7 @@ summary: "Use when implementing OAuth 2.0 login for public clients."
 | 命令 | 职责 |
 |------|------|
 | `/maestro-spec` | 向 specs 文件追加 `<spec-entry>` 条目，支持 inline 和 ref 两种模式 |
-| `/maestro-knowhow` | 捕获 6 种类型知识文档到 knowhow/（compact、template、recipe、reference、decision、tip），可加 `--tool` 标记为可执行 tool |
+| `/maestro-knowhow` | 捕获 9 种兼容 Knowhow；ordinary create 只要求 type/title/content |
 | `/maestro-knowhow` | 捕获原子洞察到 `learnings.md`（pattern、gotcha、technique、tip） |
 | `/maestro-knowledge harvest` | 从工作流产物中提取知识碎片，路由到 wiki/spec/issue 三个存储 |
 
@@ -99,7 +103,7 @@ summary: "Use when implementing OAuth 2.0 login for public clients."
 | 命令 | 职责 |
 |------|------|
 | `maestro spec load` | 按 category 加载主文档 + 跨文件 keyword 匹配条目 + 自动发现 knowhow 工具 |
-| `maestro knowhow` | 跨 workflow knowhow 和 system memory 两个存储做 list/search/get（删除/淘汰走 `/maestro-knowledge audit`） |
+| `maestro knowhow` | 对 workflow Knowhow 做 add/list/search/get 与显式 supersede/history/recover lifecycle 操作 |
 | `/maestro-knowledge wiki` | Wiki 图健康度、搜索、清理、统计 |
 
 ### 分析类
@@ -108,7 +112,7 @@ summary: "Use when implementing OAuth 2.0 login for public clients."
 |------|------|
 | `/maestro-knowledge wiki digest` | 语义主题聚类 + 知识覆盖热力图 + gap 分析 |
 | `/maestro-knowledge wiki connect` | 发现孤立节点和缺失连接，修复图联通性 |
-| `/maestro-knowledge audit` | 审计 spec/knowhow/artifact 三存储 — 矛盾检测、过期淘汰、孤立清理（keep/deprecate/delete 三态决策） |
+| `/maestro-knowledge audit` | 只读审计 Spec/Knowhow，并附加 pipeline/usage/compatibility findings；`--prune` 仅输出 soft-action suggestions |
 | `/maestro-learn decompose` | 从代码中提取设计模式，写入 spec 和 wiki |
 | `/maestro-learn follow` | 引导式阅读代码/wiki，提取 pattern 并构建理解 |
 
@@ -237,11 +241,11 @@ WikiIndexer 除了索引文件系统中的 spec/knowhow 文档外，还将非文
 规划文档 ─────┤    maestro-companion --promote├─→ issues/    ─→ maestro-issue → 追踪
 代码变更 ─────┘    /maestro-learn decompose          └─→ learnings  ─→ keyword-injector → 上下文
 
-                    淘汰清理                    审计                    CodeGraph
+                    健康输入                    只读审计                  CodeGraph
                     ─────                      ─────                  ─────
-specs/     ──┐                              ┌─→ kg search   ─→ 符号搜索
-knowhow/   ──┼──→ /maestro-knowledge audit ─────────┼─→ kg context  ─→ 调用关系
-artifacts/ ──┘    (三态: keep/deprecate/delete) └─→ kg path    ─→ 调用链追踪
+specs/     ──┐                              findings[]             kg search   ─→ 符号搜索
+knowhow/   ──┼──→ /maestro-knowledge audit ─→ prune_plan[]          kg context  ─→ 调用关系
+pipeline/usage ─┘       （仅 --prune 时报告建议）                     kg path     ─→ 调用链追踪
                                                              ↑ Hook 自动同步
                                                              kg-sync (UserPromptSubmit)
 ```

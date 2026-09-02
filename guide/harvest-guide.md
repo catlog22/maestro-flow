@@ -125,8 +125,8 @@ Harvest 提取的碎片路由到 wiki/spec/issue。Knowhow（`.workflow/knowhow/
 maestro knowhow list                  # 列出全部（默认）
 maestro knowhow search "认证流程"     # 全文搜索
 maestro knowhow get KNW-20260510-1430 # 查看指定条目
-/maestro-knowledge audit              # 删除条目 → 经审计 keep/deprecate/delete
-/maestro-knowledge audit              # 批量清理（prune）→ 知识审计
+maestro knowledge audit --scope knowhow --json   # 只读 Knowhow 健康 findings
+maestro knowledge audit --scope knowhow --prune  # 仅报告 deterministic supersede suggestions
 ```
 
 ### 双存储架构
@@ -146,8 +146,9 @@ Workflow 存储面向项目内知识，system 存储面向跨会话持久记忆�
 | `search <query>` | 全文搜索，按相关度排序 |
 | `view <id\|file>` | 查看条目全文，自动识别存储 |
 | `edit <file>` | 编辑系统记忆文件 |
-| `delete <id\|file>` | 删除条目（需确认，`MEMORY.md` 受保护） |
-| `prune` | 批量清理（需要至少一个过滤条件，支持 `--dry-run`） |
+| `supersede <oldId>` | 通过显式 lifecycle 命令把旧条目链接到 successor |
+| `history <id>` | 查看 Knowhow 演化链 |
+| `recover` | 显式恢复 pending lifecycle intent |
 
 ### 9 种 Knowhow 类型
 

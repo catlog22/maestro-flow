@@ -29,7 +29,7 @@ Maestro MCP 服务器暴露 9 个工具，供 Claude Code、Codex 等 AI 智能�
 | `team_mailbox` | 团队协作 | 邮箱式消息投递与签收 |
 | `team_task` | 团队协作 | 任务 CRUD 与状态机管理 |
 | `team_agent` | 团队协作 | 智能体生命周期管理 (spawn/shutdown) |
-| `store_knowhow` | 知识复用 | 知识复用条目存储 (9 种类型) |
+| `store_knowhow` | 知识复用 | 知识存储与生命周期（9 种类型、5 种操作） |
 
 ---
 
@@ -251,18 +251,17 @@ Maestro MCP 服务器暴露 9 个工具，供 Claude Code、Codex 等 AI 智能�
 
 | 参数 | 类型 | 必填 | 说明 |
 |------|------|------|------|
-| `operation` | add/search | 是 | 操作类型 |
+| `operation` | add/search/supersede/history/recover | 是 | 五种受支持操作之一 |
 | `type` | string | add | session/tip/template/recipe/reference/decision/asset/blueprint/document |
-| `title` / `body` | string | add | 标题 / 正文 (markdown) |
-| `description` | string | 否 | 一行摘要 (搜索结果展示) |
-| `tags` | string[] | 否 | 分类标签 |
-| `lang` | string | 否 | [template] 编程语言 |
-| `source` | string | 否 | [reference] 原始 URL |
-| `status` | string | 否 | [decision] proposed/accepted/superseded |
-| `assetType` | string | 否 | [asset] 资产子类型 (如 api-contract, prompt) |
-| `codePaths` | string[] | 否 | [asset/blueprint] 关联代码路径 |
-| `category` | string | 否 | Spec 分类 (coding, arch, test, debug, review, learning) |
-| `specCategory` | string | 否 | 跨系统对齐分类 (coding, arch, debug, test, review, learning, ui) |
+| `title` / `content` | string | add | 标题 / 正文 (markdown)；与 type 构成 ordinary add 的最小参数 |
+| `keywords` | string[] | 否 | 检索关键词 |
+| `language` | string | 否 | 内容/编程语言 |
+| `sourceRef` | string | 否 | 来源 URL 或文档 ID |
+| `relatedPaths` | string[] | 否 | 关联的 project-relative 路径 |
+| `category` | string | 否 | canonical 分类 (coding, arch, debug, test, review, learning, ui) |
+| `decisionState` | string | 否 | [decision] proposed/accepted/superseded |
+| `appliesToRepoIds` | string[] | 否 | exact stable repository UUID applicability |
+| `targetRepoId` | string | 否 | 仅显式 linked physical write；必须是 host 提供且具有 live knowhow write capability 的 exact UUID |
 | `query` | string | search | 搜索关键词 |
 | `limit` | number | 否 | 最大结果数 (默认 20) |
 
@@ -271,17 +270,20 @@ Maestro MCP 服务器暴露 9 个工具，供 Claude Code、Codex 等 AI 智能�
 
 ```jsonc
 { "operation": "add", "type": "template", "title": "React Hook Form",
-  "description": "Reusable React Hook Form pattern with validation",
-  "body": "import { useForm } from 'react-hook-form'; ...",
-  "lang": "typescript", "tags": ["react", "form"] }
+  "content": "import { useForm } from 'react-hook-form'; ...",
+  "language": "typescript", "keywords": ["react", "form"] }
 { "operation": "add", "type": "decision", "title": "Use PostgreSQL",
-  "description": "ADR: PostgreSQL selected as primary database over MongoDB",
-  "body": "ADR: PostgreSQL as primary database...",
-  "status": "accepted", "tags": ["database", "architecture"] }
+  "content": "ADR: PostgreSQL as primary database...",
+  "decisionState": "accepted", "keywords": ["database", "architecture"] }
 { "operation": "search", "query": "authentication middleware" }
+{ "operation": "supersede", "oldId": "TIP-...", "newId": "TIP-..." }
+{ "operation": "history", "id": "TIP-..." }
+{ "operation": "recover" }
 ```
 
 </details>
+
+当前仓库 MCP 写入省略 `targetRepoId`，由 host 绑定。Agent 仅在显式选择 linked physical target 且 host repository context 给出 exact stable UUID 与 live `knowhow` write capability 时传该字段。不得从 cwd、repo name、alias/path 推导 ID，也不得把 alias/path 持久化为 identity；权限缺失或 linked cached/live ID mismatch 时 fail closed。CLI 不接收 `targetRepoId`：`--repo` 接受 selector 并选择物理写入目标，repeatable `--applies-to-repo` 只记录适用范围，不会改变写入目标。
 
 ---
 

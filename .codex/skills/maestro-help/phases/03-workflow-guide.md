@@ -182,7 +182,9 @@ Odyssey:  maestro-odyssey --mode debug|improve|planex|ui → (自主循环)
 - **scope_verdict**: analyze 宏观完成后的路由建议 — large→roadmap, medium/small→直达 plan
 - **Overlay**: 非侵入式命令补丁，扩展命令行为而不修改源文件
 - **Delegate**: 将子任务委派给外部 AI 工具（Agy/Claude/Codex）
-- **Spec**: 项目约束规则（coding/arch/debug/test），自动注入到工作流
+- **Spec**: 项目约束规则（ordinary create = category/title/content），自动注入到工作流
+- **Knowhow**: 九种兼容类型；ordinary create = type/title/content。当前仓库写省略 targetRepoId；仅显式 linked write 且 host 提供 exact UUID + live corpus write capability 时传它，绝不从 cwd/name/alias/path 推导
+- **Knowledge audit/normalize**: audit 只读；normalize 必须先保存并审阅 dry-run report，再单独 --apply
 - **Wiki**: 知识图谱，存储详细技术文档
 - **Ralph**: 自适应决策引擎，动态调整执行链
 - **Odyssey**: 长周期自主循环命令族（debug/improve/planex/ui/review-test-fix），自含考古→诊断→修复→泛化→知识持久化

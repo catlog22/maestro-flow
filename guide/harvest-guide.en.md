@@ -125,8 +125,8 @@ Duplicate fragments are marked `[SKIP-DUP]` and recorded in the harvest report.
 maestro knowhow list                       # List all (default)
 maestro knowhow search "auth flow"         # Full-text search
 maestro knowhow get KNW-20260510-1430      # View specified entry
-/maestro-knowledge audit                   # Delete entry -> keep/deprecate/delete via audit
-/maestro-knowledge audit                   # Batch cleanup (prune) -> knowledge audit
+maestro knowledge audit --scope knowhow --json   # Read-only Knowhow health findings
+maestro knowledge audit --scope knowhow --prune  # Report deterministic supersede suggestions only
 ```
 
 ### Dual Storage Architecture
@@ -146,8 +146,9 @@ Workflow storage is for within-project knowledge; system storage is for cross-se
 | `search <query>` | Full-text search, sorted by relevance |
 | `view <id\|file>` | View full entry text, auto-detects storage |
 | `edit <file>` | Edit system memory file |
-| `delete <id\|file>` | Delete entry (confirmation required, `MEMORY.md` is protected) |
-| `prune` | Batch cleanup (requires at least one filter condition, supports `--dry-run`) |
+| `supersede <oldId>` | Explicitly link an old entry to its successor |
+| `history <id>` | Show the Knowhow evolution chain |
+| `recover` | Explicitly recover a pending lifecycle intent |
 
 ### 9 Knowhow Types
 

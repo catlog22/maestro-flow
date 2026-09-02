@@ -483,12 +483,12 @@ maestro ws list                         # 列出链接
 maestro ws status                       # 共享状态
 ```
 
-**knowhow (kh)** -- 知识复用管理。6 种类型: session, tip, template, recipe, reference, decision。
+**knowhow (kh)** -- 知识复用管理。9 种兼容类型: session, tip, template, recipe, reference, decision, asset, blueprint, document。普通 Knowhow 只要求 type/title/content；普通 Spec 只要求 category/title/content。Audit 只读；迁移先 `knowledge normalize --report <path>`，审阅后才 `--apply`。CLI `--repo` 选择物理目标，repeatable `--applies-to-repo` 只记录适用范围。host/MCP `targetRepoId` 不是 CLI flag：当前仓库写省略它，仅显式 linked target 且 host 提供 exact UUID + live capability 时传，绝不从 cwd/name/alias/path 推导。
 
 ```bash
-maestro kh add --type template --title "React Hook Form" --body "..." --lang typescript
-maestro kh add --type recipe --title "Deploy" --body "Steps: ..." --tags deploy
-maestro kh add --type decision --title "Use PG" --body "ADR: ..." --status accepted
+maestro kh add --type template --title "React Hook Form" --content "..." --language typescript
+maestro kh add --type recipe --title "Deploy" --content "Steps: ..." --keywords deploy
+maestro kh add --type decision --title "Use PG" --content "ADR: ..." --decision-state accepted
 maestro kh list                           # 列出全部
 maestro kh list --type template           # 按类型筛选
 maestro kh search "deploy"               # 关键词搜索

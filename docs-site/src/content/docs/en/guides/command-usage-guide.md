@@ -647,14 +647,17 @@ Analyzes codebase patterns to auto-generate `.workflow/kg/extractors.yaml` — t
 
 ### `store_knowhow` MCP Tool
 
-`store_knowhow` is a built-in MCP tool for knowledge entry storage and search:
+`store_knowhow` is a built-in MCP tool. Ordinary add requires only canonical `type`, `title`, and `content`; the nine compatible types are session, tip, template, recipe, reference, decision, asset, blueprint, and document.
 
 | Operation | Description |
 |-----------|-------------|
-| `add` | Create new knowhow entry (type: session/tip/template/recipe/reference/decision/asset/blueprint/document) |
+| `add` | Create a canonical knowhow entry |
 | `search` | Full-text search knowhow entries |
+| `supersede` | Link `oldId` to its `newId` replacement |
+| `history` | Read the evolution chain for `id` |
+| `recover` | Recover a pending lifecycle intent |
 
-Entries are auto-indexed by WikiIndexer (type=knowhow, category={type}). Supports tags, categorization, and spec category bridging (`specCategory` parameter allows knowhow entries to be injected alongside spec entries).
+Entries are auto-indexed by WikiIndexer as `type=knowhow`. For a current-repository MCP write, omit `targetRepoId`; only the host may supply an exact stable UUID for an explicitly selected linked write with a live corpus capability. Never infer identity from cwd/name/alias/path. CLI options are intentionally different: `--repo` resolves a selector and chooses the physical destination, while repeatable `--applies-to-repo` records applicability without retargeting the write.
 
 ---
 

@@ -483,12 +483,14 @@ maestro ws list                         # 列出链接
 maestro ws status                       # 共享状态
 ```
 
-**knowhow (kh)** -- Knowledge reuse management. 6 types: session, tip, template, recipe, reference, decision.
+**knowhow (kh)** -- Knowledge reuse management with nine compatible types: session, tip, template, recipe, reference, decision, asset, blueprint, and document.
+
+Nine compatible types are session, tip, template, recipe, reference, decision, asset, blueprint, and document; ordinary creation requires only type/title/content. CLI `--repo` selects the physical target and repeatable `--applies-to-repo` only records applicability. Host/MCP `targetRepoId` is an exact host-supplied UUID for an authorized linked write, not a CLI flag; omit it for current-repository writes and never infer it from cwd/name/alias/path.
 
 ```bash
-maestro kh add --type template --title "React Hook Form" --body "..." --lang typescript
-maestro kh add --type recipe --title "Deploy" --body "Steps: ..." --tags deploy
-maestro kh add --type decision --title "Use PG" --body "ADR: ..." --status accepted
+maestro kh add --type template --title "React Hook Form" --content "..." --language typescript
+maestro kh add --type recipe --title "Deploy" --content "Steps: ..." --keywords deploy
+maestro kh add --type decision --title "Use PG" --content "ADR: ..." --decision-state accepted
 maestro kh list                           # 列出全部
 maestro kh list --type template           # 按类型筛选
 maestro kh search "deploy"               # 关键词搜索

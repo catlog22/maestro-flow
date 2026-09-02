@@ -95,7 +95,7 @@ Revoked column must be set rather than deleting tokens.
 
 1. Agent 搜索知识 → 发现与当前上下文矛盾 → 调用 `maestro spec conflict mark` 标记
 2. 注入时：`contested` 条目移到末尾并显示警告；`low` 条目添加降级标记
-3. 审计清除：`/maestro-knowledge audit` 或 `maestro spec conflict clear` 消除标记
+3. `maestro knowledge audit --scope spec` 只读报告状态；仅显式 `maestro spec conflict clear` 会清除标记
 
 #### 健康检查
 
@@ -296,7 +296,7 @@ maestro wiki create --type knowhow --slug <slug> --title <title>
 maestro wiki append <containerId> --body <text> [--category <cat>] [--keywords <kw>]
 maestro wiki remove-entry <subEntryId>
 
-maestro knowhow add --type <type> --title <title> --body <text>
+maestro knowhow add --type <type> --title <title> --content <text>
 maestro knowhow list [--type <type>] | search <query>
 
 maestro wiki health | graph | orphans | hubs
@@ -415,7 +415,7 @@ maestro wiki append <containerId> --body <text> [--category <cat>] [--keywords <
 maestro wiki remove-entry <subEntryId> | update <id> [--title <title>] [--frontmatter <json>] | delete <id>
 
 # -- Knowhow --------------------------------------------------------------
-maestro knowhow add --type <type> --title <title> --body <text>
+maestro knowhow add --type <type> --title <title> --content <text>
 maestro knowhow list [--type <type>] [--json] | search <query> [--json] | get <id> [--json]
 
 # -- 图 -------------------------------------------------------------------

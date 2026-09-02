@@ -485,12 +485,12 @@ maestro msg broadcast "meeting" -s <session> --from coordinator
 <details>
 <summary>maestro knowhow (kh)</summary>
 
-Knowhow knowledge management. 6 types: session, tip, template, recipe, reference, decision.
+Knowhow knowledge management. Nine compatible types: session, tip, template, recipe, reference, decision, asset, blueprint, and document. Ordinary creation requires only type, title, and content; all metadata is optional. CLI `--repo` resolves a selector and selects the physical destination; repeatable `--applies-to-repo` records applicability without retargeting. Host/MCP `targetRepoId` is not a CLI flag: omit it for current-repository writes, and use only an exact host-supplied UUID with a live matching-corpus capability for an explicitly selected linked write. Never infer identity from cwd/name/alias/path.
 
 ```bash
-maestro kh add --type template --title "React Hook Form" --body "..." --lang typescript
-maestro kh add --type recipe --title "Deploy" --body "Steps: ..." --tags deploy
-maestro kh add --type decision --title "Use PG" --body "ADR: ..." --status accepted
+maestro kh add --type template --title "React Hook Form" --content "..." --language typescript
+maestro kh add --type recipe --title "Deploy" --content "Steps: ..." --keywords deploy
+maestro kh add --type decision --title "Use PG" --content "ADR: ..." --decision-state accepted
 maestro kh list                           # List all
 maestro kh list --type template           # Filter by type
 maestro kh search "deploy"                # Keyword search

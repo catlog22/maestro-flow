@@ -2,7 +2,7 @@
 title: "Learn Toolkit Guide"
 ---
 
-A complete reference for Maestro's learning toolkit, covering the principles, usage, and collaboration patterns of 5 `/maestro-learn` subcommands.
+A complete reference for Maestro's learning toolkit, covering the principles, usage, and collaboration patterns of 4 `/maestro-learn` subcommands.
 
 ---
 

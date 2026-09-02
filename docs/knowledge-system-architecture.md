@@ -30,7 +30,14 @@
 - 任何 semantic duplicate、conflict 或 supersession 都必须先有 reconciliation receipt。
 - 需要判断的关系由人确认；promotion 必须显式执行。
 - Deprecated 知识保留在演进链中，但默认不参与搜索和注入。
-- Prune 默认只生成计划；应用时先备份，再执行 soft deprecate/supersede，不做硬删除。
+- `knowledge audit` 始终只读；`--prune` 只在输出中附加 deterministic soft-action report，不提供 apply、mutation 或物理删除路径。
+- `knowledge audit` 检查 Spec/Knowhow，以及 pipeline、usage、compatibility/identity/link/capability/promotion 状态；它不顺手改写语料。规范化是独立 report-first 操作，必须先保存并审阅 `knowledge normalize --report <path>`，再以同一路径显式 `--apply`。源哈希或 repo_id 改变会使报告失效。
+
+### 1.2 Canonical creation and repository authority
+
+普通 Knowhow 的最小参数只有 `type/title/content`；普通 Spec 的最小参数只有 `category/title/content`。九种 Knowhow 类型保持兼容：`session|tip|template|recipe|reference|decision|asset|blueprint|document`。`keywords/sourceRef/relatedPaths/appliesToRepoIds/language/decisionState/explicitId/tool` 是高级可选字段，不应出现在所有示例的必填面。
+
+仓库身份只由 host 提供。当前仓库写入省略 `targetRepoId`。Agent 仅在用户/工作流显式选择 linked physical target、且 host 同时提供该目标的 exact stable UUID 与匹配 corpus 的 live write capability 时传 `targetRepoId`；值必须等于 host 提供的 UUID。禁止从 cwd、repo name、alias 或 path 推导 ID，也禁止把 alias/path 持久化为 identity。缺少权限或 identity mismatch 时 fail closed。多仓库仍是单物理目标写入；不做 physical multi-target copy，也不跨仓库 supersede。
 
 ### 1.1 历史偏差收敛状态
 
@@ -43,7 +50,7 @@
 | X3 | 已关闭 | 搜索从 credibility 存储读取 exposure signals，仅用于 relevance-floored exploration slot；缺失或损坏时关闭 exploration |
 | X4 | 已关闭 | `rankNormalize` 仅决定跨源交错顺序；展示 `score` 保留源内真实归一化相关度 |
 | G-C3 | 已关闭 | facet 通过 daemon 协议下推到 WikiIndexer，在 BM25/向量候选截断前应用；旧 daemon 未确认 `filtersApplied` 时回退本地预过滤 |
-| G-B3 | 已关闭 | Knowhow 支持 replay-safe deprecate/supersede 生命周期，audit apply 调用正式生命周期 API |
+| G-B3 | 已关闭 | Knowhow 支持 replay-safe deprecate/supersede 生命周期；audit 仅报告可审查的 lifecycle suggestions，不调用 mutation API |
 | G-A4 | 已关闭 | Spec writer 使用跨进程 O_EXCL lock 和 tmp+rename 原子 read-modify-write |
 
 更早关闭的 X2/G-A6/G-A8/G-C11（canonical identity、共享 Spec parser、Knowhow ID、family diversity）
@@ -185,7 +192,8 @@ read-only probe 会关闭 exploration slot，但不会影响基础搜索、MMR �
 `validated`、`contradicted`）通过 `stage` 命令附带记录：
 
 ```bash
-maestro knowledge stage spec "规则标题" "规则正文" \
+printf '%s\n' "规则正文" > /tmp/rule.md
+maestro knowledge stage spec "规则标题" --content-file /tmp/rule.md \
   --run <run-id> --session <session-id> \
   --signal validated --signal-ids spec:S-1,knowhow:K-1
 ```
@@ -386,36 +394,25 @@ maestro session seal <session-id>
 
 ---
 
-## 9. Audit 与安全剪枝
+## 9. Read-only Audit 与 prune report
 
 ```bash
 maestro knowledge audit --scope spec|knowhow|all
 maestro knowledge audit --scope all --prune
-maestro knowledge audit --scope all --prune --apply
+maestro knowledge audit --scope all --json
 ```
 
-Audit 组合检查：
+只有 `spec`、`knowhow`、`all` 三种 scope。Pipeline/repository 诊断始终执行；MaestroGraph 已初始化时附加 usage 统计。Audit 实现的检查包括：
 
-- schema 与 ledger 完整性；
-- pending observed/corroborated backlog；
-- duplicate、supersession、conflict 和 lifecycle 状态；
-- exposure/consumption concentration；
-- 演进链与孤立引用。
+- Spec：missing SID、unsynchronized supersession、exact duplicate、dangling links、supersession cycle、stale-active observation；
+- Knowhow：required metadata、frontmatter、ghost related path、exact duplicate；
+- Pipeline：invalid Session authority/knowledge ledger、corroborated promotion backlog；
+- Usage：exposure concentration（只观察）；
+- Compatibility/repository：legacy aliases/unscoped/free category、manifest、linked ID/capabilities、pending cross-repo promotion。
 
-安全剪枝分两阶段：
+`--prune` 只把确定性的建议加入 `prune_plan`：Spec 的 `deprecate` 建议仅来自 unsynchronized supersession/exact duplicate，Knowhow 的 `supersede` 建议仅来自 exact duplicate。它不调用 lifecycle API，也不写 report、backup 或 knowledge file。Audit 不提供 `--apply`、delete、purge 或交互处置阶段。
 
-1. `--prune` 只生成 deterministic soft-prune plan；
-2. `--apply` 先把受影响文件备份到
-   `.workflow/.trash/knowledge-audit-{timestamp}/`，再原子应用 deprecate/supersede。
-
-系统不依据"低命中"直接删除知识。低曝光可能代表长尾价值，而不是无效；冲突和重复必须保留证据与演进关系。
-
-**与 pending candidates 的交互**：audit 的 soft-prune 可能 deprecate 一条知识，而该知识
-同时是某个未 promote candidate 的 reconcile match target。当前系统不阻止这种竞态：
-audit 不检查 pending candidate backlog，candidate 的 freshness fence 也不感知 audit
-操作。若 audit deprecate 了 match target，后续 promote 仍会成功（写入新知识），但
-reconciliation evidence 中引用的 target 已变为 deprecated。`review` 会展示 target 的
-当前状态，人工裁决时应考虑这一点。
+系统不依据低命中、低曝光或年龄生成 prune action。若人工认可建议，后续 lifecycle change 必须通过另行授权的显式 Spec/Knowhow 命令执行。Compatibility migration 也不属于 audit；唯一显式迁移 apply 是 reviewed `knowledge normalize --report <path>` 快照的同路径 `--apply`。
 
 ---
 
@@ -428,7 +425,7 @@ reconciliation evidence 中引用的 target 已变为 deprecated。`review` 会�
 | 暂存 + 归因 | `maestro knowledge stage` | Run candidate + 可选 signal（`--signal --signal-ids`） |
 | 审查 + 裁决 | `maestro knowledge review` | 默认只读；`--refresh` 内含 reconcile；`--resolve` 内含裁决 |
 | 提升 | `maestro knowledge promote` | Spec/Knowhow + promotion receipt |
-| 治理 | `maestro knowledge audit` | 默认只读；`--apply` soft prune |
+| 治理 | `maestro knowledge audit` | 始终只读；`--prune` 仅附加 deterministic suggestion report |
 | 收口 | `maestro session seal` | Session sealed 状态 |
 
 所有 knowledge 子命令支持 `--workflow-root`，便于在隔离项目、脚本和测试中使用。
@@ -449,7 +446,7 @@ reconciliation evidence 中引用的 target 已变为 deprecated。`review` 会�
 maestro knowledge review <session-id> --json
 
 # 项目知识健康
-maestro knowledge audit --scope all --prune --json
+maestro knowledge audit --scope all --prune --json  # report-only; no files changed
 maestro spec health --json
 
 # 搜索类型隔离与 canonical ID 回读

@@ -48,6 +48,17 @@ Maestro knowledge accumulation is divided into two types: **Constraints** and **
 | Spec (`specs/`) | Index + Rules | Short entries, <200 word summary | Auto-injection (hook) |
 | Knowhow (`knowhow/`) | Detailed Documents | Complete steps, code examples | On-demand loading (`wiki load`) |
 
+### Canonical creation and multi-repository policy
+
+Ordinary Knowhow creation requires exactly `type`, `title`, and `content`; ordinary Spec creation requires `category`, `title`, and `content`. The nine compatible Knowhow types are `session|tip|template|recipe|reference|decision|asset|blueprint|document`. Canonical optional metadata uses `keywords`, `sourceRef`, `relatedPaths`, `appliesToRepoIds`, `language`, and `decisionState`.
+
+```bash
+maestro knowhow add --type tip --title "Bounded retry" --content "Retry transient failures at most three times."
+maestro spec add coding "Bounded retry rule" "Retry transient failures at most three times."
+```
+
+CLI `--repo` accepts a repository selector and chooses the physical destination. Repeatable `--applies-to-repo` records applicability and never changes that destination. Host/MCP `targetRepoId` is different: omit it for current-repository writes; use it only when the host supplies the exact stable UUID and a live matching-corpus capability for an explicitly selected linked physical write. Never infer or persist identity from cwd, repository name, alias, or path; fail closed when authority is absent or stale.
+
 <details>
 <summary>Entry Format Example</summary>
 
@@ -111,7 +122,7 @@ maestro spec history <sid>
 # ● CURRENT     S-20260704-a1b2  "New rule"
 ```
 
-Superseded entries are automatically set to `status="deprecated"`, excluded from search and agent injection, but still accessible via `--include-deprecated`.
+Superseded entries use canonical `lifecycleStatus="deprecated"` (legacy `status` remains read-compatible until explicit report-first normalization), are excluded from search and agent injection, but remain accessible via `--include-deprecated`.
 
 ### Dual-Track: Supersede vs Conflict
 
@@ -139,7 +150,7 @@ Reports: lifecycle statistics (active/deprecated/contested), evolution chain cou
 | Command | Responsibility |
 |------|------|
 | `/maestro-spec` | Appends `<spec-entry>` entries to specs files, supporting both inline and ref modes |
-| `/maestro-knowhow` | Captures 6 types of knowledge documents into knowhow/ (compact, template, recipe, reference, decision, tip); add `--tool` to mark as an executable tool |
+| `/maestro-knowhow` | Captures nine compatible Knowhow types; ordinary creation requires only type/title/content, and `--tool` is optional metadata |
 | `/maestro-learn` | Captures atomic insights to `learnings.md` (pattern, gotcha, technique, tip) |
 | `/maestro-knowledge harvest` | Extracts knowledge fragments from workflow artifacts, routing to three storages: wiki/spec/issue |
 
@@ -148,7 +159,7 @@ Reports: lifecycle statistics (active/deprecated/contested), evolution chain cou
 | Command | Responsibility |
 |------|------|
 | `maestro spec load` | Loads main documents by category + cross-file keyword matching entries + auto-discovers knowhow tools |
-| `maestro knowhow` | list/search/get across the workflow knowhow store; deletion/cleanup routes through `/maestro-knowledge audit` |
+| `maestro knowhow` | add/list/search/get plus explicit supersede/history/recover lifecycle operations for workflow Knowhow |
 | `/maestro-knowledge wiki` | Wiki graph health, search, cleanup, and statistics |
 
 ### Analysis Commands
@@ -157,7 +168,7 @@ Reports: lifecycle statistics (active/deprecated/contested), evolution chain cou
 |------|------|
 | `/maestro-knowledge wiki digest` | Semantic topic clustering + knowledge coverage heatmap + gap analysis |
 | `/maestro-knowledge wiki connect` | Discovers isolated nodes and missing links, fixes graph connectivity |
-| `/maestro-knowledge audit` | Audits spec/knowhow/artifact stores — contradiction detection, expiration cleanup, orphan pruning (keep/supersede/contest/deprecate/delete five-state decisions) |
+| `/maestro-knowledge audit` | Read-only Spec/Knowhow audit with pipeline, usage, and compatibility findings; `--prune` reports soft-action suggestions only |
 | `/maestro-learn decompose` | Extracts design patterns from code, writes to spec and wiki |
 | `/maestro-learn follow` | Guided reading of code/wiki, extracts pattern and builds understanding |
 

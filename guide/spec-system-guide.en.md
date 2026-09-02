@@ -103,7 +103,7 @@ Knowledge evolution has two distinct handling paths — **supersession** and **c
 
 1. Agent searches knowledge -> finds contradiction with current context -> calls `maestro spec conflict mark`
 2. Injection: `contested` entries moved to end with warning; `low` entries get degradation marker
-3. Audit clear: `/maestro-knowledge audit` or `maestro spec conflict clear` removes markers
+3. `maestro knowledge audit --scope spec` reports state read-only; only explicit `maestro spec conflict clear` removes markers
 
 #### Health Check
 
@@ -293,7 +293,7 @@ maestro wiki create --type knowhow --slug <slug> --title <title>
 maestro wiki append <containerId> --body <text> [--category <cat>] [--keywords <kw>]
 maestro wiki remove-entry <subEntryId>
 
-maestro knowhow add --type <type> --title <title> --body <text>
+maestro knowhow add --type <type> --title <title> --content <text>
 maestro knowhow list [--type <type>] | search <query>
 
 maestro wiki health | graph | orphans | hubs
@@ -412,7 +412,7 @@ maestro wiki append <containerId> --body <text> [--category <cat>] [--keywords <
 maestro wiki remove-entry <subEntryId> | update <id> [--title <title>] [--frontmatter <json>] | delete <id>
 
 # -- Knowhow --------------------------------------------------------------
-maestro knowhow add --type <type> --title <title> --body <text>
+maestro knowhow add --type <type> --title <title> --content <text>
 maestro knowhow list [--type <type>] [--json] | search <query> [--json] | get <id> [--json]
 
 # -- Graph ----------------------------------------------------------------

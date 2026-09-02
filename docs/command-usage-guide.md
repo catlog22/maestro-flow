@@ -309,7 +309,7 @@ maestro run skill specs-setup                            # 已有项目：扫描
 maestro spec load --category coding                      # 加载规范
 maestro kg index                                        # 重建代码库文档
 maestro knowhow search "认证"                            # 搜索知识复用
-/maestro-knowledge audit --scope all                    # 审计三存储，清理过期/矛盾条目
+maestro knowledge audit --scope all --json              # 只读审计 Spec/Knowhow + pipeline/usage 诊断
 maestro session status                                  # 项目仪表板
 /maestro-companion "实现认证"                            # 轻量执行：加载知识上下文并完成小任务
 ```
@@ -322,7 +322,7 @@ maestro session status                                  # 项目仪表板
 | `/maestro-next` | 单步推荐 | 轻量路由，不创建 session，分类意图后路由到 companion / 单 Run / `/maestro` |
 | `grill` 步骤 | 压力测试 | 对抗式苏格拉底访谈，验证方案假设，产出 context-package |
 | `blueprint` 步骤 | 正式规格 | 6 阶段文档链（Brief → PRD → Architecture → Epics），与 brainstorm 互补 |
-| `/maestro-knowledge audit` | 知识审计 | spec/knowhow/artifact 三存储审计淘汰（keep/deprecate/delete） |
+| `/maestro-knowledge audit` | 知识审计 | 只读 Spec/Knowhow 健康检查 + pipeline/usage/compatibility findings；`--prune` 仅报告建议 |
 | `/team-swarm` | 蚁群智能 | ACO 驱动群体优化，信息素收敛，4 角色 + Python 控制器 |
 
 ---
@@ -658,14 +658,17 @@ maestro domain                                        # 查看当前领域配置
 
 ### `store_knowhow` MCP 工具
 
-`store_knowhow` 是 MCP 内置工具，用于知识条目的存储和搜索：
+`store_knowhow` 是 MCP 内置工具。普通 add 的 canonical 最小参数是 `type/title/content`；九种类型为 session/tip/template/recipe/reference/decision/asset/blueprint/document。
 
 | 操作 | 说明 |
 |------|------|
-| `add` | 创建新 knowhow 条目（type: session/tip/template/recipe/reference/decision/asset/blueprint/document） |
+| `add` | 创建 canonical knowhow 条目 |
 | `search` | 全文搜索 knowhow 条目 |
+| `supersede` | 以 `oldId/newId` 建立替代链 |
+| `history` | 查询指定 `id` 的演化链 |
+| `recover` | 恢复 pending lifecycle intent |
 
-条目自动由 WikiIndexer 索引（type=knowhow, category={type}）。支持标签、分类、spec category 桥接（`specCategory` 参数允许 knowhow 条目与 spec 条目一起注入）。
+条目由 WikiIndexer 索引为 `type=knowhow`。当前仓库 MCP 写省略 `targetRepoId`；仅 host 可为显式 linked write 提供 exact stable UUID + live corpus capability。CLI `--repo` 选择物理目标，repeatable `--applies-to-repo` 只记录适用范围。禁止从 cwd/name/alias/path 推导 identity。
 
 ---
 

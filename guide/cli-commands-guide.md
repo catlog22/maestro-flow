@@ -153,18 +153,22 @@ maestro delegate "continue" --to gemini --resume
 Run 知识生命周期与项目知识维护：
 
 ```bash
-maestro knowledge stage knowhow "事务写入配方" "统一通过 SessionStore transaction 写入" --run <run-id> --category recipe
-maestro knowledge stage knowhow "长文配方" --content-file recipe.md --run <run-id>
-maestro knowledge stage spec "规则" "内容" --run <run-id> --signal validated --signal-ids spec:S-1
+maestro knowledge stage knowhow "事务写入配方" --content-file recipe.md --type recipe --run <run-id>
+maestro knowledge stage spec "规则" --content-file rule.md --run <run-id> --signal validated --signal-ids spec:S-1
 maestro knowledge record spec:S-1 knowhow:K-9 --signal consumed --source search --run <run-id>
 maestro knowledge review <session-id> [--refresh]
 maestro knowledge review <session-id> --resolve KDC-... --as related --target <knowledge-id> --reason "确认关联"
 maestro knowledge promote <session-id> --candidate KDC-...
 maestro knowledge promote <session-id> --all
-maestro knowledge audit --scope all --prune
+maestro knowledge audit --scope all --json          # read-only compatibility/identity/link/promotion diagnostics
+maestro knowledge normalize --report .workflow/knowledge-normalize.json
+# review the report, then explicitly apply the unchanged snapshot:
+maestro knowledge normalize --report .workflow/knowledge-normalize.json --apply
 ```
 
-`search` 和自动注入只代表 exposure；显式 `load` 自动记录为 consumed。`stage --signal --signal-ids` 在暂存 candidate 的同时记录 `cited` / `validated` / `contradicted` 等 Run 关系。`session done` 返回精确 candidate receipt，但不会直接写项目 spec/knowhow。`review` 展示 diversified matches、证据和可复制的下一步命令；`--refresh` 内含 reconcile；`--resolve` 内含裁决。`promote --all` 晋升所有 eligible 候选（observed-only 输出警告）。
+`search` 和自动注入只代表 exposure；显式 `load` 自动记录为 consumed。`stage --signal --signal-ids` 在暂存 candidate 的同时记录 `cited` / `validated` / `contradicted` 等 Run 关系。`session done` 返回精确 candidate receipt，但不会直接写项目 spec/knowhow。`review` 展示 diversified matches、证据和可复制的下一步命令；`--refresh` 内含 reconcile；`--resolve` 内含裁决。`promote --all` 晋升所有 eligible 候选（observed-only 输出警告）。Audit 不修改语料；normalize 必须先保存/审阅报告，再独立 `--apply`。
+
+最小创建面：ordinary Knowhow = `maestro knowhow add --type <type> --title "<title>" --content "<content>"`；ordinary Spec = `maestro spec add <category> "<title>" "<content>"`。九种 Knowhow 类型是 `session|tip|template|recipe|reference|decision|asset|blueprint|document`，其余 metadata 都是高级可选项。CLI `--repo` 接受 selector 并选择物理目标，repeatable `--applies-to-repo` 只记录适用范围。host/MCP `targetRepoId` 不是 CLI flag：当前仓库写省略它，仅在显式 linked physical write 且 host 给出 exact stable UUID + live corpus write capability 时传。禁止从 cwd/name/alias/path 推导或持久化 identity。
 
 </details>
 
@@ -730,12 +734,12 @@ maestro msg broadcast "meeting" -s <session> --from coordinator
 <details>
 <summary>maestro knowhow (kh)</summary>
 
-知识复用管理。6 种类型: session, tip, template, recipe, reference, decision。
+知识复用管理。9 种兼容类型: session, tip, template, recipe, reference, decision, asset, blueprint, document。普通创建只要求 type/title/content。
 
 ```bash
-maestro kh add --type template --title "React Hook Form" --body "..." --lang typescript
-maestro kh add --type recipe --title "Deploy" --body "Steps: ..." --tags deploy
-maestro kh add --type decision --title "Use PG" --body "ADR: ..." --status accepted
+maestro kh add --type template --title "React Hook Form" --content "..." --language typescript
+maestro kh add --type recipe --title "Deploy" --content "Steps: ..." --keywords deploy
+maestro kh add --type decision --title "Use PG" --content "ADR: ..." --decision-state accepted
 maestro kh list                           # 列出全部
 maestro kh list --type template           # 按类型筛选
 maestro kh search "deploy"               # 关键词搜索

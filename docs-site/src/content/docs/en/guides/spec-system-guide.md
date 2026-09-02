@@ -220,7 +220,7 @@ maestro wiki create --type knowhow --slug <slug> --title <title>
 maestro wiki append <containerId> --category <cat> --body <text>
 maestro wiki remove-entry <subEntryId>
 
-maestro knowhow add --type <type> --title <title> --body <text>
+maestro knowhow add --type <type> --title <title> --content <text>
 maestro knowhow list [--type <type>] | search <query>
 
 maestro wiki health | graph | orphans | hubs
@@ -315,7 +315,7 @@ maestro wiki append <containerId> --category <cat> --body <text> [--keywords <kw
 maestro wiki remove-entry <subEntryId> | update <id> [--title <title>] [--frontmatter <json>] | delete <id>
 
 # -- Knowhow --------------------------------------------------------------
-maestro knowhow add --type <type> --title <title> --body <text> [--tags <csv>]
+maestro knowhow add --type <type> --title <title> --content <text> [--keywords <csv>]
 maestro knowhow list [--type <type>] [--json] | search <query> [--json] | get <id> [--json]
 
 # -- Graph ----------------------------------------------------------------

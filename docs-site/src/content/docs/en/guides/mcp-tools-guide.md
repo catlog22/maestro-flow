@@ -29,7 +29,7 @@ The Maestro MCP server exposes 9 tools for AI agents (Claude Code, Codex, etc.) 
 | `team_mailbox` | Team | Mailbox-style message delivery with tracking |
 | `team_task` | Team | Task CRUD with state machine management |
 | `team_agent` | Team | Agent lifecycle management (spawn/shutdown) |
-| `store_knowhow` | Memory | Knowhow knowledge entry storage (6 types) |
+| `store_knowhow` | Memory | Knowhow storage and lifecycle (9 types, 5 operations) |
 
 ---
 
@@ -247,34 +247,44 @@ Agent lifecycle management. **Storage**: `.workflow/.team/{session_id}/members.j
 
 ### store_knowhow
 
-Project-level knowledge reuse in `.workflow/knowhow/`. 6 types: session(KNW-), tip(TIP-), template(TPL-), recipe(RCP-), reference(REF-), decision(DCS-). WikiIndexer auto-indexes as `type=knowhow`.
+Project-level knowledge reuse in `.workflow/knowhow/`. Nine compatible types: session(KNW-), tip(TIP-), template(TPL-), recipe(RCP-), reference(REF-), decision(DCS-), asset(AST-), blueprint(BLP-), and document(DOC-). WikiIndexer auto-indexes them as `type=knowhow`.
 
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
-| `operation` | add/search | Yes | Operation type |
-| `type` | string | add | session/tip/template/recipe/reference/decision |
-| `title` / `body` | string | add | Title / body (markdown) |
-| `tags` | string[] | No | Categorization tags |
-| `lang` | string | No | [template] Programming language |
-| `source` | string | No | [reference] Original URL |
-| `status` | string | No | [decision] proposed/accepted/superseded |
-| `query` | string | search | Search keywords |
-| `limit` | number | No | Max results (default: 20) |
+| `operation` | add/search/supersede/history/recover | Yes | One of the five supported operations |
+| `type` | string | add | Any of the nine types above |
+| `title` / `content` | string | add | Ordinary add requires type, title, and Markdown content |
+| `keywords` | string[] | No | Canonical search keywords |
+| `language` | string | No | Content/programming language |
+| `sourceRef` | string | No | Source URL or document identifier |
+| `relatedPaths` | string[] | No | Project-relative related paths |
+| `category` | string | No | Canonical category |
+| `decisionState` | string | No | proposed/accepted/superseded (decision only) |
+| `appliesToRepoIds` | string[] | No | Stable repository UUID applicability |
+| `targetRepoId` | string | No | Host-supplied exact UUID for an authorized linked physical write |
+| `query` / `limit` | string / number | search | Query and optional maximum results |
+| `oldId` / `newId` | string | supersede | Existing and replacement IDs |
+| `id` | string | history | Entry whose evolution chain is requested |
 
 <details>
 <summary>Examples</summary>
 
 ```jsonc
 { "operation": "add", "type": "template", "title": "React Hook Form",
-  "body": "import { useForm } from 'react-hook-form'; ...",
-  "lang": "typescript", "tags": ["react", "form"] }
+  "content": "import { useForm } from 'react-hook-form'; ...",
+  "language": "typescript", "keywords": ["react", "form"] }
 { "operation": "add", "type": "decision", "title": "Use PostgreSQL",
-  "body": "ADR: PostgreSQL as primary database...",
-  "status": "accepted", "tags": ["database", "architecture"] }
+  "content": "ADR: PostgreSQL as primary database...",
+  "decisionState": "accepted", "keywords": ["database", "architecture"] }
 { "operation": "search", "query": "authentication middleware" }
+{ "operation": "supersede", "oldId": "TIP-...", "newId": "TIP-..." }
+{ "operation": "history", "id": "TIP-..." }
+{ "operation": "recover" }
 ```
 
 </details>
+
+For a current-repository MCP write, omit `targetRepoId`. A host may set it only for an explicitly selected linked physical write, using the exact stable UUID and a live `knowhow` write capability. Never derive it from cwd, repository name, alias, or path. This host/MCP field differs from the CLI: CLI `--repo` accepts a repository selector and chooses the physical destination, while repeatable `--applies-to-repo` records applicability without retargeting the write.
 
 ---
 

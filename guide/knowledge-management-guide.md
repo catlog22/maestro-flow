@@ -48,6 +48,19 @@ Maestro 知识沉淀分两种：**约束**和**积累**。约束是编码规范�
 | Spec (`specs/`) | 索引 + 规则 | 短条目，<200 字摘要 | 自动注入（hook） |
 | Knowhow (`knowhow/`) | 详情文档 | 完整步骤、代码示例 | 按需加载（`wiki load`） |
 
+### 最小 canonical creation surface
+
+普通 Knowhow 只有三个必填知识参数：`type/title/content`；普通 Spec 只有三个：`category/title/content`。
+
+```bash
+maestro knowhow add --type tip --title "有界重试" --content "瞬态失败最多重试三次。"
+maestro spec add coding "有界重试规则" "瞬态失败最多重试三次。"
+```
+
+九种 Knowhow 类型保持兼容：`session|tip|template|recipe|reference|decision|asset|blueprint|document`。`keywords/sourceRef/relatedPaths/appliesToRepoIds/language/decisionState/explicitId/tool` 都是高级可选字段。
+
+CLI `--repo` 接受 repository selector 并选择物理写入目标；repeatable `--applies-to-repo` 只记录适用范围，不会改变目标。host/MCP `targetRepoId` 不是 CLI flag：当前仓库写入省略它，Agent 只有在用户/工作流显式选择 linked physical target，且 host 提供该目标的 exact stable UUID 与匹配 corpus 的 live write capability 时才传。禁止从 cwd、repo name、alias 或 path 推导 ID，也禁止持久化 alias/path 作为 identity；缺权限或 cached/live ID mismatch 时 fail closed。
+
 ### Session/Run 知识审查闭环
 
 Run 不再把结论直接写入 Spec/Knowhow，而是经过可审查的两阶段流程：
@@ -65,7 +78,7 @@ Run 不再把结论直接写入 Spec/Knowhow，而是经过可审查的两阶段
 # 暂存候选（可选，decisions/constraints 在 complete 时自动暂存）
 # 长正文可改用 --content-file <path|->
 # --signal/--signal-ids 可同时记录 validated/contradicted 等 Run 关系
-maestro knowledge stage spec "规则标题" "规则正文" \
+maestro knowledge stage spec "规则标题" --content-file <path|-> \
   --action propose --run <run-id> --session <session-id> \
   --signal validated --signal-ids spec:S-1,knowhow:K-1
 
@@ -83,6 +96,17 @@ maestro session seal <session-id>
 ```
 
 `review` 默认只读；`--refresh` 内含 reconcile，仅在显示 `missing` 或 `stale` 时使用。`--resolve` 在审查界面内直接裁决，无需单独命令。Search/自动注入只是 exposure，显式 `load` 自动记录为 consumed，也不会触发 promotion。
+
+### 只读 audit 与 report-first normalization
+
+```bash
+maestro knowledge audit --scope all --json
+maestro knowledge normalize --report .workflow/knowledge-normalize.json
+# 审阅报告后，且源文件与 repo_id 未变化：
+maestro knowledge normalize --report .workflow/knowledge-normalize.json --apply
+```
+
+Audit 报告 legacy `tags/specCategory/free category/status/source/codePaths/lang/assetType`、legacy-unscoped、缺 manifest、linked ID mismatch、read/write capabilities、pending cross-repo promotion，但不修改语料。Normalize 只迁移确定性 alias 并在写前备份；自由 category 保留为 unresolved，绝不猜 canonical category。没有先前报告、报告不匹配、源哈希变化或 repository identity 变化都 fail closed。
 
 <details>
 <summary>条目格式示例</summary>
@@ -147,7 +171,7 @@ maestro spec history <sid>
 # ● CURRENT     S-20260704-a1b2  "新规则"
 ```
 
-被替代的条目自动 `status="deprecated"`，从搜索和 agent 注入中排除，但仍可通过 `--include-deprecated` 查看。
+被替代的条目以 canonical `lifecycleStatus="deprecated"` 表示（legacy `status` 仍可读并由显式 normalize 迁移），从搜索和 agent 注入中排除，但仍可通过 `--include-deprecated` 查看。
 
 ### 冲突双轨
 
@@ -175,7 +199,7 @@ maestro spec health
 | 命令 | 职责 |
 |------|------|
 | `/maestro-spec` | 向 specs 文件追加 `<spec-entry>` 条目，支持 inline 和 ref 两种模式 |
-| `/maestro-knowhow` | 捕获 6 种类型知识文档到 knowhow/（compact、template、recipe、reference、decision、tip），可加 `--tool` 标记为可执行 tool |
+| `/maestro-knowhow` | 捕获 9 种兼容类型知识文档到 knowhow/（session、tip、template、recipe、reference、decision、asset、blueprint、document）；ordinary create 只要求 type/title/content |
 | `/maestro-learn` | 捕获原子洞察到 `learnings.md`（pattern、gotcha、technique、tip） |
 | `/maestro-knowledge harvest` | 从工作流产物中提取知识碎片，路由到 wiki/spec/issue 三个存储 |
 
@@ -184,7 +208,7 @@ maestro spec health
 | 命令 | 职责 |
 |------|------|
 | `maestro spec load` | 按 category 加载主文档 + 跨文件 keyword 匹配条目 + 自动发现 knowhow 工具 |
-| `maestro knowhow` | 对 workflow knowhow 存储做 list/search/get；删除/清理走 `/maestro-knowledge audit` |
+| `maestro knowhow` | 对 workflow knowhow 存储做 add/list/search/get 与显式 supersede/history/recover lifecycle 操作 |
 | `/maestro-knowledge wiki` | Wiki 图健康度、搜索、清理、统计 |
 
 ### 分析类
@@ -193,7 +217,7 @@ maestro spec health
 |------|------|
 | `/maestro-knowledge wiki digest` | 语义主题聚类 + 知识覆盖热力图 + gap 分析 |
 | `/maestro-knowledge wiki connect` | 发现孤立节点和缺失连接，修复图联通性 |
-| `/maestro-knowledge audit` | 审计 spec/knowhow/artifact 三存储 — 矛盾检测、过期淘汰、孤立清理（keep/supersede/contest/deprecate/delete 五态决策） |
+| `/maestro-knowledge audit` | 只读审计 Spec/Knowhow，并附加 pipeline/usage/compatibility findings；`--prune` 仅输出 soft-action suggestions |
 | `/maestro-learn decompose` | 从代码中提取设计模式，写入 spec 和 wiki |
 | `/maestro-learn follow` | 引导式阅读代码/wiki，提取 pattern 并构建理解 |
 
