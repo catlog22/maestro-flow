@@ -381,6 +381,7 @@ export class WikiIndexer {
       }
     };
 
+    add(join(this.workflowRoot, 'config.json'), this.workflowRoot);
     add(join(this.workflowRoot, 'project.md'), this.workflowRoot);
     add(join(this.workflowRoot, 'roadmap.md'), this.workflowRoot);
     scan(join(this.workflowRoot, 'knowhow'), this.workflowRoot, name => name.toLowerCase().endsWith('.md'), true);

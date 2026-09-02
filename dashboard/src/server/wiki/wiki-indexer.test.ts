@@ -324,6 +324,34 @@ Facet ranking legacy target.
     expect(index.byId['spec:project:paired-cache']).toBeDefined();
   });
 
+  it('invalidates a persisted cache when workspace configuration changes', async () => {
+    await write('config.json', JSON.stringify({ linkedWorkspaces: [] }));
+    await write('specs/config-cache.md', '---\ntitle: Config cache sentinel\n---\n# Config cache sentinel');
+    const writer = withoutCliSessions(new WikiIndexer({ workflowRoot: tmpRoot }));
+    await writer.get();
+    await expect.poll(() => stat(join(tmpRoot, 'search-cache.json'))
+      .then(() => true, () => false)).toBe(true);
+    await writer.close();
+
+    await write('config.json', JSON.stringify({ linkedWorkspaces: [{ name: 'renamed' }] }));
+    const reader = new WikiIndexer({
+      workflowRoot: tmpRoot,
+      persistence: 'read-only',
+      includeCliSessions: false,
+    });
+    const subject = reader as unknown as { buildIndexCandidate: () => Promise<unknown> };
+    const originalBuild = subject.buildIndexCandidate.bind(reader);
+    let builds = 0;
+    subject.buildIndexCandidate = async () => {
+      builds++;
+      return originalBuild();
+    };
+
+    await reader.get();
+    await reader.close();
+    expect(builds).toBe(1);
+  });
+
   it('coalesces invalidation during rebuild and only publishes the latest generation', async () => {
     await write('specs/old.md', '---\ntitle: Old generation\n---\n# Old generation');
     const indexer = new WikiIndexer({ workflowRoot: tmpRoot, persistence: 'memory-only' });
