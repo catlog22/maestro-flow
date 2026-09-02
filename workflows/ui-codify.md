@@ -5,20 +5,20 @@
 </required_reading>
 # UI Codify: Main Workflow
 
-从源代码提取设计系统，生成参考包，固化为知识资产。
+从源代码提取设计系统，生成参考包并暂存知识候选；知识资产仅在后续显式 promotion 时创建。
 
 ## Architecture
 
 ```
 Phase 1 (inline)     Phase 2 (deferred)       Phase 3 (deferred)       Phase 4 (deferred)
-  Validate &           3 Parallel Agents        Reference Package        Knowhow Assets
+  Validate &           3 Parallel Agents        Reference Package        Knowledge Candidates
   Setup                ┌─ Style Agent           Copy tokens +            Manifest +
-  ├─ Parse args        ├─ Animation Agent       Generate preview         Manifest + direct write
+  ├─ Parse args        ├─ Animation Agent       Generate preview         Stage + explicit review
   ├─ Validate source   └─ Layout Agent          (preview.html/css)       + cleanup
   ├─ Package name      ↓                        ↓                        ↓
   └─ Workspace         design-tokens.json       preview.html             knowhow-manifest.json
-                       animation-tokens.json    preview.css              → knowhow files
-                       layout-templates.json                             → spec entries
+                       animation-tokens.json    preview.css              → candidates
+                       layout-templates.json                             → review/promotion
 ```
 
 ## Data Flow
@@ -32,7 +32,7 @@ Phase 2 → design-tokens.json, animation-tokens.json, layout-templates.json
     ↓      (written to temp_dir)
 Phase 3 → preview.html, preview.css, token files copied to package_dir
     ↓
-Phase 4 → knowhow-manifest.json → 直接写入 knowhow + specs（manifest 驱动）
+Phase 4 → knowhow-manifest.json → stage candidates（manifest 驱动；显式 review/promotion）
     ↓
 Completion report
 ```
@@ -44,7 +44,7 @@ Completion report
   {"content": "Phase 1: 参数验证与工作区准备", "status": "in_progress"},
   {"content": "Phase 2: 并行 Agent 提取 (Style + Animation + Layout)", "status": "pending"},
   {"content": "Phase 3: 参考包生成 (preview.html + preview.css)", "status": "pending"},
-  {"content": "Phase 4: 知识资产固化 (manifest → 直接写入 knowhow + specs)", "status": "pending"}
+  {"content": "Phase 4: 知识候选暂存 (manifest → stage; seal 后 review/promote)", "status": "pending"}
 ]
 ```
 
@@ -170,9 +170,9 @@ Phase 3 writes:
 
 ---
 
-## Phase 4: Knowledge Asset Generation (Deferred)
+## Phase 4: Knowledge Candidate Generation (Deferred)
 
-MANDATORY: execute `~/.maestro/workflows/ui-codify-knowhow.md` steps; REQUIRED produce: knowhow-manifest.json, knowhow files, spec entries; BLOCKED if missing.
+MANDATORY: execute `~/.maestro/workflows/ui-codify-knowhow.md` steps; REQUIRED produce `knowhow-manifest.json` and `knowledge-stage-results.json`. Every attempted stage must capture valid `--json` output and a candidate ID while preserving manifest content/keywords/relatedPaths/category. Count only those validated IDs. Any missing ID is a recorded failure and `[LOW CONFIDENCE]`; if staging was attempted but no candidate ID was captured, Phase 4 is BLOCKED. Exact-title corpus skips are not candidates and do not count as successes. Corpus knowhow/spec files and canonical links do not exist until explicit post-seal review/promotion.
 
 Variables available to Phase 4:
 - `package_dir` — package directory with all token files
@@ -181,7 +181,8 @@ Variables available to Phase 4:
 
 Phase 4 writes:
 - `${package_dir}/knowhow-manifest.json`
-- Then persists knowledge assets per ui-codify-knowhow Step 4.4 (manifest-driven direct writes, no standalone skill)
+- `${package_dir}/knowledge-stage-results.json` (complete stage JSON, validated candidate IDs, exact-title skips, failures)
+- Then reports only successfully staged candidates per ui-codify-knowhow Step 4.4 (no predicted Knowhow filenames or Spec links; no direct corpus write; review/promotion stays explicit)
 
 **TodoWrite**: Mark Phase 4 completed (all tasks done).
 
@@ -198,8 +199,9 @@ Phase 4 writes:
 | 2 | No files discovered | Report empty discovery, exit |
 | 3 | Token copy failed | Report missing file, exit |
 | 3 | Preview generation failed | Report error, continue (preview is non-critical); flag preview.html/css as [LOW CONFIDENCE] (preview generation failed) |
-| 4 | Manifest build failed | Report error, package still usable without knowhow; flag knowhow assets as [LOW CONFIDENCE] (manifest build failed) |
-| 4 | Knowledge asset persist failed | Report error, manifest remains for manual retry; flag knowhow/spec entries as [LOW CONFIDENCE] (persist failed) |
+| 4 | Manifest build failed | Report error, package still usable without candidates; flag Phase 4 as [LOW CONFIDENCE] (manifest build failed) |
+| 4 | Stage failed / invalid JSON / missing candidate ID | Record the invocation in `knowledge-stage-results.json`; mark [LOW CONFIDENCE]. If no attempted stage yields a valid ID, BLOCKED; otherwise report only validated candidate IDs |
+| 4 | Canonical Knowhow target unavailable | Stage Spec body without a Knowhow ref and defer linking until promotion returns the actual canonical ID/path |
 
 ## Completion Message
 
@@ -212,21 +214,26 @@ Package: {package_name}
 Location: {package_dir}
 
 Files:
-  design-tokens.json       Design tokens (colors, typography, spacing)
-  layout-templates.json    Component patterns ({universal_count} universal, {specialized_count} specialized)
-  animation-tokens.json    Animation tokens {if exists else "(not found)"}
-  preview.html             Interactive showcase
-  preview.css              Showcase styling
-  knowhow-manifest.json    Knowledge asset manifest
+  design-tokens.json             Design tokens (colors, typography, spacing)
+  layout-templates.json          Component patterns ({universal_count} universal, {specialized_count} specialized)
+  animation-tokens.json          Animation tokens {if exists else "(not found)"}
+  preview.html                   Interactive showcase
+  preview.css                    Showcase styling
+  knowhow-manifest.json          Knowledge candidate manifest
+  knowledge-stage-results.json   Captured stage JSON, candidate IDs, skips, and failures
 
-Knowledge Assets:
-  Knowhow: AST-{package_name}-tokens, AST-{package_name}-components{, DCS-{package_name}-decisions}
-  Specs: {spec_count} entries (coding + arch)
+Knowledge Candidates (validated staged IDs only; not promoted corpus assets):
+  Knowhow: {knowhow_candidate_ids_or_none}
+  Specs: {spec_candidate_ids_or_none}
+  Successful: {successful_stage_count}; failed: {failed_stage_count}; already-promoted title skips: {existing_title_skip_count}
+  Confidence: {verified | no staging needed (exact-title skips only) | "[LOW CONFIDENCE] stage failures recorded"}
+
+Canonical Knowhow paths / Spec links: deferred until promotion returns actual targets; none are fabricated here.
 
 Open preview:
   file://{absolute_path}/preview.html
 
 Next steps:
-  maestro wiki list --category coding    # Browse by category
-  maestro spec load --keyword {package_name}    # Load related specs
+  seal → `maestro knowledge review <session-id> --refresh` → resolve → explicit promote
+  after promotion, use only returned canonical IDs/paths when adding Spec → Knowhow links
 ```
