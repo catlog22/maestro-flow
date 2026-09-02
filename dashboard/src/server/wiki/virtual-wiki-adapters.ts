@@ -1,3 +1,4 @@
+import { lstatSync } from 'node:fs';
 import { readFile, open, readdir } from 'node:fs/promises';
 import { basename, dirname, join, resolve, sep } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
@@ -1835,7 +1836,6 @@ export async function loadCodexSessions(
   const sessionsDir = join(realCodexRoot, 'sessions');
   const titleMap = await loadCodexSessionIndex(realCodexRoot);
   const cutoff = Date.now() - maxAgeDays * 86400000;
-  const { stat: fsStat } = await import('node:fs/promises');
 
   const allFiles = await findJsonlFilesRecursive(
     sessionsDir,
@@ -1848,7 +1848,9 @@ export async function loadCodexSessions(
   const candidates: FileInfo[] = [];
   for (const f of allFiles) {
     try {
-      const s = await fsStat(f.absPath);
+      // findJsonlFilesRecursive already fences each candidate. A synchronous
+      // stat avoids serial libuv round-trips across the bounded 300-file set.
+      const s = lstatSync(f.absPath);
       if (s.mtimeMs >= cutoff && s.size > 200) {
         candidates.push({ ...f, mtime: s.mtimeMs });
       }
@@ -1857,36 +1859,53 @@ export async function loadCodexSessions(
   candidates.sort((a, b) => b.mtime - a.mtime);
 
   const normalizedProjectCwd = projectCwd.replace(/\\/g, '/').toLowerCase();
-  const out: WikiEntry[] = [];
-
-  for (const c of candidates.slice(0, maxFiles * 3)) {
-    if (out.length >= maxFiles) break;
-
-    // Phase 1: peek first 8KB to check CWD match (avoids reading 512KB for non-matching sessions)
-    const sessionCwd = await peekSessionCwd(c.absPath, realCodexRoot);
-    if (!sessionCwd) continue;
-    const normalizedSessionCwd = sessionCwd.replace(/\\/g, '/').toLowerCase();
-    if (normalizedSessionCwd !== normalizedProjectCwd) continue;
-
-    // Phase 2: full read only for matching sessions
-    const lines = await readSessionHead(c.absPath, MAX_SESSION_READ_BYTES, realCodexRoot);
-    if (lines.length === 0) continue;
-
-    let sessionId: string | null = null;
-    for (const line of lines.slice(0, 5)) {
-      try {
-        const row = JSON.parse(line) as Record<string, unknown>;
-        if (row.type === 'session_meta') {
-          const p = row.payload as Record<string, unknown>;
-          sessionId = asString(p?.id) || null;
-          break;
-        }
-      } catch { continue; }
+  const matchingCandidates: FileInfo[] = [];
+  const peekConcurrency = 64;
+  const recentCandidates = candidates.slice(0, maxFiles * 3);
+  for (let offset = 0; offset < recentCandidates.length; offset += peekConcurrency) {
+    const matches = await Promise.all(
+      recentCandidates.slice(offset, offset + peekConcurrency).map(async candidate => {
+        // Phase 1: peek only 8KB. Independent files are checked concurrently
+        // so unrelated Codex histories do not add one I/O latency each.
+        const sessionCwd = await peekSessionCwd(candidate.absPath, realCodexRoot);
+        if (!sessionCwd) return null;
+        const normalizedSessionCwd = sessionCwd.replace(/\\/g, '/').toLowerCase();
+        return normalizedSessionCwd === normalizedProjectCwd ? candidate : null;
+      }),
+    );
+    for (const match of matches) {
+      if (match) matchingCandidates.push(match);
+      if (matchingCandidates.length >= maxFiles) break;
     }
+    if (matchingCandidates.length >= maxFiles) break;
+  }
 
-    const threadName = sessionId ? (titleMap.get(sessionId) ?? null) : null;
-    const entry = adaptCodexSession(lines, `~/.codex/${c.relPath}`, threadName);
-    if (entry) out.push(entry);
+  const out: WikiEntry[] = [];
+  const readConcurrency = 8;
+  for (let offset = 0; offset < matchingCandidates.length; offset += readConcurrency) {
+    const entries = await Promise.all(
+      matchingCandidates.slice(offset, offset + readConcurrency).map(async candidate => {
+        // Phase 2: full bounded read only for project-matching sessions.
+        const lines = await readSessionHead(candidate.absPath, MAX_SESSION_READ_BYTES, realCodexRoot);
+        if (lines.length === 0) return null;
+
+        let sessionId: string | null = null;
+        for (const line of lines.slice(0, 5)) {
+          try {
+            const row = JSON.parse(line) as Record<string, unknown>;
+            if (row.type === 'session_meta') {
+              const p = row.payload as Record<string, unknown>;
+              sessionId = asString(p?.id) || null;
+              break;
+            }
+          } catch { continue; }
+        }
+
+        const threadName = sessionId ? (titleMap.get(sessionId) ?? null) : null;
+        return adaptCodexSession(lines, `~/.codex/${candidate.relPath}`, threadName);
+      }),
+    );
+    for (const entry of entries) if (entry) out.push(entry);
   }
   return out;
 }
@@ -1903,14 +1922,13 @@ async function findJsonlFilesRecursive(
   if (!realDir) return [];
   const out: Array<{ absPath: string; relPath: string }> = [];
   const names = (await readAllowedSourceDir(realDir, allowedRoot)).sort().reverse();
-  const { stat: fsStat } = await import('node:fs/promises');
 
   for (const name of names) {
     const full = join(realDir, name);
     try {
       const realChild = resolveAllowedDirectSourcePath(full, allowedRoot, 'any');
       if (!realChild) continue;
-      const s = await fsStat(realChild);
+      const s = lstatSync(realChild);
       if (s.isDirectory()) {
         const sub = await findJsonlFilesRecursive(
           realChild,
