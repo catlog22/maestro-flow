@@ -84,8 +84,34 @@ function printSyncResults(results: Awaited<ReturnType<typeof syncKnowledgeGraph>
     totalNodes += r.nodesAdded;
     totalEdges += r.edgesAdded;
     console.log(`  ${r.source}: +${r.nodesAdded} nodes, +${r.edgesAdded} edges (${r.durationMs}ms)`);
+    if (r.coverage && r.coverage.filesUnsupported > 0) {
+      const listed = Object.entries(r.coverage.unsupportedExtensions)
+        .map(([ext, count]) => `${ext}:${count}`)
+        .join(' ');
+      console.log(`    coverage: ${r.coverage.filesScanned} scannable, ${r.coverage.filesUnsupported} skipped by extension [${listed}]`);
+    }
+    if (r.coverage && r.coverage.filesPartialParse > 0) {
+      console.log(`    coverage: ${r.coverage.filesPartialParse}/${r.coverage.filesScanned} file(s) parsed with a non-fatal grammar gap`);
+    }
   }
   console.log(`\nTotal: ${totalNodes} nodes, ${totalEdges} edges`);
+}
+
+/**
+ * 只有当调用方用 `--src` 明确指定“这里是我的代码”、而一个文件都没被识别为受支持
+ * 语言时，才把结果当失败。没有 `--src` 的仓库可能本来就只有文档，那时索引为空是
+ * 正确结果而不是故障 —— 用意图信号代替“这个扩展名像不像源码”的启发式。
+ */
+function codegraphIntentFailed(
+  results: Awaited<ReturnType<typeof syncKnowledgeGraph>>,
+  explicitSrc: boolean,
+): boolean {
+  if (!explicitSrc) return false;
+  const codegraph = results.find(r => r.source === 'codegraph');
+  if (!codegraph) return false;
+  return (codegraph.nodesAdded ?? 0) === 0
+    && (codegraph.coverage?.filesScanned ?? 0) === 0
+    && (codegraph.coverage?.filesUnsupported ?? 0) > 0;
 }
 
 async function syncProject(
@@ -116,10 +142,15 @@ async function syncProject(
 
   if (opts.json) {
     console.log(JSON.stringify(results, null, 2));
+    if (codegraphIntentFailed(results, Boolean(opts.src))) process.exitCode = 1;
     return;
   }
 
   printSyncResults(results);
+  if (codegraphIntentFailed(results, Boolean(opts.src))) {
+    console.error('  codegraph: --src was given but no file matched a registered language.');
+    process.exitCode = 1;
+  }
 }
 
 async function openGraph(): Promise<MaestroGraph> {

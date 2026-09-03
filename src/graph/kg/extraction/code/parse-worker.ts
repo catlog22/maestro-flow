@@ -2,6 +2,7 @@ import { parentPort } from 'node:worker_threads';
 import type { Language } from '../../db/types.js';
 import { getTreeSitterEngine } from './tree-sitter.js';
 import { getExtractor } from './languages/index.js';
+import { treeReportsError, withPartialParseDiagnostics } from './partial-parse.js';
 
 interface ExtractRequest {
   type: 'extract';
@@ -45,16 +46,7 @@ parentPort?.on('message', async (message: ExtractRequest | { type: 'shutdown' })
 
     try {
       const result = extractor.extract(tree, message.sourceCode, message.filePath);
-      if (
-        message.language === 'objc'
-        && /\.mm$/i.test(message.filePath)
-        && (tree.rootNode as unknown as { hasError?: boolean }).hasError === true
-      ) {
-        result.diagnostics = [
-          ...(result.diagnostics ?? []),
-          'objcxx-partial-parse: tree-sitter Objective-C grammar reported syntax errors',
-        ];
-      }
+      withPartialParseDiagnostics(result, message.language, message.filePath, treeReportsError(tree));
       parentPort?.postMessage({ type: 'extract-result', id: message.id, ok: true, result });
     } finally {
       tree.delete();

@@ -6,6 +6,7 @@ import type { Language } from '../../db/types.js';
 import { getTreeSitterEngine } from './tree-sitter.js';
 import { getExtractor } from './languages/index.js';
 import type { LanguageExtractionResult } from './tree-sitter-types.js';
+import { treeReportsError, withPartialParseDiagnostics } from './partial-parse.js';
 
 const PARSE_TIMEOUT_MS = 10_000;
 const MAX_PARSE_TIMEOUT_MS = 120_000;
@@ -59,16 +60,7 @@ export class CodeParseRunner {
       if (!tree) return null;
       try {
         const result = extractor.extract(tree, sourceCode, filePath);
-        if (
-          language === 'objc'
-          && /\.mm$/i.test(filePath)
-          && (tree.rootNode as unknown as { hasError?: boolean }).hasError === true
-        ) {
-          result.diagnostics = [
-            ...(result.diagnostics ?? []),
-            'objcxx-partial-parse: tree-sitter Objective-C grammar reported syntax errors',
-          ];
-        }
+        withPartialParseDiagnostics(result, language, filePath, treeReportsError(tree));
         return result;
       } finally {
         tree.delete();

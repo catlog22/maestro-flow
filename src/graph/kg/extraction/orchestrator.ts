@@ -17,6 +17,13 @@ import {
   type PreparedExternalSurfaceScan,
 } from './code/code-extractor.js';
 import { materializeAppleExternalCatalog } from './code/external/apple-catalog.js';
+import {
+  emptyCoverageTotals,
+  addUnsupportedExtensions,
+  summarizeCodeSyncCoverage,
+  unsupportedLanguageWarning,
+  partialParseWarning,
+} from './code-sync-coverage.js';
 import { resolveKnowledgeEdges } from '../resolution/knowledge-resolver.js';
 import { resolveCodeReferences } from '../resolution/code-resolver.js';
 import type { SyncResult, SourceType } from '../db/types.js';
@@ -197,6 +204,7 @@ async function syncKnowledgeGraphUnlocked(
       let genericReferenceCount = 0;
       let structuralReferenceCount = 0;
       let removedFiles = 0;
+      const coverageTotals = emptyCoverageTotals();
       const connection = mg.getConnection();
       const queries = mg.getQueryBuilder();
       const seenFilePaths = new Set<string>();
@@ -292,6 +300,11 @@ async function syncKnowledgeGraphUnlocked(
               + `${stats.filesExtracted}/${stats.filesScanned} extracted, ${stats.filesSkipped} skipped`,
             );
           }
+          coverageTotals.filesScanned += stats.filesScanned;
+          coverageTotals.filesExtracted += stats.filesExtracted;
+          coverageTotals.filesUnsupported += stats.filesUnsupported;
+          coverageTotals.filesPartialParse += stats.filesPartialParse;
+          addUnsupportedExtensions(coverageTotals, stats.unsupportedExtensions);
         }
 
         const missingExactFiles = codegraphPreflight.externalScan.files
@@ -362,7 +375,15 @@ async function syncKnowledgeGraphUnlocked(
         edgesAdded: directEdges,
         edgesRemoved: 0,
         durationMs: Date.now() - startMs,
+        coverage: summarizeCodeSyncCoverage(coverageTotals),
       });
+      // 索引完全没发生时必须顶到 stderr：--json 消费者读 coverage，人读告警。
+      for (const warning of [
+        unsupportedLanguageWarning(coverageTotals),
+        partialParseWarning(coverageTotals),
+      ]) {
+        if (warning) process.stderr.write(`[MaestroGraph] ${warning}\n`);
+      }
       results.push({
         source: 'code-resolution',
         nodesAdded: 0,

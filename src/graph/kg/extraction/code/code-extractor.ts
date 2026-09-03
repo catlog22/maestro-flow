@@ -110,10 +110,16 @@ interface CodeScanPlan {
   readonly projectRoot: string;
   readonly srcDir: string;
   readonly files: ScannedFile[];
+  /**
+   * 扩展名 → 被丢弃的文件数。这些文件在计入 `filesScanned` **之前** 就被丢了，
+   * 所以不记在这里就永远不会出现在任何统计里 —— 这正是 “+0 nodes 却 exit 0” 的根源。
+   */
+  readonly unknownExtensions: Map<string, number>;
 }
 
 function prepareCodeScanPlan(options: ScanOptions): CodeScanPlan {
   const files: ScannedFile[] = [];
+  const unknownExtensions = new Map<string, number>();
   const fileIndexByPath = new Map<string, number>();
   const maxFileSize = options.maxFileSize ?? DEFAULT_MAX_FILE_SIZE;
   const requestedSrcDir = resolve(options.srcDir);
@@ -163,7 +169,7 @@ function prepareCodeScanPlan(options: ScanOptions): CodeScanPlan {
     if (includeExternalSurfaces) {
       for (const file of externalScan.files) addExactExternalFile(file);
     }
-    return { projectRoot, srcDir: requestedSrcDir, files };
+    return { projectRoot, srcDir: requestedSrcDir, files, unknownExtensions };
   }
   const srcDir = realpathSync(requestedSrcDir);
   const scanRoot = options.projectRoot ? projectRoot : srcDir;
@@ -200,7 +206,10 @@ function prepareCodeScanPlan(options: ScanOptions): CodeScanPlan {
     if (BINARY_EXTENSIONS.has(ext)) return;
 
     const language = detectLanguageFromPath(identityPath);
-    if (language === 'unknown') return;
+    if (language === 'unknown') {
+      unknownExtensions.set(ext, (unknownExtensions.get(ext) ?? 0) + 1);
+      return;
+    }
 
     if (!options.includeTests && isTestFile(identityPath)) return;
 
@@ -311,7 +320,7 @@ function prepareCodeScanPlan(options: ScanOptions): CodeScanPlan {
   if (includeExternalSurfaces) {
     for (const file of externalScan.files) addExactExternalFile(file);
   }
-  return { projectRoot, srcDir, files };
+  return { projectRoot, srcDir, files, unknownExtensions };
 }
 
 // ---------------------------------------------------------------------------
@@ -322,6 +331,12 @@ export interface CodeExtractionStats {
   filesScanned: number;
   filesExtracted: number;
   filesSkipped: number;
+  /** 扩展名未注册到任何语言因而从未进入扫描的文件数。 */
+  filesUnsupported: number;
+  /** 上述文件按扩展名的分布，供上层判断“语言未支持”还是“真的没代码”。 */
+  unsupportedExtensions: Record<string, number>;
+  /** 解析成功但 grammar 报非致命覆盖缺口的文件数。 */
+  filesPartialParse: number;
   nodesCreated: number;
   edgesCreated: number;
   referencesCollected: number;
@@ -362,7 +377,7 @@ async function runCodeExtraction(
   const startMs = Date.now();
   // Manifest validation and exact-file resolution must happen before plugins are loaded.
   const scanPlan = prepareCodeScanPlan(options);
-  const { files: scannedFiles, projectRoot, srcDir: resolvedSrcDir } = scanPlan;
+  const { files: scannedFiles, projectRoot, srcDir: resolvedSrcDir, unknownExtensions } = scanPlan;
   const engine = getTreeSitterEngine();
   const hasTreeSitter = engine.isAvailable();
   const parser = new CodeParseRunner();
@@ -382,11 +397,15 @@ async function runCodeExtraction(
   let totalRefs = 0;
   let extractedCount = 0;
   let skippedCount = 0;
+  let filesPartialParse = 0;
 
   const emitResult = async (result: ExtractionResult, referencesCount: number): Promise<void> => {
     if (collectResults) {
       results.push(result);
     }
+    // FileRecord.errors 是提取器上报的非致命 grammar 覆盖缺口；它们不阻断入库，
+    // 但必须可数，否则一个只会部分解析的语言看起来和完全解析一模一样。
+    if (result.fileRecord.errors.length > 0) filesPartialParse++;
     await onResult?.(result);
     totalNodes += result.nodes.length;
     totalEdges += result.edges.length;
@@ -545,6 +564,9 @@ async function runCodeExtraction(
       filesScanned: scannedFiles.length,
       filesExtracted: extractedCount,
       filesSkipped: skippedCount,
+      filesUnsupported: [...unknownExtensions.values()].reduce((sum, n) => sum + n, 0),
+      unsupportedExtensions: Object.fromEntries(unknownExtensions),
+      filesPartialParse,
       nodesCreated: totalNodes,
       edgesCreated: totalEdges,
       referencesCollected: totalRefs,
