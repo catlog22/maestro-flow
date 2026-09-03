@@ -3752,6 +3752,281 @@ EXTRACTOR_REGISTRY.set('objc', {
 });
 
 // ---------------------------------------------------------------------------
+// 23. Zig — 容器匿名、名字来自父级 const；方法/字段/enum variant/@import/test
+// ---------------------------------------------------------------------------
+
+/**
+ * Zig 没有 `struct Foo {}` 内联名字语法，容器一律匿名：`pub const Foo = struct {}`。
+ * 符号名只能从父级 variable_declaration 的 identifier 取，这是 Zig 不能复用
+ * createGenericExtractor (它靠 node.childForFieldName('name')) 的根本原因。
+ */
+const ZIG_CONTAINER_KINDS: Record<string, string> = {
+  struct_declaration: 'struct',
+  enum_declaration: 'enum',
+  // 标记联合的 variant 带载荷类型，按容器建模比按枚举成员更贴近 field 语义；
+  // opaque 是不定布局的前向声明类型。两者都归到既有 kind，不新造。
+  union_declaration: 'struct',
+  opaque_declaration: 'struct',
+};
+
+/** 类型别名的右值形态：`const T = []u8` / `const T = std.mem.Allocator`。 */
+const ZIG_TYPE_VALUE_NODES = new Set([
+  'identifier', 'reference_expression', 'field_expression', 'builtin_type',
+  'slice_type', 'pointer_type', 'optional_type', 'nullable_type',
+  'error_union_type', 'error_set_type', 'anyframe_type', 'tuple_literal',
+]);
+
+const ZIG_NODE_MAP: Record<string, string> = {
+  'function_declaration': 'function',
+  'variable_declaration': 'constant',
+  'struct_declaration': 'struct',
+  'enum_declaration': 'enum',
+  'union_declaration': 'struct',
+  'opaque_declaration': 'struct',
+  'container_field': 'field',
+  'test_declaration': 'function',
+};
+
+EXTRACTOR_REGISTRY.set('zig', {
+  language: 'zig' as Language, grammarName: 'zig', nodeTypeMap: ZIG_NODE_MAP,
+  extract(tree, _src, filePath) {
+    const lang = 'zig' as Language;
+    const symbols: import('../tree-sitter-types.js').ExtractedSymbol[] = [];
+    const references: import('../tree-sitter-types.js').ExtractedReference[] = [];
+    const edges: Array<{ source: string; target: string; kind: string; line?: number }> = [];
+    const fileNodeId = makeFileNodeId(filePath);
+    const seenReferences = new Set<string>();
+
+    const addReference = (
+      referenceKind: string, referenceName: string,
+      line: number, col: number, fromSymbolId: string, fromSymbolName: string,
+    ): void => {
+      const key = `${referenceKind}\0${referenceName}\0${line}\0${col}`;
+      if (seenReferences.has(key)) return;
+      seenReferences.add(key);
+      references.push({
+        fromSymbolName, fromSymbolId, referenceName, referenceKind, line, col,
+        filePath, language: lang,
+      });
+    };
+
+    // Zig 的 const 绑定既承载名字也承载 @import，两者都在 variable_declaration 下。
+    const zigImportPath = (node: AnyNode): string | null => {
+      for (const c of (node.namedChildren ?? [])) {
+        if (c.type === 'builtin_function') {
+          const head = c.childForFieldName?.('function') ?? c.namedChildren?.[0];
+          if (head?.type !== 'builtin_identifier' || head.text !== '@import') continue;
+          const args = c.childForFieldName?.('arguments')
+            ?? c.namedChildren?.find((x: AnyNode) => x.type === 'arguments');
+          const str = args?.namedChildren?.find((x: AnyNode) => x.type === 'string');
+          const content = str?.namedChildren?.find((x: AnyNode) => x.type === 'string_content');
+          const raw = content?.text ?? str?.text?.replace(/^"|"$/g, '');
+          if (raw) return raw;
+        }
+        if (c.type === 'ERROR' || c.type === 'MISSING') continue;
+      }
+      return null;
+    };
+
+    const zigBindingName = (node: AnyNode): string | null =>
+      node.namedChildren?.find((c: AnyNode) => c.type === 'identifier')?.text ?? null;
+
+    const isPublic = (node: AnyNode): boolean =>
+      node.children?.some((c: AnyNode) => c.type === 'pub') ?? false;
+
+    const docComment = (node: AnyNode): string => {
+      const prev = prevSibling(node);
+      if (prev?.type !== 'comment' || !prev.text.startsWith('///')) return '';
+      return prev.text.split('\n').map((l: string) => l.replace(/^\/\/\/\s?/, '')).join(' ').trim();
+    };
+
+    // 函数体内的局部 const / 解析产物 (`counter += 1` 会被识别成
+    // variable_declaration) 都不是声明，必须按父节点类型挡掉。
+    const isDeclarationScope = (node: AnyNode): boolean => {
+      const p = node.parent?.type;
+      return p === 'source_file'
+        || p === 'struct_declaration' || p === 'enum_declaration'
+        || p === 'union_declaration' || p === 'opaque_declaration';
+    };
+
+    const calleeName = (fn: AnyNode | null | undefined): string | null => {
+      if (!fn) return null;
+      if (fn.type === 'identifier') return fn.text;
+      if (fn.type === 'field_expression') {
+        const ids = (fn.namedChildren ?? []).filter((c: AnyNode) => c.type === 'identifier');
+        return ids[ids.length - 1]?.text ?? null;
+      }
+      if (fn.type === 'builtin_identifier') return fn.text.replace(/^@/, '');
+      // await/try/comptime 包裹调用：`try foo()`、`await bar()`
+      if (fn.type === 'call_expression' || fn.type === 'try_expression'
+        || fn.type === 'await_expression' || fn.type === 'error_union_infiltration') {
+        return calleeName(fn.childForFieldName?.('function') ?? fn.namedChildren?.[0]);
+      }
+      return null;
+    };
+
+    const walkFn = (node: AnyNode, owner: string): void => {
+      const name = node.childForFieldName?.('name')?.text ?? nodeName(node);
+      if (!name) { walkChildren(node, owner); return; }
+      const qn = owner ? `${owner}.${name}` : name;
+      const exported = isPublic(node);
+      symbols.push(sym(owner ? 'method' : 'function', name, qn, filePath, lang, node, {
+        visibility: exported ? 'public' : 'internal',
+        isExported: exported,
+        docstring: docComment(node),
+        signature: firstLine(node),
+      }));
+      // contains 层级由 code-extractor 按 qualifiedName 统一派生，提取器不重复发边。
+      walkBody(node, qn);
+    };
+
+    const walkContainer = (node: AnyNode, name: string, decl: AnyNode): void => {
+      const kind = ZIG_CONTAINER_KINDS[node.type] ?? 'struct';
+      const qn = name;
+      const exported = isPublic(decl);
+      symbols.push(sym(kind, name, qn, filePath, lang, node, {
+        visibility: exported ? 'public' : 'internal',
+        isExported: exported,
+        docstring: docComment(decl),
+        signature: firstLine(decl),
+      }));
+
+      const isEnum = node.type === 'enum_declaration';
+      for (const c of (node.namedChildren ?? [])) {
+        if (c.type === 'container_field') {
+          // 空容器 `struct {}` 会让 grammar 插入一个 text 为空的 MISSING identifier，
+          // 这里必须静默跳过而不是产出匿名符号污染图。
+          const fieldName = c.childForFieldName?.('name')?.text;
+          if (!fieldName) continue;
+          symbols.push(sym(isEnum ? 'enum_member' : 'field', fieldName, `${qn}.${fieldName}`, filePath, lang, c, {
+            signature: firstLine(c),
+          }));
+          const valueType = c.childForFieldName?.('type');
+          if (valueType) {
+            const target = [...(valueType.text ?? '').matchAll(/[A-Za-z_][A-Za-z0-9_]*/g)]
+              .map(m => m[0]).filter(t => /^[A-Z]/.test(t));
+            for (const t of target) addReference('references', t,
+              (c.startPosition?.row ?? 0) + 1, (c.startPosition?.column ?? 0) + 1,
+              fileNodeId, '<file>');
+          }
+          continue;
+        }
+        if (c.type === 'function_declaration') { walkFn(c, qn); continue; }
+        // enum 的显式 tag type、嵌套容器等仍需下钻
+        walk(c, '');
+      }
+    };
+
+    const walk = (node: AnyNode, owner: string): void => {
+      const type = node.type;
+
+      if (type === 'call_expression') {
+        const callee = calleeName(node.childForFieldName?.('function'));
+        if (callee) addReference('calls', callee,
+          (node.startPosition?.row ?? 0) + 1, (node.startPosition?.column ?? 0) + 1,
+          owner ? makeCodeNodeId(filePath, owner) : fileNodeId, owner || '<file>');
+      }
+
+      if (type === 'variable_declaration' && isDeclarationScope(node)) {
+        const name = zigBindingName(node);
+        if (name) {
+          const exported = isPublic(node);
+          const importPath = zigImportPath(node);
+          if (importPath) {
+            references.push({
+              fromSymbolName: '<file>', fromSymbolId: fileNodeId,
+              referenceName: importPath, referenceKind: 'imports',
+              line: (node.startPosition?.row ?? 0) + 1,
+              col: (node.startPosition?.column ?? 0) + 1,
+              filePath, language: lang,
+            });
+            // `const std = @import("std")` 是模块别名，文件节点已代表该模块，
+            // 再产出 constant 节点只会制造噪声。
+            return;
+          }
+          const container = node.namedChildren?.find(
+            (c: AnyNode) => ZIG_CONTAINER_KINDS[c.type] !== undefined);
+          if (container) {
+            walkContainer(container, name, node);
+            return;
+          }
+          // `const NAME: T = V` 的 namedChildren 依次为 identifier / 声明类型 / 值，
+          // 末位就是初始化表达式；没有 `=` 时（`var x: T;`）末位只是声明类型。
+          const named = node.namedChildren ?? [];
+          const value = named.length > 1 ? named[named.length - 1] : null;
+          const hasInitializer = node.children?.some((c: AnyNode) => c.type === '=') ?? false;
+          const isVar = node.children?.some((c: AnyNode) => c.type === 'var') ?? false;
+          const isTypeAlias = !isVar && hasInitializer && !!value
+            && ZIG_TYPE_VALUE_NODES.has(value.type);
+          symbols.push(sym(
+            isTypeAlias ? 'type_alias' : (isVar ? 'variable' : 'constant'),
+            name, name, filePath, lang, node, {
+              visibility: exported ? 'public' : 'internal',
+              isExported: exported,
+              docstring: docComment(node),
+              signature: firstLine(node),
+            }));
+          if (isTypeAlias && value?.text) {
+            for (const m of value.text.matchAll(/[A-Za-z_][A-Za-z0-9_]*/g)) {
+              if (/^[A-Z]/.test(m[0]) && m[0] !== name) {
+                addReference('references', m[0],
+                  (node.startPosition?.row ?? 0) + 1, (node.startPosition?.column ?? 0) + 1,
+                  fileNodeId, '<file>');
+              }
+            }
+          }
+          walkBody(node, owner);
+          return;
+        }
+      }
+
+      if (type === 'function_declaration') { walkFn(node, owner); return; }
+
+      // 容器也可能直接出现在 source_file 下 (例如 fn 返回值里的 struct 字面量)
+      if (ZIG_CONTAINER_KINDS[type]) {
+        const owner2 = owner || nodeName(node);
+        if (owner2) walkContainer(node, owner2, node);
+        else walkChildren(node, owner);
+        return;
+      }
+
+      if (type === 'test_declaration') {
+        const str = node.namedChildren?.find((c: AnyNode) => c.type === 'string');
+        const label = str?.namedChildren?.find((c: AnyNode) => c.type === 'string_content')?.text
+          ?? str?.text?.replace(/^"|"$/g, '') ?? 'anonymous';
+        const qn = `test ${label}`;
+        symbols.push(sym('function', qn, qn, filePath, lang, node, {
+          visibility: 'internal', isExported: false, signature: firstLine(node),
+        }));
+        walkBody(node, qn);
+        return;
+      }
+
+      walkChildren(node, owner);
+    };
+
+    const walkChildren = (node: AnyNode, owner: string): void => {
+      for (const c of (node.namedChildren ?? [])) walk(c, owner);
+    };
+
+    // 声明体内部的下钻：不再改变 owner，但继续采集调用。
+    const walkBody = (node: AnyNode, owner: string): void => {
+      const body = node.childForFieldName?.('body') ?? node.children?.find((c: AnyNode) => c.type === 'block');
+      if (body) { for (const c of (body.namedChildren ?? [])) walk(c, owner); }
+      for (const c of (node.namedChildren ?? [])) {
+        if (c === body) continue;
+        if (ZIG_CONTAINER_KINDS[c.type]) continue;  // 已按容器处理过
+        if (c.type === 'parameters') continue;
+        walk(c, owner);
+      }
+    };
+
+    walk((tree as AnyNode).rootNode, '');
+    return { symbols, references, structuralReferences: [], edges };
+  },
+});
+
+// ---------------------------------------------------------------------------
 // 查询 API
 // ---------------------------------------------------------------------------
 

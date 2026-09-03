@@ -84,6 +84,7 @@ const WASM_GRAMMAR_FILES: Record<GrammarLanguage, string> = {
   lua: 'tree-sitter-lua.wasm',
   luau: 'tree-sitter-luau.wasm',
   objc: 'tree-sitter-objc.wasm',
+  zig: 'tree-sitter-zig.wasm',
 };
 
 // 自定义 WASM — ABI 版本不兼容 tree-sitter-wasms 的语言
@@ -114,6 +115,7 @@ export const LANGUAGE_TO_GRAMMAR: Record<Language, string> = {
   lua: 'tree-sitter-lua',
   luau: 'tree-sitter-luau',
   objc: 'tree-sitter-objc',
+  zig: 'tree-sitter-zig',
   yaml: 'tree-sitter-yaml',
   twig: 'tree-sitter-twig',
   xml: 'tree-sitter-xml',

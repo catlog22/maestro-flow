@@ -79,7 +79,7 @@ export const LANGUAGES = [
   'typescript', 'javascript', 'tsx', 'jsx',
   'python', 'go', 'rust', 'java',
   'c', 'cpp', 'csharp', 'php', 'ruby',
-  'swift', 'kotlin', 'dart',
+  'swift', 'kotlin', 'dart', 'zig',
   'svelte', 'vue', 'liquid',
   'pascal', 'scala', 'lua', 'luau', 'objc',
   'yaml', 'twig', 'xml', 'properties',
@@ -271,6 +271,23 @@ export interface SyncResult {
   edgesAdded: number;
   edgesRemoved: number;
   durationMs: number;
+  /** 只对 codegraph 报告：本批次扫了多少文件、为何没进图。 */
+  coverage?: CodeSyncCoverage;
+}
+
+// ---------------------------------------------------------------------------
+// CodeSyncCoverage — 代码索引覆盖率，用来区分“没有代码”与“语言未注册”
+// ---------------------------------------------------------------------------
+
+export interface CodeSyncCoverage {
+  filesScanned: number;
+  filesExtracted: number;
+  /** 扩展名未映射到任何已注册语言因而被丢弃的文件数。 */
+  filesUnsupported: number;
+  /** 上述文件的扩展名分布（按文件数降序截断）。 */
+  unsupportedExtensions: Record<string, number>;
+  /** 解析成功但 grammar 报告非致命覆盖缺口的文件数。 */
+  filesPartialParse: number;
 }
 
 // ---------------------------------------------------------------------------

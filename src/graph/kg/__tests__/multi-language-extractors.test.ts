@@ -93,6 +93,13 @@ const CASES: LangCase[] = [
     expectStructuralRefs: [['extends', 'A'], ['implements', 'P1']],
     expectSymbols: ['B'],
   },
+  {
+    // Zig 容器一律匿名 (`pub const T = struct {}`)，名字必须从父级 const 绑定回当。
+    lang: 'zig',
+    source: 'const std = @import("std");\nconst rel = @import("./sibling.zig");\n\npub const Kind = enum { all, skill, mcp };\n\npub const Set = struct {\n    items: []const Kind = &.{},\n\n    pub fn includes(self: Set) bool {\n        return helper(1) > 0;\n    }\n};\n\npub fn top(n: usize) ![]u8 {\n    return helper(n);\n}\n\nfn helper(n: usize) usize {\n    return n;\n}\n\ntest "named case" {\n    try std.testing.expect(helper(2));\n}\n',
+    expectRefs: [['calls', 'helper'], ['imports', './sibling.zig']],
+    expectSymbols: ['Kind', 'Set', 'Set.includes', 'top', 'helper'],
+  },
 ];
 
 describe.skipIf(!isTreeSitterAvailable())('multi-language extractors: calls / extends / implements', () => {

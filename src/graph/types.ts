@@ -30,6 +30,7 @@ export const LANGUAGES = [
   'typescript', 'javascript', 'tsx', 'jsx', 'python', 'go', 'rust',
   'java', 'c', 'cpp', 'csharp', 'php', 'ruby', 'swift', 'kotlin',
   'dart', 'svelte', 'vue', 'lua', 'luau', 'objc', 'scala', 'pascal',
+  'zig',
   'yaml', 'xml', 'properties', 'unknown',
 ] as const;
 export type Language = typeof LANGUAGES[number];

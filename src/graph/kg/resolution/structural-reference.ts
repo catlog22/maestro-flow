@@ -54,7 +54,7 @@ export const STRUCTURAL_LANGUAGE_HINTS = [
   'typescript', 'javascript', 'tsx', 'jsx',
   'python', 'go', 'rust', 'java',
   'c', 'cpp', 'csharp', 'php', 'ruby',
-  'swift', 'kotlin', 'dart',
+  'swift', 'kotlin', 'dart', 'zig',
   'svelte', 'vue', 'liquid',
   'pascal', 'scala', 'lua', 'luau', 'objc',
   'yaml', 'twig', 'xml', 'properties',

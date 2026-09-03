@@ -11,7 +11,7 @@ export const SOURCE_EXTENSION_TO_LANGUAGE: Readonly<Record<string, Language>> = 
   '.go': 'go', '.rs': 'rust', '.java': 'java',
   '.c': 'c', '.h': 'c', '.cpp': 'cpp', '.cc': 'cpp', '.cxx': 'cpp', '.hpp': 'cpp', '.hh': 'cpp',
   '.cs': 'csharp', '.php': 'php', '.rb': 'ruby',
-  '.swift': 'swift', '.kt': 'kotlin', '.kts': 'kotlin', '.dart': 'dart', '.luau': 'luau',
+  '.swift': 'swift', '.kt': 'kotlin', '.kts': 'kotlin', '.dart': 'dart', '.luau': 'luau', '.zig': 'zig',
   '.svelte': 'svelte', '.vue': 'vue', '.liquid': 'liquid',
   '.pas': 'pascal', '.dfm': 'pascal', '.fmx': 'pascal', '.scala': 'scala', '.sc': 'scala',
   '.lua': 'lua', '.m': 'objc', '.mm': 'objc',
