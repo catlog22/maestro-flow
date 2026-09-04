@@ -13,6 +13,7 @@ import {
 import type { WikiEntry, WikiSearchFilters } from '#maestro-dashboard/wiki/wiki-types.js';
 import type { SearchDiagnostics } from './diagnostics.js';
 import type { SearchCandidateBudget } from './candidate-budget.js';
+import { LOAD_SELECTION_TYPES, type DaemonLoadSelection } from './load-selection.js';
 
 const DAEMON_FILE = 'search-daemon.json';
 export const DAEMON_SPAWN_LOCK_FILE = 'search-daemon-spawning';
@@ -60,6 +61,8 @@ export interface DaemonSearchRequest {
   candidateBudget?: SearchCandidateBudget;
   /** Opt-in only; diagnostics are request-scoped and never persisted. */
   diagnostics?: boolean | { requestId?: string };
+  /** Optional bounded server-side selection for load; absent preserves full-index behavior. */
+  selection?: DaemonLoadSelection;
   protocol?: typeof SEARCH_DAEMON_PROTOCOL;
   instanceId?: string;
   workflowRoot?: string;
@@ -68,9 +71,11 @@ export interface DaemonSearchRequest {
 export interface DaemonSearchResponse {
   ok: boolean;
   results?: Array<{ entry: WikiEntry; score: number }>;
-  /** Full warm index used by `maestro load`; oversized indexes fall back locally. */
+  /** Full warm index for legacy load, or bounded selected entries for modern load. */
   entries?: WikiEntry[];
   generatedAt?: number;
+  /** True only when the daemon applied the optional load selection. */
+  selectionApplied?: boolean;
   embeddingUsed?: boolean;
   embeddingDocs?: number;
   /** True only when the daemon applied request filters before ranking truncation. */
@@ -343,6 +348,47 @@ function validateFilters(value: unknown): string | null {
   return null;
 }
 
+function validateLoadSelection(value: unknown): string | null {
+  if (value === undefined) return null;
+  if (!isRecord(value)) return 'selection must be an object';
+  const allowed = new Set([
+    'type', 'ids', 'category', 'keyword', 'tag', 'includeDeprecated', 'limit',
+    'projection', 'applicableRepoId', 'targetRepoId', 'targetAlias', 'originExplicit',
+  ]);
+  for (const key of Object.keys(value)) {
+    if (!allowed.has(key)) return `unknown selection field: ${key}`;
+  }
+  if (typeof value.type !== 'string' || !(LOAD_SELECTION_TYPES as readonly string[]).includes(value.type)) {
+    return 'selection.type is invalid';
+  }
+  if (!Number.isInteger(value.limit) || (value.limit as number) < 1 || (value.limit as number) > DAEMON_MAX_RESULTS) {
+    return `selection.limit must be an integer between 1 and ${DAEMON_MAX_RESULTS}`;
+  }
+  if (value.projection !== 'full' && value.projection !== 'metadata') return 'selection.projection is invalid';
+  if (value.ids !== undefined) {
+    if (!Array.isArray(value.ids) || value.ids.length > DAEMON_MAX_RESULTS
+      || value.ids.some(id => typeof id !== 'string' || id.length === 0 || id.length > DAEMON_MAX_QUERY_CHARS)) {
+      return 'selection.ids must be an array of bounded non-empty strings';
+    }
+  }
+  for (const key of ['category', 'keyword', 'tag', 'applicableRepoId', 'targetRepoId', 'targetAlias']) {
+    const field = value[key];
+    if (field !== undefined && (typeof field !== 'string' || field.length === 0 || field.length > DAEMON_MAX_QUERY_CHARS)) {
+      return `selection.${key} must be a bounded non-empty string`;
+    }
+  }
+  for (const key of ['includeDeprecated', 'originExplicit']) {
+    if (value[key] !== undefined && typeof value[key] !== 'boolean') return `selection.${key} must be a boolean`;
+  }
+  if (value.targetRepoId !== undefined && value.targetAlias !== undefined) {
+    return 'selection repository target is ambiguous';
+  }
+  if (value.originExplicit === true && value.targetRepoId === undefined && value.targetAlias === undefined) {
+    return 'selection explicit repository target is missing';
+  }
+  return null;
+}
+
 /** Strict protocol boundary validation before any indexer work is started. */
 export function validateDaemonRequest(value: unknown): DaemonRequestValidation {
   if (!isRecord(value) || typeof value.action !== 'string') {
@@ -383,6 +429,12 @@ export function validateDaemonRequest(value: unknown): DaemonRequestValidation {
       if (!commonKeys.has(key) && !['query', 'limit', 'skipEmbedding', 'filters', 'candidateBudget', 'diagnostics'].includes(key)) {
         return { ok: false, error: `unknown request field: ${key}` };
       }
+    }
+  } else if (action === 'load') {
+    const selectionError = validateLoadSelection(value.selection);
+    if (selectionError) return { ok: false, error: selectionError };
+    for (const key of Object.keys(value)) {
+      if (!commonKeys.has(key) && key !== 'selection') return { ok: false, error: `unknown request field: ${key}` };
     }
   } else {
     for (const key of Object.keys(value)) {

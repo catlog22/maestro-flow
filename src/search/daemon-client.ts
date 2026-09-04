@@ -78,6 +78,8 @@ export interface DaemonQueryOptions {
   authorityKey?: string;
   /** One boundary-computed candidate budget forwarded unchanged to the daemon. */
   candidateBudget?: SearchCandidateBudget;
+  /** Optional bounded load selection; rejected by older daemons and retried as legacy load. */
+  selection?: DaemonSearchRequest['selection'];
   /** Tests and memory-sensitive callers may lower, but never raise, the hard cap. */
   maxResponseBytes?: number;
   /** Internal attribution hook; receives bounded reason codes only. */
@@ -240,7 +242,7 @@ export async function tryDaemonSearch(
   }, opts);
 }
 
-/** Retrieve the daemon's warm full-text index for `maestro load`. */
+/** Retrieve a bounded warm-index selection, with a legacy full-load retry for older daemons. */
 export async function tryDaemonLoad(
   workflowRoot: string,
   opts?: DaemonQueryOptions,
@@ -249,7 +251,15 @@ export async function tryDaemonLoad(
   if (!info || !isDaemonInfoV2(info, workflowRoot) || !isDaemonAlive(info)) return null;
   const mismatch = await rejectStaleAuthority(workflowRoot, info, opts?.authorityKey);
   if (mismatch) return mismatch;
-  return queryVerifiedDaemon(info, { action: 'load' }, opts);
+  const response = await queryVerifiedDaemon(info, {
+    action: 'load',
+    ...(opts?.selection ? { selection: opts.selection } : {}),
+  }, opts);
+  if (opts?.selection && response?.ok === false
+    && /unknown request field|unknown selection field/.test(response.error ?? '')) {
+    return queryVerifiedDaemon(info, { action: 'load' }, opts);
+  }
+  return response;
 }
 
 /**

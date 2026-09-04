@@ -51,8 +51,11 @@ beforeEach(() => {
   process.chdir(root);
   daemon.load.mockReset().mockResolvedValue({
     ok: true,
-    entries: [entry()],
+    // Include an out-of-contract row to prove the client still re-filters a
+    // selected response instead of trusting the daemon blindly.
+    entries: [entry(), { ...entry(), id: 'note-untrusted', type: 'note' }],
     generatedAt: 42,
+    selectionApplied: true,
   });
   daemon.spawn.mockReset().mockResolvedValue(undefined);
 });
@@ -89,6 +92,10 @@ describe('load daemon reuse', () => {
       expect.objectContaining({
         timeoutMs: 1_500,
         authorityKey: expect.any(String),
+        selection: expect.objectContaining({
+          type: 'knowhow', limit: 20, projection: 'metadata',
+          includeDeprecated: false,
+        }),
       }),
     );
     expect(daemon.spawn).not.toHaveBeenCalled();

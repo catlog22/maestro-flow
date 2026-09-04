@@ -55,6 +55,7 @@ import type {
   DaemonSearchResponse,
   DaemonState,
 } from './daemon-types.js';
+import { applyDaemonLoadSelection } from './load-selection.js';
 
 const DEFAULT_IDLE_TIMEOUT_MS = 4 * 60 * 60 * 1000;
 const SOCKET_TIMEOUT_MS = 10_000;
@@ -375,8 +376,11 @@ export async function startDaemon(
         }
         return identityResponse({
           ok: true,
-          entries: index.entries,
+          entries: request.selection
+            ? applyDaemonLoadSelection(index.entries, request.selection)
+            : index.entries,
           generatedAt: index.generatedAt,
+          ...(request.selection ? { selectionApplied: true } : {}),
         });
       }
       if (request.action === 'search') {

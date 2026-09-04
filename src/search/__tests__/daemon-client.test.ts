@@ -9,6 +9,7 @@ import {
   invalidateSearchIndex,
   queryDaemon,
   stopDaemon,
+  tryDaemonLoad,
 } from '../daemon-client.js';
 import {
   SEARCH_DAEMON_PROTOCOL,
@@ -147,6 +148,37 @@ describe('daemon client protocol boundaries', () => {
       },
       diagnostics: true,
     });
+  });
+
+  it('retries a selected load as bare legacy load when an older daemon rejects the field', async () => {
+    const received: DaemonSearchRequest[] = [];
+    const root = workflowRoot();
+    const port = await listenWithHandler(socket => {
+      let body = '';
+      socket.on('data', chunk => {
+        body += chunk.toString();
+        if (!body.includes('\n')) return;
+        const request = JSON.parse(body.trim()) as DaemonSearchRequest;
+        received.push(request);
+        const info = descriptor(root, port);
+        socket.end(JSON.stringify({
+          ok: request.selection === undefined,
+          ...(request.selection ? { error: 'unknown request field: selection' } : { entries: [] }),
+          protocol: info.protocol,
+          instanceId: info.instanceId,
+          workflowRoot: info.workflowRoot,
+          pid: info.pid,
+        }) + '\n');
+      });
+    });
+    writeFileSync(getDaemonPath(root), JSON.stringify(descriptor(root, port)));
+
+    await expect(tryDaemonLoad(root, {
+      selection: { type: 'knowhow', limit: 1, projection: 'full' },
+    })).resolves.toMatchObject({ ok: true, entries: [] });
+    expect(received).toHaveLength(2);
+    expect(received[0]?.selection).toBeDefined();
+    expect(received[1]?.selection).toBeUndefined();
   });
 
   it('honors per-query timeout options', async () => {

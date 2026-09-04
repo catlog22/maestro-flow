@@ -70,6 +70,16 @@ function currentInfo(root: string): DaemonInfoV2 {
   return value;
 }
 
+function loadEntry(id: string, title: string, body: string, overrides: Record<string, unknown> = {}) {
+  return {
+    id, type: 'knowhow', title, summary: `summary ${id}`, tags: ['performance'],
+    status: 'active', created: '2026-09-02T00:00:00.000Z', updated: '2026-09-02T00:00:00.000Z',
+    related: [], source: { kind: 'file', path: `knowhow/${id}.md` }, body, ext: {},
+    scope: 'project', category: 'performance', specCategory: null,
+    createdBy: null, sourceRef: null, parent: null, ...overrides,
+  };
+}
+
 beforeEach(() => {
   indexer.get.mockReset().mockResolvedValue({});
   indexer.rebuild.mockReset().mockResolvedValue({});
@@ -251,6 +261,46 @@ describe.sequential('search daemon lifecycle state machine', () => {
       state: 'ready',
     });
     expect(indexer.searchWithMeta).not.toHaveBeenCalled();
+  });
+
+  it('bounds selected load transfer, applies selectors, and omits list bodies', async () => {
+    const root = workflowRoot();
+    indexer.get.mockResolvedValue({
+      entries: [
+        loadEntry('knowhow-huge-irrelevant', 'Huge irrelevant', 'x'.repeat(17 * 1024 * 1024), {
+          category: 'other', tags: ['other'],
+        }),
+        loadEntry('knowhow-selected', 'Selected', 'needle in body'),
+      ],
+      generatedAt: 43,
+    });
+    const started = await startDaemon(root, { workflowRoot: root });
+    running.push({ root, server: started.server });
+
+    const selected = await tryDaemonLoad(root, {
+      selection: {
+        type: 'knowhow', category: 'performance', keyword: 'needle', tag: 'performance',
+        includeDeprecated: false, limit: 1, projection: 'metadata', originExplicit: false,
+      },
+    });
+
+    expect(selected).toMatchObject({
+      ok: true,
+      selectionApplied: true,
+      entries: [{ id: 'knowhow-selected' }],
+    });
+    expect(selected?.entries?.[0]).not.toHaveProperty('body');
+    expect(JSON.stringify(selected).length).toBeLessThan(10_000);
+
+    await expect(tryDaemonLoad(root, {
+      selection: {
+        type: 'knowhow', ids: ['SELECTED'], includeDeprecated: false,
+        limit: 1, projection: 'full', originExplicit: false,
+      },
+    })).resolves.toMatchObject({
+      ok: true,
+      entries: [{ id: 'knowhow-selected', body: 'needle in body' }],
+    });
   });
 
   it('drains an authenticated daemon whose repository authority is stale', async () => {

@@ -167,5 +167,12 @@ describe('daemon request validation', () => {
       instanceId: descriptor.instanceId,
       workflowRoot: descriptor.workflowRoot,
     })).toMatchObject({ ok: true });
+    expect(validateDaemonRequest({
+      action: 'load',
+      protocol: descriptor.protocol,
+      instanceId: descriptor.instanceId,
+      workflowRoot: descriptor.workflowRoot,
+      selection: { type: 'knowhow', limit: 20, projection: 'metadata', ids: [42] },
+    })).toMatchObject({ ok: false, error: expect.stringContaining('selection.ids') });
   });
 });

@@ -26,6 +26,7 @@ import { isRepositoryApplicable } from '../repository/applicability.js';
 import { loadWorkspaceConfig, resolveWorkspaceLinks } from '../config/index.js';
 import { resolveRepositoryContext, type RepositoryContext } from '../repository/context.js';
 import { spawnDaemon, tryDaemonLoad } from '../search/daemon-client.js';
+import type { DaemonLoadSelection } from '../search/load-selection.js';
 import { loadSpecWikiEntries } from '../tools/spec-wiki-loader.js';
 
 const VALID_TYPES = ['spec', 'knowhow', 'note', 'domain', 'issue', 'project', 'roadmap', 'session', 'scratch', 'template'] as const;
@@ -415,6 +416,10 @@ export function registerLoadCommand(program: Command): void {
         return;
       }
 
+      const defaultLimit = isList ? 20 : 10;
+      const parsedLimit = opts.limit ? Number.parseInt(opts.limit, 10) : defaultLimit;
+      const limit = Math.max(1, Math.min(Number.isFinite(parsedLimit) ? parsedLimit : defaultLimit, 500));
+
       let index: WikiIndex;
       if (type === 'spec' && ids.length > 0) {
         // Canonical spec IDs are file-backed. Scan only the bounded spec scopes
@@ -423,9 +428,23 @@ export function registerLoadCommand(program: Command): void {
         index = wikiIndexFromDaemon(await loadSpecWikiEntries(targetRepository));
       } else {
         const { authorityKey } = resolveWikiAuthority(currentRepository);
+        const selection: DaemonLoadSelection = {
+          type,
+          ...(ids.length > 0 ? { ids } : {}),
+          ...(opts.category ? { category: opts.category } : {}),
+          ...(opts.keyword ? { keyword: opts.keyword } : {}),
+          ...(opts.tag ? { tag: opts.tag } : {}),
+          includeDeprecated,
+          limit,
+          projection: isList ? 'metadata' : 'full',
+          ...(targetRepository.repoId ? { applicableRepoId: targetRepository.repoId } : {}),
+          ...(opts.repo && targetRepository.repoId ? { targetRepoId: targetRepository.repoId } : {}),
+          ...(opts.repo && !targetRepository.repoId ? { targetAlias: targetRepository.alias } : {}),
+          originExplicit: Boolean(opts.repo),
+        };
         const daemonResult = await tryDaemonLoad(
           currentRepository.workflowRoot,
-          { timeoutMs: DAEMON_LOAD_BUDGET_MS, authorityKey },
+          { timeoutMs: DAEMON_LOAD_BUDGET_MS, authorityKey, selection },
         );
         if (daemonResult?.ok && Array.isArray(daemonResult.entries)) {
           index = wikiIndexFromDaemon(daemonResult.entries, daemonResult.generatedAt);
@@ -437,9 +456,6 @@ export function registerLoadCommand(program: Command): void {
           spawnDaemon(currentRepository.workflowRoot).catch(() => {});
         }
       }
-      const defaultLimit = isList ? 20 : 10;
-      const parsedLimit = opts.limit ? Number.parseInt(opts.limit, 10) : defaultLimit;
-      const limit = Math.max(1, Math.min(Number.isFinite(parsedLimit) ? parsedLimit : defaultLimit, 500));
       let entries: WikiEntry[];
 
       if (ids.length > 0) {
@@ -472,7 +488,9 @@ export function registerLoadCommand(program: Command): void {
           const kw = opts.keyword.toLowerCase();
           pool = pool.filter(e =>
             e.title.toLowerCase().includes(kw) ||
-            e.body.toLowerCase().includes(kw),
+            // A selected metadata projection intentionally omits bodies. An
+            // absent body may have been the server-side keyword match.
+            typeof e.body !== 'string' || e.body.toLowerCase().includes(kw),
           );
         }
         if (opts.tag) {
