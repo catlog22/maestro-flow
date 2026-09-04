@@ -11,6 +11,7 @@ import {
   parseBuiltSearchAdapterReport,
   type BuiltSearchAdapterExpected,
   type BuiltSearchAdapterReport,
+  type CorpusEvidence,
   type EvidenceEvent,
   type EvidenceResult,
   type EvidenceRun,
@@ -36,6 +37,7 @@ import {
   buildHermeticSearchWorkspace,
   compareRankingBaseline,
   computeRankingMetrics,
+  assertWikiCorpusIndex,
   expandCorpus,
   loadRankingFixture,
   sha256File,
@@ -51,6 +53,7 @@ export type BuiltProviderName = 'wiki' | 'kg' | 'code' | 'mixed' | 'linked';
 export type {
   BuiltSearchAdapterExpected,
   BuiltSearchAdapterReport,
+  CorpusEvidence,
   EvidenceEvent,
   EvidenceResult,
   EvidenceRun,
@@ -524,9 +527,15 @@ export async function runBuiltSearchAdapter(
       expectedCount: eligibleAuthorizedCorpusSize(judgment, provider, documentById),
     };
   });
+  const expectedCorpus: CorpusEvidence = {
+    expandedDocumentCount: corpus.latencyCorpus.size,
+    wikiIndexedEntryCount: workspace.wikiSourceDocumentCount,
+    expandedSha256: workspace.expandedCorpusSha256,
+  };
   const expected: BuiltSearchAdapterExpected = {
     workspaceRoot: workspace.root,
     qrelsSha256,
+    corpus: expectedCorpus,
     queries: expectedQueries,
     databasePaths: {
       canonicalDatabase: workspace.maestroGraphPath,
@@ -550,6 +559,15 @@ export async function runBuiltSearchAdapter(
     qrels.queries.find(item => item.category === 'linked-scope')?.query ?? qrels.queries[0].query,
     { limit: 1 },
   );
+  const wikiIndex = await wikiIndexer.get();
+  const wikiCorpusEvidence = assertWikiCorpusIndex(wikiIndex.entries, corpus);
+  if (wikiCorpusEvidence.indexedEntryCount !== expectedCorpus.wikiIndexedEntryCount) {
+    throw new RankingEvaluationError(
+      'WIKI_CORPUS_COUNT_MISMATCH',
+      'Wiki index entry count differs from the corpus manifest',
+      { expected: expectedCorpus.wikiIndexedEntryCount, actual: wikiCorpusEvidence.indexedEntryCount },
+    );
+  }
   const protectedBefore = await snapshotFiles(workspace.root);
 
   const execute = async (

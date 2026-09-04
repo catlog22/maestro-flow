@@ -358,7 +358,7 @@ async function getSearchIndexer(): Promise<WikiIndexer> {
       alias: current.alias,
       workspaceFence: current.repoId ? `repo:${current.repoId}` : 'local',
     },
-    persistence: 'read-only',
+    role: 'reader',
   });
   _searchIndexerRoot = workflowRoot;
   return _searchIndexer;

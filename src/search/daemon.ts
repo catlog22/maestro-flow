@@ -10,6 +10,10 @@ import { randomUUID } from 'node:crypto';
 import { createServer, type Server, type Socket } from 'node:net';
 import { existsSync, writeFileSync } from 'node:fs';
 import { WikiIndexer, type WikiIndexerConfig } from '#maestro-dashboard/wiki/wiki-indexer.js';
+import {
+  acquireWikiPublisherLease,
+  releaseWikiPublisherLease,
+} from './publisher-lease.js';
 
 export type {
   DaemonInfo,
@@ -25,6 +29,11 @@ export {
   readDaemonInfo,
 } from './daemon-types.js';
 
+import {
+  boundedSearchDiagnostics,
+  createSearchDiagnostics,
+  finishSearchDiagnostics,
+} from './diagnostics.js';
 import {
   DAEMON_MAX_REQUEST_BYTES,
   DAEMON_MAX_RESPONSE_BYTES,
@@ -147,13 +156,40 @@ export async function startDaemon(
     linkedWorkspaces: config.linkedWorkspaces ?? [],
     repository: config.repository ?? null,
   });
-  const indexer = new WikiIndexer(config);
+  // The resident daemon is the preferred and durable publisher. A Dashboard
+  // fallback may take only a one-shot lease when this owner is absent.
+  const publisherLease = acquireWikiPublisherLease(workflowRoot);
+  if (!publisherLease) {
+    throw new Error('wiki publisher lease unavailable');
+  }
+  const indexerConfig: WikiIndexerConfig = {
+    ...config,
+    role: 'publisher',
+    persistence: 'filesystem',
+  };
+  let indexer: WikiIndexer;
+  try {
+    indexer = new WikiIndexer(indexerConfig);
+  } catch (error) {
+    releaseWikiPublisherLease(publisherLease);
+    throw error;
+  }
+  let publisherLeaseReleased = false;
+  const releasePublisherLease = (): void => {
+    if (publisherLeaseReleased) return;
+    publisherLeaseReleased = true;
+    releaseWikiPublisherLease(publisherLease);
+  };
   const closeIndexer = async (): Promise<void> => {
     const close = (indexer as unknown as {
       close?: (options?: { disposeEmbeddingPipeline?: boolean }) => Promise<void>;
     }).close;
-    if (typeof close === 'function') {
-      await close.call(indexer, { disposeEmbeddingPipeline: true });
+    try {
+      if (typeof close === 'function') {
+        await close.call(indexer, { disposeEmbeddingPipeline: true });
+      }
+    } finally {
+      releasePublisherLease();
     }
   };
   const spawnToken = process.env[SPAWN_TOKEN_ENV];
@@ -344,24 +380,44 @@ export async function startDaemon(
         });
       }
       if (request.action === 'search') {
+        // Diagnostics are opt-in and request-local. A fresh recorder per
+        // connection prevents concurrent daemon requests from sharing timing,
+        // fallback, or result metadata.
+        const diagnosticsRequested = request.diagnostics === true
+          || (typeof request.diagnostics === 'object' && request.diagnostics !== null);
+        const diagnostics = diagnosticsRequested
+          ? createSearchDiagnostics({
+            requestId: typeof request.diagnostics === 'object'
+              ? request.diagnostics.requestId
+              : undefined,
+          })
+          : undefined;
         // Keep root compilation compatible with the last built dashboard
         // declaration while dashboard compilation publishes the new signal field.
         const searchOptions = {
           skipEmbedding: request.skipEmbedding,
           filters: request.filters,
           signal,
+          ...(request.candidateBudget ? { candidateBudget: request.candidateBudget } : {}),
+          ...(diagnostics ? { diagnostics } : {}),
         };
         const { results, embeddingUsed, embeddingDocs } = await indexer.searchWithMeta(
           request.query!,
           request.limit!,
           searchOptions,
         );
+        diagnostics?.setProvider('daemon');
+        diagnostics?.setEmbedding(embeddingUsed, embeddingDocs);
+        diagnostics?.setResultCount(results.length);
         return identityResponse({
           ok: true,
           results,
           embeddingUsed,
           embeddingDocs,
           filtersApplied: true,
+          ...(diagnostics
+            ? { diagnostics: boundedSearchDiagnostics(finishSearchDiagnostics(diagnostics)) ?? undefined }
+            : {}),
         });
       }
 

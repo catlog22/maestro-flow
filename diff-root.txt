@@ -1,0 +1,897 @@
+diff --git a/src/commands/search.ts b/src/commands/search.ts
+index bcbf25cf..cccfb7a9 100644
+--- a/src/commands/search.ts
++++ b/src/commands/search.ts
+@@ -44,0 +45,17 @@ import {
++import {
++  boundedSearchDiagnostics,
++  createSearchDiagnostics,
++  finishSearchDiagnostics,
++  withSearchDiagnosticPhase,
++  type SearchDiagnosticsContext,
++  type SearchDiagnostics,
++} from '../search/diagnostics.js';
++import {
++  computeSearchCandidateBudget,
++  escalateSearchCandidateBudget,
++  shouldEscalateSearchCandidateBudget,
++  isAdaptiveSearchBudgetEnabled,
++  type SearchCandidateBudget,
++  type SearchCandidateCounts,
++} from '../search/candidate-budget.js';
++import { runExactSearch, type ExactSearchOutcome } from '../search/exact-search.js';
+@@ -183,0 +201,4 @@ export interface UnifiedSearchOptions {
++  /** Optional request-local diagnostics collector; omitted on hot paths. */
++  diagnostics?: SearchDiagnosticsContext;
++  /** One request-bound candidate budget; adaptive mode is opt-in. */
++  candidateBudget?: SearchCandidateBudget;
+@@ -258 +279 @@ async function getIndexer(
+-        persistence: executionMode === 'read-only-probe' ? 'memory-only' : 'read-only',
++        role: executionMode === 'read-only-probe' ? 'hermetic' : 'reader',
+@@ -288,0 +310,35 @@ const DAEMON_BM25_BUDGET_MS = 1_000;
++function recordCandidateBudgetDiagnostics(
++  diagnostics: SearchDiagnosticsContext | undefined,
++  budget: SearchCandidateBudget | undefined,
++): void {
++  if (!diagnostics || !budget) return;
++  diagnostics.setCandidateBudget?.({
++    mode: budget.mode,
++    requestedLimit: budget.resultLimit,
++    initialCandidateLimit: budget.initialCandidateLimit,
++    candidateLimit: budget.candidateLimit,
++    hardCap: budget.maxCandidateLimit,
++    escalated: budget.escalated,
++    legacyCandidateLimit: budget.legacyCandidateLimit,
++  });
++}
++
++function daemonFailureReason(
++  result: Awaited<ReturnType<typeof tryDaemonSearch>>,
++  workflowRoot: string,
++): string {
++  if (result?.ok === false) {
++    const error = result.error?.toLowerCase() ?? '';
++    if (error.includes('too many')) return 'capacity';
++    if (error.includes('authority')) return 'authority-mismatch';
++    if (error.includes('identity')) return 'identity-mismatch';
++    if (error.includes('starting')) return 'starting';
++    if (error.includes('draining')) return 'draining';
++    return 'rejected';
++  }
++  const info = readDaemonInfo(workflowRoot);
++  if (!info) return 'descriptor-absent';
++  if (!isDaemonInfoV2(info, workflowRoot) || !isDaemonAlive(info)) return 'descriptor-unavailable';
++  return 'unreachable';
++}
++
+@@ -463,0 +520,2 @@ export async function runUnifiedSearch(q: string, opts: UnifiedSearchOptions & {
++  const diagnostics = opts.diagnostics;
++  const repositoryStartedAt = performance.now();
+@@ -467,0 +526 @@ export async function runUnifiedSearch(q: string, opts: UnifiedSearchOptions & {
++  diagnostics?.recordPhase('repository-context', performance.now() - repositoryStartedAt);
+@@ -489,3 +548,12 @@ export async function runUnifiedSearch(q: string, opts: UnifiedSearchOptions & {
+-  // Filters are applied inside BM25/vector candidate generation. Keep a
+-  // bounded oversample only for family caps and diversity selection.
+-  const candidateLimit = Math.min(500, Math.max(limit * 2, 40));
++  // Filters are applied inside BM25/vector candidate generation.  Legacy
++  // callers retain the current provider overfetch; adaptive callers receive
++  // one boundary-computed budget and never multiply it downstream.
++  const boundaryBudget = opts.candidateBudget
++    ?? (isAdaptiveSearchBudgetEnabled()
++      ? computeSearchCandidateBudget(limit, { surface: 'wiki', mode: 'adaptive' })
++      : undefined);
++  const adaptiveBudget = boundaryBudget?.adaptive ? boundaryBudget : undefined;
++  const candidateLimit = adaptiveBudget?.candidateLimit
++    ?? Math.min(500, Math.max(limit * 2, 40));
++  recordCandidateBudgetDiagnostics(diagnostics, boundaryBudget);
++  diagnostics?.setCandidateCount(candidateLimit);
+@@ -494,0 +563 @@ export async function runUnifiedSearch(q: string, opts: UnifiedSearchOptions & {
++  const authorityStartedAt = performance.now();
+@@ -495,0 +565 @@ export async function runUnifiedSearch(q: string, opts: UnifiedSearchOptions & {
++  diagnostics?.recordPhase('authority', performance.now() - authorityStartedAt);
+@@ -503,0 +574,5 @@ export async function runUnifiedSearch(q: string, opts: UnifiedSearchOptions & {
++  let daemonFailureObserved = false;
++  const noteDaemonFailure = (reason: string): void => {
++    daemonFailureObserved = true;
++    diagnostics?.recordFallback('daemon', reason);
++  };
+@@ -507 +582,4 @@ export async function runUnifiedSearch(q: string, opts: UnifiedSearchOptions & {
+-    && (!hasFacet || result.filtersApplied === true),
++    // A diagnostics-enabled caller can consume a pre-diagnostics daemon
++    // response that lacks the optional filter marker; ordinary callers retain
++    // the stricter filter contract.
++    && (!hasFacet || result.filtersApplied === true || (diagnostics && result.filtersApplied === undefined)),
+@@ -513,0 +592 @@ export async function runUnifiedSearch(q: string, opts: UnifiedSearchOptions & {
++    const bm25StartedAt = performance.now();
+@@ -522,0 +602,8 @@ export async function runUnifiedSearch(q: string, opts: UnifiedSearchOptions & {
++        ...(adaptiveBudget ? { candidateBudget: adaptiveBudget } : {}),
++        ...(diagnostics
++          ? {
++            diagnostics: true,
++            diagnosticsRequestId: diagnostics.requestId,
++            onFailure: noteDaemonFailure,
++          }
++          : {}),
+@@ -524,0 +612 @@ export async function runUnifiedSearch(q: string, opts: UnifiedSearchOptions & {
++    diagnostics?.recordPhase('daemon-bm25', performance.now() - bm25StartedAt, candidateLimit);
+@@ -526,0 +615 @@ export async function runUnifiedSearch(q: string, opts: UnifiedSearchOptions & {
++      const semanticStartedAt = performance.now();
+@@ -535,0 +625,8 @@ export async function runUnifiedSearch(q: string, opts: UnifiedSearchOptions & {
++          ...(adaptiveBudget ? { candidateBudget: adaptiveBudget } : {}),
++          ...(diagnostics
++            ? {
++              diagnostics: true,
++              diagnosticsRequestId: diagnostics.requestId,
++              onFailure: noteDaemonFailure,
++            }
++            : {}),
+@@ -537,0 +635 @@ export async function runUnifiedSearch(q: string, opts: UnifiedSearchOptions & {
++      diagnostics?.recordPhase('daemon-semantic', performance.now() - semanticStartedAt, candidateLimit);
+@@ -539,0 +638,2 @@ export async function runUnifiedSearch(q: string, opts: UnifiedSearchOptions & {
++  } else {
++    diagnostics?.recordFallback('daemon', 'read-only-probe');
+@@ -547 +647 @@ export async function runUnifiedSearch(q: string, opts: UnifiedSearchOptions & {
+-    && (!hasFacet || daemonResult.filtersApplied === true)
++    && (!hasFacet || daemonResult.filtersApplied === true || (diagnostics && daemonResult.filtersApplied === undefined))
+@@ -551,0 +652 @@ export async function runUnifiedSearch(q: string, opts: UnifiedSearchOptions & {
++    diagnostics?.setProvider('daemon');
+@@ -554,0 +656,8 @@ export async function runUnifiedSearch(q: string, opts: UnifiedSearchOptions & {
++    diagnostics?.setEmbedding(embeddingUsed, embeddingDocs);
++    if (diagnostics && usableDaemonResult.diagnostics) {
++      diagnostics.merge(usableDaemonResult.diagnostics);
++    } else if (diagnostics) {
++      // Older daemons may return a valid result without the optional
++      // diagnostics payload; compatibility is success, not a hard failure.
++      diagnostics.recordFallback('daemon', 'diagnostics-unavailable');
++    }
+@@ -557,0 +667,3 @@ export async function runUnifiedSearch(q: string, opts: UnifiedSearchOptions & {
++    if (diagnostics && !daemonFailureObserved && !readOnlyProbe) {
++      diagnostics.recordFallback('daemon', daemonFailureReason(daemonResult, workflowRoot));
++    }
+@@ -562,0 +675 @@ export async function runUnifiedSearch(q: string, opts: UnifiedSearchOptions & {
++    const indexerStartedAt = performance.now();
+@@ -566 +679,6 @@ export async function runUnifiedSearch(q: string, opts: UnifiedSearchOptions & {
+-      { skipEmbedding: true, filters: searchFilters },
++      {
++        skipEmbedding: true,
++        filters: searchFilters,
++        ...(diagnostics ? { diagnostics } : {}),
++        ...(adaptiveBudget ? { candidateBudget: adaptiveBudget } : {}),
++      },
+@@ -567,0 +686,2 @@ export async function runUnifiedSearch(q: string, opts: UnifiedSearchOptions & {
++    diagnostics?.recordPhase('indexer-search', performance.now() - indexerStartedAt, candidateLimit);
++    diagnostics?.setProvider('indexer');
+@@ -570,0 +691 @@ export async function runUnifiedSearch(q: string, opts: UnifiedSearchOptions & {
++    diagnostics?.setEmbedding(embeddingUsed, embeddingDocs);
+@@ -580,0 +702,3 @@ export async function runUnifiedSearch(q: string, opts: UnifiedSearchOptions & {
++  diagnostics?.setEligibleCandidateCount?.(
++    new Set(scored.map(result => result.entry.id)).size,
++  );
+@@ -581,0 +706 @@ export async function runUnifiedSearch(q: string, opts: UnifiedSearchOptions & {
++  const filterStartedAt = performance.now();
+@@ -626,0 +752,2 @@ export async function runUnifiedSearch(q: string, opts: UnifiedSearchOptions & {
++  diagnostics?.recordPhase('result-filter', performance.now() - filterStartedAt, filtered.length);
++
+@@ -653,0 +781 @@ export async function runUnifiedSearch(q: string, opts: UnifiedSearchOptions & {
++  const selectionStartedAt = performance.now();
+@@ -660,0 +789,17 @@ export async function runUnifiedSearch(q: string, opts: UnifiedSearchOptions & {
++  diagnostics?.recordPhase('result-selection', performance.now() - selectionStartedAt, deduped.length);
++  diagnostics?.setEligibleCandidateCount?.(deduped.length);
++  const adaptiveCounts: SearchCandidateCounts = {
++    candidateCount: scored.length,
++    uniqueCandidateCount: new Set(scored.map(result => result.entry.id)).size,
++    eligibleUniqueCount: deduped.length,
++    saturated: scored.length >= candidateLimit,
++  };
++  if (adaptiveBudget && shouldEscalateSearchCandidateBudget(adaptiveBudget, adaptiveCounts)) {
++    const nextBudget = escalateSearchCandidateBudget(adaptiveBudget, adaptiveCounts);
++    if (nextBudget !== adaptiveBudget) {
++      diagnostics?.recordFallback('candidate-budget', 'escalated');
++      recordCandidateBudgetDiagnostics(diagnostics, nextBudget);
++      diagnostics?.setCandidateCount(nextBudget.candidateLimit);
++      return runUnifiedSearch(q, { ...opts, candidateBudget: nextBudget });
++    }
++  }
+@@ -698,0 +844 @@ export async function runUnifiedSearch(q: string, opts: UnifiedSearchOptions & {
++  diagnostics?.setResultCount(results.length);
+@@ -777,0 +924,4 @@ export interface KgSearchOptions {
++  /** Request-local diagnostics; omitted by hooks and ordinary callers. */
++  diagnostics?: SearchDiagnosticsContext;
++  /** One boundary-computed candidate budget; adaptive mode is opt-in. */
++  candidateBudget?: SearchCandidateBudget;
+@@ -949,0 +1100,9 @@ export async function runKgSearch(
++  const diagnostics = options.diagnostics;
++  diagnostics?.setProvider('kg');
++  const boundaryBudget = options.candidateBudget
++    ?? (isAdaptiveSearchBudgetEnabled()
++      ? computeSearchCandidateBudget(limit, { surface: 'kg', mode: 'adaptive' })
++      : undefined);
++  const adaptiveBudget = boundaryBudget?.adaptive ? boundaryBudget : undefined;
++  recordCandidateBudgetDiagnostics(diagnostics, boundaryBudget);
++  const startedAt = performance.now();
+@@ -952 +1111,4 @@ export async function runKgSearch(
+-    if (!MaestroGraph.isInitialized(projectRoot)) return { results: [], summary: {} };
++    if (!MaestroGraph.isInitialized(projectRoot)) {
++      diagnostics?.recordFallback('kg', 'not-initialized');
++      return { results: [], summary: {} };
++    }
+@@ -954 +1116,4 @@ export async function runKgSearch(
+-    if (sourceTypes?.length === 0) return { results: [], summary: {} };
++    if (sourceTypes?.length === 0) {
++      diagnostics?.recordFallback('kg', 'empty-source-filter');
++      return { results: [], summary: {} };
++    }
+@@ -959 +1124,3 @@ export async function runKgSearch(
+-      const candidateLimit = Math.min(500, Math.max(limit * 4, 40));
++      const candidateLimit = adaptiveBudget?.candidateLimit
++        ?? Math.min(500, Math.max(limit * 4, 40));
++      diagnostics?.setCandidateCount(candidateLimit);
+@@ -962,21 +1129,40 @@ export async function runKgSearch(
+-      const output = mg.searchUnified(q, {
+-        limit: candidateLimit,
+-        sourceTypes,
+-        includeCode,
+-        includeKnowledge,
+-      });
+-      const candidates: KgSearchResult[] = output.directMatches.map(r => {
+-        const id = canonicalKgId(r.node.sourceType, r.node.id, r.node.filePath, projectRoot);
+-        return {
+-        id,
+-        graphId: r.node.id,
+-        aliases: id === r.node.id ? [] : [r.node.id],
+-        sourceType: r.node.sourceType,
+-        kind: r.node.kind,
+-        name: r.node.name,
+-        definition: r.node.definition?.substring(0, 120) || '',
+-        filePath: r.node.filePath,
+-        score: r.score,
+-        category: r.node.category,
+-        status: r.node.status,
+-        selectionReason: 'diversity' as const,
++      const queryKg = (passBudget: SearchCandidateBudget | undefined): {
++        candidates: KgSearchResult[];
++        results: KgSearchResult[];
++        rawCount: number;
++      } => {
++        const passLimit = passBudget?.candidateLimit ?? candidateLimit;
++        const output = mg.searchUnified(q, {
++          limit: passLimit,
++          sourceTypes,
++          includeCode,
++          includeKnowledge,
++        });
++        const candidates: KgSearchResult[] = output.directMatches.map(r => {
++          const id = canonicalKgId(r.node.sourceType, r.node.id, r.node.filePath, projectRoot);
++          return {
++            id,
++            graphId: r.node.id,
++            aliases: id === r.node.id ? [] : [r.node.id],
++            sourceType: r.node.sourceType,
++            kind: r.node.kind,
++            name: r.node.name,
++            definition: r.node.definition?.substring(0, 120) || '',
++            filePath: r.node.filePath,
++            score: r.score,
++            category: r.node.category,
++            status: r.node.status,
++            selectionReason: 'diversity' as const,
++          };
++        }).filter(result =>
++          (!sourceTypes || sourceTypes.includes(result.sourceType as SourceType))
++          &&
++          (!options.category || result.category === options.category)
++          && (options.includeDeprecated || result.status !== 'deprecated')
++        );
++        const results = selectDiverseKgResults(
++          candidates,
++          limit,
++          options.diversity ?? 'balanced',
++        );
++        return { candidates, results, rawCount: output.directMatches.length };
+@@ -984,11 +1170,19 @@ export async function runKgSearch(
+-      }).filter(result =>
+-        (!sourceTypes || sourceTypes.includes(result.sourceType as SourceType))
+-        &&
+-        (!options.category || result.category === options.category)
+-        && (options.includeDeprecated || result.status !== 'deprecated')
+-      );
+-      const results = selectDiverseKgResults(
+-        candidates,
+-        limit,
+-        options.diversity ?? 'balanced',
+-      );
++      let pass = queryKg(adaptiveBudget);
++      const adaptiveCounts: SearchCandidateCounts = {
++        candidateCount: pass.rawCount,
++        uniqueCandidateCount: new Set(pass.candidates.map(candidate => candidate.graphId)).size,
++        eligibleUniqueCount: pass.results.length,
++        saturated: pass.rawCount >= candidateLimit,
++      };
++      if (adaptiveBudget && shouldEscalateSearchCandidateBudget(adaptiveBudget, adaptiveCounts)) {
++        const nextBudget = escalateSearchCandidateBudget(adaptiveBudget, adaptiveCounts);
++        if (nextBudget !== adaptiveBudget) {
++          diagnostics?.recordFallback('candidate-budget', 'escalated');
++          recordCandidateBudgetDiagnostics(diagnostics, nextBudget);
++          diagnostics?.setCandidateCount(nextBudget.candidateLimit);
++          pass = queryKg(nextBudget);
++        }
++      }
++      const candidates = pass.candidates;
++      const results = pass.results;
++      diagnostics?.setEligibleCandidateCount?.(results.length);
+@@ -1013,0 +1208 @@ export async function runKgSearch(
++      diagnostics?.setResultCount(results.length);
+@@ -1025,0 +1221 @@ export async function runKgSearch(
++    diagnostics?.recordFallback('kg', 'unavailable');
+@@ -1029,0 +1226,2 @@ export async function runKgSearch(
++  } finally {
++    diagnostics?.recordPhase('kg-search', performance.now() - startedAt);
+@@ -1181,0 +1380,2 @@ export async function runCodeSearch(
++  diagnostics?: SearchDiagnosticsContext,
++  candidateBudget?: SearchCandidateBudget,
+@@ -1184,2 +1384,37 @@ export async function runCodeSearch(
+-  const local = await runLocalCodeSearch(q, limit, skipEmbedding, repositoryRoot, executionMode);
+-  if (!includeLinkedCode) return local;
++  const boundaryBudget = candidateBudget
++    ?? (isAdaptiveSearchBudgetEnabled()
++      ? computeSearchCandidateBudget(limit, { surface: 'code', mode: 'adaptive' })
++      : undefined);
++  const adaptiveBudget = boundaryBudget?.adaptive ? boundaryBudget : undefined;
++  const providerLimit = adaptiveBudget?.candidateLimit ?? limit;
++  recordCandidateBudgetDiagnostics(diagnostics, boundaryBudget);
++  diagnostics?.setCandidateCount(providerLimit);
++  const runPass = async (passBudget: SearchCandidateBudget | undefined): Promise<{
++    local: CodeSearchOutcome;
++    linked: LinkedCodeSearchOutcome | null;
++    results: CodeSearchResult[];
++    candidateCount: number;
++    saturated: boolean;
++  }> => {
++    const passLimit = passBudget?.candidateLimit ?? limit;
++    const local = await withSearchDiagnosticPhase(
++      diagnostics,
++      'code-search',
++      () => runLocalCodeSearch(q, passLimit, skipEmbedding, repositoryRoot, executionMode),
++      passLimit,
++    );
++    if (local.status !== 'ok') diagnostics?.recordFallback('kg', local.status);
++    // Direct code search still honors the user's K; mixed search passes its
++    // provider pool as `limit` and therefore keeps the larger pool for fusion.
++    const localResults = includeLinkedCode || !adaptiveBudget
++      ? local.results
++      : local.results.slice(0, limit);
++    if (!includeLinkedCode) {
++      return {
++        local,
++        linked: null,
++        results: localResults,
++        candidateCount: local.results.length,
++        saturated: local.results.length >= passLimit,
++      };
++    }
+@@ -1187,2 +1422,44 @@ export async function runCodeSearch(
+-  const linked = await runLinkedCodeSearch(q, limit, repositoryRoot);
+-  const results = interleaveCodeProviders(local.results, linked.results, limit);
++    const linked = await withSearchDiagnosticPhase(
++      diagnostics,
++      'linked-code-search',
++      () => runLinkedCodeSearch(q, passLimit, repositoryRoot),
++      passLimit,
++    );
++    if (linked.failures.length > 0) diagnostics?.recordFallback('kg', 'linked-unavailable');
++    const results = interleaveCodeProviders(local.results, linked.results, limit);
++    return {
++      local,
++      linked,
++      results,
++      candidateCount: local.results.length + linked.results.length,
++      saturated: local.results.length >= passLimit || linked.results.length >= passLimit,
++    };
++  };
++
++  let pass = await runPass(adaptiveBudget);
++  const passUniqueCount = new Set(pass.results.map(result => result.id)).size;
++  diagnostics?.setEligibleCandidateCount?.(passUniqueCount);
++  if (adaptiveBudget) {
++    const adaptiveCounts: SearchCandidateCounts = {
++      candidateCount: pass.candidateCount,
++      uniqueCandidateCount: new Set([
++        ...pass.local.results,
++        ...(pass.linked?.results ?? []),
++      ].map(result => result.id)).size,
++      eligibleUniqueCount: passUniqueCount,
++      saturated: pass.saturated,
++    };
++    if (shouldEscalateSearchCandidateBudget(adaptiveBudget, adaptiveCounts)) {
++      const nextBudget = escalateSearchCandidateBudget(adaptiveBudget, adaptiveCounts);
++      if (nextBudget !== adaptiveBudget) {
++        diagnostics?.recordFallback('candidate-budget', 'escalated');
++        recordCandidateBudgetDiagnostics(diagnostics, nextBudget);
++        diagnostics?.setCandidateCount(nextBudget.candidateLimit);
++        pass = await runPass(nextBudget);
++      }
++    }
++  }
++
++  diagnostics?.setResultCount(pass.results.length);
++  if (!includeLinkedCode) return { ...pass.local, results: pass.results };
++  const linked = pass.linked!;
+@@ -1190,2 +1467,2 @@ export async function runCodeSearch(
+-    results,
+-    status: results.length > 0 ? 'ok' : local.status,
++    results: pass.results,
++    status: pass.results.length > 0 ? 'ok' : pass.local.status,
+@@ -1284 +1561,9 @@ export async function runMixedSearch(
+-  const candidateLimit = Math.min(500, Math.max(limit * 3, 60));
++  const boundaryBudget = options.candidateBudget
++    ?? (isAdaptiveSearchBudgetEnabled()
++      ? computeSearchCandidateBudget(limit, { surface: 'mixed', mode: 'adaptive' })
++      : undefined);
++  const adaptiveBudget = boundaryBudget?.adaptive ? boundaryBudget : undefined;
++  const candidateLimit = adaptiveBudget?.candidateLimit
++    ?? Math.min(500, Math.max(limit * 3, 60));
++  recordCandidateBudgetDiagnostics(options.diagnostics, boundaryBudget);
++  options.diagnostics?.setCandidateCount(candidateLimit);
+@@ -1292,10 +1577,27 @@ export async function runMixedSearch(
+-  const codePromise = executionMode === 'default'
+-    ? codeSearch(q, candidateLimit, options.skipEmbedding, includeLinkedCode)
+-    : codeSearch(
+-      q,
+-      candidateLimit,
+-      true,
+-      includeLinkedCode,
+-      resolve('.'),
+-      executionMode,
+-    );
++  const invokeCodeSearch = (skipEmbedding: boolean | undefined): Promise<CodeSearchOutcome> => {
++    if (adaptiveBudget) {
++      return codeSearch(
++        q,
++        candidateLimit,
++        skipEmbedding,
++        includeLinkedCode,
++        resolve('.'),
++        executionMode,
++        options.diagnostics,
++        adaptiveBudget,
++      );
++    }
++    if (options.diagnostics) {
++      return codeSearch(
++        q,
++        candidateLimit,
++        skipEmbedding,
++        includeLinkedCode,
++        resolve('.'),
++        executionMode,
++        options.diagnostics,
++      );
++    }
++    return codeSearch(q, candidateLimit, skipEmbedding, includeLinkedCode);
++  };
++  const codePromise = invokeCodeSearch(executionMode === 'default' ? options.skipEmbedding : true);
+@@ -1310 +1612 @@ export async function runMixedSearch(
+-  const [wikiResults, codeOutcome, templateResults] = await Promise.all([
++  const providerWork = Promise.all([
+@@ -1316,0 +1619 @@ export async function runMixedSearch(
++      ...(adaptiveBudget ? { candidateBudget: adaptiveBudget } : {}),
+@@ -1320,0 +1624,7 @@ export async function runMixedSearch(
++  const [wikiResults, codeOutcome, templateResults] = await withSearchDiagnosticPhase(
++    options.diagnostics,
++    'mixed-providers',
++    providerWork,
++    candidateLimit,
++  );
++  options.diagnostics?.setProvider('mixed');
+@@ -1323,0 +1634,22 @@ export async function runMixedSearch(
++  const candidateIds = new Set([
++    ...wikiResults.map(result => result.id),
++    ...codeOutcome.results.map(result => result.id),
++    ...templateResults.map(result => result.entry.id),
++  ]);
++  const mixedCounts: SearchCandidateCounts = {
++    candidateCount: wikiResults.length + codeOutcome.results.length + templateResults.length,
++    uniqueCandidateCount: candidateIds.size,
++    eligibleUniqueCount: candidateIds.size,
++    saturated: wikiResults.length >= candidateLimit
++      || codeOutcome.results.length >= candidateLimit
++      || templateResults.length >= candidateLimit,
++  };
++  if (adaptiveBudget && shouldEscalateSearchCandidateBudget(adaptiveBudget, mixedCounts)) {
++    const nextBudget = escalateSearchCandidateBudget(adaptiveBudget, mixedCounts);
++    if (nextBudget !== adaptiveBudget) {
++      options.diagnostics?.recordFallback('candidate-budget', 'escalated');
++      recordCandidateBudgetDiagnostics(options.diagnostics, nextBudget);
++      options.diagnostics?.setCandidateCount(nextBudget.candidateLimit);
++      return runMixedSearch(q, { ...options, candidateBudget: nextBudget }, dependencies);
++    }
++  }
+@@ -1338,0 +1671,9 @@ export async function runMixedSearch(
++  options.diagnostics?.setEligibleCandidateCount?.(
++    new Set([
++      ...wikiResults.map(result => result.id),
++      ...codeOutcome.results.map(result => result.id),
++      ...templateResults.map(result => result.entry.id),
++    ]).size,
++  );
++  options.diagnostics?.setResultCount(results.length);
++
+@@ -1361,0 +1703,4 @@ export function registerSearchCommand(program: Command): void {
++    .option('--exact', 'Standalone fixed-string source search (does not use normal ranking/fusion)')
++    .option('--timeout-ms <ms>', 'Exact search wall-clock timeout (only with --exact)')
++    .option('--max-results <n>', 'Exact search occurrence cap (only with --exact)')
++    .option('--max-bytes <n>', 'Exact search response-byte cap (only with --exact)')
+@@ -1365,0 +1711 @@ export function registerSearchCommand(program: Command): void {
++    .option('--diagnostics', 'Include bounded request-scoped JSON diagnostics')
+@@ -1375,2 +1721,12 @@ export function registerSearchCommand(program: Command): void {
+-      const resolvedTag = opts.tag ?? opts.kind;
+-      const wikiOnly = opts.wikiOnly === true || typeof resolvedTag === 'string' || typeof opts.repo === 'string';
++      const diagnostics = opts.diagnostics === true ? createSearchDiagnostics() : undefined;
++      const diagnosticsPayload = (): SearchDiagnostics | undefined => {
++        if (!diagnostics) return undefined;
++        return boundedSearchDiagnostics(finishSearchDiagnostics(diagnostics)) ?? undefined;
++      };
++      const withDiagnostics = <T extends Record<string, unknown>>(payload: T): T & { diagnostics?: SearchDiagnostics } => {
++        const snapshot = diagnosticsPayload();
++        return snapshot ? { ...payload, diagnostics: snapshot } : payload;
++      };
++      try {
++        const resolvedTag = opts.tag ?? opts.kind;
++        const wikiOnly = opts.wikiOnly === true || typeof resolvedTag === 'string' || typeof opts.repo === 'string';
+@@ -1404,0 +1761,77 @@ export function registerSearchCommand(program: Command): void {
++      // --exact is intentionally a separate, fixed-string route. It must not
++      // initialize the daemon/indexer, enter mixed fusion, or inherit ranking
++      // facets whose semantics do not apply to source occurrences.
++      if (opts.exact === true) {
++        const incompatible: Array<[boolean, string]> = [
++          [Boolean(opts.type), '--type'],
++          [Boolean(opts.category), '--category'],
++          [Boolean(resolvedTag), '--tag/--kind'],
++          [codeOnly, '--code'],
++          [kgMode, '--kg'],
++          [opts.wikiOnly === true, '--wiki-only'],
++          [opts.semantic === true, '--semantic'],
++          [opts.emb === false, '--no-emb'],
++          [opts.includeDeprecated === true, '--include-deprecated'],
++          [opts.diagnostics === true, '--diagnostics'],
++        ];
++        const conflict = incompatible.find(([present]) => present)?.[1];
++        if (conflict) {
++          console.error(`Error: --exact cannot be combined with ${conflict}`);
++          process.exitCode = 1;
++          return;
++        }
++        let exact: ExactSearchOutcome;
++        try {
++          exact = await runExactSearch(q, {
++            projectRoot: resolve('.'),
++            repo: opts.repo,
++            workspace: opts.workspace,
++            includeLinkedCode: opts.includeLinkedCode === true,
++            // Pass raw caps through: exact-search owns validation/clamping and
++            // therefore cannot inherit ranked search's invalid-value defaults.
++            limit: opts.maxResults ?? opts.limit,
++            timeoutMs: opts.timeoutMs,
++            maxBytes: opts.maxBytes,
++          });
++        } catch (error: unknown) {
++          // Exact failures are terminal for this opt-in route. Never fall back
++          // to a broad filesystem scan or the normal indexed search providers.
++          console.error(`Error: ${error instanceof Error ? error.message : String(error)}`);
++          process.exitCode = 1;
++          return;
++        }
++
++        if (opts.json) {
++          console.log(JSON.stringify({
++            query: q,
++            mode: 'exact',
++            count: exact.results.length,
++            truncated: exact.truncated,
++            timedOut: exact.timedOut,
++            bytesUsed: exact.bytesUsed,
++            results: exact.results,
++          }, null, 2));
++          return;
++        }
++        const status = exact.truncated ? ', truncated' : '';
++        console.log(`Search: "${q}" (exact ${exact.results.length} result${exact.results.length === 1 ? '' : 's'}${status})`);
++        if (exact.results.length === 0) {
++          console.log('  No matches found.');
++          return;
++        }
++        for (const result of exact.results) {
++          const workspaceTag = result.workspace ? `  @${result.workspace}` : '';
++          console.log(`  [exact]  ${result.filePath}:${result.line}:${result.column}${workspaceTag}`);
++          if (result.preview) console.log(`    ${result.preview}`);
++        }
++        return;
++      }
++
++      // Exact-only caps are not meaningful on ranked search and are rejected
++      // rather than silently ignored.
++      if (opts.timeoutMs !== undefined || opts.maxResults !== undefined || opts.maxBytes !== undefined) {
++        console.error('Error: --timeout-ms, --max-results, and --max-bytes require --exact');
++        process.exitCode = 1;
++        return;
++      }
++
+@@ -1414,0 +1848 @@ export function registerSearchCommand(program: Command): void {
++        const templateStartedAt = performance.now();
+@@ -1415,0 +1850,2 @@ export function registerSearchCommand(program: Command): void {
++        diagnostics?.recordPhase('arch-kb-search', performance.now() - templateStartedAt);
++        diagnostics?.setProvider('arch-kb');
+@@ -1416,0 +1853 @@ export function registerSearchCommand(program: Command): void {
++        diagnostics?.setResultCount(merged.length);
+@@ -1419 +1856 @@ export function registerSearchCommand(program: Command): void {
+-          console.log(JSON.stringify({
++          console.log(JSON.stringify(withDiagnostics({
+@@ -1427 +1864 @@ export function registerSearchCommand(program: Command): void {
+-          }, null, 2));
++          }), null, 2));
+@@ -1456,0 +1894 @@ export function registerSearchCommand(program: Command): void {
++            ...(diagnostics ? { diagnostics } : {}),
+@@ -1458,0 +1897,2 @@ export function registerSearchCommand(program: Command): void {
++        diagnostics?.setProvider('kg');
++        diagnostics?.setResultCount(kgResults.length);
+@@ -1460 +1900,2 @@ export function registerSearchCommand(program: Command): void {
+-          console.log(JSON.stringify({ query: q, engine: 'maestrograph', count: kgResults.length, summary, results: kgResults }, null, 2));
++          diagnostics?.setProvider('kg');
++          console.log(JSON.stringify(withDiagnostics({ query: q, engine: 'maestrograph', count: kgResults.length, summary, results: kgResults }), null, 2));
+@@ -1507,0 +1949 @@ export function registerSearchCommand(program: Command): void {
++        ...(diagnostics ? { diagnostics } : {}),
+@@ -1529,0 +1972 @@ export function registerSearchCommand(program: Command): void {
++              diagnostics,
+@@ -1534,0 +1978 @@ export function registerSearchCommand(program: Command): void {
++      if (codeOnly) diagnostics?.setResultCount(codeResults.length);
+@@ -1542 +1986,2 @@ export function registerSearchCommand(program: Command): void {
+-          console.log(JSON.stringify({
++          diagnostics?.setResultCount(codeResults.length);
++          console.log(JSON.stringify(withDiagnostics({
+@@ -1548 +1993 @@ export function registerSearchCommand(program: Command): void {
+-          }, null, 2));
++          }), null, 2));
+@@ -1567,0 +2013 @@ export function registerSearchCommand(program: Command): void {
++      diagnostics?.setResultCount(merged.length);
+@@ -1580 +2026,2 @@ export function registerSearchCommand(program: Command): void {
+-        console.log(JSON.stringify({
++        diagnostics?.setResultCount(merged.length);
++        console.log(JSON.stringify(withDiagnostics({
+@@ -1590 +2037 @@ export function registerSearchCommand(program: Command): void {
+-        }, null, 2));
++        }), null, 2));
+@@ -1658,0 +2106,8 @@ export function registerSearchCommand(program: Command): void {
++      } finally {
++        // Keep human-readable stdout byte-for-byte compatible. Diagnostics are
++        // machine-readable and therefore emitted on stderr unless --json has
++        // already embedded them in the response object.
++        if (diagnostics && !opts.json) {
++          console.error(JSON.stringify({ diagnostics: diagnosticsPayload() }));
++        }
++      }
+@@ -1696 +2151 @@ export function registerSearchCommand(program: Command): void {
+-            { workflowRoot, linkedWorkspaces, repository },
++            { workflowRoot, linkedWorkspaces, repository, role: 'publisher' },
+@@ -1755 +2210 @@ export function registerSearchCommand(program: Command): void {
+-          { workflowRoot, linkedWorkspaces, repository },
++          { workflowRoot, linkedWorkspaces, repository, role: 'publisher' },
+@@ -1875 +2330 @@ export function registerSearchCommand(program: Command): void {
+-        const indexer = new WikiIndexer({ workflowRoot, linkedWorkspaces });
++        const indexer = new WikiIndexer({ workflowRoot, linkedWorkspaces, role: 'publisher' });
+diff --git a/src/search/daemon-client.ts b/src/search/daemon-client.ts
+index d9b13f11..c91510ad 100644
+--- a/src/search/daemon-client.ts
++++ b/src/search/daemon-client.ts
+@@ -52,0 +53,4 @@ import type {
++import type { SearchDiagnosticsRecorder } from './diagnostics.js';
++import type { SearchCandidateBudget } from './candidate-budget.js';
++export type { SearchDiagnostics, SearchDiagnosticsContext, SearchDiagnosticsRecorder } from './diagnostics.js';
++export type { SearchCandidateBudget } from './candidate-budget.js';
+@@ -58,0 +63,7 @@ const SPAWN_TOKEN_ENV = 'MAESTRO_SEARCH_DAEMON_SPAWN_TOKEN';
++export type DaemonFailureReason =
++  | 'timeout'
++  | 'connect-error'
++  | 'bad-response'
++  | 'response-too-large'
++  | 'identity-mismatch';
++
+@@ -61,0 +73,4 @@ export interface DaemonQueryOptions {
++  /** Opt-in request-scoped diagnostics; absent keeps the wire response unchanged. */
++  diagnostics?: boolean | SearchDiagnosticsRecorder;
++  /** Optional caller-owned ID propagated to the daemon diagnostics recorder. */
++  diagnosticsRequestId?: string;
+@@ -63,0 +79,2 @@ export interface DaemonQueryOptions {
++  /** One boundary-computed candidate budget forwarded unchanged to the daemon. */
++  candidateBudget?: SearchCandidateBudget;
+@@ -65,0 +83,2 @@ export interface DaemonQueryOptions {
++  /** Internal attribution hook; receives bounded reason codes only. */
++  onFailure?: (reason: DaemonFailureReason) => void;
+@@ -87 +106 @@ export function queryDaemon(
+-    const fail = (error: Error): void => {
++    const fail = (error: Error, reason?: DaemonFailureReason): void => {
+@@ -89,0 +109 @@ export function queryDaemon(
++      opts?.onFailure?.(reason ?? classifyDaemonFailure(error));
+@@ -118 +138 @@ export function queryDaemon(
+-    socket.on('timeout', () => { fail(new Error('timeout')); });
++    socket.on('timeout', () => { fail(new Error('timeout'), 'timeout'); });
+@@ -121,0 +142,8 @@ export function queryDaemon(
++function classifyDaemonFailure(error: Error): DaemonFailureReason {
++  const message = error.message.toLowerCase();
++  if (message.includes('timeout')) return 'timeout';
++  if (message.includes('response too large')) return 'response-too-large';
++  if (message.includes('bad response')) return 'bad-response';
++  return 'connect-error';
++}
++
+@@ -136 +164,5 @@ async function queryVerifiedDaemon(
+-    return isResponseFromDaemon(info, response) ? response : null;
++    if (!isResponseFromDaemon(info, response)) {
++      opts?.onFailure?.('identity-mismatch');
++      return null;
++    }
++    return response;
+@@ -199,0 +232,8 @@ export async function tryDaemonSearch(
++    ...(opts?.candidateBudget ? { candidateBudget: opts.candidateBudget } : {}),
++    ...(opts?.diagnostics
++      ? { diagnostics: opts.diagnosticsRequestId
++        ? { requestId: opts.diagnosticsRequestId }
++        : typeof opts.diagnostics === 'object'
++          ? { requestId: opts.diagnostics.requestId }
++          : true }
++      : {}),
+diff --git a/src/search/daemon-types.ts b/src/search/daemon-types.ts
+index b63dca33..3f68da86 100644
+--- a/src/search/daemon-types.ts
++++ b/src/search/daemon-types.ts
+@@ -13,0 +14,2 @@ import type { WikiEntry, WikiSearchFilters } from '#maestro-dashboard/wiki/wiki-
++import type { SearchDiagnostics } from './diagnostics.js';
++import type { SearchCandidateBudget } from './candidate-budget.js';
+@@ -56,0 +59,4 @@ export interface DaemonSearchRequest {
++  /** One boundary-computed budget; omitted keeps the legacy provider path. */
++  candidateBudget?: SearchCandidateBudget;
++  /** Opt-in only; diagnostics are request-scoped and never persisted. */
++  diagnostics?: boolean | { requestId?: string };
+@@ -71,0 +78,2 @@ export interface DaemonSearchResponse {
++  /** Optional request-scoped diagnostics; older daemons omit this field. */
++  diagnostics?: SearchDiagnostics;
+@@ -261,0 +270,58 @@ function validateIdentityFields(value: Record<string, unknown>, required: boolea
++function validateDiagnostics(value: unknown): string | null {
++  if (value === undefined || value === false) return null;
++  if (value === true) return null;
++  if (!isRecord(value)) return 'diagnostics must be a boolean or object';
++  for (const key of Object.keys(value)) {
++    if (key !== 'requestId') return `unknown diagnostics field: ${key}`;
++  }
++  if (value.requestId !== undefined && !isInstanceId(value.requestId)) {
++    return 'diagnostics.requestId must be a UUID';
++  }
++  return null;
++}
++
++function validateCandidateBudget(value: unknown): string | null {
++  if (value === undefined) return null;
++  if (!isRecord(value)) return 'candidateBudget must be an object';
++  const allowed = new Set([
++    'resultLimit', 'limit', 'candidateLimit', 'initialCandidateLimit',
++    'maxCandidateLimit', 'hardCap', 'mode', 'adaptive', 'escalated',
++    'escalationCount', 'legacyCandidateLimit', 'surface',
++  ]);
++  for (const key of Object.keys(value)) {
++    if (!allowed.has(key)) return `unknown candidateBudget field: ${key}`;
++  }
++  if (value.mode !== 'legacy' && value.mode !== 'adaptive') return 'candidateBudget.mode is invalid';
++  if (typeof value.adaptive !== 'boolean' || value.adaptive !== (value.mode === 'adaptive')) {
++    return 'candidateBudget.adaptive is invalid';
++  }
++  const integerFields = [
++    'resultLimit', 'limit', 'candidateLimit', 'initialCandidateLimit',
++    'maxCandidateLimit', 'hardCap', 'escalationCount', 'legacyCandidateLimit',
++  ];
++  for (const field of integerFields) {
++    if (!Number.isSafeInteger(value[field])) return `candidateBudget.${field} must be an integer`;
++    if ((value[field] as number) < 0 || (value[field] as number) > DAEMON_MAX_RESULTS) {
++      return `candidateBudget.${field} is out of bounds`;
++    }
++  }
++  const maxCandidateLimit = value.maxCandidateLimit as number;
++  const hardCap = value.hardCap as number;
++  const candidateLimit = value.candidateLimit as number;
++  const initialCandidateLimit = value.initialCandidateLimit as number;
++  const escalationCount = value.escalationCount as number;
++  if (maxCandidateLimit !== hardCap || hardCap === 0) {
++    return 'candidateBudget cap is inconsistent';
++  }
++  if (candidateLimit > maxCandidateLimit || initialCandidateLimit > maxCandidateLimit) {
++    return 'candidateBudget candidateLimit exceeds hard cap';
++  }
++  if (typeof value.escalated !== 'boolean' || escalationCount > 1) {
++    return 'candidateBudget escalation is invalid';
++  }
++  if (typeof value.surface !== 'string' || ![
++    'search', 'wiki', 'mixed', 'indexer', 'planned', 'kg', 'code', 'arch-kb',
++  ].includes(value.surface)) return 'candidateBudget.surface is invalid';
++  return null;
++}
++
+@@ -311,0 +378,4 @@ export function validateDaemonRequest(value: unknown): DaemonRequestValidation {
++    const candidateBudgetError = validateCandidateBudget(value.candidateBudget);
++    if (candidateBudgetError) return { ok: false, error: candidateBudgetError };
++    const diagnosticsError = validateDiagnostics(value.diagnostics);
++    if (diagnosticsError) return { ok: false, error: diagnosticsError };
+@@ -313 +383 @@ export function validateDaemonRequest(value: unknown): DaemonRequestValidation {
+-      if (!commonKeys.has(key) && !['query', 'limit', 'skipEmbedding', 'filters'].includes(key)) {
++      if (!commonKeys.has(key) && !['query', 'limit', 'skipEmbedding', 'filters', 'candidateBudget', 'diagnostics'].includes(key)) {
+diff --git a/src/search/daemon.ts b/src/search/daemon.ts
+index bdff961b..8a43d48f 100644
+--- a/src/search/daemon.ts
++++ b/src/search/daemon.ts
+@@ -12,0 +13,4 @@ import { WikiIndexer, type WikiIndexerConfig } from '#maestro-dashboard/wiki/wik
++import {
++  acquireWikiPublisherLease,
++  releaseWikiPublisherLease,
++} from './publisher-lease.js';
+@@ -27,0 +32,5 @@ export {
++import {
++  boundedSearchDiagnostics,
++  createSearchDiagnostics,
++  finishSearchDiagnostics,
++} from './diagnostics.js';
+@@ -150 +159,24 @@ export async function startDaemon(
+-  const indexer = new WikiIndexer(config);
++  // The resident daemon is the preferred and durable publisher. A Dashboard
++  // fallback may take only a one-shot lease when this owner is absent.
++  const publisherLease = acquireWikiPublisherLease(workflowRoot);
++  if (!publisherLease) {
++    throw new Error('wiki publisher lease unavailable');
++  }
++  const indexerConfig: WikiIndexerConfig = {
++    ...config,
++    role: 'publisher',
++    persistence: 'filesystem',
++  };
++  let indexer: WikiIndexer;
++  try {
++    indexer = new WikiIndexer(indexerConfig);
++  } catch (error) {
++    releaseWikiPublisherLease(publisherLease);
++    throw error;
++  }
++  let publisherLeaseReleased = false;
++  const releasePublisherLease = (): void => {
++    if (publisherLeaseReleased) return;
++    publisherLeaseReleased = true;
++    releaseWikiPublisherLease(publisherLease);
++  };
+@@ -155,2 +187,6 @@ export async function startDaemon(
+-    if (typeof close === 'function') {
+-      await close.call(indexer, { disposeEmbeddingPipeline: true });
++    try {
++      if (typeof close === 'function') {
++        await close.call(indexer, { disposeEmbeddingPipeline: true });
++      }
++    } finally {
++      releasePublisherLease();
+@@ -346,0 +383,12 @@ export async function startDaemon(
++        // Diagnostics are opt-in and request-local. A fresh recorder per
++        // connection prevents concurrent daemon requests from sharing timing,
++        // fallback, or result metadata.
++        const diagnosticsRequested = request.diagnostics === true
++          || (typeof request.diagnostics === 'object' && request.diagnostics !== null);
++        const diagnostics = diagnosticsRequested
++          ? createSearchDiagnostics({
++            requestId: typeof request.diagnostics === 'object'
++              ? request.diagnostics.requestId
++              : undefined,
++          })
++          : undefined;
+@@ -352,0 +401,2 @@ export async function startDaemon(
++          ...(request.candidateBudget ? { candidateBudget: request.candidateBudget } : {}),
++          ...(diagnostics ? { diagnostics } : {}),
+@@ -358,0 +409,3 @@ export async function startDaemon(
++        diagnostics?.setProvider('daemon');
++        diagnostics?.setEmbedding(embeddingUsed, embeddingDocs);
++        diagnostics?.setResultCount(results.length);
+@@ -364,0 +418,3 @@ export async function startDaemon(
++          ...(diagnostics
++            ? { diagnostics: boundedSearchDiagnostics(finishSearchDiagnostics(diagnostics)) ?? undefined }
++            : {}),

@@ -13,6 +13,12 @@ import { homedir } from 'node:os';
 import { createHash } from 'node:crypto';
 import { closeSync, existsSync, lstatSync, mkdirSync, openSync, readFileSync, readSync, readdirSync, renameSync, rmSync, statSync, unlinkSync, writeFileSync } from 'node:fs';
 import { open, rm, type FileHandle } from 'node:fs/promises';
+import {
+  buildSearchFragments,
+  isStructuredChunksEnabled,
+  STRUCTURED_FRAGMENT_POLICY_CHECKSUM,
+  type SearchFragment,
+} from './structured-fragments.js';
 
 // ---------------------------------------------------------------------------
 // Lazy zvec import — avoids hard failure when @zvec/zvec is not installed
@@ -41,16 +47,23 @@ export interface EmbeddingIndex {
   dimension: number;
   docIds: string[];
   vectors: Float32Array[];
+  /** Parent-document hashes, parallel to vectors (legacy-compatible). */
   contentHashes?: string[];
   chunkDocIds?: string[];  // parallel to docIds — maps each vector slot to its parent document ID
+  /** Structured fragment evidence, parallel to docIds when opt-in is enabled. */
+  fragments?: SearchFragment[];
+  /** Structured chunk policy fence; absent for legacy chunk artifacts. */
+  policyChecksum?: string;
   builtAt: number;
   deviceUsed?: string;
   buildTimeMs?: number;
 }
 
 export interface VectorSearchResult {
+  /** Internal chunk/fragment id; final Wiki results use parentId. */
   docId: string;
   score: number;
+  fragment?: SearchFragment;
 }
 
 export type DeviceType = 'cpu' | 'gpu';
@@ -848,6 +861,7 @@ export async function vectorSearchZvec(
   queryVector: Float32Array,
   dir: string,
   limit: number,
+  fragmentsById?: ReadonlyMap<string, SearchFragment>,
 ): Promise<VectorSearchResult[]> {
   if (process.env.MAESTRO_EMBEDDING_FLAT_SCAN) {
     return []; // caller handles fallback via sync vectorSearch
@@ -872,9 +886,11 @@ export async function vectorSearchZvec(
         if (typeof docId !== 'string' || docId.length === 0) {
           throw new Error(`zvec query result ${d.id} is missing its original docId`);
         }
+        const fragment = fragmentsById?.get(docId);
         return {
           docId,
           score: 1 - d.score,
+          ...(fragment ? { fragment } : {}),
         };
       });
     } finally {
@@ -896,10 +912,47 @@ function flatCosineSearch(
     const parentId = index.chunkDocIds?.[i] ?? index.docIds[i];
     if (allowedDocIds && !allowedDocIds.has(parentId)) continue;
     const sim = cosineSimilarity(queryVector, index.vectors[i]);
-    if (sim > 0) scored.push({ docId: index.docIds[i], score: sim });
+    if (sim > 0) {
+      scored.push({
+        docId: index.docIds[i],
+        score: sim,
+        ...(index.fragments?.[i] ? { fragment: index.fragments[i] } : {}),
+      });
+    }
   }
   scored.sort((a, b) => b.score - a.score || a.docId.localeCompare(b.docId));
   return scored.slice(0, limit);
+}
+
+/** Collapse internal fragment/chunk hits to one highest-scoring parent hit. */
+export function mapVectorResultsToParents(
+  results: readonly VectorSearchResult[],
+  index: Pick<EmbeddingIndex, 'docIds' | 'chunkDocIds' | 'fragments'>,
+  limit = results.length,
+): VectorSearchResult[] {
+  const parentByFragment = new Map<string, string>();
+  const evidenceByFragment = new Map<string, SearchFragment>();
+  for (let i = 0; i < index.docIds.length; i++) {
+    const fragment = index.fragments?.[i];
+    const parentId = index.chunkDocIds?.[i] ?? fragment?.parentId ?? index.docIds[i];
+    parentByFragment.set(index.docIds[i], parentId);
+    if (fragment) evidenceByFragment.set(index.docIds[i], fragment);
+  }
+  const best = new Map<string, VectorSearchResult>();
+  for (const result of results) {
+    const parentId = parentByFragment.get(result.docId) ?? result.fragment?.parentId ?? result.docId;
+    const fragment = result.fragment ?? evidenceByFragment.get(result.docId);
+    const candidate = {
+      ...result,
+      docId: parentId,
+      ...(fragment ? { fragment } : {}),
+    };
+    const current = best.get(parentId);
+    if (!current || candidate.score > current.score) best.set(parentId, candidate);
+  }
+  return [...best.values()]
+    .sort((left, right) => right.score - left.score || left.docId.localeCompare(right.docId))
+    .slice(0, Math.max(0, limit));
 }
 
 // ---------------------------------------------------------------------------
@@ -907,6 +960,23 @@ function flatCosineSearch(
 // ---------------------------------------------------------------------------
 
 const SQLITE_FILE = 'embedding-index.db';
+
+/**
+ * Structured and legacy vectors are intentionally not mixed.  In particular,
+ * a legacy caller must never silently query a structured artifact generated
+ * under a different chunk policy, and enabling the flag must rebuild an old
+ * five-section artifact before it can be used.
+ */
+function isCompatibleEmbeddingArtifact(index: EmbeddingIndex): boolean {
+  if (!isStructuredChunksEnabled()) {
+    return index.policyChecksum === undefined && index.fragments === undefined;
+  }
+  return index.policyChecksum === STRUCTURED_FRAGMENT_POLICY_CHECKSUM
+    && Array.isArray(index.fragments)
+    && index.fragments.length === index.docIds.length
+    && index.fragments.every((fragment, i) => fragment.fragmentId === index.docIds[i]
+      && (!index.chunkDocIds || fragment.parentId === index.chunkDocIds[i]));
+}
 
 import { createRequire } from 'node:module';
 const _require = createRequire(import.meta.url);
@@ -956,6 +1026,33 @@ function validateStringArray(
   return value as string[];
 }
 
+function validateFragmentArray(value: unknown, expectedLength: number): SearchFragment[] | undefined {
+  if (value === undefined) return undefined;
+  if (!Array.isArray(value) || value.length !== expectedLength) {
+    throw new Error('Invalid embedding index fragments');
+  }
+  for (let i = 0; i < value.length; i++) {
+    const fragment = value[i] as Partial<SearchFragment> | null;
+    if (!fragment || typeof fragment !== 'object'
+      || typeof fragment.fragmentId !== 'string' || fragment.fragmentId.length === 0
+      || typeof fragment.parentId !== 'string' || fragment.parentId.length === 0
+      || typeof fragment.text !== 'string'
+      || typeof fragment.contentHash !== 'string' || !/^[0-9a-f]{64}$/.test(fragment.contentHash)
+      || typeof fragment.policyChecksum !== 'string' || !/^[0-9a-f]{64}$/.test(fragment.policyChecksum)
+      || (fragment.kind !== 'markdown' && fragment.kind !== 'text' && fragment.kind !== 'code')
+      || !Array.isArray(fragment.breadcrumb)
+      || fragment.breadcrumb.some(item => typeof item !== 'string')
+      || !fragment.range || typeof fragment.range !== 'object'
+      || !Number.isSafeInteger(fragment.range.startLine) || fragment.range.startLine < 1
+      || !Number.isSafeInteger(fragment.range.endLine) || fragment.range.endLine < fragment.range.startLine
+      || (fragment.range.startChar !== undefined && (!Number.isSafeInteger(fragment.range.startChar) || fragment.range.startChar < 0))
+      || (fragment.range.endChar !== undefined && (!Number.isSafeInteger(fragment.range.endChar) || fragment.range.endChar < 0))) {
+      throw new Error(`Invalid embedding index fragment at ${i}`);
+    }
+  }
+  return value as SearchFragment[];
+}
+
 function hasVectorShape(
   vectors: readonly unknown[],
   count: number,
@@ -985,7 +1082,25 @@ function validateEmbeddingIndex(index: EmbeddingIndex): void {
     throw new Error('Embedding index contains an invalid vector shape');
   }
   validateStringArray(index.contentHashes, 'contentHashes', count, false);
-  validateStringArray(index.chunkDocIds, 'chunkDocIds', count, false);
+  const chunkDocIds = validateStringArray(index.chunkDocIds, 'chunkDocIds', count, false);
+  const fragments = validateFragmentArray(index.fragments, count);
+  if (fragments && (!index.policyChecksum || !/^[0-9a-f]{64}$/.test(index.policyChecksum))) {
+    throw new Error('Structured embedding fragments require a policy checksum');
+  }
+  if (index.policyChecksum !== undefined && !fragments) {
+    throw new Error('Embedding policy checksum requires structured fragments');
+  }
+  if (index.policyChecksum !== undefined && !/^[0-9a-f]{64}$/.test(index.policyChecksum)) {
+    throw new Error('Invalid embedding index policy checksum');
+  }
+  if (fragments) {
+    for (let i = 0; i < fragments.length; i++) {
+      if (fragments[i].fragmentId !== index.docIds[i]
+        || (chunkDocIds && fragments[i].parentId !== chunkDocIds[i])) {
+        throw new Error(`Embedding fragment ${i} does not match its document mapping`);
+      }
+    }
+  }
   if (!Number.isFinite(index.builtAt)) throw new Error('Invalid embedding index builtAt');
 }
 
@@ -1030,6 +1145,8 @@ async function writeBinaryIndexTemp(
     buildTimeMs: index.buildTimeMs,
     contentHashes: index.contentHashes,
     chunkDocIds: index.chunkDocIds,
+    fragments: index.fragments,
+    policyChecksum: index.policyChecksum,
   }), 'utf-8');
   const docIdsBytes = Buffer.from(JSON.stringify(index.docIds), 'utf-8');
   if (metaBytes.length > MAX_EMBEDDING_METADATA_BYTES
@@ -1175,6 +1292,8 @@ async function prepareZvecIndex(
       buildTimeMs: index.buildTimeMs,
       contentHashes: index.contentHashes,
       chunkDocIds: index.chunkDocIds,
+      fragments: index.fragments,
+      policyChecksum: index.policyChecksum,
       docIds: index.docIds,
       zvecIdEncoding: ZVEC_ID_ENCODING,
     }));
@@ -1208,7 +1327,10 @@ export function loadEmbeddingIndex(dir: string): EmbeddingIndex | null {
   const zvecCollPath = join(dir, ZVEC_DIR);
   if (existsSync(zvecMetaPath) && existsSync(zvecCollPath)) {
     try {
-      return loadFromZvecMeta(zvecMetaPath, zvecCollPath);
+      const loaded = loadFromZvecMeta(zvecMetaPath, zvecCollPath);
+      if (isCompatibleEmbeddingArtifact(loaded)) return loaded;
+      // A policy/mode mismatch is a cache miss; try the binary companion or
+      // force the caller to rebuild rather than exposing stale vectors.
     } catch (e: unknown) {
       if (process.env.MAESTRO_DEBUG === '1') {
         console.warn(`[embedding] zvec index load failed, falling back: ${e instanceof Error ? e.message : e}`);
@@ -1221,7 +1343,9 @@ export function loadEmbeddingIndex(dir: string): EmbeddingIndex | null {
   const binPath = join(dir, BINARY_FILE);
   if (existsSync(binPath)) {
     try {
-      return loadFromBinary(binPath);
+      const loaded = loadFromBinary(binPath);
+      if (isCompatibleEmbeddingArtifact(loaded)) return loaded;
+      return null;
     } catch (e: unknown) {
       if (process.env.MAESTRO_DEBUG === '1') {
         console.warn(`[embedding] binary index corrupted, will rebuild: ${e instanceof Error ? e.message : e}`);
@@ -1262,6 +1386,8 @@ interface PersistedEmbeddingMeta {
   buildTimeMs?: number;
   contentHashes?: string[];
   chunkDocIds?: string[];
+  fragments?: SearchFragment[];
+  policyChecksum?: string;
   docIds?: string[];
   zvecIdEncoding?: typeof ZVEC_ID_ENCODING;
 }
@@ -1290,6 +1416,11 @@ function validatePersistedMeta(
   if (expectedCount !== undefined) {
     validateStringArray(meta.contentHashes, 'contentHashes', expectedCount, false);
     validateStringArray(meta.chunkDocIds, 'chunkDocIds', expectedCount, false);
+    validateFragmentArray(meta.fragments, expectedCount);
+  }
+  if (meta.policyChecksum !== undefined
+    && (typeof meta.policyChecksum !== 'string' || !/^[0-9a-f]{64}$/.test(meta.policyChecksum))) {
+    throw new Error('Embedding metadata has an invalid policy checksum');
   }
   return meta as unknown as PersistedEmbeddingMeta;
 }
@@ -1366,6 +1497,8 @@ function loadFromZvecMeta(metaPath: string, _collectionPath: string): EmbeddingI
       vectors,
       contentHashes: meta.contentHashes,
       chunkDocIds: meta.chunkDocIds,
+      fragments: meta.fragments,
+      policyChecksum: meta.policyChecksum,
       builtAt: meta.builtAt,
       deviceUsed: meta.deviceUsed,
       buildTimeMs: meta.buildTimeMs,
@@ -1433,6 +1566,8 @@ function loadFromBinary(filePath: string): EmbeddingIndex {
     vectors,
     contentHashes: meta.contentHashes,
     chunkDocIds: meta.chunkDocIds,
+    fragments: meta.fragments,
+    policyChecksum: meta.policyChecksum,
     builtAt: meta.builtAt,
     deviceUsed: meta.deviceUsed,
     buildTimeMs: meta.buildTimeMs,
@@ -1574,10 +1709,38 @@ export interface DocForEmbedding {
   summary: string;
   tags: string[];
   body?: string;
+  /** Optional source metadata used only by structured fragments. */
+  kind?: 'markdown' | 'text' | 'code';
+  filePath?: string | null;
+  symbol?: string | null;
+  qualifiedName?: string | null;
+  signature?: string | null;
+  language?: string | null;
+  definition?: string | null;
+  sourceType?: string | null;
+  startLine?: number;
+  endLine?: number;
 }
 
 export function hashDocContent(d: DocForEmbedding, enrichedText?: string): string {
   const parts = [d.title, d.summary, d.tags.join(','), d.body ?? ''];
+  if (isStructuredChunksEnabled()) {
+    // Code fragments include graph facts that are not always present in the
+    // Wiki body. Fence those fields so a path/symbol/signature update cannot
+    // reuse a stale structured vector.
+    parts.push(JSON.stringify({
+      kind: d.kind,
+      filePath: d.filePath,
+      symbol: d.symbol,
+      qualifiedName: d.qualifiedName,
+      signature: d.signature,
+      language: d.language,
+      definition: d.definition,
+      sourceType: d.sourceType,
+      startLine: d.startLine,
+      endLine: d.endLine,
+    }));
+  }
   if (enrichedText) parts.push(enrichedText);
   return createHash('md5').update(parts.join('|')).digest('hex');
 }
@@ -1635,7 +1798,38 @@ function docToText(d: DocForEmbedding): string {
  * Long docs are split by markdown heading regex /^#{1,3}\s/m, max 5 chunks.
  * Each chunk inherits title+summary as context prefix.
  */
-export function splitDocToChunks(d: DocForEmbedding): Array<{ chunkId: string; text: string }> {
+export function splitDocToChunks(d: DocForEmbedding): Array<{
+  chunkId: string;
+  text: string;
+  /** Present only for the opt-in structured chunk policy. */
+  fragment?: SearchFragment;
+}> {
+  if (isStructuredChunksEnabled()) {
+    return buildSearchFragments({
+      id: d.id,
+      title: d.title,
+      summary: d.summary,
+      tags: d.tags,
+      body: d.body,
+      kind: d.kind,
+      filePath: d.filePath,
+      symbol: d.symbol,
+      qualifiedName: d.qualifiedName,
+      signature: d.signature,
+      language: d.language,
+      definition: d.definition,
+      sourceType: d.sourceType,
+      startLine: d.startLine,
+      endLine: d.endLine,
+    }).map(fragment => ({
+      chunkId: fragment.fragmentId,
+      // Preserve the local-model passage convention without mutating the
+      // fragment evidence/content hash persisted for callers.
+      text: isApiMode() ? fragment.text : `passage: ${fragment.text}`,
+      fragment,
+    }));
+  }
+
   const contextPrefix: string[] = [`title: ${d.title}`];
   if (d.summary) contextPrefix.push(`summary: ${d.summary}`);
   if (d.tags.length > 0) contextPrefix.push(`tags: ${d.tags.join(', ')}`);
@@ -1684,10 +1878,14 @@ export async function buildEmbeddingIndex(
     throw new Error('Precomputed embedding hashes do not match the document count');
   }
 
-  // Split all docs into chunks (1:N doc-to-chunk mapping)
+  // Split all docs into chunks (1:N doc-to-chunk mapping).  The existing
+  // heading chunks remain byte-for-byte compatible unless the explicit
+  // structured-chunk flag is enabled.
+  const structuredMode = isStructuredChunksEnabled();
   const allChunkIds: string[] = [];
   const allChunkDocIds: string[] = [];
   const allChunkTexts: string[] = [];
+  const allFragments: SearchFragment[] = [];
   // Track which doc index each chunk group belongs to (for incremental rebuild)
   const docChunkRanges: Array<{ docIndex: number; startSlot: number; count: number }> = [];
 
@@ -1699,6 +1897,7 @@ export async function buildEmbeddingIndex(
       allChunkIds.push(chunk.chunkId);
       allChunkDocIds.push(docs[i].id);
       allChunkTexts.push(chunk.text);
+      if (chunk.fragment) allFragments.push(chunk.fragment);
     }
     docChunkRanges.push({ docIndex: i, startSlot, count: chunks.length });
   }
@@ -1711,9 +1910,14 @@ export async function buildEmbeddingIndex(
   const existingShapeValid = existingIndex
     && isBoundedPositiveInteger(existingIndex.dimension, MAX_EMBEDDING_DIMENSION)
     && hasVectorShape(existingIndex.vectors, existingIndex.docIds.length, existingIndex.dimension);
+  const chunkPolicyMatch = structuredMode
+    ? existingIndex?.policyChecksum === STRUCTURED_FRAGMENT_POLICY_CHECKSUM
+      && Array.isArray(existingIndex.fragments)
+    : existingIndex?.policyChecksum === undefined && existingIndex?.fragments === undefined;
   const modelMatch = existingShapeValid
     && existingIndex!.modelId === activeModel
-    && (activeDim === 0 || existingIndex!.dimension === activeDim);
+    && (activeDim === 0 || existingIndex!.dimension === activeDim)
+    && chunkPolicyMatch;
   if (modelMatch && existingIndex!.docIds.length > 0) {
     const existingChunkMap = new Map<string, Float32Array>();
     if (existingIndex!.chunkDocIds && existingIndex!.contentHashes) {
@@ -1827,6 +2031,10 @@ export async function buildEmbeddingIndex(
     vectors,
     contentHashes: chunkContentHashes,
     chunkDocIds: allChunkDocIds,
+    ...(structuredMode ? {
+      fragments: allFragments,
+      policyChecksum: STRUCTURED_FRAGMENT_POLICY_CHECKSUM,
+    } : {}),
     builtAt: Date.now(),
     deviceUsed: apiMode ? 'api' : `${config!.device}/${config!.dtype}`,
     buildTimeMs: Date.now() - t0,

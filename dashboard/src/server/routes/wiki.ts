@@ -3,6 +3,10 @@ import { Hono } from 'hono';
 import type { SSEEvent } from '../../shared/types.js';
 import type { DashboardEventBus } from '../state/event-bus.js';
 import { WikiIndexer } from '../wiki/wiki-indexer.js';
+import {
+  acquireWikiPublisherLease,
+  releaseWikiPublisherLease,
+} from '../../../../src/search/publisher-lease.js';
 import type { WikiFilters, WikiStatus, WikiNodeType, WikiScope } from '../wiki/wiki-types.js';
 import { computeHealth, detectHubs, detectOrphans } from '../wiki/graph-analysis.js';
 import { WikiWriter, WikiWriteError } from '../wiki/writer.js';
@@ -18,6 +22,7 @@ export type DisposableWikiRoutes = Hono & { dispose: () => void };
 interface WikiRuntime {
   getContext: () => WikiRouteContext;
   isCurrent: (context: WikiRouteContext) => boolean;
+  publishOnce: (context: WikiRouteContext) => Promise<void>;
   dispose: () => void;
 }
 
@@ -51,19 +56,42 @@ function createWikiRuntime(
   eventBus: DashboardEventBus,
 ): WikiRuntime {
   const createContext = (): WikiRouteContext => {
-    // Resolve the root once so the indexer and writer always belong to the
-    // same workspace, even if the getter is backed by mutable state.
+    // Dashboard requests are readers by default. The daemon is the durable
+    // publisher; initial mount may take one short, atomic lease below when no
+    // daemon owner is present.
     const root = workflowRoot();
-    const indexer = new WikiIndexer({ workflowRoot: root });
+    const indexer = new WikiIndexer({ workflowRoot: root, role: 'reader' });
     return { workflowRoot: root, indexer, writer: new WikiWriter(root, indexer) };
   };
 
   let current = createContext();
   let disposed = false;
+  let dashboardLeaseAttempted = false;
 
   const handleWorkspaceSwitch = (): void => {
-    if (!disposed) current = createContext();
+    if (disposed) return;
+    const previous = current;
+    current = createContext();
+    dashboardLeaseAttempted = false;
+    void previous.indexer.close().catch(() => undefined);
   };
+  const publishOnce = async (context: WikiRouteContext): Promise<void> => {
+    if (dashboardLeaseAttempted || disposed) return;
+    dashboardLeaseAttempted = true;
+    const lease = acquireWikiPublisherLease(context.workflowRoot);
+    if (!lease) return;
+    let publisher: WikiIndexer | null = null;
+    try {
+      publisher = new WikiIndexer({ workflowRoot: context.workflowRoot, role: 'publisher' });
+      await publisher.get();
+    } catch {
+      // Dashboard publication is best effort; the reader remains usable.
+    } finally {
+      await publisher?.close().catch(() => undefined);
+      releaseWikiPublisherLease(lease);
+    }
+  };
+
   const handleWikiInvalidated = (event: SSEEvent): void => {
     if (disposed) return;
     // Skip re-entrant warm-up emissions (those carry no `path`).
@@ -77,11 +105,13 @@ function createWikiRuntime(
   return {
     getContext: () => current,
     isCurrent: (context) => !disposed && current === context,
+    publishOnce,
     dispose: () => {
       if (disposed) return;
       disposed = true;
       eventBus.off('workspace:switched', handleWorkspaceSwitch);
       eventBus.off('wiki:invalidated', handleWikiInvalidated);
+      void current.indexer.close().catch(() => undefined);
     },
   };
 }
@@ -99,6 +129,7 @@ function createWikiRouteHandlers(
     const index = await context.indexer.get();
     if (runtime.isCurrent(context)) {
       eventBus.emit('wiki:invalidated', { at: index.generatedAt });
+      await runtime.publishOnce(context);
     }
   };
 

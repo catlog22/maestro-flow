@@ -211,6 +211,10 @@ maestro search "auth" --type spec                 # 仅搜索 spec 类型
 maestro search "login" --code                     # 仅代码图搜索
 maestro search "api" --wiki-only                  # 仅 wiki 搜索
 maestro search "domain term" --kg                 # KG 全源统一搜索
+maestro search "query" --semantic                 # 显式启用 embedding 重排
+maestro search "query" --diagnostics --json      # 有界 request-scoped 诊断
+maestro search "Authorization: Bearer" --exact     # 独立 fixed-string 出现位置
+maestro search "needle" --exact --include-linked-code --json
 maestro search "hook" --category coding # 按类别过滤
 ```
 
@@ -221,16 +225,24 @@ maestro search "hook" --category coding # 按类别过滤
 | `--code` | 仅代码图结果（无 wiki） |
 | `--kg` | KG 统一搜索（MaestroGraph 全源：codegraph + domain + spec + knowhow） |
 | `--wiki-only` | 仅 wiki 结果（无代码搜索） |
-| `--workspace <name>` | 过滤到特定链接工作区 |
-| `--no-emb` | 跳过嵌入，仅用 BM25 |
+| `--workspace <name>` | 过滤到特定链接工作区（exact 需同时显式包含 linked code） |
+| `--include-linked-code` | exact 模式下加入具有 `codebase` read share 的 linked repository |
+| `--exact` | 独立 fixed-string 源码搜索，不进入默认排序/融合 |
+| `--timeout-ms <ms>` | exact wall-clock 上限 |
+| `--max-results <n>` | exact occurrence 上限 |
+| `--max-bytes <n>` | exact ripgrep 响应字节上限 |
+| `--semantic` | 显式启用 embedding 重排；默认仍为低延迟 BM25 |
+| `--no-emb` | 显式仅用 BM25（兼容旧脚本；与默认行为等价） |
+| `--diagnostics` | 输出有界 request-scoped 诊断；`--json` 时嵌入响应，否则写入 stderr |
 | `--limit <n>` | 最大结果数（默认 20） |
 | `--json` | JSON 格式输出 |
 
 **搜索模式**:
-- **默认**: wiki + code 混合，按归一化分数交错排列
+- **默认**: wiki + code 混合，使用低延迟 BM25 路径并按归一化分数交错排列；embedding 重排仅由 `--semantic` 显式启用
 - `--code`: 仅 CodeGraph 结果
 - `--wiki-only`: 仅 wiki 结果
 - `--kg`: MaestroGraph 全源统一搜索（代码符号 + 领域术语 + spec 规则 + knowhow 文档）
+- `--exact`: 直接读取受治理源码的 literal occurrences；`.gitignore`、`.maestroignore` 与敏感目录始终生效，超出上限时返回 `truncated: true`。与 `--type`、`--semantic`、`--kg` 等排序/索引选项互斥并 fail closed。
 
 **评分**: Wiki 使用 BM25F + 类型加权（spec > knowhow > note）；Code 使用 BM25 + kind 加权 + 名称匹配奖励。Per-source caps: session ≤3, scratch ≤3。
 

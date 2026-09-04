@@ -236,6 +236,19 @@
       "lima"
     ]
   },
+  "manifest": {
+    "schema_version": "search-ranking-corpus-manifest/1.0",
+    "expandedDocumentCount": 2000,
+    "expandedSha256": "986df3132e887b4f712e0f7b002c64ca8c0e6f491069fef841ab92d402fd2ea9",
+    "wikiSourceDocumentCount": 1993,
+    "measurementLanes": [
+      "daemon",
+      "semantic",
+      "cache-load",
+      "single-file-update",
+      "freshness"
+    ]
+  },
   "absoluteQueries": [
     { "id": "absolute-canonical-search", "query": "canonical search contract" },
     { "id": "absolute-deterministic-ranking", "query": "deterministic ranking contract" }

@@ -179,6 +179,8 @@ This applies to process/ops, code changes, debugging, architecture, review, plan
 
 When the user says "参考", "参照", `knowhow`, `spec`, or "reference the process", derive the query from the task subject and operation, add the named `--type`, and explicitly load every governing hit before file exploration. Search results, automatic injection, and `knowledge_context` are exposure only; explicit `maestro load` records consumption. `knowledge_context.run.knowledge_ids` lists consumed IDs, not full content: do not repeat load when the full entry is already in context, but reload when reattachment preserved only an ID or summary.
 
+**Architecture-template exception:** `source=arch-kb`, `kind=template` results and `maestro load --type template` are global reference-only evidence. They do not satisfy the project Knowledge Gate and deliberately do not record project knowledge consumption. Follow `@~/.maestro/templates/search-tools.md`.
+
 Empty results permit normal discovery only after inspection. If search returns an initialization or recovery hint, execute it and retry first.
 
 **Re-search triggers** (re-query mid-task with new keywords, never repeat old queries): entering a new module/subsystem boundary; same fix failed twice; before architecture/approach decisions.
@@ -188,7 +190,7 @@ maestro search "<query>" [--type <type>] [--category <cat>] [--tag <tag>] [--key
 maestro load --type <type> [--list] [--category <cat>] [--keyword <word>] [--tag <tag>] [--id <id>]
 ```
 
-**--type**: `spec`, `knowhow`, `domain`, `issue`, `session`, `scratch`, `note`, `project`, `roadmap`
+**--type**: `spec`, `knowhow`, `domain`, `issue`, `session`, `scratch`, `note`, `project`, `roadmap`, `template` (global Arch-KB reference only)
 **--category** (spec only): `coding`, `arch`, `debug`, `test`, `review`, `learning`, `ui`
 **--tag**: Filter by exact tag match (e.g. `diagnosis`, `review-findings`, `lessons`), wiki only
 **--keyword**: Filter by keyword in title/body (substring match), wiki only
@@ -202,6 +204,7 @@ Separate concepts from symbols. Add `--kg` for full-source.
 |--------|------|
 | Known symbol → definition/signature | `maestro search "<Symbol>" --code` (file:line, no agent cost) |
 | Concept / knowledge / conventions | `maestro search "<keywords>"` |
+| Architecture template reference | Reuse upstream evidence; otherwise upstream researcher runs `maestro search "<keywords>" --type template --json` and loads selected `openCommand` |
 | Debug symptoms / review lessons (sealed artifacts) | `maestro search "<keywords>" --tag diagnosis` / `--tag lessons` |
 | Exact text / regex / known-file search | `rg` / Grep |
 | Exhaustive usage sweep with a known symbol or syntax pattern | `rg` / Grep |
@@ -229,7 +232,7 @@ maestro load --type spec --category coding
 
 Runtime birth packets, `maestro run brief`, completion receipts, and the `maestro run check` finish checklist are authoritative for Run-specific IDs, reconciliation state, and next commands; their emitted commands override static examples. Static instructions own only these stable rules:
 
-1. Search and automatic injection are exposure; explicit `load` records consumption.
+1. Search and automatic injection are exposure; explicit `load` records consumption except `maestro load --type template`, which loads global reference evidence without project-knowledge attribution.
 2. Put accepted decisions and locked constraints in `report.md` frontmatter (completion stages them as pending candidates) — prescriptive rules only; NEVER execution-state narration (seal auto-stages every accepted/locked entry as a corpus candidate).
 3. **Staging Quality Bar** — stage only content future work can directly reuse: pitfall warning / failure lesson / non-trivial trade-off / new prescriptive constraint. NEVER process notes, re-descriptions, trivial ops, or raw traces; **zero candidates is a legitimate outcome**. Stage with `maestro knowledge stage spec|knowhow "<title>" --content-file <path|-> --run <run-id>` (or `--session <session-id> --evidence <file:line,...>` outside a Run); add `--signal cited|validated|contradicted --signal-ids <ids>` when relating to existing knowledge.
 4. Routine Run completion never writes project Spec/Knowhow directly and never promotes candidates; the finish checklist is soft guidance — unresolved items go in `report.md` concerns (unresolved reconciliation may be sealed but cannot be promoted).

@@ -84,6 +84,7 @@ Parse mode/flags (see above). Load upstream and project context:
    - locked constraints → skip (already decided)
    - open constraints → analyze first
    - open questions → discussion seeds
+   - `architecture_template_evidence` → architecture analysis context; reuse it without a new search/load
 2. Project specs: `maestro spec load --category arch`
 3. domain glossary: read `.workflow/domain/glossary.yaml` (if it exists), use canonical terms throughout the analysis; record new term candidates in the report.
 4. Existing same-milestone analyze artifacts: read their decisions, skip already-decided areas.
@@ -126,10 +127,15 @@ Initialize report.md discussion area: dynamic TOC, session metadata, User Intent
 
 Codebase exploration first, then (optional) external research, then CLI analysis.
 
-**Step 2.0 External research** (only when `external_research` selected):
-1. WebSearch 2-3 queries: `"{goal} standard library stack"`, `"architecture patterns best practices"`, `"common pitfalls mistakes"`; take top 1-2 per query and fetch official docs.
-2. Hand to workflow-phase-researcher agent to synthesize into: `## Standard Stack` (with versions), `## Architecture Patterns`, `## Don't Hand-Roll`, `## Common Pitfalls`. Style: prescriptive ("use X"), cite sources, mark HIGH/MEDIUM/LOW. Agent returns markdown only, writes no files.
-3. Store result as `researchContext` (in-memory). If not selected, `researchContext = null`.
+**Step 2.0 Research handoff** (when `external_research` is selected, or when architecture patterns are active and upstream `architecture_template_evidence` is absent):
+1. Only when `external_research` is selected, run WebSearch for 2-3 queries: `"{goal} standard library stack"`, `"architecture patterns best practices"`, `"common pitfalls mistakes"`; take top 1-2 per query and fetch official docs.
+2. Hand available web results and any upstream `architecture_template_evidence` to workflow-phase-researcher. When architecture patterns are active and the envelope is absent, the researcher follows the shared Architecture Template References rule and performs one focused search/load. Do not search for implementation-only phases.
+3. Ask the researcher to synthesize available material into: `## Standard Stack` (with versions), `## Architecture Patterns`, `## Don't Hand-Roll`, `## Common Pitfalls`, and `## Architecture Template Evidence` when applicable. Style: prescriptive ("use X"), cite sources, mark HIGH/MEDIUM/LOW. The agent returns markdown only and writes no files.
+4. Store the result as `researchContext` (in-memory). If neither dispatch condition applies, set `researchContext = null`.
+
+**Architecture template handoff**:
+- Reuse upstream `architecture_template_evidence` when present; otherwise dispatch `workflow-phase-researcher` for one focused template search/load whenever architecture patterns are an active dimension, independently of external web research.
+- Preserve the optional evidence envelope and its `no_match` or `load_failed` status in the analysis artifacts; downstream analysis does not search again.
 
 **Step 2.1 Codebase exploration** (cli-explore-agent, mandatory, not substitutable):
 
@@ -256,6 +262,7 @@ Gate: each ❌ Missed item must either (a) get an added round or (b) be user-con
   "dimensions": [],
   "findings": [],
   "decisions": [],
+  "architecture_template_evidence": null,
   "scope_verdict": "small|medium|large",
   "recommendation": "go|go_with_conditions|no_go"
 }
@@ -266,7 +273,7 @@ Gate: each ❌ Missed item must either (a) get an added round or (b) be user-con
 { "risks": [], "assumptions": [], "open_questions": [] }
 ```
 
-**5.4b Write priors.json** (session-scoped shared context): record the spec / doc-index / wiki hits gathered during exploration so downstream plan/execute can reuse them without re-searching. Registered as alias `session-priors` by the contract.
+**5.4b Write priors.json** (session-scoped shared context): record the spec / doc-index / wiki hits gathered during exploration so downstream plan/execute can reuse them without re-searching. Registered as alias `session-priors` by the contract. Do not put architecture templates in `priors.json`; template evidence remains reference-only in `findings.json#architecture_template_evidence`.
 
 Write it whenever this run resolved any spec, doc-index, or wiki hit — Required Context makes that the normal case, so skipping should be rare and deliberate. The only skip condition is that all three lists would be empty.
 

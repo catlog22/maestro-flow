@@ -1,0 +1,45 @@
+{
+  "schema_version": "search-ranking-qrels/1.0",
+  "queries": [
+    {
+      "id": "paraphrase-cache-recovery",
+      "query": "restore token cache after restart",
+      "category": "paraphrase",
+      "relevance": {
+        "knowhow-cache-lifecycle": 3
+      }
+    },
+    {
+      "id": "cross-heading-auth-audit",
+      "query": "authentication audit trail",
+      "category": "cross-heading",
+      "relevance": {
+        "spec-authentication": 3
+      }
+    },
+    {
+      "id": "deep-section-replay",
+      "query": "replay stale receipt terminal conflict",
+      "category": "deep-section",
+      "relevance": {
+        "knowhow-lifecycle": 3
+      }
+    },
+    {
+      "id": "cjk-config-cache",
+      "query": "配置缓存恢复令牌",
+      "category": "cjk",
+      "relevance": {
+        "knowhow-cjk-cache": 3
+      }
+    },
+    {
+      "id": "exact-symbol-validator",
+      "query": "AuthTokenValidator",
+      "category": "exact-symbol",
+      "relevance": {
+        "code:function:auth-token-validator": 3
+      }
+    }
+  ]
+}

@@ -116,6 +116,27 @@ Odyssey runs until acceptance criteria are met, adapting strategy mid-loop and a
 
 ---
 
+## Governed exact search
+
+For a known string or identifier, use the standalone fixed-string route:
+
+```bash
+maestro search "Authorization: Bearer" --exact
+maestro search "needle" --exact --include-linked-code --json
+```
+
+`--exact` uses the bundled `@vscode/ripgrep` adapter and returns relative `filePath`,
+line/column, preview, and truncation state without normal ranking or fusion. The current
+repository is searched by default; linked code requires both `--include-linked-code` and a
+`codebase` read share. `.gitignore`, `.maestroignore`, sensitive excludes, and timeout/result/
+byte caps always apply.
+
+Ranked search uses the low-latency BM25 path by default; embedding reranking runs only with
+explicit `--semantic`. `--diagnostics` adds bounded request-scoped machine-readable diagnostics
+(embedded in `--json` responses, otherwise written to stderr). Adaptive candidate budgets,
+compiled postings, file-level incremental indexing, and structured chunks remain controlled,
+default-off experiments and do not change the default search contract.
+
 ## Documentation
 
 ### Getting Started

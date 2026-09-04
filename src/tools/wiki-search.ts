@@ -78,7 +78,7 @@ async function getIndexer(projectRoot: string): Promise<WikiIndexer> {
       configKey,
       // The search daemon owns cache publication; MCP fallback consumes the
       // same corpus without starting a competing full-cache writer.
-      indexer: new Cls({ workflowRoot, linkedWorkspaces, repository, persistence: 'read-only' }),
+      indexer: new Cls({ workflowRoot, linkedWorkspaces, repository, role: 'reader' }),
     };
   }
   return _indexer.indexer;

@@ -107,6 +107,8 @@
     "topK": 20,
     "warmups": 20,
     "measuredSamples": 100,
-    "corpusSize": 2000
+    "corpusSize": 2000,
+    "wikiSourceDocumentCount": 1993,
+    "expandedSha256": "986df3132e887b4f712e0f7b002c64ca8c0e6f491069fef841ab92d402fd2ea9"
   }
 }

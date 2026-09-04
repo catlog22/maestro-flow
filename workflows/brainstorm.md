@@ -90,6 +90,7 @@ Pre-seed from context-package:
 - `non_goals[]` → Step 2
 - `open_questions[]` → Step 3 Phase 1
 - `insights[]` → Step 4 role agents
+- `architecture_template_evidence` → Step 3.9 and Step 4 system-architect role
 - `requirements[]` → Step 3 Phase 4.5
 
 If source not found: continue without upstream; flag guidance-specification.md as [LOW CONFIDENCE] (no upstream context).
@@ -246,21 +247,27 @@ Seven sub-phases producing guidance-specification.md:
 
 `--yes`: auto-selects variant 1.
 
-### Step 3.9: Architecture Knowledge Injection (arch-kb, Auto Mode)
+### Step 3.9: Architecture Template References (Auto Mode)
 
-Query the isolated architecture knowledge base to seed the system-architect role:
+Follow the shared Architecture Template References rule in
+`@~/.maestro/templates/search-tools.md` to seed the system-architect role:
 
 ```bash
-# Match system type to architecture templates (thinking skeleton source)
-maestro arch-kb search "{guidance-specification one-liner}" --type template --json --limit 3
-
-# View matched template decision sections as reference architecture
-maestro arch-kb show <template-id> --section "关键架构决策与权衡"
+maestro search "{guidance-specification one-liner}" \
+  --type template --json --limit 3
+maestro load --type template --id <template-id> --json
 ```
 
-- If search returns templates: inject matched template sections as **reference architecture** context for system-architect
-- arch-kb is isolated from `maestro search` — only triggered by this explicit call
-- Store as `arch_kb_context` (in-memory), passed to Step 4 system-architect agent prompt
+Use each hit's emitted `openCommand`; load the full body and select the
+relevant sections in the role prompt. `maestro load` does not support
+`--section`; do not use section flags in this evidence flow.
+
+- If search returns templates, preserve the optional
+  `architecture_template_evidence` envelope with loaded bodies and evaluated
+  dispositions as **reference architecture** context for system-architect.
+- Record `no_match` or `load_failed` status rather than retrying downstream.
+- Store as `architecture_template_evidence` (in-memory), passed to Step 4 and
+  included in the context package's `references[]` as `type=architecture-template`.
 
 ### Step 4: Parallel Role Analysis (Auto Mode)
 
@@ -278,6 +285,7 @@ Agent({
     feature_list: <F-id + slug + title rows from guidance §10>
     design_research: <ABSOLUTE path>/design-research.md  OR  null
     project_specs: <specs_content text>  OR  null
+    architecture_template_evidence: <evidence envelope> OR null
     user_context: <session.role_decisions[role] text>  OR  null
     style_skill: <ABSOLUTE style-skill SKILL.md path>  OR  null
 
@@ -462,7 +470,8 @@ Write `{output_dir}/context-package.json` by extracting from session artifacts:
   "non_goals": [],          // From guidance-specification.md Non-Goals section
   "insights": [],           // From {role}/analysis.md §3 Cross-Cutting subsections
   "open_questions": [],     // From guidance-specification.md §4-N SHOULD/MAY items
-  "references": []          // List all key files: guidance-specification.md + {role}/analysis.md per role
+  "architecture_template_evidence": null,
+  "references": []          // Key files plus evaluated architecture-template records
 }
 ```
 
@@ -475,7 +484,8 @@ Write `{output_dir}/context-package.json` by extracting from session artifacts:
 - `non_goals[]`: each Non-Goal → `{ title, rationale, ref: "guidance-specification.md#§6" }`
 - `insights[]`: from each `{role}/analysis.md` §3 Cross-Cutting subsections → `{ role, area, summary, ref: "{role}/analysis.md#§3-{heading}" }`
 - `open_questions[]`: from §4-N SHOULD/MAY items → `{ area, question, options[], ref }`
-- `references[]`: `{ type: "guidance", path: "guidance-specification.md" }` + `{ type: "role-analysis", path: "{role}/analysis.md" }` per role
+- `architecture_template_evidence`: preserve the evaluated envelope, including `no_match` or `load_failed` status
+- `references[]`: `{ type: "guidance", path: "guidance-specification.md" }` + `{ type: "role-analysis", path: "{role}/analysis.md" }` per role + evaluated `{ type: "architecture-template", template_id, source_ref, disposition, rationale, applies_to }` records
 
 **GATE Step 7.5→complete**: Glob `{output_dir}/context-package.json` MUST exist before workflow report; BLOCKED if missing.
 

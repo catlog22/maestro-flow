@@ -50,19 +50,38 @@ import type {
   DaemonSearchRequest,
   DaemonSearchResponse,
 } from './daemon-types.js';
+import type { SearchDiagnosticsRecorder } from './diagnostics.js';
+import type { SearchCandidateBudget } from './candidate-budget.js';
+export type { SearchDiagnostics, SearchDiagnosticsContext, SearchDiagnosticsRecorder } from './diagnostics.js';
+export type { SearchCandidateBudget } from './candidate-budget.js';
 
 const DEFAULT_DAEMON_TIMEOUT_MS = 5000;
 const SPAWN_LOCK_TTL_MS = 60_000;
 const SPAWN_RECLAIM_SUFFIX = '.reclaim';
 const SPAWN_TOKEN_ENV = 'MAESTRO_SEARCH_DAEMON_SPAWN_TOKEN';
 
+export type DaemonFailureReason =
+  | 'timeout'
+  | 'connect-error'
+  | 'bad-response'
+  | 'response-too-large'
+  | 'identity-mismatch';
+
 export interface DaemonQueryOptions {
   timeoutMs?: number;
   filters?: DaemonSearchRequest['filters'];
+  /** Opt-in request-scoped diagnostics; absent keeps the wire response unchanged. */
+  diagnostics?: boolean | SearchDiagnosticsRecorder;
+  /** Optional caller-owned ID propagated to the daemon diagnostics recorder. */
+  diagnosticsRequestId?: string;
   /** Effective repository/link authority expected by this caller. */
   authorityKey?: string;
+  /** One boundary-computed candidate budget forwarded unchanged to the daemon. */
+  candidateBudget?: SearchCandidateBudget;
   /** Tests and memory-sensitive callers may lower, but never raise, the hard cap. */
   maxResponseBytes?: number;
+  /** Internal attribution hook; receives bounded reason codes only. */
+  onFailure?: (reason: DaemonFailureReason) => void;
 }
 
 function isDaemonResponse(value: unknown): value is DaemonSearchResponse {
@@ -84,9 +103,10 @@ export function queryDaemon(
     const responseCap = Number.isSafeInteger(configuredCap) && configuredCap! > 0
       ? Math.min(configuredCap!, DAEMON_MAX_RESPONSE_BYTES)
       : DAEMON_MAX_RESPONSE_BYTES;
-    const fail = (error: Error): void => {
+    const fail = (error: Error, reason?: DaemonFailureReason): void => {
       if (settled) return;
       settled = true;
+      opts?.onFailure?.(reason ?? classifyDaemonFailure(error));
       socket.destroy();
       reject(error);
     };
@@ -115,8 +135,16 @@ export function queryDaemon(
       }
     });
     socket.on('error', (error) => { fail(error); });
-    socket.on('timeout', () => { fail(new Error('timeout')); });
+    socket.on('timeout', () => { fail(new Error('timeout'), 'timeout'); });
   });
+}
+
+function classifyDaemonFailure(error: Error): DaemonFailureReason {
+  const message = error.message.toLowerCase();
+  if (message.includes('timeout')) return 'timeout';
+  if (message.includes('response too large')) return 'response-too-large';
+  if (message.includes('bad response')) return 'bad-response';
+  return 'connect-error';
 }
 
 function authenticatedRequest(
@@ -133,7 +161,11 @@ async function queryVerifiedDaemon(
 ): Promise<DaemonSearchResponse | null> {
   try {
     const response = await queryDaemon(info.port, authenticatedRequest(info, request), opts);
-    return isResponseFromDaemon(info, response) ? response : null;
+    if (!isResponseFromDaemon(info, response)) {
+      opts?.onFailure?.('identity-mismatch');
+      return null;
+    }
+    return response;
   } catch { return null; }
 }
 
@@ -197,6 +229,14 @@ export async function tryDaemonSearch(
     limit,
     skipEmbedding,
     filters: opts?.filters,
+    ...(opts?.candidateBudget ? { candidateBudget: opts.candidateBudget } : {}),
+    ...(opts?.diagnostics
+      ? { diagnostics: opts.diagnosticsRequestId
+        ? { requestId: opts.diagnosticsRequestId }
+        : typeof opts.diagnostics === 'object'
+          ? { requestId: opts.diagnostics.requestId }
+          : true }
+      : {}),
   }, opts);
 }
 

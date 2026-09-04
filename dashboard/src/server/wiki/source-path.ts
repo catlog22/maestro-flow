@@ -1,4 +1,4 @@
-import { lstatSync, realpathSync, statSync } from 'node:fs';
+import { lstatSync, realpathSync, statSync, type Stats } from 'node:fs';
 import { resolve, sep } from 'node:path';
 
 export type AllowedSourceKind = 'file' | 'directory' | 'any';
@@ -84,11 +84,16 @@ function normalizeForComparison(path: string): string {
  * Resolve an existing source through symlinks and prove that it remains under
  * an explicitly allowed root. Callers must use the returned real path for I/O.
  */
-export function resolveAllowedSourcePath(
+export interface AllowedSourcePathInfo {
+  path: string;
+  stat: Stats;
+}
+
+export function resolveAllowedSourcePathInfo(
   candidate: string,
   allowedRoot: string,
   kind: AllowedSourceKind = 'file',
-): string | null {
+): AllowedSourcePathInfo | null {
   try {
     const realRoot = cachedRealpath(resolve(allowedRoot));
     if (realRoot === null) return null;
@@ -102,21 +107,29 @@ export function resolveAllowedSourcePath(
     const sourceStat = statSync(realCandidate);
     if (kind === 'file' && !sourceStat.isFile()) return null;
     if (kind === 'directory' && !sourceStat.isDirectory()) return null;
-    return realCandidate;
+    return { path: realCandidate, stat: sourceStat };
   } catch {
     return null;
   }
+}
+
+export function resolveAllowedSourcePath(
+  candidate: string,
+  allowedRoot: string,
+  kind: AllowedSourceKind = 'file',
+): string | null {
+  return resolveAllowedSourcePathInfo(candidate, allowedRoot, kind)?.path ?? null;
 }
 
 /**
  * Fast path for descendants of a root that was already realpath-resolved.
  * Symbolic links are rejected, so lexical containment cannot be redirected.
  */
-export function resolveAllowedDirectSourcePath(
+export function resolveAllowedDirectSourcePathInfo(
   candidate: string,
   canonicalAllowedRoot: string,
   kind: AllowedSourceKind = 'file',
-): string | null {
+): AllowedSourcePathInfo | null {
   try {
     const requested = resolve(candidate);
     const realRoot = resolve(canonicalAllowedRoot);
@@ -128,10 +141,18 @@ export function resolveAllowedDirectSourcePath(
     if (sourceStat.isSymbolicLink()) return null;
     if (kind === 'file' && !sourceStat.isFile()) return null;
     if (kind === 'directory' && !sourceStat.isDirectory()) return null;
-    return requested;
+    return { path: requested, stat: sourceStat };
   } catch {
     return null;
   }
+}
+
+export function resolveAllowedDirectSourcePath(
+  candidate: string,
+  canonicalAllowedRoot: string,
+  kind: AllowedSourceKind = 'file',
+): string | null {
+  return resolveAllowedDirectSourcePathInfo(candidate, canonicalAllowedRoot, kind)?.path ?? null;
 }
 
 export function isAllowedSourcePath(

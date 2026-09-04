@@ -16,6 +16,13 @@ Maestro 搜索系统基于 BM25F 算法，提供统一的知识搜索能力，�
 - **MaestroGraph** — AST 级代码符号搜索（可选）
 - **类型过滤** — 按 spec/knowhow/issue/domain 等类型筛选
 
+`--exact` 是独立的 fixed-string 路由：直接使用内置 `@vscode/ripgrep`，输出相对
+`filePath`、行/列、行预览和 `truncated` 状态，不进入普通混合排序。默认只扫描当前
+repository；linked code 只有同时指定 `--include-linked-code` 且 link 的 `codebase`
+read share 获得授权时才会加入。`.gitignore`、`.maestroignore` 和敏感目录始终有效；
+`--timeout-ms`、`--max-results`、`--max-bytes` 提供有界执行。`--type`、`--semantic`、
+`--kg` 等索引/排序选项与 `--exact` 互斥，会 fail closed。
+
 ---
 
 ## 基本用法
@@ -23,6 +30,10 @@ Maestro 搜索系统基于 BM25F 算法，提供统一的知识搜索能力，�
 ```bash
 # 关键词搜索（1-3 个核心词最佳）
 maestro search "authentication"
+
+# 受治理的 fixed-string 精确出现位置（独立于默认排序/融合）
+maestro search "Authorization: Bearer" --exact
+maestro search "needle" --exact --include-linked-code --json
 
 # 带类型过滤
 maestro search "jwt token" --type spec
@@ -42,8 +53,14 @@ maestro search "UserService" --kg
 # 搜索所有来源（wiki + code），统一归一化排名
 maestro search "UserService"
 
-# 跳过 embedding，仅用 BM25（避免 ONNX 冷启动）
+# 默认即为 BM25；需要语义重排时显式启用
+maestro search "jwt token" --semantic
+
+# 兼容旧脚本的显式 BM25 写法
 maestro search "jwt token" --no-emb
+
+# 有界 request-scoped 诊断；--json 时嵌入响应，否则写入 stderr
+maestro search "jwt token" --diagnostics --json
 
 # JSON 输出（适合脚本消费）
 maestro search "jwt token" --json
@@ -234,14 +251,16 @@ Claude Code 和 Codex 的 JSONL 会话转写被解析为轻量 note 条目（cat
 
 ## Search Cache Invalidator Hook
 
-`search-cache-invalidator` 是一个 PostToolUse hook，在文件修改后自动重建 WikiIndexer 缓存：
+`search-cache-invalidator` 是一个 PostToolUse hook，在文件修改后使 WikiIndexer generation 失效并请求重建：
 
 - **触发条件**：Write 或 Edit 工具调用后
 - **作用范围**：仅在工作区启用（`requiresWorkspace: true`）
-- **行为**：自动重建 WikiIndexer 索引，确保搜索结果反映最新文件内容
-- **持久化版本**：`search-cache.json` 当前为 **cache v5**（`version: 5`）；legacy cache generations 均拒绝复用并通过既有原子路径重建
+- **角色与写入所有权**：`publisher` 可通过单写者 publication lease 原子发布 generation；`reader` 只消费持久化 cache；`hermetic` 不读取也不写入持久化状态。旧 `filesystem`/`read-only`/`memory-only` 配置分别映射到这三个角色
+- **持久化版本**：默认 writer 仍发布 **cache v8** canonical entries。只有 `MAESTRO_SEARCH_COMPILED_POSTINGS=1` 时才发布带 compiled BM25F postings 的 **v9**；读取侧兼容 v7/v8/v9
+- **安全回退**：未启用 compiled postings 时，即使读到 v9 也不会激活 compiled payload；损坏、策略不匹配或 generation 不一致时从 canonical entries/源文件重建，不混用 generations
+- **新鲜度**：受权的用户级 CLI transcripts 使用有界 membership/metadata 与 head/tail digest 检测 append；常驻 reader/publisher 至少每 4 分钟 reconciliation 一次，timer 不阻止短命进程退出
 
-该 hook 在标准 hook 集合中默认启用，无需手动配置。当通过 Write|Edit 修改 `.workflow/` 下的 spec/knowhow 等文件时，搜索索引会自动更新。
+该 hook 在标准 hook 集合中默认启用，无需手动配置。当通过 Write|Edit 修改 `.workflow/` 下的 spec/knowhow 等文件时，下一次受权重建会反映最新内容；只有 publisher 能落盘。
 
 ---
 
@@ -251,10 +270,24 @@ Claude Code 和 Codex 的 JSONL 会话转写被解析为轻量 note 条目（cat
 |--------|------|------|
 | 冷启动优化 | 按项目规模摊销到常驻进程 | daemon 热路径 + BM25 默认低延迟 + 后台 daemon 启动 |
 | Backlinks 构建 | O(n²) → O(1) | 使用 Set 替代 Array.includes |
-| 倒排索引 | 预构建 | 首次加载时构建，后续复用 |
-| 候选集裁剪 | 3x limit | 搜索候选集为 limit 的 3 倍，过滤后返回 |
+| 倒排索引 | 预构建 | 首次加载时构建，后续复用；compiled 持久化加速仍为 opt-in |
+| 候选集裁剪 | 按 provider 的 legacy 固定预算 | 过滤后返回；自适应二次扩容尚未改变默认策略 |
 | 工作区过滤 | limit 前应用 | 在截断结果前过滤，避免丢失有效条目 |
 | Embedding 跳过 | 默认 BM25，语义检索显式启用 | `--semantic` 才等待 embedding；慢语义请求有界并回退 BM25 |
+| 请求诊断 | 默认零额外 payload | `--diagnostics` 才采集有界阶段耗时、候选数、provider/回退与 embedding 状态 |
+
+### 受控实验开关（默认关闭）
+
+以下能力仅用于基准、shadow 或受控 rollout。未设置时保持既有 BM25F/候选/索引/ID 与 provenance 契约；当前 release gates 尚未证明其量化收益，因此不得作为默认值发布。
+
+| 环境变量（设为 `1` 启用） | 能力 | 默认策略 |
+|---------------------------|------|----------|
+| `MAESTRO_SEARCH_ADAPTIVE_BUDGET` | request-bound 候选预算及至多一次有界扩容 | legacy 固定预算 |
+| `MAESTRO_SEARCH_COMPILED_POSTINGS` | cache v9 compiled BM25F postings | cache v8 canonical entries |
+| `MAESTRO_SEARCH_INCREMENTAL_INDEX` | 仅覆盖本地文件源的 deterministic 增量 apply | 完整安全重建；transcript/linked/session 变化仍强制完整重建 |
+| `MAESTRO_SEARCH_STRUCTURED_CHUNKS` | Markdown/text/code structured fragments 与 parent-aware vector recall | legacy document chunks；外部 parent ID/sourceRef 不变 |
+
+`--diagnostics` 是观测选项而非排名开关：它是 request-scoped、大小有界且不会写入持久化状态。human-readable stdout 保持不变，诊断写入 stderr；`--json` 时诊断加入顶层 `diagnostics` 字段。它与独立 `--exact` 路由互斥。
 
 ---
 

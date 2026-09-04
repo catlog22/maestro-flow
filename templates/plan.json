@@ -24,7 +24,9 @@
   "shared_context": {
     "patterns": [],
     "conventions": [],
-    "dependencies": []
+    "dependencies": [],
+    "architecture_template_search": null,
+    "architecture_templates": []
   },
 
   "_metadata": {

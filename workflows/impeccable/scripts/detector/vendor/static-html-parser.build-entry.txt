@@ -1,0 +1,9 @@
+// Build source for the self-contained static HTML parser bundle.
+// Regenerate from the Maestro repository root with:
+// npx --yes esbuild@0.25.9 workflows/impeccable/scripts/detector/vendor/static-html-parser.build-entry.txt --bundle --loader:.txt=js --platform=node --format=esm --target=node22 --legal-comments=linked --outfile=workflows/impeccable/scripts/detector/vendor/static-html-parser.bundle.mjs
+import { parseDocument } from 'htmlparser2';
+import { selectAll, selectOne, compile } from 'css-select';
+import * as csstree from 'css-tree';
+import * as domutils from 'domutils';
+
+export { parseDocument, selectAll, selectOne, compile, csstree, domutils };

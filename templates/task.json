@@ -60,7 +60,8 @@
   "reference": {
     "pattern": "{{EXISTING_PATTERN}}",
     "files": [],
-    "examples": null
+    "examples": null,
+    "architecture_template_refs": []
   },
 
   "rationale": {

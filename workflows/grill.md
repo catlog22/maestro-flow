@@ -66,21 +66,23 @@ If `--from` specified:
 
 Store as `upstream_material` (in-memory).
 
-### 2.3: Architecture Review Dimensions (arch-kb)
+### 2.3: Architecture Template References
 
-Query the isolated architecture knowledge base for grilling dimension seeds:
+Follow the shared Architecture Template References rule in
+`@~/.maestro/templates/search-tools.md` for grilling dimension seeds:
 
 ```bash
-# Match system type for domain-specific concerns (template-only)
-maestro arch-kb search "{topic keywords}" --type template --json --limit 3
-
-# View matched template's decision sections as grilling angles
-maestro arch-kb show <template-id> --section "关键架构决策与权衡"
+maestro search "{topic keywords}" --type template --json --limit 3
+maestro load --type template --id <template-id> --json
 ```
 
-- If search returns templates: inject template **§8 决策与权衡** as domain-specific grilling angles
-- arch-kb is isolated from `maestro search` — only triggered by this explicit call
-- Skip if `--depth shallow` (too lightweight for template injection)
+Use each hit's emitted `openCommand`; load the full body and use §8
+**决策与权衡** as question-generation context, not as proof. `maestro load`
+does not support `--section`; do not use section flags in this evidence flow.
+
+- For `--depth shallow`, set `architecture_template_evidence.status` to `not_applicable` and skip template search/load.
+- Otherwise record `loaded`, `no_match`, or `load_failed` status in the evidence envelope and preserve it in `grill-report.md`.
+- Add evaluated records to `context-package.json.references[]` as `type=architecture-template`.
 
 ### 2.4: Codebase Scan
 
@@ -121,6 +123,9 @@ Write `{output_dir}/grill-report.md` with header:
 
 ### Project Context
 {summary from Step 2.1}
+
+### Architecture Template Evidence
+{architecture_template_evidence envelope, including `not_applicable` for shallow mode}
 
 ### Codebase Surface
 {summary from Step 2.4}
@@ -403,6 +408,7 @@ Write `{output_dir}/context-package.json`:
   "non_goals": [],
   "insights": [],
   "open_questions": [],
+  "architecture_template_evidence": null,
   "references": []
 }
 ```
@@ -415,7 +421,8 @@ Write `{output_dir}/context-package.json`:
 - `non_goals[]`: deferred decisions + explicit exclusions → `{ title, rationale, ref }`
 - `insights[]`: code findings that contradicted or enriched the proposal → `{ area, summary, evidence, ref }`
 - `open_questions[]`: open decisions needing brainstorm/analyze exploration → `{ area, question, options[], ref }`
-- `references[]`: `{ type: "grill-report", path: "grill-report.md" }`, `{ type: "terminology", path: "terminology.md" }`
+- `architecture_template_evidence`: preserve the evaluated envelope, including `not_applicable`, `no_match`, or `load_failed` status
+- `references[]`: `{ type: "grill-report", path: "grill-report.md" }`, `{ type: "terminology", path: "terminology.md" }`, plus evaluated `{ type: "architecture-template", template_id, source_ref, disposition, rationale, applies_to }` records
 
 ---
 

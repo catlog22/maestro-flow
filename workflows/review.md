@@ -65,9 +65,17 @@ review_context = {
   success_criteria:  acceptance criteria,
   tech_stack:        detected from package.json / pyproject.toml / go.mod / Cargo.toml,
   specs:             specs_content (Step 3),
-  verification_gaps: gaps from latest-verification (if any), otherwise []
+  verification_gaps: gaps from latest-verification (if any), otherwise [],
+  architecture_template_evidence: inherited from blueprint, brainstorm, grill, or analysis; otherwise normalize plan.shared_context.architecture_template_search + architecture_templates into the envelope
 }
 ```
+
+For the architecture dimension, validate only adopted/adapted template-derived
+constraints and their project-specific rationale. Do not search or load
+architecture templates. A template alone cannot establish a violation: every
+finding requires code evidence and an adopted project constraint. Emit
+`architecture_template_checks[]` at the review level and `template_refs[]` on a
+finding only when a recorded template-derived decision is relevant.
 
 ---
 
@@ -83,7 +91,7 @@ correctness: unhandled null/undefined, missing error propagation, type mismatch,
 security:    SQL/command injection, hardcoded secrets/passwords, missing input validation, XSS vectors
 
 finding: { id, dimension, severity, title, file, line, snippet,
-           description, impact, suggestion }
+           description, impact, suggestion, template_refs[] }
 ```
 
 After scanning, jump directly to Step 6.
@@ -94,12 +102,13 @@ After scanning, jump directly to Step 6.
 
 ```
 Context: dimension, session_goal, review_files, success_criteria,
-         tech_stack, specs_content, verification_gaps
+         tech_stack, specs_content, verification_gaps,
+         architecture_template_evidence
 Instructions:
   - read each file, analyze only issues of this dimension
   - grade critical / high / medium / low
   - return a JSON array: id, dimension, severity, title, file, line, snippet,
-    description, impact, suggestion, spec_violation (if any)
+    description, impact, suggestion, spec_violation (if any), template_refs[] (only when applicable)
   - take top 20 by severity, each with file:line evidence
 ```
 
@@ -221,11 +230,17 @@ Write outputs/review-findings.json:
   "files_reviewed": review_files,
   "severity_distribution": { "critical": N, "high": N, "medium": N, "low": N, "total": N },
   "critical_files": critical_files,
+  "architecture_template_checks": architecture_template_checks,
   "findings": all_findings,
   "deep_dives": deep_dive_results,
   "issue_candidates": [...]
 }
 ```
+
+`architecture_template_checks[]` records `{template_id, disposition, applies_to,
+rationale, result}` for inherited adopted/adapted entries; no-match,
+load-failed, and not-applicable statuses remain explicit and cannot create
+findings by themselves.
 
 ---
 
@@ -342,6 +357,7 @@ The verdict decides the downstream run; the report's needs includes `latest-revi
 - [ ] Spec-conflict routing applied (supersede for evolved practice, conflict mark for disputes)
 - [ ] Delta comparison with prior-review (if exists)
 - [ ] review-findings.json written with PASS/WARN/BLOCK verdict
+- [ ] Architecture-template checks validate adopted/adapted constraints without new search/load or template-only findings
 - [ ] issue-candidates.json written (if findings warrant)
 - [ ] BLOCK produced a validated repair-loop proposal, or the immediate formal decision owns routing
 

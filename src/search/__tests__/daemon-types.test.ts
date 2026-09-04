@@ -122,6 +122,29 @@ describe('daemon request validation', () => {
       .toMatchObject({ ok: true });
   });
 
+  it('accepts bounded opt-in diagnostics while rejecting arbitrary payloads', () => {
+    expect(validateDaemonRequest({
+      action: 'search',
+      query: 'valid',
+      limit: 1,
+      diagnostics: true,
+    })).toMatchObject({ ok: true });
+    expect(validateDaemonRequest({
+      action: 'search',
+      query: 'valid',
+      limit: 1,
+      diagnostics: {
+        requestId: '12345678-1234-4123-8123-123456789abc',
+      },
+    })).toMatchObject({ ok: true });
+    expect(validateDaemonRequest({
+      action: 'search',
+      query: 'valid',
+      limit: 1,
+      diagnostics: { query: 'must not cross the boundary' },
+    })).toMatchObject({ ok: false });
+  });
+
   it('requires protocol identity for lifecycle and load actions', () => {
     expect(validateDaemonRequest({ action: 'shutdown' })).toMatchObject({
       ok: false,

@@ -5,13 +5,22 @@ import { DatabaseSync } from 'node:sqlite';
 
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
-import { WikiIndexer } from './wiki-indexer.js';
+import { WikiIndexer as ProductionWikiIndexer } from './wiki-indexer.js';
 import { createRuntimeSessionFixture } from './__fixtures__/runtime-session.js';
 import { buildGraph, detectOrphans, detectHubs, computeHealth } from './graph-analysis.js';
 import { buildInvertedIndex, searchBM25, tokenize } from './search.js';
 import { WikiWriter, WikiWriteError } from './writer.js';
 
+class WikiIndexer extends ProductionWikiIndexer {
+  constructor(config: ConstructorParameters<typeof ProductionWikiIndexer>[0]) {
+    // Generic indexer tests are hermetic; transcript behavior has dedicated fixtures.
+    super({ ...config, includeCliSessions: config.includeCliSessions ?? false });
+  }
+}
+
 let tmpRoot: string;
+const originalHome = process.env.HOME;
+const originalUserProfile = process.env.USERPROFILE;
 
 async function write(rel: string, body: string): Promise<void> {
   const abs = join(tmpRoot, rel);
@@ -31,9 +40,17 @@ function withoutCliSessions(indexer: WikiIndexer): WikiIndexer {
 
 beforeEach(async () => {
   tmpRoot = await mkdtemp(join(tmpdir(), 'wiki-test-'));
+  // Generic WikiIndexer tests must not scan the developer's real CLI history.
+  // Dedicated adapter/freshness suites provide explicit transcript fixtures.
+  process.env.HOME = tmpRoot;
+  process.env.USERPROFILE = tmpRoot;
 });
 
 afterEach(async () => {
+  if (originalHome === undefined) delete process.env.HOME;
+  else process.env.HOME = originalHome;
+  if (originalUserProfile === undefined) delete process.env.USERPROFILE;
+  else process.env.USERPROFILE = originalUserProfile;
   await rm(tmpRoot, { recursive: true, force: true, maxRetries: 3 });
 });
 

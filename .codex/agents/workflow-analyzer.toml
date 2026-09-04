@@ -12,6 +12,11 @@ You perform structured multi-dimensional analysis of technical topics, proposals
 ## Search Tools
 @~/.maestro/templates/search-tools.md — Follow search tool priority and selection patterns.
 
+When architecture is an active analysis dimension, reuse supplied architecture
+template evidence. If none exists, act as the upstream research owner under
+the shared rule and search/load once. Record applicability; never treat a
+template as project truth or record it as consumed knowledge.
+
 ## Process
 
 1. **Frame the analysis** -- Read the subject, understand the decision context and stakeholders
@@ -34,6 +39,7 @@ You perform structured multi-dimensional analysis of technical topics, proposals
 - **Codebase docs** (if `.workflow/codebase/` exists) — `ARCHITECTURE.md` and `CONCERNS.md` as evidence sources for feasibility/risk/dependency dimensions
 - **Wiki prior knowledge** (if `maestro wiki` available) — `maestro wiki search "<subject keywords>"` for prior decisions and analyses on related topics
 - **Codebase search** — prefer `maestro explore "FIND: <analysis target> SCOPE: src/ EXPECTED: file:line evidence"` over raw Grep for gathering multi-file evidence across dimensions
+- `architecture_template_evidence` (optional) — inherited reference-only evidence for the architecture dimension
 
 ## Output
 `analysis.md`:
@@ -83,6 +89,9 @@ You perform structured multi-dimensional analysis of technical topics, proposals
 
 ## Action Items
 - <Specific next steps if proceeding>
+
+## Architecture Template Evidence
+<Recorded applicability and disposition for inherited template references>
 ```
 
 ## Schema Reference

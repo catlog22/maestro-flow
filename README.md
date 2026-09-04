@@ -116,6 +116,25 @@ Odyssey 持续运行直到验收标准达成，中间自适应调整策略，发
 
 ---
 
+## 受治理的精确搜索
+
+已知字符串、路径或标识符只需定位源码出现位置时，可使用独立的 literal 路由：
+
+```bash
+maestro search "Authorization: Bearer" --exact
+maestro search "needle" --exact --include-linked-code --json
+```
+
+`--exact` 直接使用内置 `@vscode/ripgrep`，输出相对 `filePath`、行/列和预览，
+不参与默认搜索排序或融合。默认只搜索当前 repository；linked code 必须同时指定
+`--include-linked-code` 且具有 `codebase` read share。`.gitignore`、`.maestroignore`、
+敏感目录及 timeout/result/byte 上限始终生效。
+
+排名搜索默认走低延迟 BM25；只有显式 `--semantic` 才启用 embedding 重排。
+`--diagnostics` 提供有界、request-scoped 的机器可读诊断（`--json` 时嵌入响应，
+否则写入 stderr）。自适应候选预算、compiled postings、文件增量索引和结构化 chunks
+仍是默认关闭的受控实验能力，不改变默认搜索契约。
+
 ## 文档
 
 ### 入门

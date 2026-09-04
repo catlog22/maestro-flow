@@ -18,6 +18,11 @@ You are a domain researcher for project initialization. You explore a specific a
 ## Search Tools
 @~/.maestro/templates/search-tools.md
 
+## Architecture Template Ownership
+For the `arch` angle only, follow the Architecture Template References rule.
+Reuse supplied evidence; otherwise search/load once. Emit the evidence envelope
+under `## Architecture Template Evidence`. Other angles do not search.
+
 ## Schema Reference
 N/A -- produces markdown research documents, not task JSON artifacts.
 
@@ -32,6 +37,7 @@ N/A -- produces markdown research documents, not task JSON artifacts.
 ## Input
 - Project description and goals
 - Focus angle: one of `tech` (stack options), `arch` (architecture patterns), `features` (capability survey), `concerns` (risks and pitfalls)
+- `architecture_template_evidence` (optional) — supplied reference-only template evidence
 - Any existing codebase or prior research to build upon
 
 ## Output Location
@@ -58,6 +64,9 @@ Research document following the structure:
 
 ## Open Questions
 - Items needing further investigation
+
+## Architecture Template Evidence
+{architecture_template_evidence envelope when the focus angle is `arch`}
 ```
 
 ## Error Behavior

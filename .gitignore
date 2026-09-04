@@ -75,3 +75,6 @@ search-cache.json
 /artifacts/
 /test-ui/
 /ref/sidebar.html
+
+# Research checkouts under ref/ (vendored reference material only; no nested clones)
+ref/zvec-grep/

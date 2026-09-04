@@ -3,7 +3,8 @@ import { DatabaseSync } from 'node:sqlite';
 import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { adaptKnowledgeGraph } from './virtual-wiki-adapters.js';
+import { performance } from 'node:perf_hooks';
+import { adaptKnowledgeGraph, adaptKnowledgeGraphFromDb } from './virtual-wiki-adapters.js';
 import { WikiIndexer } from './wiki-indexer.js';
 
 const roots: string[] = [];
@@ -111,5 +112,51 @@ describe('MaestroGraph Wiki projection', () => {
     const stub = index.entries.find(entry => entry.title === 'NoBody')!;
     expect(stub.body).toBe('');
     expect(stub.ext.filePath).toBe('/src/a.ts');
+  });
+
+  it('materializes the selected node set before projecting a large edge set', () => {
+    const workflowRoot = mkdtempSync(join(tmpdir(), 'maestro-wiki-edges-'));
+    roots.push(workflowRoot);
+    mkdirSync(join(workflowRoot, 'kg'), { recursive: true });
+    const dbPath = join(workflowRoot, 'kg', 'maestro.db');
+    const db = new DatabaseSync(dbPath);
+    db.exec(`
+      CREATE TABLE nodes (
+        id TEXT PRIMARY KEY,
+        kind TEXT NOT NULL,
+        name TEXT NOT NULL,
+        file_path TEXT,
+        source_type TEXT NOT NULL,
+        definition TEXT,
+        body TEXT,
+        category TEXT,
+        updated_at INTEGER NOT NULL
+      );
+      CREATE TABLE edges (source TEXT NOT NULL, target TEXT NOT NULL, kind TEXT NOT NULL);
+      CREATE INDEX idx_nodes_source_type ON nodes(source_type);
+      CREATE INDEX idx_nodes_name ON nodes(name);
+      CREATE INDEX idx_edges_source_kind ON edges(source, kind);
+      BEGIN;
+    `);
+    const insertNode = db.prepare('INSERT INTO nodes VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)');
+    const insertEdge = db.prepare('INSERT INTO edges VALUES (?, ?, ?)');
+    for (let index = 0; index < 5_000; index++) {
+      const id = `code:${String(index).padStart(4, '0')}`;
+      const target = `code:${String((index + 1) % 5_000).padStart(4, '0')}`;
+      insertNode.run(id, 'function', `Node ${String(index).padStart(4, '0')}`, `/src/${index}.ts`, 'codegraph', null, null, null, 1);
+      insertEdge.run(id, target, 'calls');
+    }
+    db.exec('COMMIT;');
+    db.close();
+
+    const startedAt = performance.now();
+    const entries = adaptKnowledgeGraphFromDb(dbPath, 'kg/maestro.db');
+    const elapsedMs = performance.now() - startedAt;
+
+    expect(entries).toHaveLength(5_000);
+    const first = entries.find(entry => entry.ext.kgNodeId === 'code:0000')!;
+    const second = entries.find(entry => entry.ext.kgNodeId === 'code:0001')!;
+    expect(first.related).toContain(second.id);
+    expect(elapsedMs).toBeLessThan(2_000);
   });
 });

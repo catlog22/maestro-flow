@@ -26,7 +26,6 @@ Commands are classified by interaction level. This agent can execute **non-inter
 | adapt | Fix | Responsive/device adaptations |
 | optimize | Fix | UI performance fixes |
 | clarify | Fix | Improve UX copy and labels |
-| explore | Build | Multi-style comparison (auto-selects variant 1 in agent mode) |
 
 ### Conditionally Interactive (safe with sufficient context)
 
@@ -46,7 +45,7 @@ These commands ask questions only "if unclear from codebase". When PRODUCT.md an
 
 | Command | Reason |
 |---------|--------|
-| teach | Interview to create PRODUCT.md |
+| init / teach | Interview to create PRODUCT.md |
 | shape | Discovery interview + brief confirmation |
 | craft | Multiple user gates |
 | live | Interactive browser session |
@@ -55,27 +54,26 @@ These commands ask questions only "if unclear from codebase". When PRODUCT.md an
 
 ## Execution Protocol
 
-1. **Load context**: Run `maestro impeccable load-context` to load PRODUCT.md and DESIGN.md
-2. **Validate command**: Check the requested command is in the allowed list above
-3. **Execute**: Read `~/.maestro/workflows/impeccable/{command}.md` → follow workflow instructions
-   - Pass `-y` to auto-confirm where the workflow allows
-   - Pass `--skip-harvest` — the caller handles harvest if needed
-4. **Report**: Return the command output (scores, changes made, findings)
+1. **Resolve bundled core**: Read the first existing `SKILL.md` from project-local `workflows/impeccable/` or installed `~/.maestro/workflows/impeccable/`; retain its parent as `<impeccable-base>`. Never resolve or install another Impeccable Skill.
+2. **Load context**: Run `node <impeccable-base>/scripts/context.mjs` once from the user's project cwd.
+3. **Validate command**: Check the requested command is in the allowed list above and select the native reference variant when the bundled core requires it.
+4. **Execute**: Read `<impeccable-base>/reference/{command}.md` and follow it, including `craft-floor.md` immediately before UI edits and the bundled bounded-pass ceiling.
+5. **Report**: Return the command output, evidence, changes made, findings, and any degraded-mode disclosure.
 
 ## Usage Pattern
 
 The agent receives a prompt describing which impeccable command(s) to run and on what target:
 
 ```
-Run impeccable audit on src/pages/ then polish any P0 findings.
+Run maestro-impeccable audit on src/pages/ then polish any P0 findings.
 ```
 
 ```
-Run critique on src/components/dashboard.html and report the score.
+Run maestro-impeccable critique on src/components/dashboard.html and report the score.
 ```
 
 ```
-Run these commands sequentially on src/pages/landing.html:
+Run these maestro-impeccable commands sequentially on src/pages/landing.html:
 1. layout
 2. typeset
 3. polish
@@ -87,7 +85,7 @@ When given multiple commands, execute sequentially. If a command fails, report t
 
 ## Context Requirements
 
-- `.workflow/impeccable/PRODUCT.md` should exist for conditionally interactive commands
-- `.workflow/impeccable/DESIGN.md` should exist for color/typography-aware commands
-- If either is missing, restrict to non-interactive commands only
+- `PRODUCT.md` is the canonical durable product context; the bundled setup resolves monorepo inheritance and surface briefs.
+- `DESIGN.md` is optional visual authority and must be reconciled with incumbent code evidence.
+- Missing PRODUCT.md does not block narrow refinement; new-surface or replacement-world work routes through `init` as the bundled core specifies.
 """

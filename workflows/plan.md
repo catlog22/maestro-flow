@@ -74,6 +74,9 @@ Collect all available context:
    - `current-analysis` (findings): `decisions[class=locked]` immutable constraints, `[free]` implementer discretion, `[deferred]` exclusion; `findings[]`/recommendation → task scope. If implementation_scope exists: `scope.objective` → task titles, `scope.acceptance_criteria` → convergence.criteria (grep-ified), `scope.target_files` → files[] + read_first[], `scope.priority` → ordering. When present, skip parallel exploration.
    - `latest-review` (review-findings): BLOCK findings retain finding IDs, severity, evidence, impact, suggestion, and affected files. Normalize each record as `finding_id = finding.id`, `affected_files = [finding.file]`, and `location = finding.file + ":" + finding.line` before deduplication. Cluster related findings by shared root cause/module before planning; do not flatten a cross-module review into ad-hoc execute args.
    - `current-blueprint`: requirements + architecture seed tasks
+   - `current-analysis.architecture_template_evidence`: reference-only architecture evidence
+   - `blueprint`, `grill`, and `brainstorm` context-package `references[]` entries with `type=architecture-template`
+   - research `SUMMARY.md` architecture template evidence, when present
 2. **Project specs**: `maestro spec load --category arch` → pass to planner as constraints
 3. **Codebase docs**: read `.workflow/codebase/doc-index.json` (if it exists), extract relevant feature/component/requirement
 4. **Wiki search** (optional): extract 2-5 keywords from phase goal/title → `maestro search "<keywords>" --json` → top 10 as priors; if unavailable record W003 and continue
@@ -97,7 +100,7 @@ Collect all available context:
 - The agent produces plan.json and tasks/TASK-{NNN}.json; the main flow MUST NOT create/modify these files
 - Upstream findings (including implementation_scope) MUST be passed into the planner's explorationContext in the same step
 
-**Standard mode**: spawn workflow-planner, passing upstream context, spec-ref, doc-index, explorationContext, clarificationContext, goal + success_criteria.
+**Standard mode**: spawn workflow-planner, passing upstream context, spec-ref, doc-index, explorationContext, clarificationContext, `architecture_template_evidence`, goal + success_criteria. The planner consumes but does not search/load template references.
 
 Task-count guardrails (assess complexity before spawning): single feature/simple change ≤4 tasks; medium (multi-file cross-module) ≤8; large milestone (>3 modules, 2+1) ≤16. If exceeded, re-prompt requesting consolidation.
 
@@ -108,6 +111,7 @@ Agent responsibilities:
 4. Estimate complexity/time
 5. Set grep-verifiable convergence.criteria (when scope.acceptance_criteria exists, generate from it)
 6. Define files per task (from scope.target_files when present), fill read_first[]
+7. Pass the evaluated `architecture_template_evidence` envelope to the planner. Store its `{status, query}` in `plan.json.shared_context.architecture_template_search` and only its `templates[]` records in `plan.json.shared_context.architecture_templates`; relevant tasks may reference only resolved `template_id` values in `reference.architecture_template_refs`.
 
 **Deep Work rules** (mandatory in all modes, every TASK JSON must include):
 
@@ -124,10 +128,11 @@ Agent responsibilities:
 
 ### Step 4: Plan Checking
 
-1. **spawn workflow-plan-checker** (mandatory, not substitutable): input plan.json + all tasks + success_criteria. Check dimensions: requirements coverage, feasibility, dependency correctness (no cycles), convergence quality (grep-verifiable, no subjective language), read_first completeness, action specificity (no vague references), wave structure (no colliding files), completeness (no orphan tasks), UI-observable coverage
-2. **Revision loop** (up to 3 rounds): critical → re-spawn planner to revise and re-check; warning only → record and continue
-3. **Confidence scoring**: 5 dims (requirements_coverage, task_quality, dependency_correctness, estimation_accuracy, collision_safety) × factors (completeness .30, specificity .25, structural_validity .20, user_validation .15, consistency .10). Re-score each round. Quality mechanisms: Pressure Pass (mandatory before Step 4.5, verifies the highest-complexity task's read_first/convergence/action), Devil's Advocate (coverage>0.7 → "implicit requirement?"), Scope Minimizer, Stall Detection
-4. **Readiness Gate** (blocks Step 4.5): blocking conditions — coverage<40% | a task missing read_first/convergence | no pressure pass | circular dependency. If blocked → AskUserQuestion: revise / ignore risk and continue (record residual_risks)
+1. **spawn workflow-plan-checker** (mandatory, not substitutable): input plan.json + all tasks + success_criteria + inherited `architecture_template_evidence`. Check dimensions: requirements coverage, feasibility, dependency correctness (no cycles), convergence quality (grep-verifiable, no subjective language), read_first completeness, action specificity (no vague references), wave structure (no colliding files), completeness (no orphan tasks), UI-observable coverage, and architecture-template evidence. The checker does not search/load templates.
+2. **Architecture-template evidence checks**: `shared_context.architecture_template_search` contains only the envelope status/query and `shared_context.architecture_templates` is an array of records; every task template ID resolves to an array record; only `source=arch-kb`, `kind=template`, `reference_only=true` records are valid; adopted/adapted records require rationale and non-empty `applies_to`; a non-loaded status or candidate/rejected record cannot become a task requirement; template IDs remain absent from project-knowledge consumption fields.
+3. **Revision loop** (up to 3 rounds): critical → re-spawn planner to revise and re-check; warning only → record and continue
+4. **Confidence scoring**: 5 dims (requirements_coverage, task_quality, dependency_correctness, estimation_accuracy, collision_safety) × factors (completeness .30, specificity .25, structural_validity .20, user_validation .15, consistency .10). Re-score each round. Quality mechanisms: Pressure Pass (mandatory before Step 4.5, verifies the highest-complexity task's read_first/convergence/action), Devil's Advocate (coverage>0.7 → "implicit requirement?"), Scope Minimizer, Stall Detection
+5. **Readiness Gate** (blocks Step 4.5): blocking conditions — coverage<40% | a task missing read_first/convergence | no pressure pass | circular dependency | invalid architecture-template reference. If blocked → AskUserQuestion: revise / ignore risk and continue (record residual_risks)
 
 ### Step 4.5: Collision Detection
 
@@ -143,6 +148,8 @@ Agent responsibilities:
 Only check `task.files[]` (write targets); `read_first[]` (read-only references) is excluded.
 
 ### Step 5: Confirmation
+
+Planner, checker, revise, and check mode do not perform a new template search or load; they consume inherited evidence only.
 
 1. **Present plan summary**: objective, approach, task count, wave structure, complexity, key dependencies, plan confidence (overall %, weakest dimension, pressure pass result)
 2. **AskUserQuestion** (skip and auto-pass if `config.gates.confirm_plan == false`): Execute now / Verify plan quality (re-run Step 4 more strictly) / Just view / Modify (change specified tasks, back to Step 4)
@@ -160,7 +167,11 @@ Only check `task.files[]` (write targets); `read_first[]` (read-only references)
   "wave_ids": [],
   "confidence": 0,
   "constraints": [],
-  "acceptance_criteria": []
+  "acceptance_criteria": [],
+  "shared_context": {
+    "architecture_template_search": null,
+    "architecture_templates": []
+  }
 }
 ```
 
@@ -207,6 +218,7 @@ Body has fixed sections `Summary`, `Conclusion/Verdict`, `Discussion/Retrospecti
 - [ ] Convergence criteria are grep-verifiable (no subjective language)
 - [ ] Wave DAG has no file write conflicts within same wave
 - [ ] Plan-checker passed (or minor issues confirmed)
+- [ ] Architecture-template evidence is resolved, recorded, and reference-only
 - [ ] User confirmed (execute/modify/cancel)
 
 ---
@@ -217,6 +229,7 @@ Body has fixed sections `Summary`, `Conclusion/Verdict`, `Discussion/Retrospecti
 - convergence.criteria must be grep-verifiable, no subjective language.
 - action/implementation must contain concrete values, no vague references.
 - Inline planning in the main flow is FORBIDDEN; plan.json and tasks are produced only by the planner agent.
+- Architecture template IDs must resolve from `plan.json.shared_context.architecture_templates` and must not appear in project-knowledge consumption fields.
 - A UI plan must have a `[UI-observable]` criterion in every delivery wave; vertical slices cannot be split into pure front/back-end.
 
 ## Revise Mode (`--revise`)
@@ -224,9 +237,9 @@ Body has fixed sections `Summary`, `Conclusion/Verdict`, `Discussion/Retrospecti
 Incrementally modify an existing plan, do not rebuild.
 
 1. **Discover plan**: if `--dir` is specified use it directly; otherwise take the most recent completed plan of the current milestone; if none E004
-2. **Load**: read plan.json + all tasks, show current summary (task count, waves, per-task status)
+2. **Load**: read plan.json + all tasks, show current summary (task count, waves, per-task status). Inherit any `architecture_template_evidence`; do not search/load templates.
 3. **Get revision instructions**: `--revise "instructions"` parsed into change directives; if no instructions AskUserQuestion (add/remove tasks / modify scope-action-implementation / reorder waves or dependencies / update convergence)
-4. **spawn workflow-planner to revise**: input existing plan.json + tasks + parsed instructions + explorationContext + templates. Planner: modify affected tasks in place; on add/remove reorder IDs and waves; update plan.json summary; preserve unchanged tasks
+4. **spawn workflow-planner to revise**: input existing plan.json + tasks + parsed instructions + explorationContext + templates + inherited architecture evidence. Planner: modify affected tasks in place; on add/remove reorder IDs and waves; update plan.json summary; preserve unchanged tasks without a new template search/load
 5. **Re-run Step 4** + collision, show results and confirm
 6. **Update artifacts**: overwrite plan files in the existing directory (don't create new artifacts)
 
@@ -234,8 +247,8 @@ Incrementally modify an existing plan, do not rebuild.
 
 Read-only validation, no file changes.
 
-1. Load plan.json + tasks (if none E005) + roadmap from the `--check` path
-2. Run plan-checker (task quality, convergence), roadmap consistency, collision, dependency completeness
+1. Load plan.json + tasks (if none E005) + roadmap from the `--check` path; consume any plan-level `shared_context.architecture_templates` only.
+2. Run plan-checker (task quality, convergence), roadmap consistency, collision, dependency completeness; do not search/load templates
 3. Produce report:
 ```
 === PLAN CHECK ===

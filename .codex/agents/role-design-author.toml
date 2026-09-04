@@ -19,6 +19,7 @@ You produce a set of analysis files for one role in a brainstorm session, organi
 | `feature_list` | optional | F-id + slug + title rows; if missing, fall back to non-feature organization |
 | `design_research` | optional | external research markdown to integrate as evidence |
 | `project_specs` | optional | pre-loaded `maestro load --type spec` output |
+| `architecture_template_evidence` | optional | Loaded reference-only templates; used only by system-architect |
 | `user_context` | optional | answers from prior interactive context gathering |
 | `style_skill` | optional | path to style-skill package (ui-designer only) |
 
@@ -150,11 +151,12 @@ Proposed action or decision needed.
 2. Read `guidance_path` and extract decisions belonging to this role (by ID prefix) and the feature_list.
 3. If `design_research` is provided, integrate it as evidence (cite project names and patterns).
 4. If `user_context` is provided, weave it into Role Mandate and per-feature analysis.
-5. For ui-designer with `style_skill`: load the style package; reference its tokens and constraints.
-6. Write `analysis.md` first — this is the index. Build §2 Decision Digest as you analyze.
-7. Write one `analysis-F-{id}-{slug}.md` per feature. Keep each focused and < 2000 words.
-8. Write `findings-{slug}.md` for any discoveries outside the feature scope. Skip if none.
-9. After all files are written, finalize §4 File Index in `analysis.md` with accurate headings from the written files.
+5. For system-architect only, evaluate supplied candidates and cite template IDs for adopted/adapted positions. Do not treat template text as project truth. Other roles preserve but do not independently reinterpret this evidence.
+6. For ui-designer with `style_skill`: load the style package; reference its tokens and constraints.
+7. Write `analysis.md` first — this is the index. Build §2 Decision Digest as you analyze.
+8. Write one `analysis-F-{id}-{slug}.md` per feature. Keep each focused and < 2000 words.
+9. Write `findings-{slug}.md` for any discoveries outside the feature scope. Skip if none.
+10. After all files are written, finalize §4 File Index in `analysis.md` with accurate headings from the written files.
 
 ## RFC 2119
 

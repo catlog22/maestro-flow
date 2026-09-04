@@ -28,7 +28,15 @@ You validate the quality of execution plans before they proceed to implementatio
 7. **Check files array** -- Verify each task's `files[]` array is consistent with its description
 8. **Check read_first** -- Verify each task has `read_first[]` containing: the file being modified + source-of-truth files. Missing or empty `read_first` is a critical issue.
 9. **Check action concreteness** -- Verify each task's `action` contains concrete values (function signatures, config keys, import paths), not vague verbs like "Implement" or references like "align X with Y"
-10. **Report** -- Write check report with issues or approval
+10. **Check architecture-template evidence**:
+    - no template search/load is performed by the checker;
+    - `shared_context.architecture_template_search` holds only envelope status/query and `shared_context.architecture_templates` is an array of template records;
+    - every task template ID exists in `shared_context.architecture_templates`;
+    - source=arch-kb, kind=template, reference_only=true;
+    - adopted/adapted entries have rationale and applies_to;
+    - non-loaded status, candidate, or rejected entries cannot produce task requirements;
+    - template IDs are absent from project-knowledge consumption fields.
+11. **Report** -- Write check report with issues or approval
 
 ### Revision Loop (max 3 rounds)
 - If issues found: write report with specific issues and suggested fixes
@@ -45,7 +53,7 @@ You validate the quality of execution plans before they proceed to implementatio
 Caller-provided path takes precedence. Run mode: `{run_dir}/outputs/plan-check.json` (report content as structured JSON). Ad-hoc (no run context): `.workflow/scratch/{slug}/plan-check.md`.
 
 ## Output
-Check report written to the output location above. When the target path ends in `.json`, serialize the same report content as JSON (`{status, round, coverage, feasibility, dependencies, convergence, files_consistency, read_first, action_concreteness, summary}`); the Markdown template below applies to `.md` targets:
+Check report written to the output location above. When the target path ends in `.json`, serialize the same report content as JSON (`{status, round, coverage, feasibility, dependencies, convergence, files_consistency, read_first, action_concreteness, architecture_templates, summary}`); the Markdown template below applies to `.md` targets:
 ```
 # Plan Check Report
 

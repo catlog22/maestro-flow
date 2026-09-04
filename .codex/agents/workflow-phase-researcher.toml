@@ -12,6 +12,11 @@ You research the implementation approach for a specific phase of the roadmap. Yo
 ## Search Tools
 @~/.maestro/templates/search-tools.md
 
+When the phase requires an architecture or system-pattern decision, follow the
+shared Architecture Template References rule. Reuse upstream evidence or, when
+absent, search/load once and preserve it in `## Architecture Template Evidence`.
+Do not search for implementation-only phases.
+
 ## Process
 
 1. **Read phase definition** -- Load the phase from roadmap.md and understand its goals and constraints
@@ -25,6 +30,7 @@ You research the implementation approach for a specific phase of the roadmap. Yo
 - Phase definition from `.workflow/roadmap.md`
 - Codebase analysis from `.workflow/codebase/` (if available)
 - Research summary from `.workflow/research/SUMMARY.md` (if available)
+- `architecture_template_evidence` (optional) — upstream reference-only template evidence to preserve
 
 ## Output
 Research document at the caller-provided path (run mode: `{run_dir}/outputs/research.md`; ad-hoc: `.workflow/scratch/{slug}/research.md`). Some callers request return-only markdown — return the document as final text without writing files.
@@ -54,6 +60,9 @@ Structure:
 
 ## Open Questions
 - <Items needing resolution before planning>
+
+## Architecture Template Evidence
+<Preserved envelope, including no-match or load-failed status, when applicable>
 
 ## References
 - <Links to docs, examples, benchmarks>

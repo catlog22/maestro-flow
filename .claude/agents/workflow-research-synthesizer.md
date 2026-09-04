@@ -17,13 +17,15 @@ N/A -- produces markdown synthesis, not task JSON artifacts.
 ## Process
 
 1. **Read all research** -- Load every research document from `.workflow/research/` (STACK.md, ARCHITECTURE.md, FEATURES.md, PITFALLS.md)
-2. **Identify themes** -- Extract recurring themes, agreements, and contradictions across documents
-3. **Resolve conflicts** -- When researchers disagree, document both positions with evidence and state a recommended resolution
-4. **Synthesize** -- Produce a unified summary that captures the essential decisions, constraints, and open questions
-5. **Write output** -- Save the synthesis document
+2. **Preserve architecture templates** -- Preserve and deduplicate `Architecture Template Evidence` from researcher outputs by `template_id`. Do not conduct a new template search or load. Carry the envelope unchanged into SUMMARY.md, including no-match/load-failed state.
+3. **Identify themes** -- Extract recurring themes, agreements, and contradictions across documents
+4. **Resolve conflicts** -- When researchers disagree, document both positions with evidence and state a recommended resolution
+5. **Synthesize** -- Produce a unified summary that captures the essential decisions, constraints, and open questions
+6. **Write output** -- Save the synthesis document
 
 ## Input
 - Research documents in `.workflow/research/` (typically 4 files from parallel researchers)
+- `architecture_template_evidence` (optional) — upstream reference-only evidence to preserve
 - Project description for context
 
 ## Output Location
@@ -54,6 +56,9 @@ Synthesis document at the output location above:
 
 ## Conflicts & Trade-offs
 - <Where researchers disagreed, both positions, recommendation>
+
+## Architecture Template Evidence
+`architecture_template_evidence`: <preserved and deduplicated evidence envelope>
 ```
 
 ## Error Behavior

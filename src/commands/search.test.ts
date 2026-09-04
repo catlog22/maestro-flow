@@ -20,6 +20,7 @@ import {
   selectDiverseKgResults,
   selectDiverseWikiCandidates,
 } from './search.js';
+import { createSearchDiagnostics, finishSearchDiagnostics } from '../search/diagnostics.js';
 
 function wikiEntry(id: string, tags: string[], overrides: Partial<WikiEntry> = {}): WikiEntry {
   return {
@@ -76,12 +77,35 @@ describe('search tag facet', () => {
     expect(search?.options.some(option => option.long === '--kind')).toBe(true);
     expect(search?.options.some(option => option.long === '--wiki-only')).toBe(true);
     expect(search?.options.some(option => option.long === '--semantic')).toBe(true);
+    expect(search?.options.some(option => option.long === '--diagnostics')).toBe(true);
   });
 });
 
 describe('daemon latency fallback', () => {
   beforeEach(() => {
     daemonSearch.mockReset();
+  });
+
+  it('keeps request diagnostics isolated from the compatibility SearchMeta', async () => {
+    daemonSearch.mockResolvedValue({
+      ok: true,
+      embeddingUsed: false,
+      embeddingDocs: 0,
+      filtersApplied: true,
+      results: [{ entry: wikiEntry('diagnostic-sentinel', ['diagnostics']), score: 5 }],
+    });
+    const first = createSearchDiagnostics();
+    const second = createSearchDiagnostics();
+    await Promise.all([
+      runUnifiedSearch('first', { limit: 1, skipEmbedding: true, diagnostics: first }),
+      runUnifiedSearch('second', { limit: 1, skipEmbedding: true, diagnostics: second }),
+    ]);
+    const firstSnapshot = finishSearchDiagnostics(first);
+    const secondSnapshot = finishSearchDiagnostics(second);
+    expect(firstSnapshot.requestId).not.toBe(secondSnapshot.requestId);
+    expect(firstSnapshot.resultCount).toBe(1);
+    expect(secondSnapshot.resultCount).toBe(1);
+    expect(firstSnapshot.phases).not.toBe(secondSnapshot.phases);
   });
 
   it('uses BM25 first and keeps it when semantic lookup times out', async () => {

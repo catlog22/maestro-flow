@@ -318,7 +318,8 @@ describe('legacy mixed rank and score contract', () => {
     expect(results[2]).toMatchObject({
       source: 'arch-kb',
       kind: 'template',
-      openCommand: 'maestro arch-kb show arch-tpl-payment-system',
+      detail: 'templates/payment-system/README.md  (maestro load --type template --id arch-tpl-payment-system)',
+      openCommand: 'maestro load --type template --id arch-tpl-payment-system',
       searchCommand: 'maestro arch-kb search "payment" --type template',
       referenceOnly: true,
       projectRelated: false,

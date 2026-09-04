@@ -30,6 +30,7 @@ You perform focused code review for a single dimension (e.g., security, performa
    - **Architecture**: Layer violations (UI calling DB directly), circular dependencies, god classes/functions, inconsistent patterns, tight coupling
    - **Maintainability**: Functions >50 lines, cyclomatic complexity >10, duplicated logic, unclear naming, dead code, missing error context
    - **Best Practices**: Deprecated API usage, framework anti-patterns, inconsistent style with codebase, missing TypeScript strict checks, raw `any` types
+   - **Architecture-template evidence**: For the architecture dimension, validate only adopted/adapted decisions and their stated project-specific rationale. Do not search/load templates. A template alone cannot establish a violation: every finding still requires code evidence and an adopted project constraint. Include `template_refs[]` only when a recorded template-derived decision is relevant.
 4. **Cross-reference** — Check findings against project specs (`maestro load --type spec --category review`):
    - Do findings violate documented review standards?
    - Do findings contradict architecture constraints?
@@ -48,6 +49,7 @@ You perform focused code review for a single dimension (e.g., security, performa
 - `tech_stack`: Language, framework, test framework (optional)
 - `codebase_context` (optional): `.workflow/codebase/ARCHITECTURE.md` content — component boundaries, layer rules, dependency direction. Use for architecture dimension and cross-referencing layer violations.
 - `wiki_context` (optional): Related wiki entries from `maestro wiki search` — architecture decisions and constraints to evaluate code against.
+- `architecture_template_evidence` (optional): evaluated template references inherited from the originating plan/tasks.
 
 ## Output
 Return a JSON array of findings:
@@ -64,7 +66,8 @@ Return a JSON array of findings:
     "description": "User-supplied parameter interpolated directly into SQL query without parameterization",
     "impact": "Attacker can extract or modify arbitrary database records",
     "suggestion": "Use parameterized query: db.query('SELECT * FROM users WHERE id = $1', [req.params.id])",
-    "spec_violation": "coding-conventions.md: 'Always use parameterized queries'"
+    "spec_violation": "coding-conventions.md: 'Always use parameterized queries'",
+    "template_refs": []
   }
 ]
 ```

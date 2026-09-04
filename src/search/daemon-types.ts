@@ -11,6 +11,8 @@ import {
   unlinkSync,
 } from 'node:fs';
 import type { WikiEntry, WikiSearchFilters } from '#maestro-dashboard/wiki/wiki-types.js';
+import type { SearchDiagnostics } from './diagnostics.js';
+import type { SearchCandidateBudget } from './candidate-budget.js';
 
 const DAEMON_FILE = 'search-daemon.json';
 export const DAEMON_SPAWN_LOCK_FILE = 'search-daemon-spawning';
@@ -54,6 +56,10 @@ export interface DaemonSearchRequest {
   limit?: number;
   skipEmbedding?: boolean;
   filters?: WikiSearchFilters;
+  /** One boundary-computed budget; omitted keeps the legacy provider path. */
+  candidateBudget?: SearchCandidateBudget;
+  /** Opt-in only; diagnostics are request-scoped and never persisted. */
+  diagnostics?: boolean | { requestId?: string };
   protocol?: typeof SEARCH_DAEMON_PROTOCOL;
   instanceId?: string;
   workflowRoot?: string;
@@ -69,6 +75,8 @@ export interface DaemonSearchResponse {
   embeddingDocs?: number;
   /** True only when the daemon applied request filters before ranking truncation. */
   filtersApplied?: boolean;
+  /** Optional request-scoped diagnostics; older daemons omit this field. */
+  diagnostics?: SearchDiagnostics;
   error?: string;
   protocol?: typeof SEARCH_DAEMON_PROTOCOL;
   instanceId?: string;
@@ -259,6 +267,64 @@ function validateIdentityFields(value: Record<string, unknown>, required: boolea
   return null;
 }
 
+function validateDiagnostics(value: unknown): string | null {
+  if (value === undefined || value === false) return null;
+  if (value === true) return null;
+  if (!isRecord(value)) return 'diagnostics must be a boolean or object';
+  for (const key of Object.keys(value)) {
+    if (key !== 'requestId') return `unknown diagnostics field: ${key}`;
+  }
+  if (value.requestId !== undefined && !isInstanceId(value.requestId)) {
+    return 'diagnostics.requestId must be a UUID';
+  }
+  return null;
+}
+
+function validateCandidateBudget(value: unknown): string | null {
+  if (value === undefined) return null;
+  if (!isRecord(value)) return 'candidateBudget must be an object';
+  const allowed = new Set([
+    'resultLimit', 'limit', 'candidateLimit', 'initialCandidateLimit',
+    'maxCandidateLimit', 'hardCap', 'mode', 'adaptive', 'escalated',
+    'escalationCount', 'legacyCandidateLimit', 'surface',
+  ]);
+  for (const key of Object.keys(value)) {
+    if (!allowed.has(key)) return `unknown candidateBudget field: ${key}`;
+  }
+  if (value.mode !== 'legacy' && value.mode !== 'adaptive') return 'candidateBudget.mode is invalid';
+  if (typeof value.adaptive !== 'boolean' || value.adaptive !== (value.mode === 'adaptive')) {
+    return 'candidateBudget.adaptive is invalid';
+  }
+  const integerFields = [
+    'resultLimit', 'limit', 'candidateLimit', 'initialCandidateLimit',
+    'maxCandidateLimit', 'hardCap', 'escalationCount', 'legacyCandidateLimit',
+  ];
+  for (const field of integerFields) {
+    if (!Number.isSafeInteger(value[field])) return `candidateBudget.${field} must be an integer`;
+    if ((value[field] as number) < 0 || (value[field] as number) > DAEMON_MAX_RESULTS) {
+      return `candidateBudget.${field} is out of bounds`;
+    }
+  }
+  const maxCandidateLimit = value.maxCandidateLimit as number;
+  const hardCap = value.hardCap as number;
+  const candidateLimit = value.candidateLimit as number;
+  const initialCandidateLimit = value.initialCandidateLimit as number;
+  const escalationCount = value.escalationCount as number;
+  if (maxCandidateLimit !== hardCap || hardCap === 0) {
+    return 'candidateBudget cap is inconsistent';
+  }
+  if (candidateLimit > maxCandidateLimit || initialCandidateLimit > maxCandidateLimit) {
+    return 'candidateBudget candidateLimit exceeds hard cap';
+  }
+  if (typeof value.escalated !== 'boolean' || escalationCount > 1) {
+    return 'candidateBudget escalation is invalid';
+  }
+  if (typeof value.surface !== 'string' || ![
+    'search', 'wiki', 'mixed', 'indexer', 'planned', 'kg', 'code', 'arch-kb',
+  ].includes(value.surface)) return 'candidateBudget.surface is invalid';
+  return null;
+}
+
 function validateFilters(value: unknown): string | null {
   if (value === undefined) return null;
   if (!isRecord(value)) return 'filters must be an object';
@@ -309,8 +375,12 @@ export function validateDaemonRequest(value: unknown): DaemonRequestValidation {
     }
     const filtersError = validateFilters(value.filters);
     if (filtersError) return { ok: false, error: filtersError };
+    const candidateBudgetError = validateCandidateBudget(value.candidateBudget);
+    if (candidateBudgetError) return { ok: false, error: candidateBudgetError };
+    const diagnosticsError = validateDiagnostics(value.diagnostics);
+    if (diagnosticsError) return { ok: false, error: diagnosticsError };
     for (const key of Object.keys(value)) {
-      if (!commonKeys.has(key) && !['query', 'limit', 'skipEmbedding', 'filters'].includes(key)) {
+      if (!commonKeys.has(key) && !['query', 'limit', 'skipEmbedding', 'filters', 'candidateBudget', 'diagnostics'].includes(key)) {
         return { ok: false, error: `unknown request field: ${key}` };
       }
     }

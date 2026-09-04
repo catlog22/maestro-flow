@@ -91,7 +91,8 @@ Parse input, analyze the seed idea, optionally explore codebase, establish sessi
     - `domain.problem_statement` → Phase 2 Product Brief context
     - `non_goals[]` → Phase 2 Product Brief exclusions
     - `insights[]` → Phase 4 Architecture decisions context
-    - `references[]` → available for deep-read when needed
+    - `references[]` → available for deep-read when needed, including `type=architecture-template`
+    - `architecture_template_evidence` → Phase 4 architecture reference evidence when present
   - Set `input_type: "context-package"` — skip Phase 1.5
 - If `@file`: read file content as seed
 - If text: use directly as seed
@@ -129,7 +130,7 @@ Output dir: {run_dir}/outputs/
 - Confirm problem statement, select depth (Light/Standard/Comprehensive), select focus areas
 - `--yes`: accept all defaults
 
-**Output**: `blueprint-config.json`, `discovery-context.json` (optional), `apiResearchContext` (in-memory, optional)
+**Output**: `blueprint-config.json`, `discovery-context.json` (optional), `apiResearchContext` (in-memory, optional), `architecture_template_evidence` (reference-only, optional)
 
 ### Step 3: Requirement Expansion & Clarification (Phase 1.5)
 
@@ -160,6 +161,7 @@ Generate product brief through multi-perspective CLI analysis.
 - Read refined-requirements.json (preferred) or seed_analysis fallback
 - Read discovery-context.json (if codebase detected)
 - For context-package input: read context-package.json domain and requirements sections
+- Reuse `architecture_template_evidence` and `references[type=architecture-template]` as reference-only architecture context
 
 **Step 4.2: Multi-CLI Parallel Analysis (3 perspectives)** — MANDATORY, NOT SUBSTITUTABLE
 
@@ -173,6 +175,7 @@ Generate product brief through multi-perspective CLI analysis.
 - Extract convergent themes (all agree), conflicts (need resolution), unique insights
 - For context-package input: cross-reference with context-package insights and constraints
 - If `apiResearchContext` is set: inject API details into technical feasibility assessment
+- If `architecture_template_evidence` is set: preserve dispositions and rationale; do not treat template text as project requirements
 
 **Step 4.4: Interactive Refinement**
 - Present synthesis, user adjusts scope/vision
@@ -215,22 +218,27 @@ Generate detailed PRD with functional/non-functional requirements.
 
 Generate architecture decisions, component design, and technology selections.
 
-**Step 6.0: Architecture Knowledge Query (arch-kb)** — OPTIONAL, keyword-triggered
+**Step 6.0: Architecture Template References** — OPTIONAL, keyword-triggered
 
-Query the isolated architecture knowledge base for template scaffolding:
+Follow the shared Architecture Template References rule in
+`@~/.maestro/templates/search-tools.md`:
 
 ```bash
-# Match system type to architecture templates (inject as ADR seed)
-maestro arch-kb search "{product_brief one-liner + key constraints}" --type template --json
+maestro search "{product_brief one-liner + key constraints}" \
+  --type template --json --limit 3
 
-# View matched template sections as seed context
-maestro arch-kb show <template-id> --section "关键架构决策与权衡"
-maestro arch-kb show <template-id> --section "架构全景图"
+maestro load --type template --id <template-id> --json
 ```
 
-- If search returns ≥1 template: inject matched template's **§8 决策与权衡** and **§4 架构全景图** as seed context into Step 6.1 CLI prompt
-- If no match: proceed without template (current behavior)
-- arch-kb is isolated from `maestro search` — only triggered by this explicit call
+Use each hit's emitted `openCommand`; load the full body and extract §8
+**决策与权衡** and §4 **架构全景图** from `entries[].body` in the Step 6.1
+prompt. `maestro load` does not support `--section`; do not use section flags in
+this evidence flow.
+
+- If search returns ≥1 template, set `architecture_template_evidence.status` to `loaded` after successful loads; record no-match and load-failed outcomes explicitly.
+- If no match, set `architecture_template_evidence.status` to `no_match` and proceed without template-derived constraints.
+- Persist `architecture_template_evidence` in `blueprint-config.json`. Pass loaded bodies to Step 6.1 and pass the evaluated references to Step 6.2.
+- Each ADR derived from a template names the template ID in `evidence_source` and records whether it was `adopted`, `adapted`, or `rejected`, with project-specific rationale.
 
 **Step 6.1: Architecture Analysis via CLI (role: review)** — MANDATORY, NOT SUBSTITUTABLE
 - System architecture style with justification
@@ -303,13 +311,14 @@ Score on 4 dimensions (25% each):
 1. **Completeness**: all required sections present with substantive content
 2. **Consistency**: terminology uniform (glossary compliance), scope containment, non-goals respected
 3. **Traceability**: goals → requirements → architecture → epics (matrix generated)
-4. **Depth**: acceptance criteria testable, ADRs justified, stories estimable
+4. **Depth**: acceptance criteria testable, ADRs justified, stories estimable; template-citing ADRs resolve to loaded records with adaptation rationale
 
 Gate decision: Pass (>=80) / Review (60-79) / Fail (<60) — **GATE: readiness-passed** (Pass/Review)
 
 **Step 8.2: Generate Reports**
 - `readiness-report.md` — quality scores, issue list (Error/Warning/Info), traceability matrix
 - `blueprint-summary.md` — one-page executive summary
+- Preserve `architecture_template_evidence` and evaluated template references in the handoff context package
 
 **Step 8.3: Update Document Status**
 - All document frontmatter updated to `status: complete`
@@ -365,6 +374,7 @@ Session: {session_id} | Quality: {score}% ({gate}) | Phases: {completed_count}/6
 Output: {run_dir}/outputs/
   blueprint-config.json, product-brief.md, requirements/, architecture/, epics/,
   readiness-report.md, blueprint-summary.md, context-package.json
+  architecture_template_evidence (when applicable)
 
 Next: analyze (deep analysis) | roadmap (generate roadmap) | plan 1 (plan first phase)
 ```
@@ -397,6 +407,7 @@ Next: analyze (deep analysis) | roadmap (generate roadmap) | plan 1 (plan first 
     "dimensions": []
   },
   "has_codebase": false,
+  "architecture_template_evidence": null,
   "phasesCompleted": [
     { "phase": 1, "name": "discovery", "output_file": "blueprint-config.json", "completed_at": "ISO8601" }
   ]
@@ -441,6 +452,7 @@ CLI Fallback Chain: Role-based resolution → degraded mode (local only); flag a
 - [ ] All documents have valid YAML frontmatter with session_id
 - [ ] Glossary terms used consistently across all documents
 - [ ] Readiness gate: Pass (>=80%) or Review (>=60%) with documented concerns
+- [ ] Every template-citing ADR resolves to a loaded template record and has adaptation rationale
 - [ ] context-package.json generated for downstream consumption
 
 ## Next-Step Routing

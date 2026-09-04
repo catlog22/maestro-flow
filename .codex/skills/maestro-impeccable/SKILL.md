@@ -2,7 +2,7 @@
 name: maestro-impeccable
 disable-model-invocation: true
 description: Use when designing, reviewing, refining, fixing, or codifying
-  frontend UI through the installed Impeccable skill
+  frontend UI with Maestro's self-contained Impeccable core
 argument-hint: "[command] [target] | hooks <action> | doctor | pin|unpin
   <command> | --codify <path>"
 allowed-tools:
@@ -47,28 +47,28 @@ Maestro Codify extension only — do not read these files for normal Impeccable 
 </deferred_reading>
 
 <purpose>
-Maestro adapter for the current installed `impeccable` skill. Impeccable owns design semantics, setup, routing, references, detector behavior, and bounded verification. Maestro adds the canonical Session/Run lifecycle, progress tracking, consistent status presentation, and the optional `--codify` extension.
+Self-contained Maestro UI design command. The bundled Impeccable core owns design semantics, setup, routing, references, detector behavior, and bounded verification. Maestro adds the canonical Session/Run lifecycle, progress tracking, consistent status presentation, and the optional `--codify` extension. No separately installed `impeccable` Skill or npm runtime is required.
 </purpose>
 
-<upstream_contract>
-The installed Impeccable skill is the canonical template. First resolve and invoke it through the `Skill` tool with name `impeccable`; its loaded base directory owns `SKILL.md`, `reference/`, and `scripts/`.
+<embedded_contract>
+The bundled core is the canonical template. Resolve its base directory in this order and Read the first existing `SKILL.md`:
+1. Project-local `workflows/impeccable/SKILL.md` (Maestro source checkout/development)
+2. Installed `~/.maestro/workflows/impeccable/SKILL.md`
 
-If Skill resolution is unavailable, try these fallbacks in order and Read the first existing `SKILL.md`; its parent directory becomes the skill base directory:
-1. Project-local `.claude/skills/impeccable/SKILL.md`
-2. User-level `~/.claude/skills/impeccable/SKILL.md`
+Retain the resolved parent as `<impeccable-base>` for the entire Run. Every path in the bundled Skill and references is relative to that directory; substitute the concrete path before reading a reference or running a script.
 
 Rules:
-1. Never use the retired copied templates under `~/.maestro/workflows/impeccable/{command}.md` for normal execution.
-2. Never copy `skill/SKILL.src.md` directly: it is a build source with unresolved provider placeholders.
-3. Load the installed `SKILL.md`, then only the single command/reference file it routes to. Respect its deferred-reading rules.
-4. Run the skill's context setup once per session from the loaded skill base directory. Do not rerun it after `init`.
-5. Preserve upstream platform routing: `audit.native.md` / `adapt.native.md` for native projects; `live` and the HTML detector are web-only.
-6. Preserve upstream bounded verification: one batched inspection/fix pass and at most one confirmation pass. Do not recreate the retired open-ended refine loop.
-7. Only when Skill resolution and both fallback paths fail, stop with E001. Recommend `npx impeccable install` (or Maestro's Impeccable add-on installer). Do not silently install or vendor it.
-8. If the user explicitly asks to update the installed skill, use `npx impeccable update`; do not update it as a side effect of design work.
+1. Never resolve or invoke another Skill named `impeccable`.
+2. Never run `npx impeccable install`, `npx impeccable update`, or depend on an external Impeccable package during execution.
+3. Load the bundled `SKILL.md`, then only the single command/reference file it routes to. Respect its deferred-reading rules.
+4. Run `node <impeccable-base>/scripts/context.mjs` once per session from the user's project cwd. Do not rerun it after `init`.
+5. Preserve platform routing: `audit.native.md` / `adapt.native.md` for native projects; `live` and the HTML detector are web-only.
+6. Preserve bounded verification: one batched inspection/fix pass and at most one confirmation pass. Do not recreate the retired open-ended refine loop.
+7. If the bundled core or a required bundled file is missing, stop with E001/E003 and repair the Maestro installation; never fetch or install another Skill as recovery.
+8. Impeccable core updates ship only through Maestro source/release updates. Never offer an upstream package update during design work.
 
-Baseline checked against upstream Impeccable Skill 4.1.2. The installed skill remains authoritative when newer.
-</upstream_contract>
+Bundled core synchronized from upstream Impeccable Skill 4.1.3 (`pbakaus/impeccable@4c5243f`) and adapted for Maestro. The bundled copy remains authoritative until Maestro updates it.
+</embedded_contract>
 
 ## Maestro Symbol Style
 
@@ -96,9 +96,9 @@ Apply this table top-to-bottom; specific routes override the generic command rou
 | Input | Route |
 |---|---|
 | `--codify <source-path> ...` / `codify <source-path> ...` | Maestro Codify extension |
-| `hooks <action>` | Invoke Impeccable hooks control; load `reference/hooks.md` |
-| `doctor` | Invoke Impeccable doctor; load `reference/doctor.md` |
-| `pin <command>` / `unpin <command>` | Invoke the installed skill's pin script |
+| `hooks <action>` | Run the bundled hooks control; load `<impeccable-base>/reference/hooks.md` |
+| `doctor` | Run the bundled doctor; load `<impeccable-base>/reference/doctor.md` |
+| `pin <command>` / `unpin <command>` | Run `<impeccable-base>/scripts/pin.mjs` |
 | `teach ...` | Compatibility alias for `init`; no deprecation warning |
 | `craft ...` | Deprecated upstream alias for ordinary new-work; display W001 once |
 | Legacy Maestro preset (`build`, `redesign`, `improve`, `enhance`, `launch`, `foundation`) | Treat the full text as a general design request and let current upstream routing resolve it; display W002 once; never reconstruct the retired chain |
@@ -110,7 +110,7 @@ Apply this table top-to-bottom; specific routes override the generic command rou
 
 ## Current Impeccable Commands
 
-This table is a routing index only. The installed Skill and its references own the full instructions.
+This table is a routing index only. The bundled `workflows/impeccable/SKILL.md` and its references own the full instructions.
 
 | Command | Category | Current meaning |
 |---|---|---|
@@ -145,12 +145,12 @@ This table is a routing index only. The installed Skill and its references own t
    - For a self-started invocation, negotiate capabilities and execute the receipt-chained Session open → chain insert → run next flow from `run-mode.md`.
    - Retain whether this executor has mutation authority. An executor without it may write outputs/report and run read-only checks, but must return completion to the coordinator instead of advancing the Run itself.
 
-2. **Resolve template**
-   - Invoke Skill `impeccable`; if unavailable, Read the first available fallback defined in `<upstream_contract>` and retain its base directory.
-   - Emit E001 only if all three resolution paths fail.
+2. **Resolve bundled core**
+   - Read the first available bundled `SKILL.md` defined in `<embedded_contract>` and retain its parent as `<impeccable-base>`.
+   - Emit E001 only if both bundled paths fail. Do not search external Skill locations.
 
-3. **Run upstream setup**
-   - Follow the loaded Skill's Setup exactly.
+3. **Run bundled setup**
+   - Follow the loaded bundled core's Setup exactly.
    - Inspect the target and at least one representative source of incumbent visual truth before editing.
    - A missing PRODUCT.md blocks only new-surface or replacement-world work as upstream specifies; it does not block narrow refinement.
    - Report `CONTEXT_STALE`; never repair drift unless requested or marked `auto` by upstream.
@@ -188,8 +188,8 @@ This table is a routing index only. The installed Skill and its references own t
      FAIL [impeccable:{command}] {phase} — E###: {reason}
      ```
 
-7. **Execute upstream reference**
-   - Follow all current MUST rules, platform variants, output schemas, provenance, and safety boundaries.
+7. **Execute bundled reference**
+   - Follow all current MUST rules, platform variants, output schemas, provenance, and safety boundaries from the bundled reference.
    - Load `reference/craft-floor.md` immediately before UI edits, never for planning-only work.
    - For critique, preserve dual independent assessment and explicit degraded disclosure. Persist snapshots and report trends only when upstream resolves a non-null slug; otherwise follow its documented skip path.
    - Never assume critique is scored out of 40: excluded heuristics are `n/a`, and the applicable maximum may vary.
@@ -221,7 +221,7 @@ This table is a routing index only. The installed Skill and its references own t
    Status: DONE | FAILED
    ```
 
-   Suggest only the next step supported by the loaded upstream reference or current findings.
+   Suggest only the next step supported by the loaded bundled reference or current findings.
 
 ## Maestro Codify Extension
 
@@ -275,9 +275,9 @@ Follow the referenced workflows for all other phase instructions and recovery. F
 <error_codes>
 | Code | Severity | Condition | Recovery |
 |---|---|---|---|
-| E001 | error | Skill resolution and both installed-template fallbacks failed | Run `npx impeccable install` or install the Maestro Impeccable add-on |
+| E001 | error | Bundled Impeccable core could not be resolved from either Maestro path | Repair/reinstall Maestro workflows, then retry |
 | E002 | error | Explicit normal-mode target/path does not exist | Correct the target and retry |
-| E003 | error | Required upstream reference/script is missing | Run `npx impeccable update`, then retry |
+| E003 | error | Required bundled reference/script is missing | Update or reinstall Maestro, then retry |
 | C001 | error | Codify source argument is missing | Provide `--codify <source-path>` |
 | C002 | error | Codify source is missing or not a directory | Correct the source path |
 | C003 | error | Codify package exists without `--overwrite` | Use a new package/output path or explicitly pass `--overwrite` |
@@ -290,10 +290,10 @@ Follow the referenced workflows for all other phase instructions and recovery. F
 <success_criteria>
 Normal mode:
 - [ ] Canonical Run attached/created exactly once; exact locator and revisions retained
-- [ ] Installed Impeccable Skill or an explicit fallback resolved; retired copied Maestro workflows were not used
-- [ ] Context setup ran once from the loaded skill base directory
-- [ ] Exactly one owning command/reference was loaded, plus only its required deferred references
-- [ ] Platform and surface mode routing followed current upstream rules; unknown platform never defaulted to web
+- [ ] Bundled Impeccable core resolved from a Maestro path; no external Skill or npm Impeccable runtime was used
+- [ ] Context setup ran once from `<impeccable-base>`
+- [ ] Exactly one owning bundled command/reference was loaded, plus only its required deferred references
+- [ ] Platform and surface mode routing followed the bundled core; unknown platform never defaulted to web
 - [ ] Target and incumbent visual truth were inspected before editing
 - [ ] update_plan tracked the loaded reference's major phases
 - [ ] Verification stayed within the upstream bounded-pass ceiling

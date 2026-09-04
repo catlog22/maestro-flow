@@ -6,11 +6,59 @@ import { performance } from 'node:perf_hooks';
 
 import { MaestroGraph } from '../../graph/kg/engine.js';
 import type { UnifiedNode } from '../../graph/kg/db/types.js';
+import {
+  SEARCH_MEASUREMENT_LANES,
+  type SearchMeasurementLane,
+} from '#built-search-adapter-contract';
+
+export { SEARCH_MEASUREMENT_LANES };
+export type { SearchMeasurementLane };
 
 export const LATENCY_WARMUPS = 20;
 export const LATENCY_SAMPLES = 100;
 export const DEFAULT_QUALITY_RUNS = 5;
 export const DEFAULT_TOP_K = 20;
+
+/**
+ * The benchmark lanes are generated from the adapter contract so evaluator
+ * and release-machine validation cannot drift. Callers still provide each
+ * evaluation-only operation; the contract does not alter production paths.
+ */
+export type SearchMeasurementPhase = 'cold' | 'warm' | 'update' | 'freshness';
+
+export interface SearchMeasurementStats {
+  warmups: number;
+  measuredSamples: number;
+  samplesMs: number[];
+  p50Ms: number;
+  p95Ms: number;
+  maxMs: number;
+}
+
+export interface SearchMeasurementLaneReport {
+  lane: SearchMeasurementLane;
+  phase: SearchMeasurementPhase;
+  status: 'measured' | 'deferred';
+  stats: SearchMeasurementStats | null;
+  reason?: string;
+}
+
+export interface SearchMeasurementReport {
+  schema_version: 'search-ranking-measurements/1.0';
+  lanes: SearchMeasurementLaneReport[];
+  complete: boolean;
+}
+
+export type SearchMeasurementOperation = () => void | Promise<void>;
+
+export interface SearchMeasurementOptions {
+  warmups?: number;
+  measuredSamples?: number;
+}
+
+export type SearchMeasurementOperations = Partial<
+  Record<SearchMeasurementLane, SearchMeasurementOperation>
+>;
 
 export type RankingCategory =
   | 'exact-symbol'
@@ -36,6 +84,14 @@ export interface RankingDocument {
   };
 }
 
+export interface RankingCorpusManifest {
+  schema_version: 'search-ranking-corpus-manifest/1.0';
+  expandedDocumentCount: number;
+  expandedSha256: string;
+  wikiSourceDocumentCount: number;
+  measurementLanes: SearchMeasurementLane[];
+}
+
 export interface RankingCorpusFixture {
   schema_version: 'search-ranking-corpus/1.0';
   documents: RankingDocument[];
@@ -44,6 +100,7 @@ export interface RankingCorpusFixture {
     idPrefix: string;
     vocabulary: string[];
   };
+  manifest: RankingCorpusManifest;
   absoluteQueries?: Array<{ id: string; query: string }>;
 }
 
@@ -92,6 +149,8 @@ export interface RankingBaselineFixture {
     warmups: number;
     measuredSamples: number;
     corpusSize: number;
+    wikiSourceDocumentCount: number;
+    expandedSha256: string;
   };
 }
 
@@ -252,6 +311,254 @@ export async function sha256File(path: string): Promise<string> {
   return createHash('sha256').update(content).digest('hex');
 }
 
+function canonicalJson(value: unknown): string {
+  if (Array.isArray(value)) return `[${value.map(canonicalJson).join(',')}]`;
+  if (isRecord(value)) {
+    return `{${Object.keys(value).sort().map(key => (
+      `${JSON.stringify(key)}:${canonicalJson(value[key])}`
+    )).join(',')}}`;
+  }
+  return JSON.stringify(value);
+}
+
+/** Hashes the expanded, generated corpus rather than the self-referential fixture manifest. */
+export function expandedCorpusSha256(corpus: RankingCorpusFixture): string {
+  return createHash('sha256').update(canonicalJson(expandCorpus(corpus))).digest('hex');
+}
+
+export function wikiSourceDocuments(
+  corpus: RankingCorpusFixture,
+): RankingDocument[] {
+  return expandCorpus(corpus).filter(document => (
+    (document.workspace === 'local' || document.workspace === undefined)
+    && document.kind !== 'code-symbol'
+  ));
+}
+
+export interface WikiCorpusIndexEntry {
+  id?: unknown;
+  source?: { kind?: unknown; path?: unknown };
+  sourceRef?: unknown;
+}
+
+export interface WikiCorpusIndexEvidence {
+  expectedEntryCount: number;
+  indexedEntryCount: number;
+  missingSourceRefs: string[];
+  duplicateSourceRefs: string[];
+}
+
+/**
+ * Count only file-backed corpus entries.  KG virtual projections are
+ * intentionally excluded: they are a separate provider and must not make a
+ * Wiki corpus appear indexed when its source files were never scanned.
+ */
+export function inspectWikiCorpusIndex(
+  entries: readonly WikiCorpusIndexEntry[],
+  corpus: RankingCorpusFixture,
+): WikiCorpusIndexEvidence {
+  const expected = wikiSourceDocuments(corpus);
+  const expectedRefs = new Set(expected.map(document => document.id));
+  const generatedRefs = new Set(expected
+    .filter(document => document.kind === 'latency-noise')
+    .map(document => document.id));
+  const seen = new Set<string>();
+  const duplicate = new Set<string>();
+  for (const entry of entries) {
+    if (entry.source?.kind !== 'file') continue;
+    const sourceRef = typeof entry.sourceRef === 'string' && expectedRefs.has(entry.sourceRef)
+      ? entry.sourceRef
+      : typeof entry.id === 'string'
+        && entry.id.startsWith('domain-')
+        && entry.source?.path === 'domain/glossary.json'
+        && generatedRefs.has(entry.id.slice('domain-'.length))
+        ? entry.id.slice('domain-'.length)
+        : null;
+    if (sourceRef === null) continue;
+    if (seen.has(sourceRef)) duplicate.add(sourceRef);
+    seen.add(sourceRef);
+  }
+  const missing = [...expectedRefs].filter(sourceRef => !seen.has(sourceRef)).sort();
+  return {
+    expectedEntryCount: expectedRefs.size,
+    indexedEntryCount: seen.size,
+    missingSourceRefs: missing,
+    duplicateSourceRefs: [...duplicate].sort(),
+  };
+}
+
+export function assertWikiCorpusIndex(
+  entries: readonly WikiCorpusIndexEntry[],
+  corpus: RankingCorpusFixture,
+): WikiCorpusIndexEvidence {
+  const evidence = inspectWikiCorpusIndex(entries, corpus);
+  if (evidence.indexedEntryCount !== evidence.expectedEntryCount
+      || evidence.missingSourceRefs.length > 0
+      || evidence.duplicateSourceRefs.length > 0) {
+    fail('WIKI_CORPUS_NOT_INDEXED', 'Wiki source corpus is incomplete or duplicated', evidence);
+  }
+  return evidence;
+}
+
+function measurementStats(samples: readonly number[], warmups: number): SearchMeasurementStats {
+  const sorted = [...samples].sort((left, right) => left - right);
+  const at = (fraction: number): number => sorted[Math.min(
+    sorted.length - 1,
+    Math.floor(sorted.length * fraction),
+  )]!;
+  return {
+    warmups,
+    measuredSamples: samples.length,
+    samplesMs: [...samples],
+    p50Ms: at(0.5),
+    p95Ms: at(0.95),
+    maxMs: sorted[sorted.length - 1]!,
+  };
+}
+
+function validMeasurementCount(value: unknown): value is number {
+  return typeof value === 'number' && Number.isInteger(value) && value >= 0;
+}
+
+export async function measureSearchLane(
+  lane: SearchMeasurementLane,
+  operation: SearchMeasurementOperation,
+  options: SearchMeasurementOptions & { phase?: SearchMeasurementPhase } = {},
+): Promise<SearchMeasurementLaneReport> {
+  const warmups = options.warmups ?? LATENCY_WARMUPS;
+  const measuredSamples = options.measuredSamples ?? LATENCY_SAMPLES;
+  if (!validMeasurementCount(warmups) || !validMeasurementCount(measuredSamples)
+      || warmups < 1 || measuredSamples < 1) {
+    fail('INVALID_MEASUREMENT_OPTIONS', 'measurement warmups and samples must be positive integers', {
+      warmups,
+      measuredSamples,
+    });
+  }
+  const phase = options.phase ?? 'warm';
+  for (let index = 0; index < warmups; index += 1) await operation();
+  const samples: number[] = [];
+  for (let index = 0; index < measuredSamples; index += 1) {
+    const started = performance.now();
+    await operation();
+    const duration = performance.now() - started;
+    if (!Number.isFinite(duration) || duration < 0) {
+      fail('INVALID_MEASUREMENT_SAMPLE', 'measurement operation returned an invalid duration', {
+        lane,
+        index,
+        duration,
+      });
+    }
+    samples.push(Number(duration.toFixed(6)));
+  }
+  return { lane, phase, status: 'measured', stats: measurementStats(samples, warmups) };
+}
+
+const MEASUREMENT_PHASES: Readonly<Record<SearchMeasurementLane, SearchMeasurementPhase>> = {
+  daemon: 'cold',
+  semantic: 'warm',
+  'cache-load': 'cold',
+  'single-file-update': 'update',
+  freshness: 'freshness',
+};
+
+export async function measureSearchLanes(
+  operations: SearchMeasurementOperations,
+  options: SearchMeasurementOptions = {},
+): Promise<SearchMeasurementReport> {
+  const lanes: SearchMeasurementLaneReport[] = [];
+  for (const lane of SEARCH_MEASUREMENT_LANES) {
+    const operation = operations[lane];
+    lanes.push(operation
+      ? await measureSearchLane(lane, operation, { ...options, phase: MEASUREMENT_PHASES[lane] })
+      : {
+        lane,
+        phase: MEASUREMENT_PHASES[lane],
+        status: 'deferred',
+        stats: null,
+        reason: 'operation was not supplied by this evaluation runner',
+      });
+  }
+  return {
+    schema_version: 'search-ranking-measurements/1.0',
+    lanes,
+    complete: lanes.every(lane => lane.status === 'measured'),
+  };
+}
+
+export function assertCompleteSearchMeasurements(
+  report: SearchMeasurementReport,
+): void {
+  if (report.schema_version !== 'search-ranking-measurements/1.0'
+      || !Array.isArray(report.lanes)
+      || report.lanes.length !== SEARCH_MEASUREMENT_LANES.length
+      || report.lanes.some((lane, index) => lane.lane !== SEARCH_MEASUREMENT_LANES[index])
+      || report.complete !== true) {
+    fail('INCOMPLETE_SEARCH_MEASUREMENTS', 'search measurement report is not complete', report);
+  }
+  for (const lane of report.lanes) {
+    if (lane.status !== 'measured' || lane.stats === null
+        || lane.stats.warmups < 1
+        || lane.stats.measuredSamples < 1
+        || lane.stats.samplesMs.length !== lane.stats.measuredSamples) {
+      fail('INCOMPLETE_SEARCH_MEASUREMENTS', 'search measurement lane is invalid', lane);
+    }
+  }
+}
+
+export function validateSearchMeasurementReport(
+  report: SearchMeasurementReport,
+  requireComplete = true,
+): void {
+  if (report.schema_version !== 'search-ranking-measurements/1.0'
+      || !Array.isArray(report.lanes)
+      || report.lanes.length !== SEARCH_MEASUREMENT_LANES.length) {
+    fail('INVALID_SEARCH_MEASUREMENTS', 'invalid search-ranking-measurements/1.0 report');
+  }
+  for (let index = 0; index < report.lanes.length; index += 1) {
+    const lane = report.lanes[index]!;
+    if (lane.lane !== SEARCH_MEASUREMENT_LANES[index]
+        || !['measured', 'deferred'].includes(lane.status)
+        || !['cold', 'warm', 'update', 'freshness'].includes(lane.phase)) {
+      fail('INVALID_SEARCH_MEASUREMENTS', 'invalid search measurement lane', lane);
+    }
+    if (lane.status === 'deferred') {
+      if (lane.stats !== null || typeof lane.reason !== 'string' || lane.reason.length === 0) {
+        fail('INVALID_SEARCH_MEASUREMENTS', 'deferred lane must expose a reason and no stats', lane);
+      }
+      continue;
+    }
+    if (!lane.stats || !validMeasurementCount(lane.stats.warmups)
+        || !validMeasurementCount(lane.stats.measuredSamples)
+        || lane.stats.warmups < 1 || lane.stats.measuredSamples < 1
+        || lane.stats.samplesMs.length !== lane.stats.measuredSamples
+        || lane.stats.samplesMs.some(sample => typeof sample !== 'number' || !Number.isFinite(sample) || sample < 0)) {
+      fail('INVALID_SEARCH_MEASUREMENTS', 'measured lane has invalid stats', lane);
+    }
+    const recomputed = measurementStats(lane.stats.samplesMs, lane.stats.warmups);
+    if (lane.stats.p50Ms !== recomputed.p50Ms
+        || lane.stats.p95Ms !== recomputed.p95Ms
+        || lane.stats.maxMs !== recomputed.maxMs) {
+      fail('INVALID_SEARCH_MEASUREMENTS', 'measurement aggregates do not match raw samples', {
+        lane: lane.lane,
+        expected: {
+          p50Ms: recomputed.p50Ms,
+          p95Ms: recomputed.p95Ms,
+          maxMs: recomputed.maxMs,
+        },
+        actual: {
+          p50Ms: lane.stats.p50Ms,
+          p95Ms: lane.stats.p95Ms,
+          maxMs: lane.stats.maxMs,
+        },
+      });
+    }
+  }
+  if (report.complete !== report.lanes.every(lane => lane.status === 'measured')) {
+    fail('INVALID_SEARCH_MEASUREMENTS', 'measurement complete flag does not match lane statuses');
+  }
+  if (requireComplete) assertCompleteSearchMeasurements(report);
+}
+
 export function validateCorpus(value: RankingCorpusFixture): void {
   if (value.schema_version !== 'search-ranking-corpus/1.0'
       || !Array.isArray(value.documents)
@@ -272,6 +579,34 @@ export function validateCorpus(value: RankingCorpusFixture): void {
     }
     if (ids.has(document.id)) fail('INVALID_CORPUS', `duplicate corpus document id: ${document.id}`);
     ids.add(document.id);
+  }
+
+  const manifest = value.manifest;
+  const expanded = expandCorpus(value);
+  const expectedWikiCount = expanded.filter(document => (
+    (document.workspace === 'local' || document.workspace === undefined)
+    && document.kind !== 'code-symbol'
+  )).length;
+  if (!manifest
+      || manifest.schema_version !== 'search-ranking-corpus-manifest/1.0'
+      || manifest.expandedDocumentCount !== expanded.length
+      || manifest.expandedDocumentCount !== value.latencyCorpus.size
+      || !/^[a-f0-9]{64}$/.test(manifest.expandedSha256)
+      || manifest.expandedSha256 !== expandedCorpusSha256(value)
+      || manifest.wikiSourceDocumentCount !== expectedWikiCount
+      || !Array.isArray(manifest.measurementLanes)
+      || manifest.measurementLanes.length !== SEARCH_MEASUREMENT_LANES.length
+      || manifest.measurementLanes.some(
+        (lane, index) => lane !== SEARCH_MEASUREMENT_LANES[index],
+      )) {
+    fail('INVALID_CORPUS_MANIFEST', 'corpus manifest does not match deterministic expansion', {
+      expectedExpandedDocumentCount: expanded.length,
+      actualExpandedDocumentCount: manifest?.expandedDocumentCount ?? null,
+      expectedWikiSourceDocumentCount: expectedWikiCount,
+      actualWikiSourceDocumentCount: manifest?.wikiSourceDocumentCount ?? null,
+      expectedExpandedSha256: expandedCorpusSha256(value),
+      actualExpandedSha256: manifest?.expandedSha256 ?? null,
+    });
   }
 }
 
@@ -328,6 +663,9 @@ export function validateBaseline(value: RankingBaselineFixture): void {
       || value.protocol.topK < DEFAULT_TOP_K
       || !Number.isInteger(value.protocol.corpusSize)
       || value.protocol.corpusSize < 1
+      || !Number.isInteger(value.protocol.wikiSourceDocumentCount)
+      || value.protocol.wikiSourceDocumentCount < 1
+      || !/^[a-f0-9]{64}$/.test(value.protocol.expandedSha256)
       || !Object.values(value.metrics.categories).every(validMetrics)
       || !Object.values(value.knownOrder).every(order => (
         Array.isArray(order)
@@ -376,6 +714,22 @@ export function validateRankingFixtures(
   const documentIds = new Set(corpus.documents.map(document => document.id));
   validateQrels(qrels, documentIds);
   validateKnownOrderBaseline(baseline, qrels, documentIds);
+  if (baseline.protocol.corpusSize !== corpus.manifest.expandedDocumentCount
+      || baseline.protocol.wikiSourceDocumentCount !== corpus.manifest.wikiSourceDocumentCount
+      || baseline.protocol.expandedSha256 !== corpus.manifest.expandedSha256) {
+    fail('CORPUS_BASELINE_MISMATCH', 'baseline protocol does not match corpus manifest', {
+      baseline: {
+        corpusSize: baseline.protocol.corpusSize,
+        wikiSourceDocumentCount: baseline.protocol.wikiSourceDocumentCount,
+        expandedSha256: baseline.protocol.expandedSha256,
+      },
+      manifest: {
+        expandedDocumentCount: corpus.manifest.expandedDocumentCount,
+        wikiSourceDocumentCount: corpus.manifest.wikiSourceDocumentCount,
+        expandedSha256: corpus.manifest.expandedSha256,
+      },
+    });
+  }
   assertHoldoutsDisjoint(holdouts, qrels, corpus);
 }
 
@@ -430,6 +784,8 @@ export interface HermeticSearchWorkspace {
   unauthorizedWorkspaceRoot: string;
   unauthorizedMaestroGraphPath: string;
   corpusSize: number;
+  wikiSourceDocumentCount: number;
+  expandedCorpusSha256: string;
 }
 
 function graphNode(document: RankingDocument): UnifiedNode {
@@ -489,13 +845,14 @@ function safeFixtureName(id: string): string {
 async function projectWikiSourceFiles(
   workflowRoot: string,
   documents: readonly RankingDocument[],
-): Promise<void> {
+): Promise<number> {
   const wikiDocuments = documents.filter(document => (
-    document.workspace === 'local'
+    (document.workspace === 'local' || document.workspace === undefined)
     && document.kind !== 'code-symbol'
-    && document.kind !== 'latency-noise'
   ));
-  for (const document of wikiDocuments) {
+  const generatedNoise = wikiDocuments.filter(document => document.kind === 'latency-noise');
+  const authoredDocuments = wikiDocuments.filter(document => document.kind !== 'latency-noise');
+  for (const document of authoredDocuments) {
     const path = join(workflowRoot, 'knowhow', `FIXTURE-${safeFixtureName(document.id)}.md`);
     await mkdir(dirname(path), { recursive: true });
     const tags = document.tags.map(tag => `  - ${JSON.stringify(tag)}`).join('\n');
@@ -518,6 +875,27 @@ async function projectWikiSourceFiles(
       '',
     ].join('\n'), 'utf8');
   }
+
+  // Materialize generated distractors through the Wiki indexer's file-backed
+  // domain source. A single compact JSON parse avoids thousands of repeated
+  // XML/frontmatter normalization calls while every document still enters the
+  // same cold WikiIndex + BM25 construction measured by the gate.
+  if (generatedNoise.length > 0) {
+    const path = join(workflowRoot, 'domain', 'glossary.json');
+    await mkdir(dirname(path), { recursive: true });
+    await writeFile(path, JSON.stringify({
+      terms: generatedNoise.map(document => ({
+        id: document.id,
+        canonical: document.title,
+        definition: `${document.summary} ${document.body}`,
+        keywords: document.tags,
+        status: 'active',
+        tier: 'evaluation',
+        source: { kind: 'fixture' },
+      })),
+    }), 'utf8');
+  }
+  return wikiDocuments.length;
 }
 
 export async function buildHermeticSearchWorkspace(
@@ -553,11 +931,16 @@ export async function buildHermeticSearchWorkspace(
     schema_version: corpus.schema_version,
     documents,
   }, null, 2)}\n`, 'utf8');
-  await projectWikiSourceFiles(workflowRoot, documents);
+  const wikiSourceDocumentCount = await projectWikiSourceFiles(workflowRoot, documents);
 
+  // The Wiki lane owns the generated distractors as file-backed entries. Keep
+  // them out of the KG virtual projection so one logical corpus does not get
+  // counted twice (and so KG latency remains a separate, curated-provider
+  // measurement).
   const localDocuments = documents.filter(document => (
     (document.workspace === 'local' || document.workspace === undefined)
     && document.status !== 'deprecated'
+    && document.kind !== 'latency-noise'
   ));
   const linkedDocuments = documents.filter(document => (
     document.workspace === 'peer' && document.authorized !== false
@@ -585,6 +968,8 @@ export async function buildHermeticSearchWorkspace(
     unauthorizedWorkspaceRoot,
     unauthorizedMaestroGraphPath,
     corpusSize: documents.length,
+    wikiSourceDocumentCount,
+    expandedCorpusSha256: corpus.manifest.expandedSha256,
   };
 }
 

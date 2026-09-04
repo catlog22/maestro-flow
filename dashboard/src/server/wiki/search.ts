@@ -1,4 +1,10 @@
+import { createHash } from 'node:crypto';
 import type { WikiEntry } from './wiki-types.js';
+import {
+  computeSearchCandidateBudget,
+  isAdaptiveSearchBudgetEnabled,
+} from '../../../../src/search/candidate-budget.js';
+import type { SearchCandidateBudget } from '../../../../src/search/candidate-budget.js';
 
 /**
  * BM25F full-text search with per-field boosting.
@@ -248,12 +254,272 @@ export interface SearchResult {
 // Internal BM25F types
 // ---------------------------------------------------------------------------
 
-type FieldLengths = Record<FieldName, number>;
+export type FieldLengths = Record<FieldName, number>;
 
 interface FieldPosting {
   docId: string;
   fieldTfs: Record<FieldName, number>;
 }
+
+/** JSON-safe representation of the BM25F acceleration index. */
+export interface SerializedInvertedIndex {
+  /** Stable payload marker; entries remain the canonical source of truth. */
+  schemaVersion: 'bm25f/1';
+  /** Explicit payload version for forward-compatible validation. */
+  version: 1;
+  totalDocs: number;
+  avgFieldLengths: FieldLengths;
+  fieldPostings: Array<readonly [string, Array<{
+    docId: string;
+    fieldTfs: FieldLengths;
+  }>] >;
+  fieldLengths: Array<readonly [string, FieldLengths]>;
+  docConfigKeys: Array<readonly [string, FieldConfigKey]>;
+  /** Optional publication metadata used to reject stale acceleration hints. */
+  generation?: number;
+  sourceFingerprint?: string;
+  docIdFingerprint?: string;
+  configFingerprint?: string;
+}
+
+export interface InvertedIndexSerializationMetadata {
+  generation?: number;
+  sourceFingerprint?: string;
+}
+
+export interface InvertedIndexValidationOptions {
+  expectedGeneration?: number;
+  expectedSourceFingerprint?: string;
+  expectedDocIds?: ReadonlySet<string>;
+  expectedDocConfigKeys?: ReadonlyMap<string, FieldConfigKey>;
+}
+
+const SERIALIZED_BM25F_VERSION = 1;
+const MAX_COMPILED_TERMS = 1_000_000;
+const MAX_COMPILED_POSTINGS = 4_000_000;
+const MAX_COMPILED_DOCS = 1_000_000;
+const MAX_COMPILED_STRING = 32_768;
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function finiteNonNegative(value: unknown): value is number {
+  return typeof value === 'number' && Number.isFinite(value) && value >= 0;
+}
+
+function validLengths(value: unknown): value is FieldLengths {
+  if (!isRecord(value)) return false;
+  for (const field of INDEX_FIELDS) {
+    if (!finiteNonNegative(value[field]) || !Number.isSafeInteger(value[field])) return false;
+  }
+  return true;
+}
+
+function validAverageLengths(value: unknown): value is FieldLengths {
+  if (!isRecord(value)) return false;
+  for (const field of INDEX_FIELDS) {
+    if (!finiteNonNegative(value[field])) return false;
+  }
+  return true;
+}
+
+function cloneLengths(value: FieldLengths): FieldLengths {
+  return {
+    title: value.title,
+    summary: value.summary,
+    tags: value.tags,
+    body: value.body,
+  };
+}
+
+function fingerprintPairs(pairs: ReadonlyArray<readonly [string, string]>): string {
+  const hash = createHash('sha256');
+  for (const [key, value] of pairs.slice().sort(([left], [right]) => left.localeCompare(right))) {
+    hash.update(key).update('\0').update(value).update('\0');
+  }
+  return hash.digest('hex');
+}
+
+/**
+ * Serialize an in-memory BM25F index without Maps or prototype-bearing
+ * objects. Arrays are used for deterministic output and compact JSON; term
+ * and document IDs remain explicit so validation can reject duplicate keys.
+ */
+export function serializeInvertedIndex(
+  index: InvertedIndex,
+  metadata: InvertedIndexSerializationMetadata = {},
+): SerializedInvertedIndex {
+  const fieldPostings = [...index.fieldPostings.entries()]
+    .sort(([left], [right]) => left.localeCompare(right))
+    .map(([term, postings]) => [
+      term,
+      postings
+        .slice()
+        .sort((left, right) => left.docId.localeCompare(right.docId))
+        .map(posting => ({ docId: posting.docId, fieldTfs: cloneLengths(posting.fieldTfs) })),
+    ] as const);
+  const fieldLengths = [...index.fieldLengths.entries()]
+    .sort(([left], [right]) => left.localeCompare(right))
+    .map(([docId, lengths]) => [docId, cloneLengths(lengths)] as const);
+  const docConfigKeys = [...index.docConfigKeys.entries()]
+    .sort(([left], [right]) => left.localeCompare(right))
+    .map(([docId, configKey]) => [docId, configKey] as const);
+  const docIdFingerprint = fingerprintPairs(fieldLengths.map(([docId]) => [docId, ''] as const));
+  const configFingerprint = fingerprintPairs(docConfigKeys.map(([docId, configKey]) => [docId, configKey] as const));
+  return {
+    schemaVersion: 'bm25f/1',
+    version: SERIALIZED_BM25F_VERSION,
+    totalDocs: index.totalDocs,
+    avgFieldLengths: cloneLengths(index.avgFieldLengths),
+    fieldPostings,
+    fieldLengths,
+    docConfigKeys,
+    ...(metadata.generation === undefined ? {} : { generation: metadata.generation }),
+    ...(metadata.sourceFingerprint === undefined ? {} : { sourceFingerprint: metadata.sourceFingerprint }),
+    docIdFingerprint,
+    configFingerprint,
+  };
+}
+
+/**
+ * Validate and rehydrate a serialized BM25F index. Invalid acceleration data
+ * returns null rather than throwing: callers must rebuild from WikiEntry[] so
+ * a corrupt optional section can never hide canonical content.
+ */
+export function deserializeInvertedIndex(
+  value: unknown,
+  options: InvertedIndexValidationOptions = {},
+): InvertedIndex | null {
+  if (!isRecord(value)) return null;
+  const schemaVersion = value.schemaVersion;
+  const format = value.format;
+  const version = value.version;
+  const totalDocs = value.totalDocs;
+  const avgFieldLengths = value.avgFieldLengths;
+  const rawFieldPostings = value.fieldPostings;
+  const rawFieldLengths = value.fieldLengths;
+  const rawDocConfigKeys = value.docConfigKeys;
+  const generation = value.generation;
+  const sourceFingerprint = value.sourceFingerprint;
+  const docIdFingerprint = value.docIdFingerprint;
+  const configFingerprint = value.configFingerprint;
+  if ((schemaVersion !== 'bm25f/1' && format !== 'bm25f')
+    || (version !== SERIALIZED_BM25F_VERSION && schemaVersion !== 'bm25f/1')
+    || typeof totalDocs !== 'number' || !Number.isSafeInteger(totalDocs)
+    || totalDocs < 0 || totalDocs > MAX_COMPILED_DOCS
+    || !validAverageLengths(avgFieldLengths)
+    || !Array.isArray(rawFieldPostings)
+    || !Array.isArray(rawFieldLengths)
+    || !Array.isArray(rawDocConfigKeys)
+    || (generation !== undefined && (typeof generation !== 'number' || !Number.isFinite(generation)))
+    || (sourceFingerprint !== undefined
+      && (typeof sourceFingerprint !== 'string' || !/^[0-9a-f]{64}$/.test(sourceFingerprint)))
+    || (docIdFingerprint !== undefined
+      && (typeof docIdFingerprint !== 'string' || !/^[0-9a-f]{64}$/.test(docIdFingerprint)))
+    || (configFingerprint !== undefined
+      && (typeof configFingerprint !== 'string' || !/^[0-9a-f]{64}$/.test(configFingerprint)))
+    || (options.expectedGeneration !== undefined && generation !== undefined
+      && generation !== options.expectedGeneration)
+    || (options.expectedSourceFingerprint !== undefined && sourceFingerprint !== undefined
+      && sourceFingerprint !== options.expectedSourceFingerprint)
+    || rawFieldPostings.length > MAX_COMPILED_TERMS
+    || rawFieldLengths.length > MAX_COMPILED_DOCS
+    || rawDocConfigKeys.length > MAX_COMPILED_DOCS) return null;
+  const normalizedAvgFieldLengths = avgFieldLengths as FieldLengths;
+  const normalizedFieldPostings = rawFieldPostings as unknown[];
+  const normalizedFieldLengths = rawFieldLengths as unknown[];
+  const normalizedDocConfigKeys = rawDocConfigKeys as unknown[];
+
+  const fieldLengths = new Map<string, FieldLengths>();
+  const totalFieldLengths: FieldLengths = { title: 0, summary: 0, tags: 0, body: 0 };
+  for (const item of normalizedFieldLengths) {
+    if (!Array.isArray(item) || item.length !== 2
+      || typeof item[0] !== 'string' || item[0].length === 0 || item[0].length > MAX_COMPILED_STRING
+      || !validLengths(item[1]) || fieldLengths.has(item[0])) return null;
+    const lengths = item[1] as FieldLengths;
+    for (const field of INDEX_FIELDS) totalFieldLengths[field] += lengths[field];
+    fieldLengths.set(item[0], cloneLengths(lengths));
+  }
+
+  const docConfigKeys = new Map<string, FieldConfigKey>();
+  for (const item of normalizedDocConfigKeys) {
+    if (!Array.isArray(item) || item.length !== 2
+      || typeof item[0] !== 'string' || item[0].length === 0 || item[0].length > MAX_COMPILED_STRING
+      || (item[1] !== 'default' && item[1] !== 'kg' && item[1] !== 'session')
+      || docConfigKeys.has(item[0])) return null;
+    docConfigKeys.set(item[0], item[1] as FieldConfigKey);
+  }
+
+  const fieldPostings = new Map<string, FieldPosting[]>();
+  let postingCount = 0;
+  for (const item of normalizedFieldPostings) {
+    if (!Array.isArray(item) || item.length !== 2
+      || typeof item[0] !== 'string' || item[0].length === 0 || item[0].length > MAX_COMPILED_STRING
+      || !Array.isArray(item[1]) || fieldPostings.has(item[0])) return null;
+    const postings: FieldPosting[] = [];
+    const seenDocs = new Set<string>();
+    const rawPostings = item[1] as unknown[];
+    for (const posting of rawPostings) {
+      postingCount++;
+      if (postingCount > MAX_COMPILED_POSTINGS
+        || !isRecord(posting)
+        || typeof posting.docId !== 'string' || posting.docId.length === 0
+        || posting.docId.length > MAX_COMPILED_STRING
+        || seenDocs.has(posting.docId)
+        || !fieldLengths.has(posting.docId)
+        || !validLengths(posting.fieldTfs)) return null;
+      const fieldTfs = posting.fieldTfs as FieldLengths;
+      const fieldLengthsForDoc = fieldLengths.get(posting.docId)!;
+      // A posting with no positive field frequency cannot affect scoring and
+      // is almost certainly a damaged/truncated payload. Frequencies also
+      // cannot exceed the token count recorded for their document/field.
+      if (!INDEX_FIELDS.some(field => fieldTfs[field] > 0)
+        || INDEX_FIELDS.some(field => fieldTfs[field] > fieldLengthsForDoc[field])) return null;
+      seenDocs.add(posting.docId);
+      postings.push({ docId: posting.docId, fieldTfs: cloneLengths(fieldTfs) });
+    }
+    fieldPostings.set(item[0], postings);
+  }
+
+  // Every searchable document has a field-length/config record in indexes
+  // emitted by buildInvertedIndex. Rejecting mismatches keeps malformed IDs
+  // from silently changing document-frequency statistics.
+  if (fieldLengths.size !== totalDocs || docConfigKeys.size !== totalDocs) return null;
+  for (const docId of fieldLengths.keys()) {
+    if (!docConfigKeys.has(docId)) return null;
+  }
+  for (const field of INDEX_FIELDS) {
+    const expectedAverage = totalDocs === 0 ? 0 : totalFieldLengths[field] / totalDocs;
+    const difference = Math.abs(normalizedAvgFieldLengths[field] - expectedAverage);
+    if (difference > Math.max(1e-9, Math.abs(expectedAverage) * 1e-12)) return null;
+  }
+  if (options.expectedDocIds !== undefined
+    && (options.expectedDocIds.size !== fieldLengths.size
+      || [...options.expectedDocIds].some(docId => !fieldLengths.has(docId)))) return null;
+  if (options.expectedDocConfigKeys !== undefined
+    && (options.expectedDocConfigKeys.size !== docConfigKeys.size
+      || [...options.expectedDocConfigKeys].some(([docId, key]) => docConfigKeys.get(docId) !== key))) return null;
+  if (docIdFingerprint !== undefined
+    && docIdFingerprint !== fingerprintPairs([...fieldLengths.keys()].map(docId => [docId, ''] as const))) return null;
+  if (configFingerprint !== undefined
+    && configFingerprint !== fingerprintPairs([...docConfigKeys.entries()])) return null;
+
+  return {
+    postings: new Map(),
+    docLengths: new Map(),
+    avgDocLength: 0,
+    totalDocs,
+    fieldPostings,
+    fieldLengths,
+    avgFieldLengths: cloneLengths(normalizedAvgFieldLengths),
+    docConfigKeys,
+  };
+}
+
+/** Explicit aliases for callers that refer to the compiled BM25F format. */
+export const serializeBM25FIndex = serializeInvertedIndex;
+export const deserializeBM25FIndex = deserializeInvertedIndex;
 
 // ---------------------------------------------------------------------------
 // CJK support
@@ -345,6 +611,11 @@ function getFieldConfigKey(entry: WikiEntry): FieldConfigKey {
   if (isKgVirtual(entry)) return 'kg';
   if (isSessionEntry(entry)) return 'session';
   return 'default';
+}
+
+/** Resolve the field-configuration identity without building postings. */
+export function getInvertedIndexConfigKey(entry: WikiEntry): FieldConfigKey {
+  return getFieldConfigKey(entry);
 }
 
 const FIELD_CONFIG_MAP: Record<FieldConfigKey, Record<FieldName, FieldConfig>> = {
@@ -458,12 +729,23 @@ export function searchBM25(
   limit = 50,
   credibilityFactors?: Map<string, number>,
   allowedDocIds?: ReadonlySet<string>,
+  candidateBudget?: SearchCandidateBudget,
 ): SearchResult[] {
   const terms = tokenize(query);
   if (terms.length === 0 || index.totalDocs === 0) return [];
 
   const weighted = expandQueryTerms(terms, index);
-  const fetchLimit = (credibilityFactors && credibilityFactors.size > 0) ? limit * 2 : limit;
+  const effectiveBudget = candidateBudget
+    ?? (isAdaptiveSearchBudgetEnabled()
+      ? computeSearchCandidateBudget(limit, { surface: 'wiki', mode: 'adaptive' })
+      : undefined);
+  // Adaptive callers already supplied the boundary-computed provider budget;
+  // never multiply it again for credibility reranking.
+  const adaptiveLimit = effectiveBudget?.adaptive
+    ? Math.min(effectiveBudget.maxCandidateLimit, effectiveBudget.candidateLimit)
+    : undefined;
+  const fetchLimit = adaptiveLimit
+    ?? ((credibilityFactors && credibilityFactors.size > 0) ? limit * 2 : limit);
   const results = searchBM25F(index, weighted, fetchLimit, allowedDocIds);
 
   if (credibilityFactors && credibilityFactors.size > 0) {
@@ -474,7 +756,7 @@ export function searchBM25(
     results.sort((a, b) => b.score - a.score || a.docId.localeCompare(b.docId));
   }
 
-  return results.slice(0, limit);
+  return results.slice(0, adaptiveLimit === undefined ? limit : Math.min(limit, adaptiveLimit));
 }
 
 function searchBM25F(
@@ -701,12 +983,21 @@ export function searchBM25Planned(
   limit = 50,
   credibilityFactors?: Map<string, number>,
   allowedDocIds?: ReadonlySet<string>,
+  candidateBudget?: SearchCandidateBudget,
 ): SearchResult[] {
   const terms = tokenize(query);
   if (terms.length === 0 || index.totalDocs === 0) return [];
 
   const plan = buildQueryPlan(query, index);
-  const internalLimit = Math.min(500, Math.max(limit * 3, 60));
+  const effectiveBudget = candidateBudget
+    ?? (isAdaptiveSearchBudgetEnabled()
+      ? computeSearchCandidateBudget(limit, { surface: 'planned', mode: 'adaptive' })
+      : undefined);
+  // `candidateBudget` is computed at the request boundary. Legacy callers keep
+  // the old planned-search overfetch until adaptive rollout is enabled.
+  const internalLimit = effectiveBudget?.adaptive
+    ? Math.min(effectiveBudget.maxCandidateLimit, effectiveBudget.candidateLimit)
+    : Math.min(500, Math.max(limit * 3, 60));
   const coverageOpts: CoveragePenaltyOptions = {
     coreTerms: plan.coreCoverageTerms,
     baseFactor: 0.65,
@@ -770,7 +1061,9 @@ export function searchBM25Planned(
     ranked.sort((a, b) => b.score - a.score || a.docId.localeCompare(b.docId));
   }
 
-  return ranked.slice(0, limit);
+  return ranked.slice(0, effectiveBudget?.adaptive
+    ? Math.min(limit, effectiveBudget.candidateLimit)
+    : limit);
 }
 
 // ---------------------------------------------------------------------------

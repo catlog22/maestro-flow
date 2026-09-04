@@ -458,8 +458,14 @@ interface MaestroGraphWikiRow {
   id: string;
   kind: string;
   name: string;
+  qualified_name?: string | null;
   file_path: string | null;
+  language?: string | null;
+  start_line?: number | null;
+  end_line?: number | null;
   source_type: string;
+  docstring?: string | null;
+  signature?: string | null;
   definition: string | null;
   body: string | null;
   category: string | null;
@@ -474,12 +480,27 @@ export function adaptKnowledgeGraphFromDb(
 ): WikiEntry[] {
   const db = new DatabaseSync(dbPath, { readOnly: true });
   try {
+    // MaestroGraph's canonical schema carries symbol/signature/path fields,
+    // while older test/legacy projections may only have the compact columns.
+    // Select optional fields through a schema probe so structured embedding
+    // can reuse existing graph facts without making old DBs unreadable.
+    const nodeColumns = new Set(
+      (db.prepare('PRAGMA table_info(nodes)').all() as Array<{ name?: unknown }>)
+        .map(column => typeof column.name === 'string' ? column.name : ''),
+    );
+    const optionalColumn = (name: string): string => nodeColumns.has(name) ? name : `NULL AS ${name}`;
+    const nodeSelect = [
+      'id', 'kind', 'name', optionalColumn('qualified_name'), 'file_path',
+      optionalColumn('language'), 'source_type', optionalColumn('docstring'),
+      optionalColumn('signature'), 'definition', 'body', 'category',
+      optionalColumn('start_line'), optionalColumn('end_line'), 'updated_at',
+    ].join(', ');
     // Preserve the canonical non-codegraph-first ordering without sorting an
-    // expression across the entire node table. Both branches can use existing
+    // expression across the entire table. Both branches can use existing
     // source/name indexes and together are exactly equivalent to the prior
     // `source_type != 'codegraph' DESC, name` ordering.
     const knowledgeNodes = db.prepare(`
-      SELECT id, kind, name, file_path, source_type, definition, body, category, updated_at
+      SELECT ${nodeSelect}
       FROM nodes
       WHERE source_type != 'codegraph'
       ORDER BY name
@@ -488,7 +509,7 @@ export function adaptKnowledgeGraphFromDb(
     const remaining = 5000 - knowledgeNodes.length;
     const codeNodes = remaining > 0
       ? db.prepare(`
-          SELECT id, kind, name, file_path, source_type, definition, body, category, updated_at
+          SELECT ${nodeSelect}
           FROM nodes
           WHERE source_type = 'codegraph'
           ORDER BY name
@@ -503,7 +524,7 @@ export function adaptKnowledgeGraphFromDb(
     // ordered 5,000-node projection in an edge CTE. json_each keeps this a
     // single bounded parameter and both joins retain the previous membership.
     const projectedEdges = db.prepare(`
-      WITH selected(id) AS (SELECT value FROM json_each(?))
+      WITH selected(id) AS MATERIALIZED (SELECT value FROM json_each(?))
       SELECT e.source, e.target, e.kind
       FROM edges e
       JOIN selected source_node ON source_node.id = e.source
@@ -542,7 +563,14 @@ export function adaptKnowledgeGraphFromDb(
           virtualKind: 'kg-node',
           kgNodeId: node.id,
           nodeType: node.kind,
+          sourceType: node.source_type,
           filePath: node.file_path,
+          qualifiedName: node.qualified_name,
+          language: node.language,
+          startLine: node.start_line,
+          endLine: node.end_line,
+          docstring: node.docstring,
+          signature: node.signature,
           kgEdges: nodeEdges.map(edge => ({
             target: idMap.get(edge.target)!,
             type: edge.kind,

@@ -31,6 +31,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 
 import {
   SCHEMA_SHA256,
+  SEARCH_MEASUREMENT_LANES,
   parseBuiltSearchAdapterExpected,
   parseBuiltSearchAdapterReport,
 } from '../shared/built-search-adapter-contract.mjs';
@@ -1518,6 +1519,29 @@ function validateParentRankingFixtures({ qrels, baseline, corpus, holdouts }) {
     }
     documentById.set(document.id, document);
   }
+  const expectedExpandedDocumentCount = corpus.latencyCorpus.size;
+  const expectedWikiSourceDocumentCount = wikiSourceDocumentCount(corpus);
+  const actualManifest = corpus.manifest;
+  if (!actualManifest
+      || actualManifest.schema_version !== 'search-ranking-corpus-manifest/1.0'
+      || actualManifest.expandedDocumentCount !== expectedExpandedDocumentCount
+      || actualManifest.wikiSourceDocumentCount !== expectedWikiSourceDocumentCount
+      || !/^[a-f0-9]{64}$/.test(actualManifest.expandedSha256)
+      || actualManifest.expandedSha256 !== expandedCorpusSha256(corpus)
+      || !Array.isArray(actualManifest.measurementLanes)
+      || actualManifest.measurementLanes.length !== SEARCH_MEASUREMENT_LANES.length
+      || actualManifest.measurementLanes.some(
+        (lane, index) => lane !== SEARCH_MEASUREMENT_LANES[index],
+      )) {
+    invalid('corpus manifest does not match deterministic expansion', {
+      expectedExpandedDocumentCount,
+      actualExpandedDocumentCount: actualManifest?.expandedDocumentCount ?? null,
+      expectedWikiSourceDocumentCount,
+      actualWikiSourceDocumentCount: actualManifest?.wikiSourceDocumentCount ?? null,
+      expectedExpandedSha256: expandedCorpusSha256(corpus),
+      actualExpandedSha256: actualManifest?.expandedSha256 ?? null,
+    });
+  }
   if (!qrels || typeof qrels !== 'object' || Array.isArray(qrels)
       || qrels.schema_version !== 'search-ranking-qrels/1.0'
       || !Array.isArray(qrels.queries)
@@ -1553,6 +1577,8 @@ function validateParentRankingFixtures({ qrels, baseline, corpus, holdouts }) {
     || !/^[a-f0-9]{64}$/.test(baseline.qrelsSha256)
     || !baseline.metrics || typeof baseline.metrics !== 'object'
     || !baseline.knownOrder || typeof baseline.knownOrder !== 'object'
+    || !baseline.protocol || typeof baseline.protocol !== 'object'
+    || !/^[a-f0-9]{64}$/.test(baseline.protocol.expandedSha256)
   )) invalid('invalid search-ranking-baseline/1.0 fixture');
   if (holdouts !== undefined && (
     !holdouts || typeof holdouts !== 'object' || Array.isArray(holdouts)
@@ -1579,7 +1605,31 @@ function validateParentRankingFixtures({ qrels, baseline, corpus, holdouts }) {
   if (baseline !== undefined && !baselineGoldenMatches(qrels, baseline)) {
     invalid('baseline metrics are not reproducible from qrels and known-order rows');
   }
-  return { documentById, holdoutOverlapIds };
+  if (baseline !== undefined && (
+    baseline.protocol.corpusSize !== expectedExpandedDocumentCount
+    || baseline.protocol.wikiSourceDocumentCount !== expectedWikiSourceDocumentCount
+    || baseline.protocol.expandedSha256 !== actualManifest.expandedSha256
+  )) {
+    invalid('baseline protocol does not match corpus manifest', {
+      baseline: {
+        corpusSize: baseline.protocol.corpusSize,
+        wikiSourceDocumentCount: baseline.protocol.wikiSourceDocumentCount,
+        expandedSha256: baseline.protocol.expandedSha256,
+      },
+      manifest: {
+        expandedDocumentCount: expectedExpandedDocumentCount,
+        wikiSourceDocumentCount: expectedWikiSourceDocumentCount,
+        expandedSha256: actualManifest.expandedSha256,
+      },
+    });
+  }
+  return {
+    documentById,
+    holdoutOverlapIds,
+    expandedDocumentCount: expectedExpandedDocumentCount,
+    wikiSourceDocumentCount: expectedWikiSourceDocumentCount,
+    expandedSha256: actualManifest.expandedSha256,
+  };
 }
 
 export function deriveBuiltSearchAdapterExpected({
@@ -1594,13 +1644,23 @@ export function deriveBuiltSearchAdapterExpected({
     cpuCount: cpus().length,
   },
 }) {
-  const { documentById } = validateParentRankingFixtures({
+  const {
+    documentById,
+    expandedDocumentCount,
+    wikiSourceDocumentCount: expectedWikiSourceDocumentCount,
+    expandedSha256,
+  } = validateParentRankingFixtures({
     qrels,
     corpus,
   });
   const expected = {
     workspaceRoot,
     qrelsSha256,
+    corpus: {
+      expandedDocumentCount,
+      wikiIndexedEntryCount: expectedWikiSourceDocumentCount,
+      expandedSha256,
+    },
     queries: qrels.queries.map(query => {
       const provider = builtProviderForCategory(query.category);
       return {
@@ -1856,7 +1916,17 @@ function normalizedQuery(value) {
   return value.trim().toLocaleLowerCase('en-US').replace(/\s+/g, ' ');
 }
 
-function preparedCorpus(corpus) {
+function canonicalJson(value) {
+  if (Array.isArray(value)) return `[${value.map(canonicalJson).join(',')}]`;
+  if (value && typeof value === 'object') {
+    return `{${Object.keys(value).sort().map(key => (
+      `${JSON.stringify(key)}:${canonicalJson(value[key])}`
+    )).join(',')}}`;
+  }
+  return JSON.stringify(value);
+}
+
+function expandCorpusDocuments(corpus) {
   const documents = [...corpus.documents];
   const vocabulary = corpus.latencyCorpus.vocabulary;
   for (let index = documents.length; index < corpus.latencyCorpus.size; index += 1) {
@@ -1876,7 +1946,22 @@ function preparedCorpus(corpus) {
       provenance: { source: 'fixture', path: `latency/${suffix}.json` },
     });
   }
-  return documents.map(document => ({
+  return documents;
+}
+
+export function expandedCorpusSha256(corpus) {
+  return sha256(Buffer.from(canonicalJson(expandCorpusDocuments(corpus))));
+}
+
+function wikiSourceDocumentCount(corpus) {
+  return expandCorpusDocuments(corpus).filter(document => (
+    (document.workspace === 'local' || document.workspace === undefined)
+    && document.kind !== 'code-symbol'
+  )).length;
+}
+
+function preparedCorpus(corpus) {
+  return expandCorpusDocuments(corpus).map(document => ({
     document,
     title: tokenize(document.title),
     summary: tokenize(document.summary),

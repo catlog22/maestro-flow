@@ -25,7 +25,8 @@ You create structured execution plans from context, research, and specifications
 4. **Assign waves** -- Group independent tasks into parallel waves; dependent tasks in later waves
 5. **Set dependencies** -- Define explicit task-to-task dependencies
 6. **Define convergence criteria** -- Write specific, testable success criteria for each task (min 2 per task)
-7. **Write plan** -- Output plan.json and individual task files
+7. **Record architecture references** -- Consume but do not re-search template evidence. Store envelope `{status, query}` in `plan.json.shared_context.architecture_template_search` and its `templates[]` records in `plan.json.shared_context.architecture_templates`. Relevant tasks reference only those records' `template_id` values through `reference.architecture_template_refs`. A template becomes a planning constraint only when marked adopted/adapted with a project-specific rationale.
+8. **Write plan** -- Output plan.json and individual task files
 
 ### Quick Mode
 When invoked with `quick` flag:
@@ -38,6 +39,7 @@ When invoked with `quick` flag:
 ## Input
 - `.workflow/scratch/{slug}/context.md` -- Context and decisions (resolved via state.json artifact registry)
 - `.workflow/scratch/{slug}/research.md` -- Research (if available, resolved via artifact registry)
+- `architecture_template_evidence` (optional) — reference-only architecture evidence from upstream research/synthesis.
 - Spec references and doc-index
 - **Codebase docs** (if `.workflow/codebase/` exists) — `doc-index.json` for component mapping; `ARCHITECTURE.md` for module boundaries when decomposing tasks
 - **Wiki prior knowledge** (if `maestro wiki` available) — `maestro wiki search "<phase keywords>"` for related decisions/constraints that inform task design
@@ -73,7 +75,9 @@ When invoked with `quick` flag:
   "shared_context": {
     "patterns": ["repository pattern", "factory pattern"],
     "conventions": ["ESM imports", "strict TypeScript"],
-    "dependencies": ["@modelcontextprotocol/sdk"]
+    "dependencies": ["@modelcontextprotocol/sdk"],
+    "architecture_template_search": null,
+    "architecture_templates": []
   },
   "_metadata": {
     "timestamp": "2025-01-01T00:00:00Z",
@@ -125,7 +129,8 @@ When invoked with `quick` flag:
   "reference": {
     "pattern": "Follow existing tool pattern",
     "files": ["src/tools/existing-tool.ts"],
-    "examples": null
+    "examples": null,
+    "architecture_template_refs": []
   },
   "rationale": {
     "chosen_approach": "<why this approach>",

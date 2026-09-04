@@ -23,6 +23,7 @@ import test from 'node:test';
 
 import {
   SCHEMA_SHA256,
+  SEARCH_MEASUREMENT_LANES,
   makeBuiltSearchAdapterFixture,
   parseBuiltSearchAdapterExpected,
   parseBuiltSearchAdapterReport,
@@ -63,6 +64,7 @@ import {
   DASHBOARD_TEST_PATHS,
   deriveCertifiedArtifactPaths,
   deriveBuiltSearchAdapterExpected,
+  expandedCorpusSha256,
   openRetainedArtifactHandle,
   parseArguments,
   parseArtifactJson,
@@ -1895,6 +1897,50 @@ test('rejects aggregate green with raw evidence fault', async () => {
       label,
     );
   }
+});
+
+test('parent rejects corpus hash drift and non-canonical lane ordering', () => {
+  assert.deepEqual(validCorpusFixture.manifest.measurementLanes, [...SEARCH_MEASUREMENT_LANES]);
+
+  const permutedCorpus = structuredClone(validCorpusFixture);
+  [permutedCorpus.manifest.measurementLanes[0], permutedCorpus.manifest.measurementLanes[1]] = [
+    permutedCorpus.manifest.measurementLanes[1],
+    permutedCorpus.manifest.measurementLanes[0],
+  ];
+  assert.throws(
+    () => deriveBuiltSearchAdapterExpected({
+      workspaceRoot: temporaryRoot('permuted-lanes'),
+      qrels: validQrelsFixture,
+      corpus: permutedCorpus,
+      qrelsSha256: validBaselineFixture.qrelsSha256,
+    }),
+    error => error.code === 'INVALID_RANKING_FIXTURES'
+      && /corpus manifest does not match deterministic expansion/.test(error.message),
+  );
+
+  const mutatedCorpus = structuredClone(validCorpusFixture);
+  mutatedCorpus.latencyCorpus.vocabulary[0] = 'hash-mutated-alpha';
+  mutatedCorpus.manifest.expandedSha256 = expandedCorpusSha256(mutatedCorpus);
+  assert.equal(
+    mutatedCorpus.manifest.expandedDocumentCount,
+    validCorpusFixture.manifest.expandedDocumentCount,
+  );
+  assert.equal(
+    mutatedCorpus.manifest.wikiSourceDocumentCount,
+    validCorpusFixture.manifest.wikiSourceDocumentCount,
+  );
+  const root = temporaryRoot('baseline-corpus-hash');
+  const report = greenAdapterBody(root);
+  assert.throws(
+    () => recomputeBuiltAggregates(report, {
+      qrels: validQrelsFixture,
+      baseline: validBaselineFixture,
+      corpus: mutatedCorpus,
+      holdouts: validHoldoutsFixture,
+    }),
+    error => error.code === 'INVALID_RANKING_FIXTURES'
+      && /baseline protocol does not match corpus manifest/.test(error.message),
+  );
 });
 
 test('parent uses generated adapter contract', async () => {

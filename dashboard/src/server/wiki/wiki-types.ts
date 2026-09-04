@@ -133,6 +133,75 @@ export interface WikiSearchFilters {
   includeDeprecated?: boolean;
 }
 
+/** Structural view of the shared root SearchCandidateBudget. */
+export interface WikiSearchCandidateBudget {
+  readonly resultLimit: number;
+  readonly limit: number;
+  readonly candidateLimit: number;
+  readonly initialCandidateLimit: number;
+  readonly maxCandidateLimit: number;
+  readonly hardCap: number;
+  readonly mode: 'legacy' | 'adaptive';
+  readonly adaptive: boolean;
+  readonly escalated: boolean;
+  readonly escalationCount: number;
+  readonly legacyCandidateLimit: number;
+  readonly surface: 'search' | 'wiki' | 'mixed' | 'indexer' | 'planned' | 'kg' | 'code' | 'arch-kb';
+}
+
+/**
+ * Request-scoped search diagnostics sink.  This structural contract keeps the
+ * dashboard WikiIndexer independent from the root CLI package while allowing a
+ * caller to collect bounded phase timings and reason-coded fallbacks.
+ */
+export interface WikiSearchDiagnosticsSnapshot {
+  schemaVersion: string;
+  requestId: string;
+  durationMs: number;
+  phases: Array<{ phase: string; durationMs: number; candidateCount?: number }>;
+  fallbacks: Array<{ source: string; reason: string }>;
+  provider?: 'daemon' | 'indexer' | 'mixed' | 'kg' | 'arch-kb' | 'none';
+  cacheState?: 'hit' | 'miss' | 'stale' | 'unknown';
+  embeddingUsed?: boolean;
+  embeddingDocs?: number;
+  resultCount?: number;
+  candidateCount?: number;
+  eligibleCandidateCount?: number;
+  candidateBudget?: {
+    mode: 'legacy' | 'adaptive';
+    requestedLimit: number;
+    initialCandidateLimit: number;
+    candidateLimit: number;
+    hardCap: number;
+    escalated: boolean;
+    legacyCandidateLimit: number;
+  };
+  truncated?: boolean;
+}
+
+export interface WikiSearchDiagnostics {
+  readonly requestId?: string;
+  recordPhase?(phase: string, durationMs: number, candidateCount?: number): void;
+  recordFallback?(source: string, reason: string): void;
+  setProvider?(provider: 'daemon' | 'indexer' | 'mixed' | 'kg' | 'arch-kb' | 'none'): void;
+  setCacheState?(state: 'hit' | 'miss' | 'stale' | 'unknown'): void;
+  setEmbedding?(used: boolean, docs: number): void;
+  setResultCount?(count: number): void;
+  setCandidateCount?(count: number): void;
+  setEligibleCandidateCount?(count: number): void;
+  setCandidateBudget?(budget: {
+    mode: 'legacy' | 'adaptive';
+    requestedLimit: number;
+    initialCandidateLimit: number;
+    candidateLimit: number;
+    hardCap: number;
+    escalated: boolean;
+    legacyCandidateLimit: number;
+  }): void;
+  merge?(value: unknown): void;
+  snapshot?(): WikiSearchDiagnosticsSnapshot;
+}
+
 export interface WikiFilters {
   type?: WikiNodeType;
   tag?: string;

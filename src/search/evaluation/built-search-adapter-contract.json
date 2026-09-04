@@ -96,6 +96,33 @@
         "measuredSamples": { "const": 100 }
       }
     },
+    "CorpusEvidence": {
+      "type": "object",
+      "required": [
+        "expandedDocumentCount",
+        "wikiIndexedEntryCount",
+        "expandedSha256"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "expandedDocumentCount": { "type": "integer", "minimum": 1 },
+        "wikiIndexedEntryCount": { "type": "integer", "minimum": 1 },
+        "expandedSha256": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        }
+      }
+    },
+    "SearchMeasurementLane": {
+      "type": "string",
+      "enum": [
+        "daemon",
+        "semantic",
+        "cache-load",
+        "single-file-update",
+        "freshness"
+      ]
+    },
     "BuiltSearchAdapterExpected": {
       "type": "object",
       "required": [
@@ -123,7 +150,8 @@
         },
         "databasePaths": { "$ref": "#/$defs/DatabasePaths" },
         "runner": { "$ref": "#/$defs/Runner" },
-        "constants": { "$ref": "#/$defs/ProtocolConstants" }
+        "constants": { "$ref": "#/$defs/ProtocolConstants" },
+        "corpus": { "$ref": "#/$defs/CorpusEvidence" }
       }
     },
     "Provenance": {
@@ -504,6 +532,7 @@
           "type": "string",
           "pattern": "^[a-f0-9]{64}$"
         },
+        "corpus": { "$ref": "#/$defs/CorpusEvidence" },
         "evidence": { "$ref": "#/$defs/Evidence" },
         "reported": { "$ref": "#/$defs/ReportedAggregates" },
         "workspace": { "$ref": "#/$defs/WorkspaceEvidence" },

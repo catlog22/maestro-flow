@@ -85,7 +85,7 @@ async function getIndexer(): Promise<WikiIndexer> {
     const linkedWorkspaces = resolved
       .filter(lw => lw.valid)
       .map(lw => ({ name: lw.name, workflowRoot: lw.workflowRoot, shareTypes: lw.share }));
-    _indexer = new Cls({ workflowRoot, linkedWorkspaces, persistence: 'read-only' });
+    _indexer = new Cls({ workflowRoot, linkedWorkspaces, role: 'reader' });
   }
   return _indexer;
 }

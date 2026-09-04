@@ -108,7 +108,7 @@ describe('daemon client protocol boundaries', () => {
     expect(readFileSync(lockPath, 'utf-8')).toBe(stalePrimary);
   });
 
-  it('serializes facet filters in the search request', async () => {
+  it('serializes facet filters and diagnostics opt-in in the search request', async () => {
     let received: DaemonSearchRequest | null = null;
     const port = await listenWithHandler(socket => {
       let body = '';
@@ -132,6 +132,7 @@ describe('daemon client protocol boundaries', () => {
         workspace: 'shared',
         includeDeprecated: true,
       },
+      diagnostics: true,
     });
 
     expect(received).toMatchObject({
@@ -144,6 +145,7 @@ describe('daemon client protocol boundaries', () => {
         workspace: 'shared',
         includeDeprecated: true,
       },
+      diagnostics: true,
     });
   });
 

@@ -12,20 +12,30 @@ vi.mock('#maestro-dashboard/wiki/wiki-indexer.js', async () => (
 ));
 
 import {
+  assertCompleteSearchMeasurements,
   assertNoQuerySpecialCases,
+  SEARCH_MEASUREMENT_LANES,
   assertStableTopK,
   computeKnownOrderBaselineMetrics,
   computeRankingMetrics,
   evaluateRanking,
+  expandedCorpusSha256,
   lexicalFixtureRanker,
+  measureSearchLanes,
+  validateCorpus,
+  validateRankingFixtures,
+  validateSearchMeasurementReport,
   loadRankingFixture,
   RankingEvaluationError,
   scanQuerySpecialCases,
   sha256File,
+  buildHermeticSearchWorkspace,
+  assertWikiCorpusIndex,
   type RankingBaselineFixture,
   type RankingProvider,
   type RankingQrelsFixture,
   type RankingCorpusFixture,
+  type RankingHoldoutsFixture,
 } from './relevance-evaluator.js';
 import {
   assertColdWikiIndexEvidence,
@@ -35,6 +45,7 @@ import {
   type WikiIndexSample,
 } from './built-search-adapter.js';
 import { parseBuiltSearchAdapterReport } from '#built-search-adapter-contract';
+import { WikiIndexer } from '#maestro-dashboard/wiki/wiki-indexer.js';
 
 const fixturesRoot = fileURLToPath(new URL('./fixtures/', import.meta.url));
 const corpusPath = join(fixturesRoot, 'search-ranking-corpus.json');
@@ -97,6 +108,7 @@ function expectedForReport(report: BuiltSearchAdapterReport): BuiltSearchAdapter
   return {
     workspaceRoot: report.workspace.root,
     qrelsSha256: report.qrelsSha256,
+    corpus: report.corpus,
     queries: report.evidence.queries.map(({
       queryId,
       category,
@@ -163,6 +175,104 @@ describe('hash-fenced hermetic evaluator', () => {
       mixed: { ndcgAt10: 0.6653152460429406 },
       'wiki-short': { ndcgAt10: 0.6309297535714575 },
     });
+  });
+
+  it('hash-fences the expanded corpus manifest', async () => {
+    const corpus = await loadRankingFixture<RankingCorpusFixture>(corpusPath);
+    expect(corpus.manifest.expandedDocumentCount).toBe(corpus.latencyCorpus.size);
+    expect(corpus.manifest.wikiSourceDocumentCount).toBe(1993);
+    expect(expandedCorpusSha256(corpus)).toBe(corpus.manifest.expandedSha256);
+    expect(corpus.manifest.measurementLanes).toEqual([...SEARCH_MEASUREMENT_LANES]);
+
+    const permuted = structuredClone(corpus);
+    [permuted.manifest.measurementLanes[0], permuted.manifest.measurementLanes[1]] = [
+      permuted.manifest.measurementLanes[1]!,
+      permuted.manifest.measurementLanes[0]!,
+    ];
+    expect(() => validateCorpus(permuted)).toThrow(/corpus manifest/);
+  });
+
+  it('binds the frozen baseline to the expanded corpus hash', async () => {
+    const corpus = await loadRankingFixture<RankingCorpusFixture>(corpusPath);
+    const qrels = await loadRankingFixture<RankingQrelsFixture>(qrelsPath);
+    const baseline = await loadRankingFixture<RankingBaselineFixture>(baselinePath);
+    const holdouts = await loadRankingFixture<RankingHoldoutsFixture>(holdoutsPath);
+    expect(baseline.protocol.expandedSha256).toBe(corpus.manifest.expandedSha256);
+
+    const mutatedCorpus = structuredClone(corpus);
+    mutatedCorpus.latencyCorpus.vocabulary[0] = 'hash-mutated-alpha';
+    mutatedCorpus.manifest.expandedSha256 = expandedCorpusSha256(mutatedCorpus);
+    expect(mutatedCorpus.manifest.expandedDocumentCount).toBe(corpus.manifest.expandedDocumentCount);
+    expect(mutatedCorpus.manifest.wikiSourceDocumentCount).toBe(corpus.manifest.wikiSourceDocumentCount);
+    expect(() => validateRankingFixtures(mutatedCorpus, qrels, baseline, holdouts))
+      .toThrow(/baseline protocol does not match corpus manifest/);
+  });
+
+  it('materializes every generated Wiki distractor and reports its count', async () => {
+    const corpus = await loadRankingFixture<RankingCorpusFixture>(corpusPath);
+    const workspace = await buildHermeticSearchWorkspace(corpus, join(testRoot, 'wiki-workspace'));
+    const indexer = new WikiIndexer({
+      workflowRoot: join(workspace.root, '.workflow'),
+      persistence: 'memory-only',
+      includeCliSessions: false,
+    });
+    try {
+      const index = await indexer.get();
+      const evidence = assertWikiCorpusIndex(index.entries, corpus);
+      expect(evidence.indexedEntryCount).toBe(corpus.manifest.wikiSourceDocumentCount);
+      expect(evidence.missingSourceRefs).toEqual([]);
+      expect(evidence.duplicateSourceRefs).toEqual([]);
+      expect(index.entries.filter(entry => entry.source.kind === 'file'
+        && entry.source.path === 'domain/glossary.json'
+        && entry.id.startsWith(`domain-${corpus.latencyCorpus.idPrefix}-`))).toHaveLength(
+        corpus.latencyCorpus.size - corpus.documents.length,
+      );
+    } finally {
+      await indexer.close();
+    }
+  }, 120_000);
+
+  it('provides explicit, non-green deferred measurement lanes', async () => {
+    const calls: Record<string, number> = {};
+    const partial = await measureSearchLanes({
+      daemon: async () => { calls.daemon = (calls.daemon ?? 0) + 1; },
+    }, { warmups: 1, measuredSamples: 2 });
+    expect(partial.complete).toBe(false);
+    expect(calls.daemon).toBe(3);
+    expect(partial.lanes).toHaveLength(SEARCH_MEASUREMENT_LANES.length);
+    expect(partial.lanes.find(lane => lane.lane === 'daemon')).toMatchObject({
+      status: 'measured',
+      phase: 'cold',
+      stats: { warmups: 1, measuredSamples: 2, samplesMs: expect.any(Array) },
+    });
+    expect(partial.lanes.find(lane => lane.lane === 'semantic')).toMatchObject({
+      status: 'deferred',
+      reason: expect.any(String),
+      stats: null,
+    });
+    validateSearchMeasurementReport(partial, false);
+    expect(() => assertCompleteSearchMeasurements(partial)).toThrow(/not complete/);
+
+    const full = await measureSearchLanes(
+      Object.fromEntries(SEARCH_MEASUREMENT_LANES.map(lane => [lane, async () => undefined])),
+      { warmups: 1, measuredSamples: 2 },
+    );
+    expect(full.complete).toBe(true);
+    validateSearchMeasurementReport(full);
+    expect(() => assertCompleteSearchMeasurements(full)).not.toThrow();
+
+    for (const aggregate of ['p50Ms', 'p95Ms', 'maxMs'] as const) {
+      const forged = structuredClone(full);
+      forged.lanes[0]!.stats![aggregate] += 1;
+      expect(() => validateSearchMeasurementReport(forged)).toThrow(
+        /measurement aggregates do not match raw samples/,
+      );
+    }
+
+    const permuted = structuredClone(full);
+    [permuted.lanes[0], permuted.lanes[1]] = [permuted.lanes[1]!, permuted.lanes[0]!];
+    expect(() => validateSearchMeasurementReport(permuted)).toThrow(/invalid search measurement lane/);
+    expect(() => assertCompleteSearchMeasurements(permuted)).toThrow(/not complete/);
   });
 
   it('emits stable machine JSON from a 2000-document temporary workspace', async () => {
@@ -522,6 +632,11 @@ describe('compiled production ranking adapter', () => {
     const report = await getColdEvidenceReport();
     const expected = expectedForReport(report);
     expect(parseBuiltSearchAdapterReport(report, expected)).toEqual(report);
+    expect(report.corpus).toMatchObject({
+      expandedDocumentCount: 2000,
+      wikiIndexedEntryCount: 1993,
+      expandedSha256: expect.stringMatching(/^[a-f0-9]{64}$/),
+    });
     expect(report.evidence.queries.every(query => query.runs.length === 5)).toBe(true);
 
     const firstQuery = report.evidence.queries[0];
@@ -659,6 +774,7 @@ describe('compiled production ranking adapter', () => {
       { ...report, unexpected: true },
       { ...report, schema_version: 'built-search-adapter/1.0' },
       { ...report, runner: { ...report.runner, platform: 'not-a-platform' } },
+      { ...report, corpus: { ...report.corpus, wikiIndexedEntryCount: 1 } },
       { ...report, evidence: { ...report.evidence, events: null } },
     ]) {
       expect(() => parseBuiltSearchAdapterReport(fault, expected)).toThrow();

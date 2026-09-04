@@ -40,6 +40,10 @@ import {
   isDaemonInfoV2,
   readDaemonInfo,
 } from '../daemon-types.js';
+import {
+  acquireWikiPublisherLease,
+  releaseWikiPublisherLease,
+} from '../publisher-lease.js';
 import type { DaemonInfoV2 } from '../daemon-types.js';
 
 const roots: string[] = [];
@@ -132,6 +136,22 @@ describe.sequential('search daemon lifecycle state machine', () => {
     running.push({ root, server: started[0].value.server });
   });
 
+  it('holds the publisher lease against Dashboard until daemon shutdown', async () => {
+    const root = workflowRoot();
+    const started = await startDaemon(root, { workflowRoot: root });
+    running.push({ root, server: started.server });
+
+    // Dashboard's one-shot fallback is a second lease contender while the
+    // resident daemon owns publication; it must fail closed rather than write.
+    const dashboardAttempt = acquireWikiPublisherLease(root);
+    expect(dashboardAttempt).toBeNull();
+
+    await expect(stopDaemon(root)).resolves.toBe(true);
+    const afterShutdown = acquireWikiPublisherLease(root);
+    expect(afterShutdown).not.toBeNull();
+    releaseWikiPublisherLease(afterShutdown);
+  });
+
   it('cleans stale spawn artifacts after atomically claiming the descriptor', async () => {
     const root = workflowRoot();
     const lockPath = getDaemonSpawnLockPath(root);
@@ -168,6 +188,47 @@ describe.sequential('search daemon lifecycle state machine', () => {
       state: 'ready',
     });
     expect(indexer.searchWithMeta).toHaveBeenCalledTimes(1);
+  });
+
+  it('returns bounded request-scoped diagnostics and accepts old-style callers', async () => {
+    const root = workflowRoot();
+    const started = await startDaemon(root, { workflowRoot: root });
+    running.push({ root, server: started.server });
+    const descriptor = currentInfo(root);
+
+    const response = await queryDaemon(descriptor.port, {
+      action: 'search',
+      query: 'diagnostic request',
+      limit: 1,
+      diagnostics: true,
+      ...daemonIdentityRequest(descriptor),
+    });
+
+    expect(response).toMatchObject({
+      ok: true,
+      diagnostics: {
+        schemaVersion: 'maestro-search-diagnostics/1.0',
+        requestId: expect.any(String),
+        phases: expect.any(Array),
+        fallbacks: expect.any(Array),
+      },
+    });
+    expect(indexer.searchWithMeta).toHaveBeenCalledWith(
+      'diagnostic request',
+      1,
+      expect.objectContaining({ diagnostics: expect.objectContaining({ requestId: expect.any(String) }) }),
+    );
+
+    // A response without diagnostics remains a valid protocol response for
+    // clients that predate the optional field.
+    const legacy = await queryDaemon(descriptor.port, {
+      action: 'search',
+      query: 'old caller',
+      limit: 1,
+      ...daemonIdentityRequest(descriptor),
+    });
+    expect(legacy.ok).toBe(true);
+    expect(legacy.diagnostics).toBeUndefined();
   });
 
   it('serves the warm full index to authenticated load clients', async () => {

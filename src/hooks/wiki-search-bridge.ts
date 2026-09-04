@@ -88,7 +88,7 @@ async function getIndexer(workflowRoot: string): Promise<WikiIndexer> {
     workflowRoot,
     linkedWorkspaces,
     repository,
-    persistence: 'read-only',
+    role: 'reader',
   });
   _indexerRoot = workflowRoot;
   _indexerAuthorityKey = authorityKey;

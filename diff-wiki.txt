@@ -1,0 +1,621 @@
+diff --git a/dashboard/src/server/wiki/embedding.ts b/dashboard/src/server/wiki/embedding.ts
+index b5457dc1..ac9c06b3 100644
+--- a/dashboard/src/server/wiki/embedding.ts
++++ b/dashboard/src/server/wiki/embedding.ts
+@@ -15,0 +16,6 @@ import { open, rm, type FileHandle } from 'node:fs/promises';
++import {
++  buildSearchFragments,
++  isStructuredChunksEnabled,
++  STRUCTURED_FRAGMENT_POLICY_CHECKSUM,
++  type SearchFragment,
++} from './structured-fragments.js';
+@@ -43,0 +50 @@ export interface EmbeddingIndex {
++  /** Parent-document hashes, parallel to vectors (legacy-compatible). */
+@@ -45,0 +53,4 @@ export interface EmbeddingIndex {
++  /** Structured fragment evidence, parallel to docIds when opt-in is enabled. */
++  fragments?: SearchFragment[];
++  /** Structured chunk policy fence; absent for legacy chunk artifacts. */
++  policyChecksum?: string;
+@@ -51,0 +63 @@ export interface VectorSearchResult {
++  /** Internal chunk/fragment id; final Wiki results use parentId. */
+@@ -53,0 +66 @@ export interface VectorSearchResult {
++  fragment?: SearchFragment;
+@@ -850,0 +864 @@ export async function vectorSearchZvec(
++  fragmentsById?: ReadonlyMap<string, SearchFragment>,
+@@ -874,0 +889 @@ export async function vectorSearchZvec(
++        const fragment = fragmentsById?.get(docId);
+@@ -877,0 +893 @@ export async function vectorSearchZvec(
++          ...(fragment ? { fragment } : {}),
+@@ -899 +915,7 @@ function flatCosineSearch(
+-    if (sim > 0) scored.push({ docId: index.docIds[i], score: sim });
++    if (sim > 0) {
++      scored.push({
++        docId: index.docIds[i],
++        score: sim,
++        ...(index.fragments?.[i] ? { fragment: index.fragments[i] } : {}),
++      });
++    }
+@@ -904,0 +927,31 @@ function flatCosineSearch(
++/** Collapse internal fragment/chunk hits to one highest-scoring parent hit. */
++export function mapVectorResultsToParents(
++  results: readonly VectorSearchResult[],
++  index: Pick<EmbeddingIndex, 'docIds' | 'chunkDocIds' | 'fragments'>,
++  limit = results.length,
++): VectorSearchResult[] {
++  const parentByFragment = new Map<string, string>();
++  const evidenceByFragment = new Map<string, SearchFragment>();
++  for (let i = 0; i < index.docIds.length; i++) {
++    const fragment = index.fragments?.[i];
++    const parentId = index.chunkDocIds?.[i] ?? fragment?.parentId ?? index.docIds[i];
++    parentByFragment.set(index.docIds[i], parentId);
++    if (fragment) evidenceByFragment.set(index.docIds[i], fragment);
++  }
++  const best = new Map<string, VectorSearchResult>();
++  for (const result of results) {
++    const parentId = parentByFragment.get(result.docId) ?? result.fragment?.parentId ?? result.docId;
++    const fragment = result.fragment ?? evidenceByFragment.get(result.docId);
++    const candidate = {
++      ...result,
++      docId: parentId,
++      ...(fragment ? { fragment } : {}),
++    };
++    const current = best.get(parentId);
++    if (!current || candidate.score > current.score) best.set(parentId, candidate);
++  }
++  return [...best.values()]
++    .sort((left, right) => right.score - left.score || left.docId.localeCompare(right.docId))
++    .slice(0, Math.max(0, limit));
++}
++
+@@ -910,0 +964,17 @@ const SQLITE_FILE = 'embedding-index.db';
++/**
++ * Structured and legacy vectors are intentionally not mixed.  In particular,
++ * a legacy caller must never silently query a structured artifact generated
++ * under a different chunk policy, and enabling the flag must rebuild an old
++ * five-section artifact before it can be used.
++ */
++function isCompatibleEmbeddingArtifact(index: EmbeddingIndex): boolean {
++  if (!isStructuredChunksEnabled()) {
++    return index.policyChecksum === undefined && index.fragments === undefined;
++  }
++  return index.policyChecksum === STRUCTURED_FRAGMENT_POLICY_CHECKSUM
++    && Array.isArray(index.fragments)
++    && index.fragments.length === index.docIds.length
++    && index.fragments.every((fragment, i) => fragment.fragmentId === index.docIds[i]
++      && (!index.chunkDocIds || fragment.parentId === index.chunkDocIds[i]));
++}
++
+@@ -958,0 +1029,27 @@ function validateStringArray(
++function validateFragmentArray(value: unknown, expectedLength: number): SearchFragment[] | undefined {
++  if (value === undefined) return undefined;
++  if (!Array.isArray(value) || value.length !== expectedLength) {
++    throw new Error('Invalid embedding index fragments');
++  }
++  for (let i = 0; i < value.length; i++) {
++    const fragment = value[i] as Partial<SearchFragment> | null;
++    if (!fragment || typeof fragment !== 'object'
++      || typeof fragment.fragmentId !== 'string' || fragment.fragmentId.length === 0
++      || typeof fragment.parentId !== 'string' || fragment.parentId.length === 0
++      || typeof fragment.text !== 'string'
++      || typeof fragment.contentHash !== 'string' || !/^[0-9a-f]{64}$/.test(fragment.contentHash)
++      || typeof fragment.policyChecksum !== 'string' || !/^[0-9a-f]{64}$/.test(fragment.policyChecksum)
++      || (fragment.kind !== 'markdown' && fragment.kind !== 'text' && fragment.kind !== 'code')
++      || !Array.isArray(fragment.breadcrumb)
++      || fragment.breadcrumb.some(item => typeof item !== 'string')
++      || !fragment.range || typeof fragment.range !== 'object'
++      || !Number.isSafeInteger(fragment.range.startLine) || fragment.range.startLine < 1
++      || !Number.isSafeInteger(fragment.range.endLine) || fragment.range.endLine < fragment.range.startLine
++      || (fragment.range.startChar !== undefined && (!Number.isSafeInteger(fragment.range.startChar) || fragment.range.startChar < 0))
++      || (fragment.range.endChar !== undefined && (!Number.isSafeInteger(fragment.range.endChar) || fragment.range.endChar < 0))) {
++      throw new Error(`Invalid embedding index fragment at ${i}`);
++    }
++  }
++  return value as SearchFragment[];
++}
++
+@@ -988 +1085,19 @@ function validateEmbeddingIndex(index: EmbeddingIndex): void {
+-  validateStringArray(index.chunkDocIds, 'chunkDocIds', count, false);
++  const chunkDocIds = validateStringArray(index.chunkDocIds, 'chunkDocIds', count, false);
++  const fragments = validateFragmentArray(index.fragments, count);
++  if (fragments && (!index.policyChecksum || !/^[0-9a-f]{64}$/.test(index.policyChecksum))) {
++    throw new Error('Structured embedding fragments require a policy checksum');
++  }
++  if (index.policyChecksum !== undefined && !fragments) {
++    throw new Error('Embedding policy checksum requires structured fragments');
++  }
++  if (index.policyChecksum !== undefined && !/^[0-9a-f]{64}$/.test(index.policyChecksum)) {
++    throw new Error('Invalid embedding index policy checksum');
++  }
++  if (fragments) {
++    for (let i = 0; i < fragments.length; i++) {
++      if (fragments[i].fragmentId !== index.docIds[i]
++        || (chunkDocIds && fragments[i].parentId !== chunkDocIds[i])) {
++        throw new Error(`Embedding fragment ${i} does not match its document mapping`);
++      }
++    }
++  }
+@@ -1032,0 +1148,2 @@ async function writeBinaryIndexTemp(
++    fragments: index.fragments,
++    policyChecksum: index.policyChecksum,
+@@ -1177,0 +1295,2 @@ async function prepareZvecIndex(
++      fragments: index.fragments,
++      policyChecksum: index.policyChecksum,
+@@ -1211 +1330,4 @@ export function loadEmbeddingIndex(dir: string): EmbeddingIndex | null {
+-      return loadFromZvecMeta(zvecMetaPath, zvecCollPath);
++      const loaded = loadFromZvecMeta(zvecMetaPath, zvecCollPath);
++      if (isCompatibleEmbeddingArtifact(loaded)) return loaded;
++      // A policy/mode mismatch is a cache miss; try the binary companion or
++      // force the caller to rebuild rather than exposing stale vectors.
+@@ -1224 +1346,3 @@ export function loadEmbeddingIndex(dir: string): EmbeddingIndex | null {
+-      return loadFromBinary(binPath);
++      const loaded = loadFromBinary(binPath);
++      if (isCompatibleEmbeddingArtifact(loaded)) return loaded;
++      return null;
+@@ -1264,0 +1389,2 @@ interface PersistedEmbeddingMeta {
++  fragments?: SearchFragment[];
++  policyChecksum?: string;
+@@ -1292,0 +1419,5 @@ function validatePersistedMeta(
++    validateFragmentArray(meta.fragments, expectedCount);
++  }
++  if (meta.policyChecksum !== undefined
++    && (typeof meta.policyChecksum !== 'string' || !/^[0-9a-f]{64}$/.test(meta.policyChecksum))) {
++    throw new Error('Embedding metadata has an invalid policy checksum');
+@@ -1368,0 +1500,2 @@ function loadFromZvecMeta(metaPath: string, _collectionPath: string): EmbeddingI
++      fragments: meta.fragments,
++      policyChecksum: meta.policyChecksum,
+@@ -1435,0 +1569,2 @@ function loadFromBinary(filePath: string): EmbeddingIndex {
++    fragments: meta.fragments,
++    policyChecksum: meta.policyChecksum,
+@@ -1576,0 +1712,11 @@ export interface DocForEmbedding {
++  /** Optional source metadata used only by structured fragments. */
++  kind?: 'markdown' | 'text' | 'code';
++  filePath?: string | null;
++  symbol?: string | null;
++  qualifiedName?: string | null;
++  signature?: string | null;
++  language?: string | null;
++  definition?: string | null;
++  sourceType?: string | null;
++  startLine?: number;
++  endLine?: number;
+@@ -1580,0 +1727,17 @@ export function hashDocContent(d: DocForEmbedding, enrichedText?: string): strin
++  if (isStructuredChunksEnabled()) {
++    // Code fragments include graph facts that are not always present in the
++    // Wiki body. Fence those fields so a path/symbol/signature update cannot
++    // reuse a stale structured vector.
++    parts.push(JSON.stringify({
++      kind: d.kind,
++      filePath: d.filePath,
++      symbol: d.symbol,
++      qualifiedName: d.qualifiedName,
++      signature: d.signature,
++      language: d.language,
++      definition: d.definition,
++      sourceType: d.sourceType,
++      startLine: d.startLine,
++      endLine: d.endLine,
++    }));
++  }
+@@ -1638 +1801,32 @@ function docToText(d: DocForEmbedding): string {
+-export function splitDocToChunks(d: DocForEmbedding): Array<{ chunkId: string; text: string }> {
++export function splitDocToChunks(d: DocForEmbedding): Array<{
++  chunkId: string;
++  text: string;
++  /** Present only for the opt-in structured chunk policy. */
++  fragment?: SearchFragment;
++}> {
++  if (isStructuredChunksEnabled()) {
++    return buildSearchFragments({
++      id: d.id,
++      title: d.title,
++      summary: d.summary,
++      tags: d.tags,
++      body: d.body,
++      kind: d.kind,
++      filePath: d.filePath,
++      symbol: d.symbol,
++      qualifiedName: d.qualifiedName,
++      signature: d.signature,
++      language: d.language,
++      definition: d.definition,
++      sourceType: d.sourceType,
++      startLine: d.startLine,
++      endLine: d.endLine,
++    }).map(fragment => ({
++      chunkId: fragment.fragmentId,
++      // Preserve the local-model passage convention without mutating the
++      // fragment evidence/content hash persisted for callers.
++      text: isApiMode() ? fragment.text : `passage: ${fragment.text}`,
++      fragment,
++    }));
++  }
++
+@@ -1687 +1881,4 @@ export async function buildEmbeddingIndex(
+-  // Split all docs into chunks (1:N doc-to-chunk mapping)
++  // Split all docs into chunks (1:N doc-to-chunk mapping).  The existing
++  // heading chunks remain byte-for-byte compatible unless the explicit
++  // structured-chunk flag is enabled.
++  const structuredMode = isStructuredChunksEnabled();
+@@ -1690,0 +1888 @@ export async function buildEmbeddingIndex(
++  const allFragments: SearchFragment[] = [];
+@@ -1701,0 +1900 @@ export async function buildEmbeddingIndex(
++      if (chunk.fragment) allFragments.push(chunk.fragment);
+@@ -1713,0 +1913,4 @@ export async function buildEmbeddingIndex(
++  const chunkPolicyMatch = structuredMode
++    ? existingIndex?.policyChecksum === STRUCTURED_FRAGMENT_POLICY_CHECKSUM
++      && Array.isArray(existingIndex.fragments)
++    : existingIndex?.policyChecksum === undefined && existingIndex?.fragments === undefined;
+@@ -1716 +1919,2 @@ export async function buildEmbeddingIndex(
+-    && (activeDim === 0 || existingIndex!.dimension === activeDim);
++    && (activeDim === 0 || existingIndex!.dimension === activeDim)
++    && chunkPolicyMatch;
+@@ -1829,0 +2034,4 @@ export async function buildEmbeddingIndex(
++    ...(structuredMode ? {
++      fragments: allFragments,
++      policyChecksum: STRUCTURED_FRAGMENT_POLICY_CHECKSUM,
++    } : {}),
+diff --git a/dashboard/src/server/wiki/search.ts b/dashboard/src/server/wiki/search.ts
+index 3909a794..fe68ebee 100644
+--- a/dashboard/src/server/wiki/search.ts
++++ b/dashboard/src/server/wiki/search.ts
+@@ -0,0 +1 @@
++import { createHash } from 'node:crypto';
+@@ -1,0 +3,5 @@ import type { WikiEntry } from './wiki-types.js';
++import {
++  computeSearchCandidateBudget,
++  isAdaptiveSearchBudgetEnabled,
++} from '../../../../src/search/candidate-budget.js';
++import type { SearchCandidateBudget } from '../../../../src/search/candidate-budget.js';
+@@ -251 +257 @@ export interface SearchResult {
+-type FieldLengths = Record<FieldName, number>;
++export type FieldLengths = Record<FieldName, number>;
+@@ -257,0 +264,260 @@ interface FieldPosting {
++/** JSON-safe representation of the BM25F acceleration index. */
++export interface SerializedInvertedIndex {
++  /** Stable payload marker; entries remain the canonical source of truth. */
++  schemaVersion: 'bm25f/1';
++  /** Explicit payload version for forward-compatible validation. */
++  version: 1;
++  totalDocs: number;
++  avgFieldLengths: FieldLengths;
++  fieldPostings: Array<readonly [string, Array<{
++    docId: string;
++    fieldTfs: FieldLengths;
++  }>] >;
++  fieldLengths: Array<readonly [string, FieldLengths]>;
++  docConfigKeys: Array<readonly [string, FieldConfigKey]>;
++  /** Optional publication metadata used to reject stale acceleration hints. */
++  generation?: number;
++  sourceFingerprint?: string;
++  docIdFingerprint?: string;
++  configFingerprint?: string;
++}
++
++export interface InvertedIndexSerializationMetadata {
++  generation?: number;
++  sourceFingerprint?: string;
++}
++
++export interface InvertedIndexValidationOptions {
++  expectedGeneration?: number;
++  expectedSourceFingerprint?: string;
++  expectedDocIds?: ReadonlySet<string>;
++  expectedDocConfigKeys?: ReadonlyMap<string, FieldConfigKey>;
++}
++
++const SERIALIZED_BM25F_VERSION = 1;
++const MAX_COMPILED_TERMS = 1_000_000;
++const MAX_COMPILED_POSTINGS = 4_000_000;
++const MAX_COMPILED_DOCS = 1_000_000;
++const MAX_COMPILED_STRING = 32_768;
++
++function isRecord(value: unknown): value is Record<string, unknown> {
++  return typeof value === 'object' && value !== null && !Array.isArray(value);
++}
++
++function finiteNonNegative(value: unknown): value is number {
++  return typeof value === 'number' && Number.isFinite(value) && value >= 0;
++}
++
++function validLengths(value: unknown): value is FieldLengths {
++  if (!isRecord(value)) return false;
++  for (const field of INDEX_FIELDS) {
++    if (!finiteNonNegative(value[field]) || !Number.isSafeInteger(value[field])) return false;
++  }
++  return true;
++}
++
++function validAverageLengths(value: unknown): value is FieldLengths {
++  if (!isRecord(value)) return false;
++  for (const field of INDEX_FIELDS) {
++    if (!finiteNonNegative(value[field])) return false;
++  }
++  return true;
++}
++
++function cloneLengths(value: FieldLengths): FieldLengths {
++  return {
++    title: value.title,
++    summary: value.summary,
++    tags: value.tags,
++    body: value.body,
++  };
++}
++
++function fingerprintPairs(pairs: ReadonlyArray<readonly [string, string]>): string {
++  const hash = createHash('sha256');
++  for (const [key, value] of pairs.slice().sort(([left], [right]) => left.localeCompare(right))) {
++    hash.update(key).update('\0').update(value).update('\0');
++  }
++  return hash.digest('hex');
++}
++
++/**
++ * Serialize an in-memory BM25F index without Maps or prototype-bearing
++ * objects. Arrays are used for deterministic output and compact JSON; term
++ * and document IDs remain explicit so validation can reject duplicate keys.
++ */
++export function serializeInvertedIndex(
++  index: InvertedIndex,
++  metadata: InvertedIndexSerializationMetadata = {},
++): SerializedInvertedIndex {
++  const fieldPostings = [...index.fieldPostings.entries()]
++    .sort(([left], [right]) => left.localeCompare(right))
++    .map(([term, postings]) => [
++      term,
++      postings
++        .slice()
++        .sort((left, right) => left.docId.localeCompare(right.docId))
++        .map(posting => ({ docId: posting.docId, fieldTfs: cloneLengths(posting.fieldTfs) })),
++    ] as const);
++  const fieldLengths = [...index.fieldLengths.entries()]
++    .sort(([left], [right]) => left.localeCompare(right))
++    .map(([docId, lengths]) => [docId, cloneLengths(lengths)] as const);
++  const docConfigKeys = [...index.docConfigKeys.entries()]
++    .sort(([left], [right]) => left.localeCompare(right))
++    .map(([docId, configKey]) => [docId, configKey] as const);
++  const docIdFingerprint = fingerprintPairs(fieldLengths.map(([docId]) => [docId, ''] as const));
++  const configFingerprint = fingerprintPairs(docConfigKeys.map(([docId, configKey]) => [docId, configKey] as const));
++  return {
++    schemaVersion: 'bm25f/1',
++    version: SERIALIZED_BM25F_VERSION,
++    totalDocs: index.totalDocs,
++    avgFieldLengths: cloneLengths(index.avgFieldLengths),
++    fieldPostings,
++    fieldLengths,
++    docConfigKeys,
++    ...(metadata.generation === undefined ? {} : { generation: metadata.generation }),
++    ...(metadata.sourceFingerprint === undefined ? {} : { sourceFingerprint: metadata.sourceFingerprint }),
++    docIdFingerprint,
++    configFingerprint,
++  };
++}
++
++/**
++ * Validate and rehydrate a serialized BM25F index. Invalid acceleration data
++ * returns null rather than throwing: callers must rebuild from WikiEntry[] so
++ * a corrupt optional section can never hide canonical content.
++ */
++export function deserializeInvertedIndex(
++  value: unknown,
++  options: InvertedIndexValidationOptions = {},
++): InvertedIndex | null {
++  if (!isRecord(value)) return null;
++  const schemaVersion = value.schemaVersion;
++  const format = value.format;
++  const version = value.version;
++  const totalDocs = value.totalDocs;
++  const avgFieldLengths = value.avgFieldLengths;
++  const rawFieldPostings = value.fieldPostings;
++  const rawFieldLengths = value.fieldLengths;
++  const rawDocConfigKeys = value.docConfigKeys;
++  const generation = value.generation;
++  const sourceFingerprint = value.sourceFingerprint;
++  const docIdFingerprint = value.docIdFingerprint;
++  const configFingerprint = value.configFingerprint;
++  if ((schemaVersion !== 'bm25f/1' && format !== 'bm25f')
++    || (version !== SERIALIZED_BM25F_VERSION && schemaVersion !== 'bm25f/1')
++    || typeof totalDocs !== 'number' || !Number.isSafeInteger(totalDocs)
++    || totalDocs < 0 || totalDocs > MAX_COMPILED_DOCS
++    || !validAverageLengths(avgFieldLengths)
++    || !Array.isArray(rawFieldPostings)
++    || !Array.isArray(rawFieldLengths)
++    || !Array.isArray(rawDocConfigKeys)
++    || (generation !== undefined && (typeof generation !== 'number' || !Number.isFinite(generation)))
++    || (sourceFingerprint !== undefined
++      && (typeof sourceFingerprint !== 'string' || !/^[0-9a-f]{64}$/.test(sourceFingerprint)))
++    || (docIdFingerprint !== undefined
++      && (typeof docIdFingerprint !== 'string' || !/^[0-9a-f]{64}$/.test(docIdFingerprint)))
++    || (configFingerprint !== undefined
++      && (typeof configFingerprint !== 'string' || !/^[0-9a-f]{64}$/.test(configFingerprint)))
++    || (options.expectedGeneration !== undefined && generation !== undefined
++      && generation !== options.expectedGeneration)
++    || (options.expectedSourceFingerprint !== undefined && sourceFingerprint !== undefined
++      && sourceFingerprint !== options.expectedSourceFingerprint)
++    || rawFieldPostings.length > MAX_COMPILED_TERMS
++    || rawFieldLengths.length > MAX_COMPILED_DOCS
++    || rawDocConfigKeys.length > MAX_COMPILED_DOCS) return null;
++  const normalizedAvgFieldLengths = avgFieldLengths as FieldLengths;
++  const normalizedFieldPostings = rawFieldPostings as unknown[];
++  const normalizedFieldLengths = rawFieldLengths as unknown[];
++  const normalizedDocConfigKeys = rawDocConfigKeys as unknown[];
++
++  const fieldLengths = new Map<string, FieldLengths>();
++  const totalFieldLengths: FieldLengths = { title: 0, summary: 0, tags: 0, body: 0 };
++  for (const item of normalizedFieldLengths) {
++    if (!Array.isArray(item) || item.length !== 2
++      || typeof item[0] !== 'string' || item[0].length === 0 || item[0].length > MAX_COMPILED_STRING
++      || !validLengths(item[1]) || fieldLengths.has(item[0])) return null;
++    const lengths = item[1] as FieldLengths;
++    for (const field of INDEX_FIELDS) totalFieldLengths[field] += lengths[field];
++    fieldLengths.set(item[0], cloneLengths(lengths));
++  }
++
++  const docConfigKeys = new Map<string, FieldConfigKey>();
++  for (const item of normalizedDocConfigKeys) {
++    if (!Array.isArray(item) || item.length !== 2
++      || typeof item[0] !== 'string' || item[0].length === 0 || item[0].length > MAX_COMPILED_STRING
++      || (item[1] !== 'default' && item[1] !== 'kg' && item[1] !== 'session')
++      || docConfigKeys.has(item[0])) return null;
++    docConfigKeys.set(item[0], item[1] as FieldConfigKey);
++  }
++
++  const fieldPostings = new Map<string, FieldPosting[]>();
++  let postingCount = 0;
++  for (const item of normalizedFieldPostings) {
++    if (!Array.isArray(item) || item.length !== 2
++      || typeof item[0] !== 'string' || item[0].length === 0 || item[0].length > MAX_COMPILED_STRING
++      || !Array.isArray(item[1]) || fieldPostings.has(item[0])) return null;
++    const postings: FieldPosting[] = [];
++    const seenDocs = new Set<string>();
++    const rawPostings = item[1] as unknown[];
++    for (const posting of rawPostings) {
++      postingCount++;
++      if (postingCount > MAX_COMPILED_POSTINGS
++        || !isRecord(posting)
++        || typeof posting.docId !== 'string' || posting.docId.length === 0
++        || posting.docId.length > MAX_COMPILED_STRING
++        || seenDocs.has(posting.docId)
++        || !fieldLengths.has(posting.docId)
++        || !validLengths(posting.fieldTfs)) return null;
++      const fieldTfs = posting.fieldTfs as FieldLengths;
++      const fieldLengthsForDoc = fieldLengths.get(posting.docId)!;
++      // A posting with no positive field frequency cannot affect scoring and
++      // is almost certainly a damaged/truncated payload. Frequencies also
++      // cannot exceed the token count recorded for their document/field.
++      if (!INDEX_FIELDS.some(field => fieldTfs[field] > 0)
++        || INDEX_FIELDS.some(field => fieldTfs[field] > fieldLengthsForDoc[field])) return null;
++      seenDocs.add(posting.docId);
++      postings.push({ docId: posting.docId, fieldTfs: cloneLengths(fieldTfs) });
++    }
++    fieldPostings.set(item[0], postings);
++  }
++
++  // Every searchable document has a field-length/config record in indexes
++  // emitted by buildInvertedIndex. Rejecting mismatches keeps malformed IDs
++  // from silently changing document-frequency statistics.
++  if (fieldLengths.size !== totalDocs || docConfigKeys.size !== totalDocs) return null;
++  for (const docId of fieldLengths.keys()) {
++    if (!docConfigKeys.has(docId)) return null;
++  }
++  for (const field of INDEX_FIELDS) {
++    const expectedAverage = totalDocs === 0 ? 0 : totalFieldLengths[field] / totalDocs;
++    const difference = Math.abs(normalizedAvgFieldLengths[field] - expectedAverage);
++    if (difference > Math.max(1e-9, Math.abs(expectedAverage) * 1e-12)) return null;
++  }
++  if (options.expectedDocIds !== undefined
++    && (options.expectedDocIds.size !== fieldLengths.size
++      || [...options.expectedDocIds].some(docId => !fieldLengths.has(docId)))) return null;
++  if (options.expectedDocConfigKeys !== undefined
++    && (options.expectedDocConfigKeys.size !== docConfigKeys.size
++      || [...options.expectedDocConfigKeys].some(([docId, key]) => docConfigKeys.get(docId) !== key))) return null;
++  if (docIdFingerprint !== undefined
++    && docIdFingerprint !== fingerprintPairs([...fieldLengths.keys()].map(docId => [docId, ''] as const))) return null;
++  if (configFingerprint !== undefined
++    && configFingerprint !== fingerprintPairs([...docConfigKeys.entries()])) return null;
++
++  return {
++    postings: new Map(),
++    docLengths: new Map(),
++    avgDocLength: 0,
++    totalDocs,
++    fieldPostings,
++    fieldLengths,
++    avgFieldLengths: cloneLengths(normalizedAvgFieldLengths),
++    docConfigKeys,
++  };
++}
++
++/** Explicit aliases for callers that refer to the compiled BM25F format. */
++export const serializeBM25FIndex = serializeInvertedIndex;
++export const deserializeBM25FIndex = deserializeInvertedIndex;
++
+@@ -349,0 +616,5 @@ function getFieldConfigKey(entry: WikiEntry): FieldConfigKey {
++/** Resolve the field-configuration identity without building postings. */
++export function getInvertedIndexConfigKey(entry: WikiEntry): FieldConfigKey {
++  return getFieldConfigKey(entry);
++}
++
+@@ -460,0 +732 @@ export function searchBM25(
++  candidateBudget?: SearchCandidateBudget,
+@@ -466 +738,11 @@ export function searchBM25(
+-  const fetchLimit = (credibilityFactors && credibilityFactors.size > 0) ? limit * 2 : limit;
++  const effectiveBudget = candidateBudget
++    ?? (isAdaptiveSearchBudgetEnabled()
++      ? computeSearchCandidateBudget(limit, { surface: 'wiki', mode: 'adaptive' })
++      : undefined);
++  // Adaptive callers already supplied the boundary-computed provider budget;
++  // never multiply it again for credibility reranking.
++  const adaptiveLimit = effectiveBudget?.adaptive
++    ? Math.min(effectiveBudget.maxCandidateLimit, effectiveBudget.candidateLimit)
++    : undefined;
++  const fetchLimit = adaptiveLimit
++    ?? ((credibilityFactors && credibilityFactors.size > 0) ? limit * 2 : limit);
+@@ -477 +759 @@ export function searchBM25(
+-  return results.slice(0, limit);
++  return results.slice(0, adaptiveLimit === undefined ? limit : Math.min(limit, adaptiveLimit));
+@@ -703,0 +986 @@ export function searchBM25Planned(
++  candidateBudget?: SearchCandidateBudget,
+@@ -709 +992,9 @@ export function searchBM25Planned(
+-  const internalLimit = Math.min(500, Math.max(limit * 3, 60));
++  const effectiveBudget = candidateBudget
++    ?? (isAdaptiveSearchBudgetEnabled()
++      ? computeSearchCandidateBudget(limit, { surface: 'planned', mode: 'adaptive' })
++      : undefined);
++  // `candidateBudget` is computed at the request boundary. Legacy callers keep
++  // the old planned-search overfetch until adaptive rollout is enabled.
++  const internalLimit = effectiveBudget?.adaptive
++    ? Math.min(effectiveBudget.maxCandidateLimit, effectiveBudget.candidateLimit)
++    : Math.min(500, Math.max(limit * 3, 60));
+@@ -773 +1064,3 @@ export function searchBM25Planned(
+-  return ranked.slice(0, limit);
++  return ranked.slice(0, effectiveBudget?.adaptive
++    ? Math.min(limit, effectiveBudget.candidateLimit)
++    : limit);
+diff --git a/dashboard/src/server/wiki/virtual-wiki-adapters.ts b/dashboard/src/server/wiki/virtual-wiki-adapters.ts
+index 261d7885..33e8d87c 100644
+--- a/dashboard/src/server/wiki/virtual-wiki-adapters.ts
++++ b/dashboard/src/server/wiki/virtual-wiki-adapters.ts
+@@ -460,0 +461 @@ interface MaestroGraphWikiRow {
++  qualified_name?: string | null;
+@@ -461,0 +463,3 @@ interface MaestroGraphWikiRow {
++  language?: string | null;
++  start_line?: number | null;
++  end_line?: number | null;
+@@ -462,0 +467,2 @@ interface MaestroGraphWikiRow {
++  docstring?: string | null;
++  signature?: string | null;
+@@ -476,0 +483,15 @@ export function adaptKnowledgeGraphFromDb(
++    // MaestroGraph's canonical schema carries symbol/signature/path fields,
++    // while older test/legacy projections may only have the compact columns.
++    // Select optional fields through a schema probe so structured embedding
++    // can reuse existing graph facts without making old DBs unreadable.
++    const nodeColumns = new Set(
++      (db.prepare('PRAGMA table_info(nodes)').all() as Array<{ name?: unknown }>)
++        .map(column => typeof column.name === 'string' ? column.name : ''),
++    );
++    const optionalColumn = (name: string): string => nodeColumns.has(name) ? name : `NULL AS ${name}`;
++    const nodeSelect = [
++      'id', 'kind', 'name', optionalColumn('qualified_name'), 'file_path',
++      optionalColumn('language'), 'source_type', optionalColumn('docstring'),
++      optionalColumn('signature'), 'definition', 'body', 'category',
++      optionalColumn('start_line'), optionalColumn('end_line'), 'updated_at',
++    ].join(', ');
+@@ -478 +499 @@ export function adaptKnowledgeGraphFromDb(
+-    // expression across the entire node table. Both branches can use existing
++    // expression across the entire table. Both branches can use existing
+@@ -482 +503 @@ export function adaptKnowledgeGraphFromDb(
+-      SELECT id, kind, name, file_path, source_type, definition, body, category, updated_at
++      SELECT ${nodeSelect}
+@@ -491 +512 @@ export function adaptKnowledgeGraphFromDb(
+-          SELECT id, kind, name, file_path, source_type, definition, body, category, updated_at
++          SELECT ${nodeSelect}
+@@ -544,0 +566 @@ export function adaptKnowledgeGraphFromDb(
++          sourceType: node.source_type,
+@@ -545,0 +568,6 @@ export function adaptKnowledgeGraphFromDb(
++          qualifiedName: node.qualified_name,
++          language: node.language,
++          startLine: node.start_line,
++          endLine: node.end_line,
++          docstring: node.docstring,
++          signature: node.signature,
