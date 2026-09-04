@@ -190,6 +190,9 @@ const associatedPrepare = new Map();
 const associatedCommands = new Map();
 
 for (const path of walkMarkdown(join(root, 'workflows'))) {
+  // workflows/impeccable/ is the bundled upstream Impeccable skill distribution
+  // (SKILL.md/reference/scripts), not a Maestro workflow definition.
+  if (relative(root, path).replace(/\\/g, '/').startsWith('workflows/impeccable/')) continue;
   const text = readFileSync(path, 'utf8');
   const metadata = frontmatter(text);
   const workflowMode = metadata?.['session-mode']
