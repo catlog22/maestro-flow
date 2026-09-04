@@ -5,6 +5,7 @@ import { basename, dirname, extname, join, relative, resolve, sep } from 'node:p
 import { toForwardSlash } from '../../shared/utils.js';
 import { normalizeCanonicalKnowledgeContent } from '../../../../shared/knowledge-content.js';
 import { parseFrontmatter } from './frontmatter-util.js';
+import { BoundedTtlCache } from './bounded-ttl-cache.js';
 import { parseSpecEntries, parseKnowhowEntries } from './spec-entry-parser.js';
 import {
   adaptCodebaseDocIndex,
@@ -114,11 +115,11 @@ const CLI_FINGERPRINT_HEAD_BYTES = 4 * 1024;
 const CLI_FINGERPRINT_TAIL_BYTES = 4 * 1024;
 const CLI_SESSION_CWD_CACHE_LIMIT = 2_048;
 const CLI_HOME_DISCOVERY_CACHE_TTL_MS = 3 * 60_000;
-const cliSessionScanCache = new Map<string, {
+const CLI_SESSION_SCAN_CACHE_LIMIT = 16;
+const cliSessionScanCache = new BoundedTtlCache<string, {
   fingerprint: string;
-  cachedAt: number;
   entries: WikiEntry[];
-}>();
+}>(CLI_SESSION_SCAN_CACHE_LIMIT, CLI_SESSION_CACHE_TTL_MS);
 const cliSessionCwdCache = new Map<string, {
   size: number;
   mtimeMs: number;
@@ -2745,8 +2746,7 @@ export class WikiIndexer {
     const codexRoot = join(home, '.codex');
     const fingerprint = await cliSessionStoreFingerprint(claudeProjectDir, codexRoot, projectCwd);
     const cached = cliSessionScanCache.get(projectCwd);
-    if (cached && cached.fingerprint === fingerprint
-      && Date.now() - cached.cachedAt < CLI_SESSION_CACHE_TTL_MS) {
+    if (cached && cached.fingerprint === fingerprint) {
       return structuredClone(cached.entries);
     }
 
@@ -2762,7 +2762,6 @@ export class WikiIndexer {
     const entries = [...claudeEntries, ...codexEntries];
     cliSessionScanCache.set(projectCwd, {
       fingerprint,
-      cachedAt: Date.now(),
       entries: structuredClone(entries),
     });
     return entries;
