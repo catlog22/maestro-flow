@@ -2335,11 +2335,15 @@ export function registerSearchCommand(program: Command): void {
         const linkedWorkspaces = resolved.filter(lw => lw.valid).map(lw => ({ name: lw.name, workflowRoot: lw.workflowRoot, shareTypes: lw.share }));
         const indexer = new WikiIndexer({ workflowRoot, linkedWorkspaces, role: 'publisher' });
         const t0 = Date.now();
-        const { embeddingUsed, embeddingDocs } = await indexer.searchWithMeta('warmup', 1);
-        if (embeddingUsed) {
-          console.log(`Index rebuilt: ${embeddingDocs} docs (${Date.now() - t0}ms)`);
-        } else {
-          console.log(`Rebuild failed — check with: maestro embedding status`);
+        try {
+          const { embeddingUsed, embeddingDocs } = await indexer.searchWithMeta('warmup', 1);
+          if (embeddingUsed) {
+            console.log(`Index rebuilt: ${embeddingDocs} docs (${Date.now() - t0}ms)`);
+          } else {
+            console.log(`Rebuild failed — check with: maestro embedding status`);
+          }
+        } finally {
+          await indexer.close({ disposeEmbeddingPipeline: true });
         }
         return;
       }
