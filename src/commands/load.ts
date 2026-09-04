@@ -18,6 +18,7 @@ import {
   type ArchKbEntry,
 } from '../arch-kb/index.js';
 import { truncate } from '../utils/cli-format.js';
+import { AsyncResourceSlot } from '../utils/async-resource-slot.js';
 import { isDeprecatedKnowledgeEntry } from '../utils/knowledge-lifecycle.js';
 import type { WikiIndexer } from '#maestro-dashboard/wiki/wiki-indexer.js';
 import type { WikiEntry, WikiIndex } from '#maestro-dashboard/wiki/wiki-types.js';
@@ -30,9 +31,7 @@ import { loadSpecWikiEntries } from '../tools/spec-wiki-loader.js';
 const VALID_TYPES = ['spec', 'knowhow', 'note', 'domain', 'issue', 'project', 'roadmap', 'session', 'scratch', 'template'] as const;
 type LoadType = (typeof VALID_TYPES)[number];
 
-let _indexer: WikiIndexer | null = null;
-let _indexerRoot: string | null = null;
-let _indexerAuthorityKey: string | null = null;
+const indexerSlot = new AsyncResourceSlot<string, WikiIndexer>();
 
 function resolveWikiAuthority(current: RepositoryContext) {
   const linkedWorkspaces = resolveWorkspaceLinks(
@@ -61,27 +60,28 @@ function resolveWikiAuthority(current: RepositoryContext) {
   };
 }
 
-async function getIndexer(projectRoot?: string): Promise<WikiIndexer> {
+/** Run one operation while holding the cached reader's lifecycle lease. */
+export async function withWikiIndexer<T>(
+  projectRoot: string | undefined,
+  operation: (indexer: WikiIndexer) => Promise<T>,
+): Promise<T> {
   const root = resolve(projectRoot ?? '.');
   const current = resolveRepositoryContext('current', { projectRoot: root });
   const { linkedWorkspaces, repository, authorityKey } = resolveWikiAuthority(current);
-  if (_indexer && _indexerRoot === root && _indexerAuthorityKey === authorityKey) return _indexer;
-  _indexer = null;
-  _indexerRoot = root;
-  _indexerAuthorityKey = authorityKey;
-  const { WikiIndexer: Cls } = await import('#maestro-dashboard/wiki/wiki-indexer.js');
-  _indexer = new Cls({
-    workflowRoot: current.workflowRoot,
-    linkedWorkspaces,
-    repository,
-    role: 'reader',
-  });
-  return _indexer;
-}
-
-/** Shared indexer accessor for knowledge signal-id validation (K8). */
-export async function getWikiIndexer(projectRoot?: string): Promise<WikiIndexer> {
-  return getIndexer(projectRoot);
+  const key = JSON.stringify({ workflowRoot: current.workflowRoot, authorityKey });
+  return indexerSlot.run(
+    key,
+    async () => {
+      const { WikiIndexer: Cls } = await import('#maestro-dashboard/wiki/wiki-indexer.js');
+      return new Cls({
+        workflowRoot: current.workflowRoot,
+        linkedWorkspaces,
+        repository,
+        role: 'reader',
+      });
+    },
+    operation,
+  );
 }
 
 function matchesType(entry: WikiEntry, type: LoadType): boolean {
@@ -430,8 +430,7 @@ export function registerLoadCommand(program: Command): void {
         if (daemonResult?.ok && Array.isArray(daemonResult.entries)) {
           index = wikiIndexFromDaemon(daemonResult.entries, daemonResult.generatedAt);
         } else {
-          const indexer = await getIndexer();
-          index = await indexer.get();
+          index = await withWikiIndexer(undefined, indexer => indexer.get());
           // `load` used to remain permanently cold because only `search` spawned
           // the resident indexer. Warm future load/search calls after this safe
           // read-only fallback; spawn arbitration keeps concurrent callers single.

@@ -212,10 +212,11 @@ async function validateKnowledgeSignalIds(
 ): Promise<void> {
   const unique = [...new Set(ids.map(id => id.trim()).filter(Boolean))];
   if (unique.length === 0) return;
-  const { getWikiIndexer, findEntry } = await import('./load.js');
-  const indexer = await getWikiIndexer(projectRoot);
-  const index = await indexer.get();
-  const unknown = unique.filter(id => !findEntry(index, id));
+  const { withWikiIndexer, findEntry } = await import('./load.js');
+  const unknown = await withWikiIndexer(projectRoot, async indexer => {
+    const index = await indexer.get();
+    return unique.filter(id => !findEntry(index, id));
+  });
   if (unknown.length === 0) return;
   if (!allowUnknown) {
     throw new Error(

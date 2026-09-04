@@ -18,6 +18,7 @@ import type { ToolSchema, CcwToolResult } from '../types/tool-schema.js';
 import { existsSync, mkdirSync } from 'fs';
 import { join } from 'path';
 import { getProjectRoot } from '../utils/path-validator.js';
+import { AsyncResourceSlot } from '../utils/async-resource-slot.js';
 import {
   getActiveRepositoryExecution,
   resolveRepositoryContext,
@@ -328,16 +329,13 @@ async function executeRecover(
     };
 }
 
-// Cached WikiIndexer instance per project root. Lazy-initialized so the
-// import cost is only paid when search is invoked.
-let _searchIndexer: WikiIndexer | null = null;
-let _searchIndexerRoot: string | null = null;
+// Cached WikiIndexer lifecycle is serialized so root/authority switches cannot
+// abandon timers or let a replacement close an active borrower.
+const searchIndexerSlot = new AsyncResourceSlot<string, WikiIndexer>();
 
-async function getSearchIndexer(): Promise<WikiIndexer> {
+async function withSearchIndexer<T>(operation: (indexer: WikiIndexer) => Promise<T>): Promise<T> {
   const projectRoot = getProjectRoot();
   const workflowRoot = join(projectRoot, '.workflow');
-  if (_searchIndexer && _searchIndexerRoot === workflowRoot) return _searchIndexer;
-  const { WikiIndexer: Cls } = await import('#maestro-dashboard/wiki/wiki-indexer.js');
   const current = resolveRepositoryContext('current', { projectRoot });
   const linkedWorkspaces = resolveWorkspaceLinks(projectRoot, loadWorkspaceConfig(projectRoot))
     .filter(link => link.valid)
@@ -349,19 +347,21 @@ async function getSearchIndexer(): Promise<WikiIndexer> {
       repoName: link.repoName,
       workspaceFence: link.repoId ? `repo:${link.repoId}` : `linked:${link.name}`,
     }));
-  _searchIndexer = new Cls({
-    workflowRoot,
-    linkedWorkspaces,
-    repository: {
-      repoId: current.repoId,
-      repoName: current.repoName,
-      alias: current.alias,
-      workspaceFence: current.repoId ? `repo:${current.repoId}` : 'local',
+  const repository = {
+    repoId: current.repoId,
+    repoName: current.repoName,
+    alias: current.alias,
+    workspaceFence: current.repoId ? `repo:${current.repoId}` : 'local',
+  };
+  const key = JSON.stringify({ workflowRoot, linkedWorkspaces, repository });
+  return searchIndexerSlot.run(
+    key,
+    async () => {
+      const { WikiIndexer: Cls } = await import('#maestro-dashboard/wiki/wiki-indexer.js');
+      return new Cls({ workflowRoot, linkedWorkspaces, repository, role: 'reader' });
     },
-    role: 'reader',
-  });
-  _searchIndexerRoot = workflowRoot;
-  return _searchIndexer;
+    operation,
+  );
 }
 
 function deriveTypeLabel(entry: WikiEntry): string {
@@ -391,15 +391,15 @@ async function executeSearch(params: Params): Promise<CcwToolResult> {
   try {
     const target = resolveRepositoryContext(params.repo ?? 'current', { projectRoot: getProjectRoot() });
     const explicitRepository = Boolean(params.repo);
-    const indexer = await getSearchIndexer();
-    entries = (await indexer.search(query, limit ?? 20, {
-      filters: {
-        type: 'knowhow',
-        ...(explicitRepository && target.repoId ? { repoId: target.repoId } : {}),
-        ...(explicitRepository && !target.repoId ? { repoAlias: target.alias } : {}),
-        applicableRepoId: target.repoId ?? '__legacy__',
-      },
-    })).filter(entry => isRepositoryApplicable(entry, target.repoId));
+    entries = await withSearchIndexer(async indexer =>
+      (await indexer.search(query, limit ?? 20, {
+        filters: {
+          type: 'knowhow',
+          ...(explicitRepository && target.repoId ? { repoId: target.repoId } : {}),
+          ...(explicitRepository && !target.repoId ? { repoAlias: target.alias } : {}),
+          applicableRepoId: target.repoId ?? '__legacy__',
+        },
+      })).filter(entry => isRepositoryApplicable(entry, target.repoId)));
   } catch (err) {
     return { success: false, error: `WikiIndexer search failed: ${(err as Error).message}` };
   }

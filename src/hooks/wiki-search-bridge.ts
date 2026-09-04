@@ -10,6 +10,7 @@
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import type { WikiIndexer } from '#maestro-dashboard/wiki/wiki-indexer.js';
+import { AsyncResourceSlot } from '../utils/async-resource-slot.js';
 import { isDeprecatedKnowledgeEntry } from '../utils/knowledge-lifecycle.js';
 import { loadWorkspaceConfig, resolveWorkspaceLinks } from '../config/index.js';
 import { resolveRepositoryContext } from '../repository/context.js';
@@ -50,9 +51,7 @@ const HYBRID_SCALE_CUTOFF = 1.5;
 
 // --- Cached WikiIndexer (lazy, only loaded when daemon is unavailable) ---
 
-let _indexer: WikiIndexer | null = null;
-let _indexerRoot: string | null = null;
-let _indexerAuthorityKey: string | null = null;
+const indexerSlot = new AsyncResourceSlot<string, WikiIndexer>();
 
 function resolveWikiAuthority(workflowRoot: string) {
   const projectRoot = join(workflowRoot, '..');
@@ -80,19 +79,25 @@ function resolveWikiAuthority(workflowRoot: string) {
   };
 }
 
-async function getIndexer(workflowRoot: string): Promise<WikiIndexer> {
+async function withIndexer<T>(
+  workflowRoot: string,
+  operation: (indexer: WikiIndexer) => Promise<T>,
+): Promise<T> {
   const { linkedWorkspaces, repository, authorityKey } = resolveWikiAuthority(workflowRoot);
-  if (_indexer && _indexerRoot === workflowRoot && _indexerAuthorityKey === authorityKey) return _indexer;
-  const { WikiIndexer: Cls } = await import('#maestro-dashboard/wiki/wiki-indexer.js');
-  _indexer = new Cls({
-    workflowRoot,
-    linkedWorkspaces,
-    repository,
-    role: 'reader',
-  });
-  _indexerRoot = workflowRoot;
-  _indexerAuthorityKey = authorityKey;
-  return _indexer;
+  const key = JSON.stringify({ workflowRoot, authorityKey });
+  return indexerSlot.run(
+    key,
+    async () => {
+      const { WikiIndexer: Cls } = await import('#maestro-dashboard/wiki/wiki-indexer.js');
+      return new Cls({
+        workflowRoot,
+        linkedWorkspaces,
+        repository,
+        role: 'reader',
+      });
+    },
+    operation,
+  );
 }
 
 interface RawHit {
@@ -236,12 +241,11 @@ export async function searchWiki(
     // Fallback: direct WikiIndexer BM25 search (skipEmbedding → raw BM25 scale).
     // Bounded — a cold process parses ~11MB of index JSON, so this must never be
     // allowed to run unmetered on the prompt hot path.
-    const indexer = await getIndexer(workflowRoot);
     const results = await withTimeout(
-      indexer.searchWithMeta(query, INTERNAL_LIMIT, {
+      withIndexer(workflowRoot, indexer => indexer.searchWithMeta(query, INTERNAL_LIMIT, {
         skipEmbedding: true,
         filters: { applicableRepoId: opts?.applicableRepoId ?? '__legacy__' },
-      }).then(r => r.results),
+      }).then(r => r.results)),
       DEFAULT_INDEXER_TIMEOUT_MS,
     );
     if (!results) return { hits: [], source: 'none' };
@@ -269,5 +273,5 @@ function withTimeout<T>(p: Promise<T>, ms: number): Promise<T | null> {
  * skip the cold-start cost. Never throws.
  */
 export function prewarmWikiIndexer(workflowRoot: string): void {
-  getIndexer(workflowRoot).catch(() => {});
+  withIndexer(workflowRoot, indexer => indexer.get().then(() => undefined)).catch(() => {});
 }
