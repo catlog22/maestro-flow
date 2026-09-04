@@ -858,6 +858,10 @@ function sessionTopology(entry: WikiEntry): Pick<SearchResult, 'sessionId' | 'ru
   };
 }
 
+function hasCanonicalKg(projectRoot: string): boolean {
+  return existsSync(resolve(projectRoot, '.workflow', 'kg', 'maestro.db'));
+}
+
 function incrementSearchHitsAsync(
   entries: Array<{ id: string; sourceRef?: string | null }>,
   evidenceRecorder?: (event: SearchEvidenceEvent) => void,
@@ -865,6 +869,7 @@ function incrementSearchHitsAsync(
   contexts: string[] = [],
 ): void {
   const projectRoot = resolve('.');
+  if (!hasCanonicalKg(projectRoot)) return;
   Promise.all([
     import('../graph/kg/engine.js'),
     import('../graph/kg/credibility.js'),
@@ -1107,11 +1112,11 @@ export async function runKgSearch(
   recordCandidateBudgetDiagnostics(diagnostics, boundaryBudget);
   const startedAt = performance.now();
   try {
-    const { MaestroGraph } = await import('../graph/kg/engine.js');
-    if (!MaestroGraph.isInitialized(projectRoot)) {
+    if (!hasCanonicalKg(projectRoot)) {
       diagnostics?.recordFallback('kg', 'not-initialized');
       return { results: [], summary: {} };
     }
+    const { MaestroGraph } = await import('../graph/kg/engine.js');
     const sourceTypes = options.codeOnly ? ['codegraph'] as SourceType[] : kgSourceTypes(options.type);
     if (sourceTypes?.length === 0) {
       diagnostics?.recordFallback('kg', 'empty-source-filter');
@@ -1293,8 +1298,8 @@ async function runLocalCodeSearch(
   executionMode: SearchExecutionMode,
 ): Promise<CodeSearchOutcome> {
   try {
+    if (!hasCanonicalKg(projectRoot)) return { results: [], status: 'not-initialized' };
     const { MaestroGraph } = await import('../graph/kg/engine.js');
-    if (!MaestroGraph.isInitialized(projectRoot)) return { results: [], status: 'not-initialized' };
     const mg = executionMode === 'read-only-probe'
       ? await MaestroGraph.openReadOnly(projectRoot)
       : await MaestroGraph.open(projectRoot);
@@ -1338,12 +1343,13 @@ export async function runLinkedCodeSearch(
   limit: number,
   projectRoot: string = resolve('.'),
 ): Promise<LinkedCodeSearchOutcome> {
-  const { MaestroGraph } = await import('../graph/kg/engine.js');
   const linkedWorkspaces = resolveWorkspaceLinks(projectRoot, loadWorkspaceConfig(projectRoot))
     .filter(workspace => workspace.valid && workspace.share.includes('codebase'))
     .sort((left, right) => left.name < right.name ? -1 : left.name > right.name ? 1 : 0);
   const results: CodeSearchResult[] = [];
   const failures: LinkedCodeSearchFailure[] = [];
+  if (linkedWorkspaces.length === 0) return { results, failures };
+  const { MaestroGraph } = await import('../graph/kg/engine.js');
 
   for (const workspace of linkedWorkspaces) {
     let graph: InstanceType<typeof MaestroGraph> | null = null;
