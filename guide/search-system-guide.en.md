@@ -234,14 +234,16 @@ Search hits asynchronously update node `search_hits` counts (via `CredibilitySto
 
 ## Search Cache Invalidator Hook
 
-`search-cache-invalidator` is a PostToolUse hook that automatically rebuilds WikiIndexer cache after file modifications:
+`search-cache-invalidator` is a PostToolUse hook that invalidates WikiIndexer generations after file modifications and requests a rebuild:
 
 - **Trigger condition**: After Write or Edit tool calls
 - **Scope**: Only active in workspace (`requiresWorkspace: true`)
-- **Behavior**: Automatically rebuilds WikiIndexer index, ensuring search results reflect latest file content
-- **Persisted version**: `search-cache.json` currently uses **cache v5** (`version: 5`); legacy cache generations are rejected and atomically rebuilt through the existing cache path
+- **Roles and write ownership**: a `publisher` atomically publishes generations through a single-writer publication lease; a `reader` only consumes the persisted cache; a `hermetic` role neither reads nor writes persisted state. The legacy `filesystem`/`read-only`/`memory-only` configurations map to these three roles respectively
+- **Persisted version**: the default writer still publishes **cache v8** canonical entries. Only with `MAESTRO_SEARCH_COMPILED_POSTINGS=1` does it publish **v9** with compiled BM25F postings; readers stay compatible with v7/v8/v9
+- **Safe fallback**: without compiled postings enabled, a v9 payload is never activated even if read; corrupted, policy-mismatched or generation-inconsistent state is rebuilt from canonical entries/source files and fails closed without mixing generations
+- **Freshness**: authorized user-level CLI transcripts are detected for append via bounded membership/metadata and head/tail digests; resident readers/publishers reconcile at least every 4 minutes, and the timer does not block short-lived process exit
 
-This hook is enabled by default in the standard hook collection, no manual configuration needed. When modifying spec/knowhow files under `.workflow/` via Write|Edit, the search index automatically updates.
+This hook is enabled by default in the standard hook collection, no manual configuration needed. When modifying spec/knowhow files under `.workflow/` via Write|Edit, the next authorized rebuild reflects the latest content; only a publisher writes to disk.
 
 ---
 
