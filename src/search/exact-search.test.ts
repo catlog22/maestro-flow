@@ -1,3 +1,4 @@
+import { getEventListeners } from 'node:events';
 import {
   mkdirSync,
   mkdtempSync,
@@ -83,6 +84,22 @@ describe('standalone exact search', () => {
     expect(outcome.results).toHaveLength(1);
     expect(['src/one.ts', 'src/two.ts']).toContain(outcome.results[0]?.filePath);
     expect(outcome.truncated).toBe(true);
+  });
+
+  it('removes abort listeners after every successful pass', async () => {
+    const root = repository('abort-listener');
+    mkdirSync(join(root, 'src'), { recursive: true });
+    writeFileSync(join(root, 'src', 'example.ts'), 'haystack\n', 'utf8');
+    const controller = new AbortController();
+    const baseline = getEventListeners(controller.signal, 'abort').length;
+
+    for (let i = 0; i < 25; i += 1) {
+      await runExactSearch('missing-value', {
+        projectRoot: root,
+        signal: controller.signal,
+      });
+      expect(getEventListeners(controller.signal, 'abort')).toHaveLength(baseline);
+    }
   });
 
   it('parses every submatch in a JSON match event', () => {

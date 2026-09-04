@@ -543,11 +543,16 @@ async function runExactRipgrep(options: ExactRipgrepOptions): Promise<ExactRipgr
     let terminated = false;
     let settled = false;
     let timer: ReturnType<typeof setTimeout> | undefined;
+    let abortHandler: (() => void) | undefined;
 
     const finish = (error?: Error): void => {
       if (settled) return;
       settled = true;
       if (timer) clearTimeout(timer);
+      if (options.signal && abortHandler) {
+        options.signal.removeEventListener('abort', abortHandler);
+        abortHandler = undefined;
+      }
       if (error) rejectPromise(error);
       else resolvePromise({
         results: results.slice(0, options.limit),
@@ -659,7 +664,10 @@ async function runExactRipgrep(options: ExactRipgrepOptions): Promise<ExactRipgr
     timer = setTimeout(() => terminate('timeout'), timeout);
     if (options.signal) {
       if (options.signal.aborted) terminate('abort');
-      else options.signal.addEventListener('abort', () => terminate('abort'), { once: true });
+      else {
+        abortHandler = () => terminate('abort');
+        options.signal.addEventListener('abort', abortHandler, { once: true });
+      }
     }
   });
 }
