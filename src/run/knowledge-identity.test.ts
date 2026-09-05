@@ -156,6 +156,17 @@ describe('resolveWriteAuthority (K3 tiers)', () => {
     expect(authority).toMatchObject({ kind: 'session', sessionId: created.session_id, via: 'explicit', synthetic: false });
   });
 
+  it('explains the identity boundary when an explicit Session is missing', () => {
+    const projectRoot = root();
+    const store = new SessionStore(projectRoot);
+    expect(() => resolveWriteAuthority({
+      projectRoot,
+      store,
+      explicitSession: '01a06eda-a4f5-799a-bbcc-06afc2ca913b',
+      env: {},
+    })).toThrow(/existing Maestro Workflow Session[\s\S]*Pi chat\/session-history ID[\s\S]*--channel <name>/);
+  });
+
   it('routes through a single live bound channel', () => {
     const projectRoot = root();
     const created = seedRunningRun(projectRoot, 'channeled-session');

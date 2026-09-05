@@ -763,7 +763,7 @@ function splitFileEvidenceRef(
   if (existsSync(exact)) return { path: ref, anchor: null };
   const hashAnchor = ref.match(/^(.*?)(#.+)$/);
   if (hashAnchor) return { path: hashAnchor[1], anchor: hashAnchor[2] };
-  const lineAnchor = ref.match(/^(.*?)(:\d+(?::\d+)?)$/);
+  const lineAnchor = ref.match(/^(.*?)(:\d+(?::\d+)?(?:-\d+(?::\d+)?)?)$/);
   if (lineAnchor) return { path: lineAnchor[1], anchor: lineAnchor[2] };
   return { path: ref, anchor: null };
 }
@@ -897,7 +897,11 @@ export function resolveSessionKnowledgeEvidenceRoots(
         size: verified.size,
       };
     } catch (error) {
-      throw new Error(`Unresolved or mutable session evidence "${ref}": ${(error as Error).message}`);
+      throw new Error(
+        `Unresolved or mutable session evidence "${ref}": expected an existing immutable project file `
+        + 'optionally followed by #fragment, :line, :line:column, or :start-end; '
+        + (error as Error).message,
+      );
     }
   });
   return descriptors.sort((left, right) => left.ref.localeCompare(right.ref)

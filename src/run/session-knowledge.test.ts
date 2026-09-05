@@ -186,6 +186,27 @@ describe('session knowledge ledger (K1)', () => {
     expect(summary.run_count).toBe(0);
   });
 
+  it('accepts standard line-range evidence anchors', () => {
+    const projectRoot = root();
+    const { sessionId } = ensureSyntheticKnowledgeSession(projectRoot, 'host-range');
+    const result = stageSessionKnowledgeCandidate(projectRoot, sessionId, {
+      target: 'knowhow',
+      title: 'Range evidence',
+      content: 'Range evidence content',
+      evidenceRefs: ['src/foo.ts:1-3'],
+    });
+    const candidate = summarizeSessionKnowledge(projectRoot, sessionId, { readOnly: true })
+      .candidates.find(item => item.candidate_id === result.candidate_id);
+    expect(candidate?.source_snapshot?.evidence_root_descriptors).toEqual([
+      expect.objectContaining({
+        kind: 'file',
+        ref: 'src/foo.ts:1-3',
+        path: 'src/foo.ts',
+        anchor: ':1-3',
+      }),
+    ]);
+  });
+
   it('rejects staging without evidence (S2 precondition)', () => {
     const projectRoot = root();
     const { sessionId } = ensureSyntheticKnowledgeSession(projectRoot, 'host-b');
@@ -196,7 +217,7 @@ describe('session knowledge ledger (K1)', () => {
     })).toThrow(/--evidence/);
   });
 
-  it('rejects unresolved mutable evidence labels', () => {
+  it('rejects unresolved mutable evidence labels with accepted file-anchor formats', () => {
     const projectRoot = root();
     const { sessionId } = ensureSyntheticKnowledgeSession(projectRoot, 'host-unresolved');
     expect(() => stageSessionKnowledgeCandidate(projectRoot, sessionId, {
@@ -204,7 +225,7 @@ describe('session knowledge ledger (K1)', () => {
       title: 'Unresolved evidence',
       content: 'Unresolved evidence content',
       evidenceRefs: ['missing-label'],
-    })).toThrow(/Unresolved or mutable session evidence/);
+    })).toThrow(/Unresolved or mutable session evidence[\s\S]*:line[\s\S]*:start-end/);
   });
 
   it('content-addresses Run, sealed artifact, and explicit inline roots', () => {

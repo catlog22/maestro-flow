@@ -331,7 +331,11 @@ export function resolveWriteAuthority(input: ResolveWriteAuthorityInput): WriteA
   }
   if (input.explicitSession) {
     if (!store.sessionExists(input.explicitSession)) {
-      throw new Error(`Session not found: ${input.explicitSession}`);
+      throw new Error(
+        `Session not found: ${input.explicitSession}. `
+        + '--session must name an existing Maestro Workflow Session from session status or run brief, '
+        + 'not a Pi chat/session-history ID; if no Maestro Session exists, omit --session or pass --channel <name>',
+      );
     }
     return { kind: 'session', sessionId: input.explicitSession, via: 'explicit', synthetic: false };
   }
