@@ -17,6 +17,14 @@ interface ChangelogEntry {
 
 const changelog: ChangelogEntry[] = [
   {
+    version: '0.5.86',
+    date: '2026-09',
+    changes: [
+      { type: 'feat', text_en: 'Knowledge evidence anchors now accept :start-end line ranges in addition to :line and :line:column, so session-source candidates can reference contiguous code blocks precisely', text_zh: 'Knowledge 证据锚点现除 :line 与 :line:column 外还支持 :start-end 行范围，使基于会话的候选可精确引用连续代码块' },
+      { type: 'fix', text_en: 'The --session option error message now clearly states it expects an existing Maestro Workflow Session ID, not a Pi chat or session-history ID, and suggests --channel when no Session is available', text_zh: '--session 选项错误信息现明确说明其需要的是已存在的 Maestro Workflow Session ID，而非 Pi 聊天或 session-history ID，并在无可用 Session 时提示使用 --channel' },
+    ],
+  },
+  {
     version: '0.5.85',
     date: '2026-09',
     changes: [
