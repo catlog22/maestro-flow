@@ -231,7 +231,7 @@ export { makeNodeId, validateNodeId } from './types.js';
 // ---------------------------------------------------------------------------
 // 通用类型映射辅助
 // ---------------------------------------------------------------------------
-export const FILE_LEVEL_ONLY_LANGUAGES: Set<string> = new Set(['yaml', 'twig', 'properties']);
+export const FILE_LEVEL_ONLY_LANGUAGES: Set<string> = new Set(['yaml', 'twig', 'xml', 'properties']);
 
 export function isFileLevelOnlyLanguage(lang: Language | string): boolean {
   return FILE_LEVEL_ONLY_LANGUAGES.has(lang);

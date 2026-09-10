@@ -449,7 +449,7 @@ async function runCodeExtraction(
           continue;
         }
 
-        // file-level-only 语言 (yaml/twig/properties)
+        // file-level-only 语言 (yaml/twig/xml/properties)
         if (isFileLevelOnlyLanguage(file.language)) {
           const fileNode = createFileLevelNode(file, relPath);
           await emitResult({

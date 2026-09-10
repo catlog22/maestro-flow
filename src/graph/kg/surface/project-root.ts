@@ -11,13 +11,23 @@ import { execFileSync } from 'node:child_process';
 import { existsSync, realpathSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { resolveWorkspace } from '../../../hooks/workspace.js';
+import { isPathContained } from '../../../repository/context.js';
+import { getKgDatabasePath } from '../db/connection.js';
 
 function canonicalPath(path: string): string {
   try {
-    return realpathSync(path);
+    return realpathSync.native(path);
   } catch {
-    return resolve(path);
+    try {
+      return realpathSync(path);
+    } catch {
+      return resolve(path);
+    }
   }
+}
+
+function containedIn(candidate: string, root: string): boolean {
+  return isPathContained(canonicalPath(candidate), canonicalPath(root));
 }
 
 function findGitRoot(startDir: string): string | null {
@@ -52,7 +62,9 @@ function findExternalManifestRoot(startDir: string): string | null {
  *
  * `MAESTRO_PROJECT_ROOT` is an explicit, hard boundary. Without an override,
  * KG state follows the containing Git worktree so nested source directories
- * cannot create or query a shadow database. Outside Git, use the nearest
+ * cannot create or query a shadow database — unless that Git root has no KG
+ * database and a descendant Maestro workspace already does (snapshot git at
+ * a parent drive vs the real project folder). Outside Git, use the nearest
  * initialized Maestro workspace, then the external-surface manifest or cwd
  * fallback for an uninitialized project.
  */
@@ -62,9 +74,21 @@ export function resolveKgCliProjectRoot(startDir = process.cwd()): string {
 
   const cwd = canonicalPath(startDir);
   const gitRoot = findGitRoot(cwd);
-  if (gitRoot) return gitRoot;
-
   const workspace = resolveWorkspace({ cwd });
+  if (gitRoot) {
+    if (existsSync(getKgDatabasePath(gitRoot))) return gitRoot;
+    if (workspace) {
+      const nestedWorkspace = canonicalPath(workspace);
+      if (
+        existsSync(getKgDatabasePath(nestedWorkspace))
+        && containedIn(nestedWorkspace, gitRoot)
+      ) {
+        return nestedWorkspace;
+      }
+    }
+    return gitRoot;
+  }
+
   if (workspace) return canonicalPath(workspace);
 
   return findExternalManifestRoot(cwd) ?? cwd;

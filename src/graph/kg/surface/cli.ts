@@ -122,11 +122,25 @@ async function syncProject(
   printSyncResults(results);
 }
 
+function reportGraphNotInitialized(projectRoot: string, json = false): boolean {
+  if (MaestroGraph.isInitialized(projectRoot)) return false;
+  const dbPath = getKgDatabasePath(projectRoot);
+  if (json) {
+    console.log(JSON.stringify({
+      status: 'fail',
+      error: { code: 'graph_not_initialized', path: dbPath },
+    }));
+  } else {
+    console.error('MaestroGraph not initialized for this project.');
+    console.error('  Run: maestro kg init');
+  }
+  process.exitCode = 1;
+  return true;
+}
+
 async function openGraph(): Promise<MaestroGraph> {
   const projectRoot = resolveKgCliProjectRoot();
-  if (!MaestroGraph.isInitialized(projectRoot)) {
-    console.error('MaestroGraph not initialized for this project.');
-    console.error('  Run: maestro kg sync');
+  if (reportGraphNotInitialized(projectRoot)) {
     process.exit(1);
   }
   return MaestroGraph.open(projectRoot);
@@ -323,7 +337,9 @@ export function registerKgCommands(program: Command): void {
     .option('--limit <n>', 'Max results', '20')
     .option('--json', 'Output as JSON')
     .action(async (text: string, opts) => {
-      const mg = await MaestroGraph.open(resolveKgCliProjectRoot());
+      const projectRoot = resolveKgCliProjectRoot();
+      if (reportGraphNotInitialized(projectRoot, Boolean(opts.json))) return;
+      const mg = await MaestroGraph.open(projectRoot);
       try {
         const parsed = parseQuery(text);
         const sourceTypes = normalizeSources(opts.source)
@@ -656,7 +672,9 @@ export function registerKgCommands(program: Command): void {
     .description('Show knowledge graph statistics')
     .option('--json', 'Output as JSON')
     .action(async (opts) => {
-      const mg = await MaestroGraph.open(resolveKgCliProjectRoot());
+      const projectRoot = resolveKgCliProjectRoot();
+      if (reportGraphNotInitialized(projectRoot, Boolean(opts.json))) return;
+      const mg = await MaestroGraph.open(projectRoot);
       try {
         const stats = mg.getStats();
 

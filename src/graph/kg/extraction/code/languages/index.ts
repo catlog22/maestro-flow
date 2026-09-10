@@ -3773,7 +3773,7 @@ export function detectLanguageFromPath(filePath: string): Language {
 
 // file-level-only 语言 (无 tree-sitter grammar, 但仍索引文件级)
 export const FILE_LEVEL_ONLY_LANGUAGES: Set<Language> = new Set<Language>([
-  'yaml' as Language, 'twig' as Language, 'properties' as Language,
+  'yaml' as Language, 'twig' as Language, 'xml' as Language, 'properties' as Language,
 ]);
 
 export function isFileLevelOnlyLanguage(language: Language): boolean {

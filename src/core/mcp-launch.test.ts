@@ -1,3 +1,4 @@
+import { spawnSync } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
@@ -41,14 +42,50 @@ describe('maestroHookCommand', () => {
       .toBe('maestro hooks run session-context');
   });
 
-  it('quotes node and the JS entry on Windows so hosts do not go through maestro.cmd', () => {
+  it('does not lead with a quoted executable on Windows (PowerShell -Command ParserError)', () => {
     const execPath = 'C:\\Program Files\\nodejs\\node.exe';
     const packageRoot = 'C:\\Program Files\\nodejs\\node_global\\node_modules\\maestro-flow';
     const command = maestroHookCommand('session-context', { platform: 'win32', execPath, packageRoot });
     expect(command).toBe(
-      `"${execPath}" "${join(packageRoot, 'bin', 'maestro.js')}" hooks run session-context`,
+      `node "${join(packageRoot, 'bin', 'maestro.js')}" hooks run session-context`,
     );
+    expect(command).not.toMatch(/^"/);
     expect(command).not.toMatch(/^maestro /);
+  });
+
+  it('keeps an unquoted absolute node path when it has no spaces', () => {
+    const execPath = 'C:\\nodejs\\node.exe';
+    const packageRoot = 'D:\\pkg';
+    expect(maestroHookCommand('session-context', { platform: 'win32', execPath, packageRoot })).toBe(
+      `${execPath} "${join(packageRoot, 'bin', 'maestro.js')}" hooks run session-context`,
+    );
+  });
+
+  it('falls back to PATH node when execPath contains a shell metacharacter', () => {
+    const execPath = 'C:\\nodejs\\node&more.exe';
+    const packageRoot = 'D:\\pkg';
+    expect(maestroHookCommand('session-context', { platform: 'win32', execPath, packageRoot })).toBe(
+      `node "${join(packageRoot, 'bin', 'maestro.js')}" hooks run session-context`,
+    );
+  });
+
+  it('survives PowerShell -Command and cmd shell:true on Windows', () => {
+    if (process.platform !== 'win32') return;
+    const command = maestroHookCommand('session-context', {
+      platform: 'win32',
+      execPath: process.execPath,
+      packageRoot: resolveMaestroPackageRoot(),
+    }).replace(' hooks run session-context', ' --version');
+    const ps = spawnSync('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', command], {
+      encoding: 'utf8',
+      windowsHide: true,
+      timeout: 15_000,
+    });
+    expect(ps.status, ps.stderr).toBe(0);
+    expect(ps.stdout).toMatch(/\d+\.\d+\.\d+/);
+    const sh = spawnSync(command, { encoding: 'utf8', windowsHide: true, timeout: 15_000, shell: true });
+    expect(sh.status, sh.stderr).toBe(0);
+    expect(sh.stdout).toMatch(/\d+\.\d+\.\d+/);
   });
 });
 
@@ -61,7 +98,7 @@ describe('maestroStatuslineCommand', () => {
     const execPath = 'C:\\Program Files\\nodejs\\node.exe';
     const packageRoot = 'D:\\pkg';
     expect(maestroStatuslineCommand({ platform: 'win32', execPath, packageRoot })).toBe(
-      `"${execPath}" "${join(packageRoot, 'bin', 'maestro-statusline.js')}"`,
+      `node "${join(packageRoot, 'bin', 'maestro-statusline.js')}"`,
     );
   });
 });

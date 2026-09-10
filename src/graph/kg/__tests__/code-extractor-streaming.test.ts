@@ -58,6 +58,29 @@ describe('MaestroGraph code extractor streaming', () => {
     }
   });
 
+  it('indexes non-mapper XML as a file-level node instead of throwing under failOnSkippedFile', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'maestro-code-xml-file-level-'));
+    try {
+      const srcDir = join(root, 'src');
+      mkdirSync(srcDir, { recursive: true });
+      writeFileSync(join(root, '.maestroignore'), '');
+      writeFileSync(join(srcDir, 'settings.xml'), '<settings><name>demo</name></settings>\n');
+
+      const collected = await extractCode({
+        projectRoot: root,
+        srcDir,
+        createMaestroIgnore: false,
+        failOnSkippedFile: true,
+      });
+
+      expect(collected.stats.filesExtracted).toBe(1);
+      expect(collected.results[0].nodes[0].kind).toBe('file');
+      expect(collected.results[0].fileRecord.language).toBe('xml');
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
   it('uses the content-aware final language for file records and extracted nodes', async () => {
     const root = mkdtempSync(join(tmpdir(), 'maestro-code-header-language-'));
     try {

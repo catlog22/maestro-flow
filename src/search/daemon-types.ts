@@ -230,6 +230,27 @@ export function deleteDaemonInfoIfStale(
   try { unlinkSync(getDaemonPath(workflowRoot)); return true; } catch { return false; }
 }
 
+/**
+ * Drop a dead-pid descriptor for this workflow so a successor can spawn.
+ * Live, foreign, and malformed descriptors are left in place.
+ * Legacy files in this directory are reclaimed when their PID is dead;
+ * the path itself is the workspace identity for that generation.
+ */
+export function reclaimDeadDaemonDescriptor(workflowRoot: string): boolean {
+  const path = getDaemonPath(workflowRoot);
+  if (!existsSync(path)) return true;
+  const existing = readDaemonInfo(workflowRoot);
+  if (!existing) return false;
+  if (isDaemonInfoV2(existing) && !isDaemonInfoV2(existing, workflowRoot)) return false;
+  if (isDaemonAlive(existing)) return false;
+  if (deleteDaemonInfoIfStale(workflowRoot, existing)) return true;
+  const current = readDaemonInfo(workflowRoot);
+  if (current && isDaemonInfoV2(current, workflowRoot) && !isDaemonAlive(current)) {
+    return deleteDaemonInfoIfOwned(workflowRoot, current);
+  }
+  return !existsSync(path);
+}
+
 /** Release a spawn lock only when the caller still owns its opaque token. */
 export function releaseDaemonSpawnLock(workflowRoot: string, token: string | undefined): boolean {
   if (!token) return false;
