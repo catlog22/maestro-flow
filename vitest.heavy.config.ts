@@ -16,6 +16,7 @@ export default defineConfig({
     setupFiles: [resolve(__dirname, 'scripts/vitest-environment-guard.ts')],
     pool: 'forks',
     maxWorkers: 1,
+    execArgv: ['--liftoff-only'],
     minWorkers: 1,
     fileParallelism: false,
     testTimeout: 60_000,

@@ -1,9 +1,21 @@
 import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
+import { createRequire } from 'node:module';
 import { extname, isAbsolute, relative, resolve, sep } from 'node:path';
 import { execFileSync, execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 
 const execFileAsync = promisify(execFile);
+const require = createRequire(import.meta.url);
+
+function resolveRipgrepPath(): string {
+  try {
+    const rgPath = (require('@vscode/ripgrep') as { rgPath?: string }).rgPath;
+    if (typeof rgPath === 'string' && rgPath.length > 0) return rgPath;
+  } catch {
+    /* fall through to PATH rg */
+  }
+  return 'rg';
+}
 const BATCH_EXECUTION_CONCURRENCY = 16;
 const BATCH_RESULT_BUDGET_BYTES = 64 * 1024;
 const BATCH_COMMAND_RESULT_MAX_BYTES = 12 * 1024;
@@ -124,7 +136,7 @@ function glob(args: { pattern: string; path?: string }, cwd: string): string {
   assertWithinCwd(dir, cwd);
 
   try {
-    const output = execFileSync('rg', ['--files', '--glob', args.pattern, dir], {
+    const output = execFileSync(resolveRipgrepPath(), ['--files', '--glob', args.pattern, dir], {
       encoding: 'utf-8',
       maxBuffer: 1024 * 1024,
       timeout: 10_000,
@@ -162,7 +174,7 @@ function globToRegex(pattern: string): RegExp {
 // ---------------------------------------------------------------------------
 
 function runRg(rgArgs: string[]): string {
-  return execFileSync('rg', rgArgs, {
+  return execFileSync(resolveRipgrepPath(), rgArgs, {
     encoding: 'utf-8',
     maxBuffer: 2 * 1024 * 1024,
     timeout: 15_000,
@@ -170,7 +182,7 @@ function runRg(rgArgs: string[]): string {
 }
 
 async function runRgAsync(rgArgs: string[]): Promise<string> {
-  const { stdout } = await execFileAsync('rg', rgArgs, {
+  const { stdout } = await execFileAsync(resolveRipgrepPath(), rgArgs, {
     encoding: 'utf-8',
     maxBuffer: 2 * 1024 * 1024,
     timeout: 15_000,

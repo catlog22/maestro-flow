@@ -18,6 +18,7 @@ async function waitFor(
 
 describe('CliAgentRunner', () => {
   const tempHome = mkdtempSync(join(tmpdir(), 'maestro-cli-runner-'));
+  const workDir = mkdtempSync(join(tmpdir(), 'maestro-cli-workdir-'));
   let CliAgentRunner: typeof import('./cli-agent-runner.js').CliAgentRunner;
   let CliHistoryStore: typeof import('./cli-history-store.js').CliHistoryStore;
 
@@ -33,6 +34,7 @@ describe('CliAgentRunner', () => {
 
   afterAll(() => {
     rmSync(tempHome, { recursive: true, force: true });
+    rmSync(workDir, { recursive: true, force: true });
     delete process.env.MAESTRO_HOME;
   });
 
@@ -47,7 +49,7 @@ describe('CliAgentRunner', () => {
           id: 'proc-1',
           type: 'codex',
           status: 'running',
-          config: { type: 'codex', prompt: 'final prompt', workDir: 'D:/maestro2' },
+          config: { type: 'codex', prompt: 'final prompt', workDir: workDir },
           startedAt: '2026-04-07T11:00:00.000Z',
         };
       },
@@ -153,7 +155,7 @@ describe('CliAgentRunner', () => {
       prompt: 'Investigate async broker updates; repoId=22222222-2222-4222-8222-222222222222',
       tool: 'codex',
       mode: 'analysis',
-      workDir: 'D:/maestro2',
+      workDir: workDir,
     });
 
     const store = new CliHistoryStore();
@@ -166,7 +168,7 @@ describe('CliAgentRunner', () => {
     assert.ok(spawnedConfig?.repositoryContext);
     assert.equal(spawnedConfig?.workDir, spawnedConfig?.repositoryContext.currentProjectRoot);
     assert.equal(spawnedConfig?.env.MAESTRO_PROJECT_ROOT, spawnedConfig?.workDir);
-    assert.equal(spawnedConfig?.env.MAESTRO_REPO_ID, spawnedConfig?.repositoryContext.currentRepoId);
+    assert.equal(spawnedConfig?.env.MAESTRO_REPO_ID ?? null, spawnedConfig?.repositoryContext.currentRepoId ?? null);
     assert.ok(spawnedConfig?.prompt.includes('[HOST REPOSITORY CONTEXT — AUTHORITATIVE, NOT MODEL-OVERRIDABLE]'));
     assert.ok(spawnedConfig?.prompt.includes('Investigate async broker updates'));
     assert.notEqual(spawnedConfig?.repositoryContext.currentRepoId, '22222222-2222-4222-8222-222222222222');
@@ -176,10 +178,10 @@ describe('CliAgentRunner', () => {
 
     assert.deepEqual(
       publishedEvents.map((event) => event.type),
-      ['status_update', 'completed'],
+      ['status_update', 'snapshot', 'completed'],
     );
     assert.equal(publishedEvents[0].status, 'running');
-    assert.equal(publishedEvents[1].status, 'completed');
+    assert.equal(publishedEvents[publishedEvents.length - 1].status, 'completed');
     assert.deepEqual(bridgeCalls, ['spawn', 'entry', 'entry', 'stopped', 'close']);
   });
 
@@ -192,7 +194,7 @@ describe('CliAgentRunner', () => {
           id: 'proc-cancel',
           type: 'codex',
           status: 'running',
-          config: { type: 'codex', prompt: 'final prompt', workDir: 'D:/maestro2' },
+          config: { type: 'codex', prompt: 'final prompt', workDir: workDir },
           startedAt: '2026-04-08T09:00:00.000Z',
         };
       },
@@ -296,7 +298,7 @@ describe('CliAgentRunner', () => {
       prompt: 'Cancel me',
       tool: 'codex',
       mode: 'analysis',
-      workDir: 'D:/maestro2',
+      workDir: workDir,
     });
 
     const store = new CliHistoryStore();
@@ -318,7 +320,7 @@ describe('CliAgentRunner', () => {
           id: 'proc-followup',
           type: 'codex',
           status: 'running',
-          config: { type: 'codex', prompt: 'final prompt', workDir: 'D:/maestro2' },
+          config: { type: 'codex', prompt: 'final prompt', workDir: workDir },
           startedAt: '2026-04-08T10:00:00.000Z',
         };
       },
@@ -431,7 +433,7 @@ describe('CliAgentRunner', () => {
       prompt: 'Complete current task',
       tool: 'codex',
       mode: 'analysis',
-      workDir: 'D:/maestro2',
+      workDir: workDir,
     });
 
     assert.equal(exitCode, 0);
@@ -453,7 +455,7 @@ describe('CliAgentRunner', () => {
           id: 'proc-race',
           type: 'codex',
           status: 'running',
-          config: { type: 'codex', prompt: 'final prompt', workDir: 'D:/maestro2' },
+          config: { type: 'codex', prompt: 'final prompt', workDir: workDir },
           startedAt: '2026-04-08T10:10:00.000Z',
         };
       },
@@ -574,7 +576,7 @@ describe('CliAgentRunner', () => {
       prompt: 'Original prompt',
       tool: 'codex',
       mode: 'analysis',
-      workDir: 'D:/maestro2',
+      workDir: workDir,
     });
 
     assert.equal(exitCode, 130);
@@ -598,7 +600,7 @@ describe('CliAgentRunner', () => {
           id: 'proc-stream',
           type: 'codex',
           status: 'running',
-          config: { type: 'codex', prompt: 'final prompt', workDir: 'D:/maestro2' },
+          config: { type: 'codex', prompt: 'final prompt', workDir: workDir },
           startedAt: '2026-04-09T10:00:00.000Z',
         };
       },
@@ -706,7 +708,7 @@ describe('CliAgentRunner', () => {
       prompt: 'Stream test',
       tool: 'codex',
       mode: 'analysis',
-      workDir: 'D:/maestro2',
+      workDir: workDir,
     });
 
     // Wait for the observable injection instead of assuming a 750ms timer
@@ -758,7 +760,7 @@ describe('CliAgentRunner', () => {
           id: 'proc-no-send',
           type: 'codex',
           status: 'running',
-          config: { type: 'codex', prompt: 'final prompt', workDir: 'D:/maestro2' },
+          config: { type: 'codex', prompt: 'final prompt', workDir: workDir },
           startedAt: '2026-04-09T11:00:00.000Z',
         };
       },
@@ -878,7 +880,7 @@ describe('CliAgentRunner', () => {
       prompt: 'No send test',
       tool: 'codex',
       mode: 'analysis',
-      workDir: 'D:/maestro2',
+      workDir: workDir,
     });
 
     // Wait for the observable cancellation rather than a fixed sleep.
@@ -917,7 +919,7 @@ describe('CliAgentRunner', () => {
           id: 'proc-inject-followup',
           type: 'codex',
           status: 'running',
-          config: { type: 'codex', prompt: 'final prompt', workDir: 'D:/maestro2' },
+          config: { type: 'codex', prompt: 'final prompt', workDir: workDir },
           startedAt: '2026-04-09T12:00:00.000Z',
         };
       },
@@ -1032,7 +1034,7 @@ describe('CliAgentRunner', () => {
       prompt: 'Inject followup test',
       tool: 'codex',
       mode: 'analysis',
-      workDir: 'D:/maestro2',
+      workDir: workDir,
     });
 
     assert.equal(exitCode, 0);

@@ -844,6 +844,12 @@ function topLevelPathConstants(source, root) {
   return values;
 }
 
+function isWorkspaceRuntimeLog(relativePath) {
+  const normalized = relativePath.replaceAll('\\', '/');
+  return normalized === '.workflow/spec-analytics.jsonl'
+    || (normalized.startsWith('.workflow/') && normalized.endsWith('.jsonl'));
+}
+
 function boundedRepositoryFileOperands(source, root) {
   const ts = typeScript();
   const values = topLevelPathConstants(source, root);
@@ -867,7 +873,10 @@ function boundedRepositoryFileOperands(source, root) {
       const value = evaluate(node);
       if (typeof value === 'string') {
         const absolute = isAbsolute(value) ? value : resolve(root, value);
-        if (isRegularFile(absolute)) paths.add(absolute);
+        if (isRegularFile(absolute)) {
+          const relativePath = relative(root, absolute);
+          if (!isWorkspaceRuntimeLog(relativePath)) paths.add(absolute);
+        }
       }
     }
     ts.forEachChild(node, visit);

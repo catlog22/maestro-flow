@@ -342,7 +342,9 @@ async function runAdmittedWorker(
   let worker: Worker;
   try {
     worker = new Worker(workerUrl, {
-      execArgv: process.execArgv.filter(argument => !argument.startsWith('--input-type')),
+      execArgv: process.execArgv.filter(argument =>
+        !argument.startsWith('--input-type') && argument !== '--liftoff-only'
+      ),
     });
   } catch (error) {
     await cleanupAfterWorker(null, canonicalRoot, request);

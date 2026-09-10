@@ -244,9 +244,14 @@ function startLockLifecycleMonitor(lock: string, directory: string): {
   let lastPresent = existsSync(lock);
   const tokens = new Set<string>();
   const errors: Array<{ code: string | null; message: string }> = [];
-  const watcher = watch(directory, (_event, filename) => {
-    if (filename === '.session-store.lock') watchEvents += 1;
-  });
+  // Windows libuv fs-event aborts when 8.3 vs long paths disagree
+  // (`_wcsnicmp(filename, dir, dirlen)` in src/win/fs-event.c). Interval
+  // polling still observes lock present/absent transitions.
+  const watcher = process.platform === 'win32'
+    ? null
+    : watch(directory, (_event, filename) => {
+      if (filename === '.session-store.lock') watchEvents += 1;
+    });
   const interval = setInterval(() => {
     const present = existsSync(lock);
     if (present !== lastPresent) {
@@ -266,7 +271,7 @@ function startLockLifecycleMonitor(lock: string, directory: string): {
   return {
     stop: () => {
       clearInterval(interval);
-      watcher.close();
+      watcher?.close();
       return { watchEvents, presentTransitions, absentTransitions, tokens: [...tokens], errors };
     },
   };

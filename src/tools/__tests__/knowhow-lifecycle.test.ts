@@ -30,6 +30,7 @@ import {
   resolveKnowhowFilename,
 } from '../../utils/frontmatter.js';
 import {
+  canonicalizeExistingPrefix,
   createKnowhowLifecycleSnapshot,
   getKnowhowEvolutionChain,
   recoverKnowhowLifecycleIntent,
@@ -987,6 +988,16 @@ describe('knowhow replay-safe lifecycle', () => {
         out: missingTarget,
       })).toThrow(/symbolic link or junction component/);
       expect(treeState(externalRoot)).toEqual(before);
+    },
+  );
+
+  it.skipIf(process.platform !== 'win32')(
+    'keeps the Windows UNC share root when expanding an existing prefix',
+    () => {
+      const unc = '\\\\server\\share\\repo\\.workflow\\knowhow\\x.md';
+      const canonical = canonicalizeExistingPrefix(unc);
+      expect(canonical.startsWith('\\\\server\\share\\')).toBe(true);
+      expect(canonical).toBe(unc);
     },
   );
 

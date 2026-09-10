@@ -35,6 +35,62 @@ function openFresh(name: string): KgDatabaseConnection {
   return conn;
 }
 
+/** Windows node:sqlite refuses DROP/UPDATE on FTS5 shadow tables; writable_schema can still sabotage them. */
+function execWritableSchema(conn: KgDatabaseConnection, sql: string): void {
+  conn.raw.exec('PRAGMA writable_schema=ON');
+  try {
+    conn.raw.exec(sql);
+  } finally {
+    conn.raw.exec('PRAGMA writable_schema=OFF');
+  }
+}
+
+function quoteIdent(name: string): string {
+  if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(name)) {
+    throw new Error(`refusing to sabotage non-identifier table: ${name}`);
+  }
+  return name;
+}
+
+function dropTableForSabotage(conn: KgDatabaseConnection, table: string): boolean {
+  const ident = quoteIdent(table);
+  try {
+    conn.raw.exec(`DROP TABLE ${ident}`);
+    return true;
+  } catch {
+    try {
+      execWritableSchema(
+        conn,
+        `DELETE FROM sqlite_master WHERE name = '${ident}' OR name LIKE '${ident}_%'`,
+      );
+      return true;
+    } catch {
+      // Windows node:sqlite refuses DROP/UPDATE on FTS5 shadow tables and sqlite_master.
+      return false;
+    }
+  }
+}
+
+function invalidateFtsConfigVersion(conn: KgDatabaseConnection): boolean {
+  try {
+    conn.raw.exec(`UPDATE code_fts_config SET v = 0 WHERE k = 'version'`);
+    return true;
+  } catch {
+    try {
+      execWritableSchema(conn, `UPDATE code_fts_config SET v = 0 WHERE k = 'version'`);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+}
+
+function skipIfFtsSabotageUnsupported(ok: boolean): boolean {
+  if (ok) return false;
+  expect(process.platform).toBe('win32');
+  return true;
+}
+
 function reopenAndMigrate(conn: KgDatabaseConnection): KgDatabaseConnection {
   const dbPath = conn.path;
   conn.close();
@@ -438,10 +494,8 @@ describe('structural schema v7 and FTS schema v8', () => {
           sourceType: 'spec',
           definition: 'RecoveredGuidance',
         });
-        conn.raw.exec(`
-          DELETE FROM schema_versions WHERE version > 6;
-          DROP TABLE ${missingTable};
-        `);
+        conn.raw.exec(`DELETE FROM schema_versions WHERE version > 6;`);
+        if (skipIfFtsSabotageUnsupported(dropTableForSabotage(conn, missingTable))) return;
 
         expect(conn.getSchemaVersion()).toBe(6);
         applyMigrations(conn);
@@ -488,10 +542,8 @@ describe('structural schema v7 and FTS schema v8', () => {
           sourceType: 'spec',
           definition: 'RecoveredGuidance',
         });
-        conn.raw.exec(`
-          DELETE FROM schema_versions WHERE version = 8;
-          DROP TABLE ${missingTable};
-        `);
+        conn.raw.exec(`DELETE FROM schema_versions WHERE version = 8;`);
+        if (skipIfFtsSabotageUnsupported(dropTableForSabotage(conn, missingTable))) return;
 
         expect(conn.getSchemaVersion()).toBe(7);
         conn = reopenAndMigrate(conn);
@@ -521,10 +573,8 @@ describe('structural schema v7 and FTS schema v8', () => {
       new KgQueryBuilder(conn).insertNode(
         makeNode('code:/project/InvalidConfig.swift:InvalidConfig', 'InvalidConfigRecovered'),
       );
-      conn.raw.exec(`
-        DELETE FROM schema_versions WHERE version = 8;
-        UPDATE code_fts_config SET v = 0 WHERE k = 'version';
-      `);
+      conn.raw.exec(`DELETE FROM schema_versions WHERE version = 8;`);
+      if (skipIfFtsSabotageUnsupported(invalidateFtsConfigVersion(conn))) return;
 
       conn = reopenAndMigrate(conn);
 
@@ -566,7 +616,7 @@ describe('structural schema v7 and FTS schema v8', () => {
           sourceType: 'spec',
           definition: 'V8RecoveredGuidance',
         });
-        conn.raw.exec(`DROP TABLE ${missingTable};`);
+        if (skipIfFtsSabotageUnsupported(dropTableForSabotage(conn, missingTable))) return;
 
         expect(conn.getSchemaVersion()).toBe(8);
         conn = reopenAndMigrate(conn);

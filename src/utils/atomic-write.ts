@@ -28,6 +28,7 @@ import {
   statSync,
   unlinkSync,
   writeFileSync,
+  realpathSync,
 } from 'node:fs';
 import { basename, dirname, join, resolve } from 'node:path';
 
@@ -144,8 +145,13 @@ function renameWithRetry(from: string, to: string): void {
   }
 }
 
+function canonicalExistingPath(path: string): string {
+  const abs = resolve(path);
+  try { return realpathSync.native(abs); } catch { return abs; }
+}
+
 export function knowledgeCorpusNamespaceTarget(projectRoot: string): string {
-  return join(resolve(projectRoot), '.workflow', '.knowledge-corpus.namespace');
+  return join(canonicalExistingPath(projectRoot), '.workflow', '.knowledge-corpus.namespace');
 }
 
 function corpusNamespaceTargetForFile(filePath: string): string | null {
@@ -154,7 +160,7 @@ function corpusNamespaceTargetForFile(filePath: string): string | null {
   const corpusName = basename(corpusDir).toLowerCase();
   if ((corpusName !== 'specs' && corpusName !== 'knowhow')
     || basename(workflowRoot).toLowerCase() !== '.workflow') return null;
-  return join(workflowRoot, '.knowledge-corpus.namespace');
+  return knowledgeCorpusNamespaceTarget(dirname(workflowRoot));
 }
 
 export function acquireFileLocksSync(filePaths: readonly string[]): () => void {

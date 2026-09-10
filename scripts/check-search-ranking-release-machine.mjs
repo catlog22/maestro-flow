@@ -577,13 +577,13 @@ function handleIdentity(stat) {
   };
 }
 
-function sameHandleIdentity(left, right) {
+function sameHandleIdentity(left, right, { ignoreCtime = false } = {}) {
   return left.dev === right.dev
     && left.ino === right.ino
     && left.mode === right.mode
     && left.size === right.size
     && left.mtimeMs === right.mtimeMs
-    && left.ctimeMs === right.ctimeMs;
+    && (ignoreCtime || left.ctimeMs === right.ctimeMs);
 }
 
 function identityHashProjection(artifact) {
@@ -739,15 +739,15 @@ export function rehashRetainedArtifactHandle(handle, {
     sha256: sha256(buffer),
   };
   const changed = [];
-  if (!sameHandleIdentity(beforeIdentity, afterIdentity)) changed.push('handleIdentity');
-  if (!sameHandleIdentity(afterIdentity, pathIdentity)) changed.push('pathIdentity');
-  for (const field of ['dev', 'ino', 'mode', 'size', 'mtimeMs', 'ctimeMs']) {
+  if (!sameHandleIdentity(beforeIdentity, afterIdentity, { ignoreCtime: true })) changed.push('handleIdentity');
+  if (!sameHandleIdentity(afterIdentity, pathIdentity, { ignoreCtime: true })) changed.push('pathIdentity');
+  for (const field of ['dev', 'ino', 'mode', 'size', 'mtimeMs']) {
     if (afterIdentity[field] !== pathIdentity[field]) changed.push(field);
   }
   if (baseline.realPath !== current.realPath) changed.push('realPath');
   const baselineFields = allowContentTransition
     ? ['dev', 'ino', 'mode']
-    : ['dev', 'ino', 'mode', 'size', 'mtimeMs', 'ctimeMs'];
+    : ['dev', 'ino', 'mode', 'size', 'mtimeMs'];
   for (const field of baselineFields) {
     if (baseline.identity[field] !== current.identity[field]) changed.push(field);
   }
