@@ -996,7 +996,7 @@ const CODEX_PROFILE: ConversionProfile = {
 // Pi profile — teammate subagent model (pi-maestro-flow)
 //
 // Pi tools: same file ops as Claude + teammate() for subagent + maestro() for CLI
-// Install: https://github.com/catlog22/pi-maestro-flow
+// Install: pi install npm:pi-maestro-flow
 // ---------------------------------------------------------------------------
 
 const PI_HOST_MIRROR_BLOCK = `<host_mirror>
