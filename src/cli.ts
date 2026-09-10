@@ -62,6 +62,7 @@ const commandLoaders: Record<string, () => Promise<(p: Command) => void>> = {
   knowhow:    async () => (await import('./commands/knowhow.js')).registerKnowhowCommand,
   kh:         async () => (await import('./commands/knowhow.js')).registerKnowhowCommand,
   knowledge:  async () => (await import('./commands/knowledge.js')).registerKnowledgeCommand,
+  memory:     async () => (await import('./commands/memory.js')).registerMemoryCommand,
   'delegate-config': async () => (await import('./commands/tools.js')).registerToolsCommand,
   dc:                async () => (await import('./commands/tools.js')).registerToolsCommand,
   config:  async () => (await import('./commands/config.js')).registerConfigCommand,

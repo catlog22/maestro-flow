@@ -114,6 +114,10 @@ export const HOOK_DEFS: Record<string, HookDef> = {
   'kg-auto-init': { event: 'SessionStart', matcher: 'startup', level: 'standard', requiresWorkspace: true },
   'search-cache-invalidator': { event: 'PostToolUse', matcher: 'Write|Edit', level: 'standard', requiresWorkspace: true },
   'search-daemon-start': { event: 'SessionStart', matcher: 'startup', level: 'standard', requiresWorkspace: true },
+  'memory-extract': { event: 'Stop', level: 'standard', requiresWorkspace: true },
+  'memory-extract-end': { event: 'SessionEnd', level: 'standard', requiresWorkspace: true, runner: 'memory-extract' },
+  'memory-inject-start': { event: 'SessionStart', matcher: 'startup|resume', level: 'standard', requiresWorkspace: true, runner: 'memory-inject' },
+  'memory-inject-prompt': { event: 'UserPromptSubmit', level: 'standard', requiresWorkspace: true, runner: 'memory-inject' },
   'workflow-guard': { event: 'PreToolUse', matcher: 'Bash|Write|Edit', level: 'full', requiresWorkspace: true },
   'prompt-guard': { event: 'UserPromptSubmit', level: 'full', requiresWorkspace: false },
 };
@@ -148,6 +152,10 @@ export const CODEX_HOOK_DEFS: Record<string, CodexHookDef> = {
   'spec-validator':        { event: 'PreToolUse', matcher: 'Write', level: 'standard', requiresWorkspace: true, statusMessage: 'Validating against specs' },
   'search-daemon-start':   { event: 'SessionStart', matcher: 'startup', level: 'standard', requiresWorkspace: true, statusMessage: 'Starting search daemon' },
   'search-cache-invalidator': { event: 'PostToolUse', matcher: 'Write|Edit', level: 'standard', requiresWorkspace: true },
+  'memory-extract':        { event: 'Stop', level: 'standard', requiresWorkspace: true },
+  'memory-extract-end':    { event: 'SessionEnd', level: 'standard', requiresWorkspace: true, runner: 'memory-extract' },
+  'memory-inject-start':   { event: 'SessionStart', matcher: 'startup|resume', level: 'standard', requiresWorkspace: true, runner: 'memory-inject' },
+  'memory-inject-prompt':  { event: 'UserPromptSubmit', level: 'standard', requiresWorkspace: true, runner: 'memory-inject' },
   'workflow-guard':        { event: 'PreToolUse', matcher: 'Bash', level: 'full', requiresWorkspace: true, statusMessage: 'Checking command safety' },
   'prompt-guard':          { event: 'UserPromptSubmit', level: 'full', requiresWorkspace: false },
 };
@@ -179,6 +187,10 @@ export const GROK_HOOK_DEFS: Record<string, CodexHookDef> = {
   'coordinator-tracker':   { event: 'Stop', level: 'standard', requiresWorkspace: true },
   'team-monitor':          { event: 'Stop', level: 'standard' },
   'telemetry':             { event: 'Stop', level: 'standard' },
+  'memory-extract':        { event: 'Stop', level: 'standard', requiresWorkspace: true },
+  'memory-extract-end':    { event: 'SessionEnd', level: 'standard', requiresWorkspace: true, runner: 'memory-extract' },
+  'memory-inject-start':   { event: 'SessionStart', matcher: 'startup|resume', level: 'standard', requiresWorkspace: true, runner: 'memory-inject' },
+  'memory-inject-prompt':  { event: 'PreToolUse', level: 'standard', requiresWorkspace: true, runner: 'memory-inject' },
   'workflow-guard':        { event: 'PreToolUse', matcher: 'run_terminal_command|write_file|search_replace', level: 'full', requiresWorkspace: true },
   'prompt-guard':          { event: 'UserPromptSubmit', level: 'full', requiresWorkspace: false },
 };
@@ -186,7 +198,7 @@ export const GROK_HOOK_DEFS: Record<string, CodexHookDef> = {
 export const GROK_HOOK_LEVEL_DESCRIPTIONS: Record<HookLevel, string> = {
   none: 'No hooks',
   minimal: 'Session context (SessionStart) + spec-injector (spawn_subagent)',
-  standard: '+ keyword/spec/KG context (UserPromptSubmit) + kg-auto-init + delegate-monitor + coordinator/team/telemetry(Stop) + guards',
+  standard: '+ keyword/spec/KG context (UserPromptSubmit) + kg-auto-init + delegate-monitor + coordinator/team/telemetry(Stop) + working-memory inject (PreToolUse) / extract (Stop) + guards',
   full: '+ workflow-guard (PreToolUse) + prompt-guard (UserPromptSubmit)',
 };
 
@@ -690,12 +702,12 @@ export function getGenericHooksPlatform(platformId: string): GenericHooksPlatfor
 export function installGenericHooksByLevel(
   platformId: string,
   level: HookLevel,
-  opts: { project?: boolean; selectedHooks?: string[] } = {},
+  opts: { project?: boolean; selectedHooks?: string[]; hooksPath?: string } = {},
 ): InstallHooksResult {
   const platform = getGenericHooksPlatform(platformId);
   if (!platform) return { settingsPath: '', installedHooks: [], level };
 
-  const hooksPath = platform.hooksPath({ project: opts.project });
+  const hooksPath = opts.hooksPath ?? platform.hooksPath({ project: opts.project });
   const defs = platform.defs ?? CODEX_HOOK_DEFS;
 
   const filteredHooks = opts.selectedHooks
@@ -788,6 +800,8 @@ export const AGY_HOOK_DEFS: Record<string, AgyHookDef> = {
 
   'search-daemon-start':   { event: 'PreInvocation', level: 'standard', requiresWorkspace: true },
   'search-cache-invalidator': { event: 'PostToolUse', matcher: 'write_to_file|replace_file_content|multi_replace_file_content', level: 'standard', requiresWorkspace: true },
+  'memory-extract':        { event: 'Stop', level: 'standard', requiresWorkspace: true },
+  'memory-inject':         { event: 'PreInvocation', level: 'standard', requiresWorkspace: true },
 
   // Full — guards
   'preflight-guard':       { event: 'PreToolUse', matcher: 'run_command|write_to_file|replace_file_content|multi_replace_file_content|invoke_subagent', level: 'standard', requiresWorkspace: true },
@@ -1006,6 +1020,62 @@ function extractHookInputData(raw: string): Record<string, unknown> {
   } catch {
     return {};
   }
+}
+
+function firstHookString(data: Record<string, unknown>, keys: string[]): string | undefined {
+  for (const key of keys) {
+    const value = data[key];
+    if (typeof value === 'string' && value.trim()) return value;
+  }
+  return undefined;
+}
+
+export function parseHookStdinObject(raw: string): Record<string, unknown> {
+  try {
+    if (!raw) return {};
+    const data = JSON.parse(raw) as unknown;
+    if (!data || typeof data !== 'object' || Array.isArray(data)) return {};
+    return data as Record<string, unknown>;
+  } catch {
+    return {};
+  }
+}
+
+export function conversationPayloadFromHook(data: Record<string, unknown>, cwd: string): {
+  session_id?: string;
+  run_id?: string;
+  maestro_session_id?: string;
+  cwd: string;
+  messages?: Array<{ role: 'user' | 'assistant' | 'system'; content: string }>;
+  transcript?: string;
+  transcript_path?: string;
+  user_prompt?: string;
+  hook_event_name?: string;
+} {
+  const prompt = typeof data.user_prompt === 'string' ? data.user_prompt
+    : typeof data.prompt === 'string' ? data.prompt
+    : typeof data.userPrompt === 'string' ? data.userPrompt
+    : undefined;
+  const transcriptPath = typeof data.transcript_path === 'string' ? data.transcript_path
+    : typeof data.transcriptPath === 'string' ? data.transcriptPath
+    : undefined;
+  return {
+    session_id: firstHookString(data, ['session_id', 'sessionId', 'conversation_id', 'conversationId']),
+    run_id: typeof data.run_id === 'string' ? data.run_id
+      : typeof data.runId === 'string' ? data.runId
+      : undefined,
+    maestro_session_id: typeof data.maestro_session_id === 'string' ? data.maestro_session_id
+      : typeof data.maestroSessionId === 'string' ? data.maestroSessionId
+      : undefined,
+    cwd,
+    messages: Array.isArray(data.messages) ? data.messages as Array<{ role: 'user' | 'assistant' | 'system'; content: string }> : undefined,
+    transcript: typeof data.transcript === 'string' ? data.transcript : undefined,
+    transcript_path: transcriptPath,
+    user_prompt: prompt,
+    hook_event_name: typeof data.hook_event_name === 'string' ? data.hook_event_name
+      : typeof data.hookEventName === 'string' ? data.hookEventName
+      : undefined,
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -1430,6 +1500,66 @@ const HOOK_RUNNERS: Record<string, HookRunner> = {
     const { spawnDaemon } = await import('../search/daemon-client.js');
     await spawnDaemon(workflowRoot);
   },
+
+  'memory-extract': async () => {
+    const config = loadHooksConfig();
+    if (config.toggles['memoryExtract'] === false) return;
+    const raw = await readStdin();
+    const data = parseHookStdinObject(raw);
+    const workspace = resolveWorkspace(data);
+    if (!workspace) return;
+    const cwd = typeof data.cwd === 'string' && data.cwd.trim() ? data.cwd : workspace;
+    const { retainWorkingMemory } = await import('../memory/retain.js');
+    try {
+      await retainWorkingMemory(workspace, conversationPayloadFromHook(data, cwd));
+    } catch {
+      /* fail-open: extract must not block the host */
+    }
+  },
+
+  'memory-inject': async () => {
+    const config = loadHooksConfig();
+    if (config.toggles['memoryInject'] === false) return;
+    const raw = await readStdin();
+    const data = parseHookStdinObject(raw);
+    const workspace = resolveWorkspace(data);
+    if (!workspace) return;
+    const cwd = typeof data.cwd === 'string' && data.cwd.trim() ? data.cwd : workspace;
+    const { isExtractEnabled, isInjectEnabled, loadMemoryConfig } = await import('../memory/index.js');
+    const memoryConfig = loadMemoryConfig(workspace);
+    if (!isInjectEnabled(memoryConfig.auto)) return;
+    const payload = conversationPayloadFromHook(data, cwd);
+    if (isExtractEnabled(memoryConfig.auto) && payload.user_prompt) {
+      const { retainWorkingMemory } = await import('../memory/retain.js');
+      try {
+        await retainWorkingMemory(workspace, payload, { config: memoryConfig });
+      } catch {
+        /* fail-open: extract must not skip recall */
+      }
+    }
+    const { recallWorkingMemory } = await import('../memory/recall.js');
+    try {
+      const recalled = await recallWorkingMemory(workspace, payload.user_prompt ?? '', {
+        config: memoryConfig,
+        sessionId: payload.session_id,
+      });
+      if (recalled.content) {
+        const eventName = typeof data.hook_event_name === 'string' && data.hook_event_name
+          ? data.hook_event_name
+          : typeof data.hookEventName === 'string' && data.hookEventName
+            ? data.hookEventName
+            : 'UserPromptSubmit';
+        process.stdout.write(JSON.stringify({
+          hookSpecificOutput: {
+            hookEventName: eventName,
+            additionalContext: recalled.content,
+          },
+        }));
+      }
+    } catch {
+      /* fail-open: inject must not block the host */
+    }
+  },
 };
 
 // ---------------------------------------------------------------------------
@@ -1455,7 +1585,7 @@ export function registerHooksCommand(program: Command): void {
       // Workspace gate — hooks with requiresWorkspace exit silently
       // when no Maestro workspace (.workflow/ + valid state.json) is found.
       // This avoids stdin parsing + evaluator overhead for non-workflow projects.
-      const def = HOOK_DEFS[name] ?? CODEX_HOOK_DEFS[name] ?? AGY_HOOK_DEFS[name];
+      const def = HOOK_DEFS[name] ?? CODEX_HOOK_DEFS[name] ?? GROK_HOOK_DEFS[name] ?? AGY_HOOK_DEFS[name];
       const cwd = process.cwd();
       if (def?.requiresWorkspace) {
         if (!resolveWorkspace({ cwd })) {

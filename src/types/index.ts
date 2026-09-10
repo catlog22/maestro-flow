@@ -95,6 +95,30 @@ export interface StatuslineConfig {
   layout?: 'compact' | 'expanded';
 }
 
+export type MemoryAutoMode = 'off' | 'index' | 'extract' | 'promote-safe';
+
+export interface MemoryConfig {
+  auto?: MemoryAutoMode;
+  mem0ApiKey?: string;
+  mem0BaseUrl?: string;
+  mem0UserId?: string;
+  mem0AgentId?: string;
+  mem0AppId?: string;
+  workingSetMaxLines?: number;
+  workingSetMaxBytes?: number;
+  decayHalfLifeDays?: number;
+  minRecallScore?: number;
+  recallLimit?: number;
+  stickyLimit?: number;
+  autoStageSafe?: boolean;
+  semantic?: 'lexical' | 'topic' | 'embed';
+  remote?: 'off' | 'mcp';
+  mcpServer?: string;
+  mcpCommand?: string;
+  mcpArgs?: string[];
+  mcpWrite?: boolean;
+}
+
 export interface MaestroConfig {
   version: string;
   extensions: ExtensionConfig[];
@@ -103,6 +127,7 @@ export interface MaestroConfig {
   hooks?: HooksConfig;
   specInjection?: SpecInjectionConfig;
   statusline?: StatuslineConfig;
+  memory?: MemoryConfig;
 }
 
 export interface ExtensionConfig {

@@ -73,7 +73,7 @@ export function discoverVitestFiles(root) {
     .filter((directory) => fs.existsSync(path.join(root, directory)))
     .flatMap((directory) => walk(root, directory))
     .filter((file) =>
-      (file.startsWith('src/') && file.endsWith('.test.ts')) ||
+      (file.startsWith('src/') && file.endsWith('.test.ts') && !file.endsWith('.e2e.test.ts')) ||
       (file.startsWith('scripts/') && file.endsWith('.test.mjs')),
     )
     .sort();
