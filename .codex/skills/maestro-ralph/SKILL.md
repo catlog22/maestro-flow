@@ -154,7 +154,7 @@ All command syntax and lifecycle mechanics follow `orchestrator-run-loop.md` and
 
 ### A_RESOLVE
 
-Read-only lookup via `run recall`. Explicit birth `session_id + run_id` wins. Multiple candidates require user selection; historical similarity never grants authority.
+Read-only lookup via `maestro run recall search "<topic>" --json`; `maestro run recall list --json` enumerates without a topic. `run recall` takes a positional subcommand — there is no `--query` option, and passing one fails with `COMMANDER_USAGE`. Explicit birth `session_id + run_id` wins, addressed with `--session <id>`. Multiple candidates require user selection; historical similarity never grants authority.
 
 ### A_INFER
 
