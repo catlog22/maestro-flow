@@ -137,4 +137,26 @@ describe('resolveWorkspace', () => {
   it('returns null when cwd has no workspace', () => {
     assert.strictEqual(resolveWorkspace({ cwd: TEST_DIR }), null);
   });
+
+  it('resolves Cursor workspace_roots when cwd is not a workspace', () => {
+    makeState(TEST_DIR);
+    const hookCwd = join(tmpdir(), `maestro-hook-cwd-${Date.now()}`);
+    mkdirSync(hookCwd, { recursive: true });
+    try {
+      assert.strictEqual(resolveWorkspace({
+        cwd: hookCwd,
+        workspace_roots: [TEST_DIR],
+      }), TEST_DIR);
+    } finally {
+      rmSync(hookCwd, { recursive: true, force: true });
+    }
+  });
+
+  it('finds a Maestro workspace in an immediate child of a wrapper folder', () => {
+    const wrapper = join(TEST_DIR, 'wrapper');
+    const repo = join(wrapper, 'repo');
+    mkdirSync(wrapper, { recursive: true });
+    makeState(repo);
+    assert.strictEqual(resolveWorkspace({ cwd: wrapper }), repo);
+  });
 });
