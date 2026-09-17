@@ -150,7 +150,7 @@ Intent-driven knowhow precipitation — record decisions, templates, recipes, an
 
 Intent-driven knowledge-store management — audit, harvest, wiki health, knowledge-graph linking, and domain terms
 
-**Invocation:** Explicit routing or user slash command
+**Invocation:** Automatic entrypoint and explicit slash command
 
 ---
 
