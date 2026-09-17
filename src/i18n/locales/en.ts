@@ -82,7 +82,7 @@ export const en: LocaleStrings = {
     hubDetailExtraMcp: 'Register maestro-tools in additional IDEs/CLIs:\nCursor, Qoder, Trae, Kiro, Roo, VS Code, Gemini CLI.',
 
     // Pi Agent — not installed by maestro; install the pi Maestro Flow plugin
-    piPluginReminder: 'Pi Agent is not installed by Maestro. Install the Maestro Flow pi plugin: pi install https://github.com/catlog22/pi-maestro-flow',
+    piPluginReminder: 'Pi Agent is not installed by Maestro. Install the Maestro Flow pi plugin: pi install npm:pi-maestro-flow',
 
     // Hooks granular
     hooksIndividual: 'Individual Hooks',

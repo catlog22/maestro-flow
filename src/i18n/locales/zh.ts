@@ -82,7 +82,7 @@ export const zh: LocaleStrings = {
     hubDetailExtraMcp: '在其他 IDE/CLI 中注册 maestro-tools：\nCursor、Qoder、Trae、Kiro、Roo、VS Code、Gemini CLI。',
 
     // Pi Agent — 不再由 maestro 安装，请安装 Pi 版 Maestro Flow 插件
-    piPluginReminder: 'Pi Agent 不再由 Maestro 安装。请安装 Pi 版 Maestro Flow 插件：pi install https://github.com/catlog22/pi-maestro-flow',
+    piPluginReminder: 'Pi Agent 不再由 Maestro 安装。请安装 Pi 版 Maestro Flow 插件：pi install npm:pi-maestro-flow',
 
     // Hooks granular
     hooksIndividual: '单独 Hooks',

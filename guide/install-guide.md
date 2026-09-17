@@ -143,7 +143,7 @@ maestro install
 > 请在 Pi 中安装官方 Maestro Flow 插件以接入 Pi 平台：
 >
 > ```bash
-> pi install https://github.com/catlog22/pi-maestro-flow
+> pi install npm:pi-maestro-flow
 > ```
 
 ---

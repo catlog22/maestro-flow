@@ -59,7 +59,7 @@ Install is **additive** — it adds, it does not delete. Existing component file
 > skills/agents into `~/.pi/`). To integrate with Pi, install the official Maestro Flow pi plugin:
 >
 > ```bash
-> pi install https://github.com/catlog22/pi-maestro-flow
+> pi install npm:pi-maestro-flow
 > ```
 
 ---
