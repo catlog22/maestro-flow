@@ -1,6 +1,6 @@
 ---
 name: maestro-knowledge
-disable-model-invocation: true
+disable-model-invocation: false
 description: Intent-driven knowledge-store and Run knowledge lifecycle management — read-only audit/prune reports, stage candidates (with signal recording), review/resolve/promote candidates, harvest artifacts, or manage wiki/domain knowledge.
 argument-hint: "[intent — e.g. '审计知识库' | 'harvest 这个 session' | 'wiki health' | '注册术语 MVP' | 'extractors']"
 allowed-tools:
@@ -54,5 +54,6 @@ Classify the intent in `$ARGUMENTS` into one operation. For an operation mapped 
 - Use `maestro knowledge review <session-id>` as the human review surface. It shows fresh/missing/stale receipts, diversified evidence-backed matches, and copyable promote commands. `--refresh` reconciles all candidate source Runs. `--resolve <candidate-id> --as <choice> --reason "..."` resolves a candidate inline before displaying the refreshed view.
 - Reconciliation is mandatory before completion but is not a popularity vote: exact identity, diversified semantic matches, and recorded/KG associations are evaluated separately. Unresolved semantic duplicate/conflict/supersession candidates may be sealed, but promotion must fail closed until resolved via `review --resolve`.
 - `promote --all` promotes all eligible pending candidates (observed-only emits a warning); `--include-observed` has been removed.
+- Promotion requires eligible candidates with fresh receipts. Run-source candidates require every source Run sealed. A `session/2.0` session-source candidate does not require Session seal: it requires immutable candidate version/content hash, exact Session activity revision, non-empty evidence roots/hash, and a fresh session reconciliation receipt for the candidate snapshot and current corpus fingerprint, revalidated at final commit. Normal completion and Execution seal never imply approval or promotion.
 - Treat audit findings and prune suggestions as evidence only. Never translate them into automatic lifecycle changes, and never prune solely because knowledge has low usage.
 </dispatch>

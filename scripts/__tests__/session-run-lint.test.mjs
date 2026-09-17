@@ -338,7 +338,7 @@ test('package release gate orders source lint, generation, freshness, then parit
   }
   assert.match(
     pkg.scripts.prepublishOnly,
-    /^npm run build:arch-kb && node scripts\/lint-invocation-policy\.mjs && node scripts\/lint-session-execution-prompts\.mjs && node scripts\/lint-session-run-prompts\.mjs/,
+    /^npm run build:arch-kb && npm run check:instructions && node scripts\/lint-invocation-policy\.mjs && node scripts\/lint-session-execution-prompts\.mjs && node scripts\/lint-session-run-prompts\.mjs/,
   );
 });
 

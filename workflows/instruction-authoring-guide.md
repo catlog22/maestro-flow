@@ -43,9 +43,9 @@ When removing content from command file because "workflow file has it":
 
 ## Anti-Patterns — Fix These
 
-### 1. Passive Dependency Assumptions
+### 1. Hard Guarantees Left to Prose
 
-"hooks handle it" / "auto-loaded" → "ALWAYS search before acting."
+A rule that must always hold does not belong in the prompt. Enforce it in a hook or code (fail-visible), and let the prompt carry only the pointer. Never restate an enforced rule as ALWAYS/NEVER paragraphs, and never write "hooks handle it" while no such hook exists.
 
 ### 2. Flat Tables With Equal Weight
 

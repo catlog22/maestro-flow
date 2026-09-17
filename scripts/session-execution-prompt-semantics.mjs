@@ -263,9 +263,11 @@ const SUPPORT_PROFILES = [
       { description: 'runtime Session seal promotion prerequisite', pattern: /promote only after the Session is sealed with a fresh session reconciliation receipt/i },
     ],
   },
-  ...['claude', 'agy', 'codex'].map(platform => ({
-    id: `${platform}-instruction-knowledge`,
-    path: `workflows/${platform}-instructions.md`,
+  // Knowledge promotion canon lives in the maestro-knowledge skill (L1);
+  // always-on instruction files only route to it.
+  {
+    id: 'knowledge-skill-canon',
+    path: '.claude/commands/maestro-knowledge.md',
     required: [
       'does not require Session seal',
       'immutable candidate version/content hash',
@@ -275,7 +277,7 @@ const SUPPORT_PROFILES = [
     forbidden: [
       { description: 'instruction Session seal promotion prerequisite', pattern: /sealed Session \+ fresh session receipt/i },
     ],
-  })),
+  },
 ];
 
 function read(root, relativePath) {

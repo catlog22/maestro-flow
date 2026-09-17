@@ -5,7 +5,7 @@ import { join, relative } from 'node:path';
 
 const root = process.cwd();
 const check = process.argv.includes('--check');
-const automatic = new Set(['maestro-next', 'maestro', 'maestro-ralph']);
+const automatic = new Set(['maestro-next', 'maestro', 'maestro-ralph', 'maestro-knowledge']);
 
 function update(path, expected) {
   const before = readFileSync(path, 'utf8');

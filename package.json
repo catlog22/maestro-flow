@@ -50,6 +50,8 @@
   "scripts": {
     "build": "npm run native:lifecycle:verify && cd dashboard && npx tsc -p tsconfig.node.json && cd .. && tsc && node -e \"const fs=require('fs');const p=require('path');const s='src/tools/impeccable/live/static',d='dist/src/tools/impeccable/live/static';if(fs.existsSync(s)){fs.mkdirSync(d,{recursive:true});for(const f of fs.readdirSync(s)){fs.copyFileSync(p.join(s,f),p.join(d,f))}}\" && node -e \"const fs=require('fs');const p=require('path');for(const [s,d] of [['src/graph/db/schema.sql','dist/src/graph/db/schema.sql'],['src/graph/kg/schema.sql','dist/src/graph/kg/schema.sql']]){if(fs.existsSync(s)){fs.mkdirSync(p.dirname(d),{recursive:true});fs.copyFileSync(s,d)}}\" && node -e \"const fs=require('fs'),p=require('path');const s=p.join('src','graph','kg','extraction','code','wasm'),d=p.join('dist','src','graph','kg','extraction','code','wasm');if(fs.existsSync(s)){fs.mkdirSync(d,{recursive:true});for(const f of fs.readdirSync(s)){fs.copyFileSync(p.join(s,f),p.join(d,f))}}\"",
     "build:arch-kb": "node scripts/build-arch-kb-index.mjs",
+    "build:instructions": "node scripts/build-instructions.mjs",
+    "check:instructions": "node scripts/build-instructions.mjs --check",
     "dev": "tsc --watch",
     "start": "node bin/maestro.js",
     "mcp": "node bin/maestro-mcp.js",
@@ -82,8 +84,8 @@
     "lint:codex-agents": "node scripts/sync-codex-agents.mjs --check",
     "migrate:session-run-prompts": "node scripts/migrate-session-run-prompts.mjs --write",
     "clean": "rm -rf dist",
-    "build:mirrors": "node scripts/lint-session-execution-prompts.mjs && node scripts/lint-session-run-prompts.mjs && node scripts/convert-claude-to-agy.mjs && node scripts/build-agents-standard.mjs && node scripts/build-codex-skills.mjs && node scripts/sync-codex-run-mode.mjs --write && node scripts/sync-codex-run-mode.mjs --check && node scripts/sync-codex-agents.mjs --check && node scripts/lint-session-run-mirrors.mjs",
-    "prepublishOnly": "npm run build:arch-kb && node scripts/lint-invocation-policy.mjs && node scripts/lint-session-execution-prompts.mjs && node scripts/lint-session-run-prompts.mjs && npm run check:docs-reference && npm run check:session-run-contract-parity && npm run check:search-ranking-release-machine:source && npm run build && npm run check:search-ranking-release-machine:built && npm run check:session-run-release-machine && npm run build:mirrors && npm run check:session-run-packaged-install && npm run check:session-run-skill-surface"
+    "build:mirrors": "node scripts/build-instructions.mjs && node scripts/lint-session-execution-prompts.mjs && node scripts/lint-session-run-prompts.mjs && node scripts/convert-claude-to-agy.mjs && node scripts/build-agents-standard.mjs && node scripts/build-codex-skills.mjs && node scripts/sync-codex-run-mode.mjs --write && node scripts/sync-codex-run-mode.mjs --check && node scripts/sync-codex-agents.mjs --check && node scripts/lint-session-run-mirrors.mjs",
+    "prepublishOnly": "npm run build:arch-kb && npm run check:instructions && node scripts/lint-invocation-policy.mjs && node scripts/lint-session-execution-prompts.mjs && node scripts/lint-session-run-prompts.mjs && npm run check:docs-reference && npm run check:session-run-contract-parity && npm run check:search-ranking-release-machine:source && npm run build && npm run check:search-ranking-release-machine:built && npm run check:session-run-release-machine && npm run build:mirrors && npm run check:session-run-packaged-install && npm run check:session-run-skill-surface"
   },
   "engines": {
     "node": ">=22.19.0"

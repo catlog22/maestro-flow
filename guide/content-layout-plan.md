@@ -33,7 +33,7 @@ title: "内容与文档放置规划 — 迁移后各类内容放在哪、谁加�
 | 5 | **入口专属编排文档** | `workflows/maestro.md`（chain catalog）、`maestro-super.md` | 并入对应入口命令正文或其 `ref/`；catalog 数据化进共享 scorer 素材 | — | 入口命令 | 入口执行时 |
 | 6 | **命名门禁** | 无（新增） | `gates/{name}.yaml` → `~/.maestro/gates/` | `.workflow/gates/` | CLI | create/complete 解析即快照 |
 | 7 | **kind 注册** | 无（新增） | `kinds/{kind}.yaml` → `~/.maestro/kinds/` | `.workflow/kinds/` | CLI | 扫描器校验时 |
-| 8 | **通用准则文档** | `~/.maestro/workflows/coding-philosophy.md` `delegate-usage.md` | **原位保留**（非 run 体系，CLAUDE.md `@` 引用） | — | CLAUDE.md | 会话启动 |
+| 8 | **通用准则文档** | `~/.maestro/workflows/coding-philosophy.md` `delegate-usage.md` | **原位保留**（非 run 体系，始终在线内核一行索引） | — | 模型按需 `cat` | 需要时 |
 | 9 | **第二/三档 skill** | `.claude/commands/` `.claude/skills/` | **原位保留**（team-* / odyssey-* / manage-* / spec-* 等） | — | 宿主 Skill 机制 | 用户调用时 |
 | 10 | **session 动词** | `.claude/commands/` | 原位保留（init / session-seal / fork / merge）；`maestro-companion` **并入 next**（迁移规划 §1.3：`--suggest`/`--note`/`--promote` + 复杂度轻量通道） | — | 宿主 Skill 机制 | 用户调用时 |
 | 11 | **设计文档**（本系列） | `guide/` | 原位保留，仅人读，不参与运行时 | — | 人 | — |
@@ -56,7 +56,7 @@ title: "内容与文档放置规划 — 迁移后各类内容放在哪、谁加�
 | `issue.md` `learn.md` `knowhow.md` `sync.md` `refactor.md` `init.md` | 原位保留 | 消费方为保留档 skill（manage-* / quality-refactor / quality-sync / maestro-init） |
 | `fork.md` `merge.md` `overlays.md` | 原位保留 | 服务于保留入口的 session 动词 / meta 工具（类型 9/10） |
 | `maestro.md`（chain catalog）`maestro-super.md` | 并入 `maestro` 入口（catalog 数据化） | 类型 5 |
-| `coding-philosophy.md` `delegate-usage.md` | 原位保留 | 类型 8：CLAUDE.md 全局引用 |
+| `coding-philosophy.md` `delegate-usage.md` | 原位保留 | 类型 8：内核索引，按需读取 |
 | 其余未列文件 | 按判定规则归类：被 step 引用 → `ref/`；被保留 skill 引用 → 原位；无人引用 → 删除候选（迁移时逐个盘点） | — |
 
 **判定规则**（新内容写作时同样适用）：
@@ -67,7 +67,7 @@ title: "内容与文档放置规划 — 迁移后各类内容放在哪、谁加�
 只被一个 step 用？   → 该 step 的 workflows/{name}.md（YAML 关联头 + 正文，create 全量交付）
 被多 step 共用/较长？ → ref/（参考层，deferred）
 是可执行检查？       → gates/{name}.yaml
-是跨项目准则？       → workflows/（CLAUDE.md 引用）
+是跨项目准则？       → workflows/（内核一行索引，模型按需 cat）
 是设计决策记录？     → guide/（人读）或 maestro spec/knowhow（可检索）
 ```
 
