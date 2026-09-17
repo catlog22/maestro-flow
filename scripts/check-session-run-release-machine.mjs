@@ -515,7 +515,7 @@ async function main() {
       'execution operation status', 'execution pause', 'execution resolve', 'execution resume', 'execution seal',
       'execution start', 'execution status',
       'run brief', 'run cancel', 'run check', 'run complete', 'run create', 'run decide', 'run next',
-      'run recall', 'run seal', 'run transition',
+      'run rebind', 'run recall', 'run seal', 'run transition',
       'session archive', 'session chain insert', 'session chain replace', 'session chain skip', 'session chain update',
       'session complete', 'session list', 'session migrate', 'session open', 'session resume-view',
       'session status', 'session unarchive',
