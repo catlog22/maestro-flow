@@ -689,6 +689,8 @@ export const runV30Schema = z.object({
   attempt: z.number().int().positive(),
   command: nonEmptyString,
   args: z.array(z.string()),
+  /** Captured lifecycle contract at Run creation; absent on pre-snapshot v3 Runs. */
+  command_contract_hash: z.string().regex(/^sha256:[a-f0-9]{64}$/).nullable().optional(),
   goal: z.string().min(1).nullable(),
   status: runStatusV30Schema,
   revision: z.number().int().nonnegative(),

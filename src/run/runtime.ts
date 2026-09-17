@@ -361,6 +361,8 @@ export interface CheckRunResult {
   finish?: string[];
   /** Completion-preflight knowledge classification; promotion review remains separate. */
   knowledge_reconciliation?: ReturnType<typeof reconciliationSummary>;
+  /** Diagnostic-only contract drift; no Run/gate/check marker writes occurred. */
+  contract_drift?: { expected: string; current: string; mode: 'diagnostic' };
 }
 
 export interface CompleteRunResult extends CheckRunResult {
@@ -2156,18 +2158,33 @@ function gateSummary(registry: GateRegistry, ids: string[]): GateSummary {
   return summary;
 }
 
+type ContractResolutionMode = 'authoritative' | 'diagnostic';
+
+type ContractResolution = {
+  contract: CommandContract;
+  warning: string | null;
+  drifted?: { expected: string; current: string };
+};
+
 function contractForRun(
   projectRoot: string,
   run: CommandRun,
-): { contract: CommandContract; warning: string | null } {
+  mode: ContractResolutionMode = 'authoritative',
+): ContractResolution {
   const source = resolveCommandSource(projectRoot, run.command.name);
   const currentContractHash = contractHash(source.contract);
   if (run.contract_snapshot) {
     if (source.contractSnapshot.snapshot_hash !== run.contract_snapshot.snapshot_hash) {
-      throw new Error(
-        `Command lifecycle contract changed after run creation: ${run.command.name} `
-        + `(expected ${run.contract_snapshot.snapshot_hash}, got ${source.contractSnapshot.snapshot_hash})`,
-      );
+      const warning = `Command lifecycle contract changed after run creation: ${run.command.name} `
+        + `(expected ${run.contract_snapshot.snapshot_hash}, got ${source.contractSnapshot.snapshot_hash})`;
+      if (mode === 'diagnostic') {
+        return {
+          contract: source.contract,
+          warning,
+          drifted: { expected: run.contract_snapshot.snapshot_hash, current: source.contractSnapshot.snapshot_hash },
+        };
+      }
+      throw new Error(warning);
     }
     return {
       contract: source.contract,
@@ -2178,10 +2195,16 @@ function contractForRun(
   }
   if (run.command.contract_hash) {
     if (currentContractHash !== run.command.contract_hash) {
-      throw new Error(
-        `Command lifecycle contract changed after run creation: ${run.command.name} `
-        + `(expected ${run.command.contract_hash}, got ${currentContractHash})`,
-      );
+      const warning = `Command lifecycle contract changed after run creation: ${run.command.name} `
+        + `(expected ${run.command.contract_hash}, got ${currentContractHash})`;
+      if (mode === 'diagnostic') {
+        return {
+          contract: source.contract,
+          warning,
+          drifted: { expected: run.command.contract_hash, current: currentContractHash },
+        };
+      }
+      throw new Error(warning);
     }
     return {
       contract: source.contract,
@@ -2191,11 +2214,17 @@ function contractForRun(
     };
   }
   if (source.contentHash !== run.command.content_hash) {
-    throw new Error(
-      `Command definition changed after run creation: ${run.command.name}; `
+    const warning = `Command definition changed after run creation: ${run.command.name}; `
       + `legacy Run has no contract_hash. Rebind prompt-only drift with: `
-      + `maestro run rebind ${run.run_id} --session ${run.session_id} --reason "<reason>"`,
-    );
+      + `maestro run rebind ${run.run_id} --session ${run.session_id} --reason "<reason>"`;
+    if (mode === 'diagnostic') {
+      return {
+        contract: source.contract,
+        warning,
+        drifted: { expected: run.command.content_hash, current: source.contentHash },
+      };
+    }
+    throw new Error(warning);
   }
   return { contract: source.contract, warning: null };
 }
@@ -2900,13 +2929,31 @@ export function checkRun(
   const store = new SessionStore(projectRoot);
   const located = store.findRun(runId, sessionId);
   const initialBundle = store.readBundle(located.sessionId);
-  const resolvedContract = contractForRun(projectRoot, located.run);
+  const resolvedContract = contractForRun(projectRoot, located.run, 'diagnostic');
+  const runDir = store.runDir(located.sessionId, runId);
+  const sessionDir = store.sessionDir(located.sessionId);
+  if (resolvedContract.drifted) {
+    const scan = scanOutputs(runDir, sessionDir, resolvedContract.contract);
+    validateStrictArtifactContract(runDir, resolvedContract.contract, scan, options);
+    return {
+      session_id: located.sessionId,
+      run_id: runId,
+      status: located.run.status,
+      gates: gateSummary(initialBundle.gates, located.run.gate_ids),
+      artifacts: scanSummary(scan),
+      warnings: [resolvedContract.warning ?? 'Command contract drift detected', ...scan.warnings],
+      errors: scan.errors,
+      upstream: {},
+      reuse_assessments: [],
+      next: {
+        command: `maestro run rebind ${runId} --session ${located.sessionId} --reason \"<reason>\"`,
+        reason: 'contract drift is diagnostic-only; rebind the Run before writing check state',
+      },
+      contract_drift: { ...resolvedContract.drifted, mode: 'diagnostic' },
+    };
+  }
   const reuse = revalidateRunReuse(projectRoot, store, initialBundle, located.run, resolvedContract.contract);
-  const scan = scanOutputs(
-    store.runDir(located.sessionId, runId),
-    store.sessionDir(located.sessionId),
-    resolvedContract.contract,
-  );
+  const scan = scanOutputs(runDir, sessionDir, resolvedContract.contract);
   validateStrictArtifactContract(
     store.runDir(located.sessionId, runId),
     resolvedContract.contract,
@@ -4703,7 +4750,7 @@ export function briefRun(
     })
     .filter((item): item is NonNullable<typeof item> => item !== null);
 
-  const resolvedContract = contractForRun(projectRoot, run);
+  const resolvedContract = contractForRun(projectRoot, run, 'diagnostic');
   const contract = resolvedContract.contract;
   const validatedReuse = revalidateRunReuse(projectRoot, store, bundle, run, contract);
   const upstream = validatedReuse.upstream;
@@ -4766,7 +4813,7 @@ export function briefRun(
           : contract.contract_version === 2 ? 'command-contract/2.0' : 'command-contract/1.0'),
       snapshot_hash: run.contract_snapshot?.snapshot_hash ?? null,
       warnings: contract.compatibility_warnings ?? [],
-      drift: resolvedContract.warning ? 'prompt-only' : 'none',
+      drift: resolvedContract.drifted ? 'blocking-contract' : resolvedContract.warning ? 'prompt-only' : 'none',
     },
     freshness: {
       captured_at: localISO(),

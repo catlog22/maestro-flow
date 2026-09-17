@@ -6,6 +6,8 @@ import { resolve } from 'node:path';
 import { SessionStore } from '../run/store.js';
 import type { RunV30 } from '../run/schemas.js';
 import { artifactRegistrySchema, type ArtifactRegistry } from '../run/schemas.js';
+import { evaluateArtifactContract, scanOutputs, validateStrictArtifactContract } from '../run/artifacts.js';
+import { resolveCommandSource } from '../run/contract.js';
 import { V3StructuredError } from '../run/v3/errors.js';
 import { buildRetryMetadata } from '../run/v3/run-machine.js';
 import {
@@ -19,6 +21,7 @@ import {
   createRunningRunV3,
   mutateRunV3,
   recoverSealRunV3,
+  rebindRunV3,
   v3BirthPacket,
 } from '../run/v3/mutation-engine.js';
 import {
@@ -271,6 +274,21 @@ export function registerRunV3Command(program: Command): void {
       }
     });
 
+  addV3MutationOptions(run.command('rebind <run-id>').description('Rebind a drifted Run to the current lifecycle contract'), 'run')
+    .action((runId: string, options: RunMutationOptions) => {
+      try {
+        const { store, options: resolved } = resolveV3Options(options);
+        const mutation = rebindRunV3(store, {
+          ...mutationIdentity(resolved), runId,
+          expectedRunRevision: resolved.expectedRunRevision!,
+        });
+        emitV3Success({ operation: 'run-rebind', sessionId: resolved.session, runId,
+          requestId: resolved.requestId, result: runResult(mutation), mutation });
+      } catch (error) {
+        emitV3Error('run-rebind', error, { session: options.session, runId, requestId: options.requestId });
+      }
+    });
+
   addV3MutationOptions(run.command('seal <run-id>').description('Deprecated recovery seal for an already terminal pre-upgrade Run'), 'run')
     .action((runId: string, options: RunMutationOptions) => {
       try {
@@ -435,6 +453,17 @@ export function registerRunV3Command(program: Command): void {
         const result: Record<string, unknown> = {
           run_id: runId, status: value.status, revision: value.revision,
           available_transitions: transitions[value.status],
+        };
+        const runDir = store.runDir(resolved.session, runId);
+        const sessionDir = store.sessionDir(resolved.session);
+        const contract = resolveCommandSource(store.projectRoot, value.command).contract;
+        const scan = scanOutputs(runDir, sessionDir, contract);
+        const outputContract = evaluateArtifactContract(runDir, contract, scan);
+        validateStrictArtifactContract(runDir, contract, scan);
+        result.output_contract = {
+          ...outputContract,
+          scan_errors: scan.errors,
+          scan_warnings: scan.warnings,
         };
         // Read-only receipt attach: check never re-runs reconciliation (run
         // complete performs the one-shot reconcile). A missing or unreadable

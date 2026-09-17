@@ -42,6 +42,29 @@ export interface StrictArtifactValidationOptions {
   skipArtifactMetadataValidation?: boolean;
 }
 
+export interface ArtifactContractReport {
+  declared: Array<{
+    path: string | null;
+    kind: string;
+    schema: string | null;
+    role: string;
+    required: boolean;
+    alias: string | null;
+  }>;
+  observed: Array<{
+    path: string;
+    kind: string;
+    schema: string;
+    role: string;
+    alias: string | null;
+  }>;
+  missing: string[];
+  mismatches: string[];
+  unexpected: string[];
+  errors: string[];
+  warnings: string[];
+}
+
 export interface VerifiedContainedFile {
   data: Buffer;
   canonicalPath: string;
@@ -379,18 +402,37 @@ export function defaultArtifactAlias(kind: string, command: string): string | un
   return undefined;
 }
 
-export function validateStrictArtifactContract(
+export function evaluateArtifactContract(
   runDir: string,
   contract: CommandContract,
   scan: ArtifactScanResult,
   options: StrictArtifactValidationOptions = {},
-): void {
-  if (contract.contract_version !== 2 && contract.contract_version !== 2.1) return;
+): ArtifactContractReport {
+  const declared = contract.produces.map(expected => ({
+    path: expected.path?.replaceAll('\\', '/').replace(/^\.\//, '') ?? null,
+    kind: expected.kind,
+    schema: typeof expected.schema === 'string' ? expected.schema : null,
+    role: expected.role ?? (expected.primary ? 'primary' : 'attachment'),
+    required: expected.required ?? false,
+    alias: expected.alias ?? null,
+  }));
+  const observed = scan.artifacts.map(actual => ({
+    path: relative(runDir, actual.absolutePath).replaceAll('\\', '/'),
+    kind: actual.kind,
+    schema: actual.schemaVersion,
+    role: actual.role,
+    alias: actual.alias ?? null,
+  }));
+  const missing: string[] = [];
+  const mismatches: string[] = [];
+  const errors: string[] = [];
+  const warnings: string[] = [];
   const reportMismatch = (message: string): void => {
+    mismatches.push(message);
     if (options.skipArtifactMetadataValidation) {
-      scan.warnings.push(`artifact metadata validation skipped: ${message}`);
+      warnings.push(`artifact metadata validation skipped: ${message}`);
     } else {
-      scan.errors.push(message);
+      errors.push(message);
     }
   };
   for (const expected of contract.produces) {
@@ -402,7 +444,9 @@ export function validateStrictArtifactContract(
         ))
       : [];
     if (actuals.length === 0) {
-      if (expected.required) scan.errors.push(`Missing required contract v2 output: ${expectedPath ?? expected.kind}`);
+      const missingValue = expectedPath ?? expected.kind;
+      missing.push(missingValue);
+      if (expected.required) errors.push(`Missing required contract v2 output: ${missingValue}`);
       continue;
     }
     for (const actual of actuals) {
@@ -422,6 +466,23 @@ export function validateStrictArtifactContract(
       }
     }
   }
+  const unexpected = observed
+    .filter(actual => !contract.produces.some(expected => expected.path
+      && declaredPathMatches(expected.path.replaceAll('\\', '/').replace(/^\.\//, ''), actual.path)))
+    .map(actual => actual.path);
+  return { declared, observed, missing, mismatches, unexpected, errors, warnings };
+}
+
+export function validateStrictArtifactContract(
+  runDir: string,
+  contract: CommandContract,
+  scan: ArtifactScanResult,
+  options: StrictArtifactValidationOptions = {},
+): void {
+  if (contract.contract_version !== 2 && contract.contract_version !== 2.1) return;
+  const report = evaluateArtifactContract(runDir, contract, scan, options);
+  scan.errors.push(...report.errors);
+  scan.warnings.push(...report.warnings);
 }
 
 function hasNestedDeclaredTemplate(contract: CommandContract, outputRelative: string): boolean {

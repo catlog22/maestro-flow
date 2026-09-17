@@ -40,6 +40,7 @@ import { SessionStore, type SessionV30StoreTransaction } from '../store.js';
 import { assertSafePathSegment } from '../ids.js';
 import {
   defaultArtifactAlias,
+  evaluateArtifactContract,
   scanOutputs,
   validateStrictArtifactContract,
   type DiscoveredArtifact,
@@ -122,6 +123,11 @@ export interface RecoverSealRunV3Input extends V3MutationIdentity {
   expectedRunRevision: number;
 }
 
+export interface RebindRunV3Input extends V3MutationIdentity {
+  runId: string;
+  expectedRunRevision: number;
+}
+
 export interface RepublishArtifactV3Input extends V3MutationIdentity {
   artifactId: string;
   consumerCommand: string;
@@ -190,6 +196,7 @@ function creationPayload(run: RunV30) {
     attempt: run.attempt,
     command: run.command,
     args: run.args,
+    command_contract_hash: run.command_contract_hash ?? null,
     goal: run.goal,
     input_refs: run.input_refs,
   };
@@ -398,6 +405,25 @@ function registerRunArtifacts(
   return ids;
 }
 
+function assertRunContractSnapshot(store: SessionStore, run: RunV30): void {
+  if (!run.command_contract_hash) return;
+  const currentContractHash = `sha256:${hashCommandContract(resolveCommandSource(store.projectRoot, run.command).contract)}`;
+  if (run.command_contract_hash === currentContractHash) return;
+  throw new V3StructuredError(
+    'INVALID_STATE_TRANSITION',
+    `Command lifecycle contract changed after Run creation: ${run.command}`,
+    {
+      details: {
+        reason: 'RUN_CONTRACT_DRIFT',
+        expected_contract_hash: run.command_contract_hash,
+        current_contract_hash: currentContractHash,
+      },
+      target_type: 'run', target_id: run.run_id,
+      next_actions: ['inspect-command-contract', 'create-a-new-run'],
+    },
+  );
+}
+
 interface ArtifactPublicationAuthority {
   authority: 'transition-receipt/2.0';
   artifact_registry_revision: number;
@@ -418,10 +444,16 @@ function prepareArtifactPublication(input: {
   const sessionDir = input.store.sessionDir(input.session.session_id);
   const contract = resolveCommandSource(input.store.projectRoot, input.run.command).contract;
   const scan = scanOutputs(runDir, sessionDir, contract);
+  const outputContract = evaluateArtifactContract(runDir, contract, scan);
   if (input.strict) validateStrictArtifactContract(runDir, contract, scan);
   if (scan.errors.length > 0) {
     throw new V3StructuredError('INVALID_STATE_TRANSITION', `Run output validation failed: ${scan.errors.join('; ')}`, {
-      details: { reason: 'RUN_OUTPUT_VALIDATION_FAILED', errors: scan.errors, warnings: scan.warnings },
+      details: {
+        reason: 'RUN_OUTPUT_VALIDATION_FAILED',
+        errors: scan.errors,
+        warnings: scan.warnings,
+        output_contract: outputContract,
+      },
       target_type: 'run', target_id: input.run.run_id,
       next_actions: [`repair-run-outputs:${input.run.run_id}`, `check-run:${input.run.run_id}`],
     });
@@ -721,6 +753,43 @@ export function mutateRunV3(store: SessionStore, input: MutateRunV3Input): V3Mut
   });
 }
 
+export function rebindRunV3(store: SessionStore, input: RebindRunV3Input): V3MutationResult {
+  const identity = normalizedIdentity(input);
+  const runId = required(input.runId, 'run ID');
+  return store.withV30Transaction(identity.sessionId, tx => {
+    const run = readRunOrThrow(tx, runId);
+    const currentContractHash = `sha256:${hashCommandContract(resolveCommandSource(store.projectRoot, run.command).contract)}`;
+    const payload = {
+      operation: 'run-rebind', run_id: runId,
+      expected_run_revision: input.expectedRunRevision,
+      command_contract_hash: currentContractHash,
+      ...auditPayload(identity),
+    };
+    const payloadHash = canonicalPayloadHash(payload);
+    const replayed = replay(tx, identity, payloadHash);
+    if (replayed) return replayed;
+    assertRunRevision(run, input.expectedRunRevision);
+    if (run.status === 'sealed') {
+      throw new V3StructuredError('INVALID_STATE_TRANSITION', `Run ${runId} is sealed and immutable`);
+    }
+    const nextRun: RunV30 = {
+      ...run,
+      command_contract_hash: currentContractHash,
+      revision: run.revision + 1,
+      actor_id: identity.actorId,
+    };
+    return stageApplied({
+      tx, identity, payloadHash, session: tx.readSession(), run: nextRun,
+      targetType: 'run', targetId: runId,
+      revisionBefore: run.revision, revisionAfter: nextRun.revision,
+      result: {
+        run_id: runId, revision: nextRun.revision,
+        command_contract_hash: currentContractHash, rebound: true,
+      },
+    });
+  });
+}
+
 export function recoverSealRunV3(store: SessionStore, input: RecoverSealRunV3Input): V3MutationResult {
   const identity = normalizedIdentity(input);
   const runId = required(input.runId, 'run ID');
@@ -737,6 +806,7 @@ export function recoverSealRunV3(store: SessionStore, input: RecoverSealRunV3Inp
     const run = readRunOrThrow(tx, runId);
     assertRunRevision(run, input.expectedRunRevision);
     assertSessionRunTransitionAllowed(session.status, run.status, 'sealed');
+    assertRunContractSnapshot(store, run);
     const publication = prepareArtifactPublication({
       store, tx, session, run, strict: run.status === 'completed',
     });
@@ -896,6 +966,8 @@ function republishedConsumerInputs(
 export function createRunningRunV3(store: SessionStore, input: CreateRunningRunV3Input): V3MutationResult {
   const identity = normalizedIdentity(input);
   const candidate = structuredClone(input.run);
+  const source = resolveCommandSource(store.projectRoot, candidate.command);
+  candidate.command_contract_hash = `sha256:${hashCommandContract(source.contract)}`;
   const payload = {
     operation: input.requestOperation ?? 'run-next', expected_orchestration_revision: input.expectedOrchestrationRevision,
     run: creationPayload(candidate),
@@ -1143,6 +1215,7 @@ export function completeRunAndAdvance(
     if (stepIndex < 0) throw new V3StructuredError('INVALID_ARGUMENT', `Run ${runId} references unknown step ${run.step_id}`);
 
     const runDir = store.runDir(identity.sessionId, runId);
+    assertRunContractSnapshot(store, run);
 
     // ── report.md frontmatter summary fallback ─────────────────────────────
     const knowledgeConcerns: string[] = [];
