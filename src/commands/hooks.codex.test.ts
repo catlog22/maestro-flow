@@ -37,7 +37,7 @@ describe('Codex prompt context lifecycle', () => {
     const preToolHooks = Object.entries(CODEX_HOOK_DEFS)
       .filter(([, def]) => def.event === 'PreToolUse')
       .map(([name]) => name);
-    expect(preToolHooks).toEqual(['preflight-guard', 'spec-validator', 'workflow-guard']);
+    expect(preToolHooks).toEqual(['preflight-guard', 'spec-validator', 'knowledge-guard', 'workflow-guard']);
   });
 
   it('installs one prompt context hook and removes all legacy KG hook entries', () => {
@@ -72,6 +72,7 @@ describe('Codex prompt context lifecycle', () => {
     expect(preToolCommands).toEqual([
       maestroHookCommand('preflight-guard'),
       maestroHookCommand('spec-validator'),
+      maestroHookCommand('knowledge-guard'),
     ]);
     expect(promptCommands).toContain(maestroHookCommand('keyword-spec-injector'));
     expect(JSON.stringify(installed)).not.toMatch(/kg-(?:context|unified)-injector/);

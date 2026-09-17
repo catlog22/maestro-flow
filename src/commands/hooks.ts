@@ -109,6 +109,7 @@ export const HOOK_DEFS: Record<string, HookDef> = {
   'coordinator-tracker': { event: 'Stop', level: 'standard', requiresWorkspace: true },
   'preflight-guard': { event: 'PreToolUse', matcher: 'Bash|Write|Edit|Agent', level: 'standard', requiresWorkspace: true },
   'spec-validator': { event: 'PreToolUse', matcher: 'Write', level: 'standard', requiresWorkspace: true },
+  'knowledge-guard': { event: 'PreToolUse', matcher: 'Write|Edit', level: 'standard', requiresWorkspace: true },
   'keyword-spec-injector': { event: 'UserPromptSubmit', level: 'standard', requiresWorkspace: true },
   'kg-sync': { event: 'UserPromptSubmit', level: 'standard', requiresWorkspace: true },
   'kg-auto-init': { event: 'SessionStart', matcher: 'startup', level: 'standard', requiresWorkspace: true },
@@ -146,6 +147,7 @@ export const CODEX_HOOK_DEFS: Record<string, CodexHookDef> = {
   'telemetry':             { event: 'Stop', level: 'standard' },
   'preflight-guard':       { event: 'PreToolUse', matcher: 'Bash', level: 'standard', requiresWorkspace: true, statusMessage: 'Running preflight checks' },
   'spec-validator':        { event: 'PreToolUse', matcher: 'Write', level: 'standard', requiresWorkspace: true, statusMessage: 'Validating against specs' },
+  'knowledge-guard':       { event: 'PreToolUse', matcher: 'Write|Edit', level: 'standard', requiresWorkspace: true, statusMessage: 'Checking knowledge gate' },
   'search-daemon-start':   { event: 'SessionStart', matcher: 'startup', level: 'standard', requiresWorkspace: true, statusMessage: 'Starting search daemon' },
   'search-cache-invalidator': { event: 'PostToolUse', matcher: 'Write|Edit', level: 'standard', requiresWorkspace: true },
   'workflow-guard':        { event: 'PreToolUse', matcher: 'Bash', level: 'full', requiresWorkspace: true, statusMessage: 'Checking command safety' },
@@ -171,6 +173,7 @@ export const GROK_HOOK_DEFS: Record<string, CodexHookDef> = {
   'spec-injector':         { event: 'PreToolUse', matcher: 'spawn_subagent|Task', level: 'minimal', requiresWorkspace: true },
   'preflight-guard':       { event: 'PreToolUse', matcher: 'run_terminal_command|write_file|search_replace|spawn_subagent|Task', level: 'standard', requiresWorkspace: true },
   'spec-validator':        { event: 'PreToolUse', matcher: 'write_file|search_replace', level: 'standard', requiresWorkspace: true },
+  'knowledge-guard':       { event: 'PreToolUse', matcher: 'write_file|search_replace', level: 'standard', requiresWorkspace: true },
   'skill-context':         { event: 'UserPromptSubmit', level: 'standard', requiresWorkspace: true },
   'keyword-spec-injector': { event: 'UserPromptSubmit', level: 'standard', requiresWorkspace: true },
   'kg-sync':               { event: 'UserPromptSubmit', level: 'standard', requiresWorkspace: true },
@@ -805,6 +808,7 @@ export const AGY_HOOK_DEFS: Record<string, AgyHookDef> = {
   // Full — guards
   'preflight-guard':       { event: 'PreToolUse', matcher: 'run_command|write_to_file|replace_file_content|multi_replace_file_content|invoke_subagent', level: 'standard', requiresWorkspace: true },
   'spec-validator':        { event: 'PreToolUse', matcher: 'write_to_file', level: 'standard', requiresWorkspace: true },
+  'knowledge-guard':       { event: 'PreToolUse', matcher: 'write_to_file|replace_file_content|multi_replace_file_content', level: 'standard', requiresWorkspace: true },
   'workflow-guard':        { event: 'PreToolUse', matcher: 'run_command|write_to_file|replace_file_content|multi_replace_file_content', level: 'full', requiresWorkspace: true },
   'prompt-guard':          { event: 'PreInvocation', level: 'full', requiresWorkspace: false },
 };
@@ -1085,6 +1089,28 @@ const HOOK_RUNNERS: Record<string, HookRunner> = {
           additionalContext: `[SpecValidator] Format warnings:\n${errorSummary}`,
         }));
       }
+    }
+  },
+
+  'knowledge-guard': async () => {
+    const config = loadHooksConfig();
+    if (config.toggles['knowledgeGuard'] === false) return;
+
+    const raw = await readStdin();
+    const data = JSON.parse(raw);
+    const toolInput = data.tool_input ?? {};
+    const filePath: string = toolInput.file_path ?? '';
+    if (!filePath) return;
+
+    const cwd: string = data.cwd ?? process.env.MAESTRO_PROJECT_ROOT ?? process.cwd();
+    const { evaluateKnowledgeGuard, loadKnowledgeGuardConfig } = await import('../hooks/guards/knowledge-guard.js');
+    const result = evaluateKnowledgeGuard(cwd, filePath, loadKnowledgeGuardConfig(cwd));
+    if (result.warnings.length > 0) {
+      // Advisory only — the gate is a visible signal, never a block.
+      process.stdout.write(JSON.stringify({
+        decision: 'allow',
+        additionalContext: result.warnings.join('\n'),
+      }));
     }
   },
 
