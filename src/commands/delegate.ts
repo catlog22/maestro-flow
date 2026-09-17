@@ -5,6 +5,7 @@
 import { spawn, type SpawnOptions } from 'node:child_process';
 import { readFileSync, readdirSync, unlinkSync } from 'node:fs';
 import { resolve, join } from 'node:path';
+import { defaultDelegateWorkerEntryScript } from '../utils/delegate-worker-entry.js';
 import type { AgentRepositoryContext } from '../../shared/agent-types.js';
 import { resolveAgentRepositoryContext } from '../repository/context.js';
 import { Command, Option } from 'commander';
@@ -151,7 +152,7 @@ function buildJobMetadata(request: DelegateExecutionRequest, workerPid?: number)
 
 export function buildDetachedDelegateWorkerArgs(
   request: DelegateExecutionRequest,
-  entryScript = process.argv[1],
+  entryScript = defaultDelegateWorkerEntryScript(),
 ): string[] {
   if (!entryScript) {
     throw new Error('Cannot determine maestro entry script for detached delegate worker.');

@@ -15,6 +15,7 @@ import { loadTemplate, loadProtocol } from '../config/template-discovery.js';
 import { loadSpecs, type SpecCategory } from '../tools/spec-loader.js';
 import { NOTIFY_PREFIX } from '../hooks/constants.js';
 import { DelegateBrokerClient, type DelegateBrokerApi, type DelegateJobStatus, type JsonObject } from '../async/index.js';
+import { defaultDelegateWorkerEntryScript } from '../utils/delegate-worker-entry.js';
 
 // ---------------------------------------------------------------------------
 // Types imported from the canonical shared definition
@@ -396,7 +397,9 @@ function spawnQueuedDelegateWorker(
   execId: string,
   prompt: string,
 ): boolean {
-  const entryScript = process.argv[1];
+  // 与 buildDetachedDelegateWorkerArgs 同一入口解析：MCP server 进程里
+  // argv[1] 是 maestro-mcp.js，直接用它会让 worker 永不执行。
+  const entryScript = defaultDelegateWorkerEntryScript();
   if (!entryScript) {
     return false;
   }
@@ -545,31 +548,34 @@ export class CliAgentRunner {
     status: 'completed' | 'failed' | 'cancelled',
     exitCode: number,
   ): void {
-    try {
-      // Dynamic import to avoid circular dependency — getMcpServer is exported
-      // from mcp/server.ts which may not be loaded in CLI-only mode.
-      const { getMcpServer } = require('../mcp/server.js') as { getMcpServer: () => import('@modelcontextprotocol/sdk/server/index.js').Server | null };
-      const server = getMcpServer();
-      if (!server) return;
+    // Dynamic import to avoid circular dependency — getMcpServer is exported
+    // from mcp/server.ts which may not be loaded in CLI-only mode.
+    // 注意必须用 import()：包是 ESM（type:module），require 未定义，
+    // 旧实现的 require() 调用必抛 "require is not defined" 并刷错误日志。
+    void import('../mcp/server.js')
+      .then(({ getMcpServer }) => {
+        const server = getMcpServer();
+        if (!server) return;
 
-      const label = status === 'completed'
-        ? 'DONE'
-        : status === 'cancelled'
-          ? 'CANCELLED'
-          : 'FAILED';
-      const content = `[DELEGATE ${label}] ${execId} ${tool}/${mode} ${status === 'failed' ? `exit:${exitCode}` : status}`;
+        const label = status === 'completed'
+          ? 'DONE'
+          : status === 'cancelled'
+            ? 'CANCELLED'
+            : 'FAILED';
+        const content = `[DELEGATE ${label}] ${execId} ${tool}/${mode} ${status === 'failed' ? `exit:${exitCode}` : status}`;
 
-      // Fire-and-forget notification via MCP protocol
-      server.notification({
-        method: 'notifications/claude/channel',
-        params: {
-          content,
-          meta: { exec_id: execId, job_id: execId, tool, mode, exit_code: String(exitCode), event_type: status, status },
-        },
-      }).catch((err: unknown) => { console.error(`[${execId}] MCP notification send failed: ${err instanceof Error ? err.message : err}`); });
-    } catch (err) {
-      console.error(`[${execId}] MCP server not available for channel notification: ${err instanceof Error ? err.message : err}`);
-    }
+        // Fire-and-forget notification via MCP protocol
+        server.notification({
+          method: 'notifications/claude/channel',
+          params: {
+            content,
+            meta: { exec_id: execId, job_id: execId, tool, mode, exit_code: String(exitCode), event_type: status, status },
+          },
+        }).catch((err: unknown) => { console.error(`[${execId}] MCP notification send failed: ${err instanceof Error ? err.message : err}`); });
+      })
+      .catch((err: unknown) => {
+        console.error(`[${execId}] MCP server not available for channel notification: ${err instanceof Error ? err.message : err}`);
+      });
   }
 
   /**
