@@ -6,7 +6,7 @@
  * changes (commit / pull / branch switch) that leave the working tree clean.
  */
 
-import { execSync } from 'node:child_process';
+import { execFileSync } from 'node:child_process';
 import { existsSync, readFileSync, writeFileSync, mkdirSync, renameSync, unlinkSync } from 'node:fs';
 import { resolve, dirname } from 'node:path';
 import { randomUUID } from 'node:crypto';
@@ -279,11 +279,12 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 export function getGitHead(projectPath: string): string | null {
   try {
-    const head = execSync('git rev-parse HEAD', {
+    const head = execFileSync('git', ['rev-parse', 'HEAD'], {
       cwd: projectPath,
       encoding: 'utf-8',
       timeout: 5000,
       stdio: ['pipe', 'pipe', 'pipe'],
+      windowsHide: true,
     }).trim();
     return head || null;
   } catch {

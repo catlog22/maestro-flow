@@ -367,6 +367,7 @@ function readGitStatus(projectRoot: string): GitStatusSnapshot {
         encoding: 'buffer',
         timeout: 5000,
         stdio: ['ignore', 'pipe', 'pipe'],
+        windowsHide: true,
       },
     );
     const entries = parseGitPorcelainZ(output);
