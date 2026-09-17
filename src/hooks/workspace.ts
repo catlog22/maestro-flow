@@ -8,7 +8,7 @@
  * regardless of the working directory Claude Code reports.
  */
 
-import { existsSync, readFileSync, realpathSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync, realpathSync } from 'node:fs';
 import { join } from 'node:path';
 import {
   canonicalizeRepositoryRoot,
@@ -64,12 +64,89 @@ export function findWorkspaceRoot(startDir: string): string | null {
   return findRepositoryRoot(startDir);
 }
 
+/** Loose hook payload shape: fields arrive untyped from host CLIs. */
+export interface WorkspaceHint {
+  cwd?: unknown;
+  workspace_roots?: unknown;
+  workspaceRoots?: unknown;
+}
+
+const CHILD_WORKSPACE_SKIP = new Set(['node_modules', 'dist', 'coverage', 'dashboard']);
+
+/** Append value to dirs when it is a non-blank string; ignore everything else. */
+function pushDir(dirs: string[], value: unknown): void {
+  if (typeof value !== 'string') return;
+  const trimmed = value.trim();
+  if (trimmed) dirs.push(trimmed);
+}
+
+/**
+ * Directories a host hook may be talking about: cwd, Cursor workspace_roots,
+ * and common project-dir env vars. Order is preference, not uniqueness.
+ *
+ * An explicit `cwd` is not silently replaced by `process.cwd()` — callers that
+ * pass a non-workspace directory still get null, matching the old contract.
+ */
+export function workspaceStartDirs(data: WorkspaceHint = {}, fallbackCwd = process.cwd()): string[] {
+  const dirs: string[] = [];
+  const hasExplicitCwd = typeof data.cwd === 'string' && data.cwd.trim().length > 0;
+  pushDir(dirs, data.cwd);
+  const roots = data.workspace_roots ?? data.workspaceRoots;
+  const beforeRoots = dirs.length;
+  if (Array.isArray(roots)) {
+    for (const root of roots) pushDir(dirs, root);
+  } else {
+    pushDir(dirs, roots);
+  }
+  const hasRoots = dirs.length > beforeRoots;
+  if (!hasExplicitCwd || hasRoots) {
+    pushDir(dirs, process.env.CURSOR_PROJECT_DIR);
+    pushDir(dirs, process.env.CLAUDE_PROJECT_DIR);
+    pushDir(dirs, process.env.MAESTRO_PROJECT_ROOT);
+  }
+  if (!hasExplicitCwd) pushDir(dirs, fallbackCwd);
+  return [...new Set(dirs)];
+}
+
+/**
+ * Cursor often opens a wrapper folder whose Maestro workspace is one child
+ * (e.g. maestrogrok/repo). Walk-up cannot see that; scan immediate children.
+ */
+export function findWorkspaceInImmediateChildren(dir: string): string | null {
+  let names: string[] = [];
+  try {
+    names = readdirSync(dir, { withFileTypes: true })
+      .filter(entry => entry.isDirectory() && !entry.name.startsWith('.') && !CHILD_WORKSPACE_SKIP.has(entry.name))
+      .map(entry => entry.name);
+  } catch {
+    return null;
+  }
+  names.sort((left, right) => {
+    if (left === 'repo') return -1;
+    if (right === 'repo') return 1;
+    return left.localeCompare(right);
+  });
+  for (const name of names) {
+    const child = join(dir, name);
+    if (isMaestroWorkspace(child)) return child;
+  }
+  return null;
+}
+
+/** Resolve one candidate directory: walk up first, then probe immediate children. */
+function resolveFromStart(startDir: string): string | null {
+  return findWorkspaceRoot(startDir) ?? findWorkspaceInImmediateChildren(startDir);
+}
+
 /**
  * Resolve the workspace root from hook input data.
- * Tries data.cwd first, falls back to process.cwd().
+ * Tries cwd, workspace_roots, then project-dir env vars, then process.cwd().
  * Returns null if no workspace found.
  */
-export function resolveWorkspace(data: { cwd?: string }): string | null {
-  const startDir = data.cwd || process.cwd();
-  return findWorkspaceRoot(startDir);
+export function resolveWorkspace(data: WorkspaceHint = {}): string | null {
+  for (const startDir of workspaceStartDirs(data)) {
+    const found = resolveFromStart(startDir);
+    if (found) return found;
+  }
+  return null;
 }
