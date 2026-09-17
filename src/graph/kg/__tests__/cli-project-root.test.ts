@@ -23,7 +23,8 @@ import {
 const roots: string[] = [];
 
 function makeRoot(prefix: string): string {
-  const root = realpathSync(mkdtempSync(join(tmpdir(), prefix)));
+  const created = mkdtempSync(join(tmpdir(), prefix));
+  const root = realpathSync.native(created);
   roots.push(root);
   return root;
 }
@@ -156,6 +157,33 @@ describe('KG CLI project root resolution', () => {
     expect(sync.exitCode).not.toBe(1);
     expect(existsSync(getKgDatabasePath(syncRoot))).toBe(true);
     expect(existsSync(getKgDatabasePath(syncNested))).toBe(false);
+  });
+
+  it('does not throw from kg stats when the graph is not initialized', async () => {
+    const root = makeRoot('maestro-kg-cli-stats-uninit-');
+    execFileSync('git', ['init', '--quiet', root]);
+
+    const stats = await runCli(root, ['kg', 'stats', '--json']);
+    expect(stats.exitCode).toBe(1);
+    expect(JSON.parse(stats.stdout)).toMatchObject({
+      error: { code: 'graph_not_initialized', path: getKgDatabasePath(root) },
+    });
+  });
+
+  it('uses a descendant initialized workspace when the Git root has no KG database', async () => {
+    const root = makeRoot('maestro-kg-cli-nested-ws-');
+    const nested = join(root, 'workspaceNew');
+    mkdirSync(nested, { recursive: true });
+    execFileSync('git', ['init', '--quiet', root]);
+    await seedGraph(nested, 'ProjectNode');
+
+    expect(resolveKgCliProjectRoot(nested)).toBe(realpathSync.native(nested));
+
+    const stats = await runCli(nested, ['kg', 'stats', '--json']);
+    expect(stats.exitCode).not.toBe(1);
+    expect(JSON.parse(stats.stdout)).toMatchObject({
+      nodeCount: 1,
+    });
   });
 
   it('uses the nearest initialized workspace when a nested cwd is outside Git', async () => {

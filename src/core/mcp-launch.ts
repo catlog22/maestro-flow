@@ -1,7 +1,9 @@
 // Windows MCP/hook hosts spawn the configured command with piped stdio and
 // typically without CREATE_NO_WINDOW. npm's *.cmd shims are console programs,
 // so `cmd /c maestro-mcp` allocates a visible conhost that flashes then exits.
-// Launch node.exe + the package JS entry instead; Unix keeps PATH binaries.
+// Launch node + the package JS entry instead; Unix keeps PATH binaries.
+// Hook command strings must also survive PowerShell -Command (Grok): a leading
+// quoted argv0 is a string expression, not a program.
 import { existsSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -55,7 +57,14 @@ function quoteWin(value: string): string {
 function winNodeScriptCommand(scriptName: string, extraArgs: string[], opts: McpLaunchOptions): string {
   const execPath = opts.execPath ?? process.execPath;
   const root = opts.packageRoot ?? resolveMaestroPackageRoot();
-  return [quoteWin(execPath), quoteWin(join(root, 'bin', scriptName)), ...extraArgs].join(' ');
+  const script = quoteWin(join(root, 'bin', scriptName));
+  // Grok (and other PowerShell -Command hosts) treat a leading quoted token as a
+  // string, not a program: `"C:\Program Files\nodejs\node.exe" "script" args`
+  // fails with ParserError at character 36. Keep argv0 unquoted. When the real
+  // node path contains spaces or shell metacharacters, use PATH `node` so the
+  // executable does not need quotes. cmd.exe shell:true still accepts this form.
+  const argv0 = /[\s&|<>()^%!`$;{}'",]/.test(execPath) ? 'node' : execPath;
+  return [argv0, script, ...extraArgs].join(' ');
 }
 
 export function maestroHookCommand(name: string, opts: McpLaunchOptions = {}): string {

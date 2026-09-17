@@ -36,7 +36,7 @@ import {
   SEARCH_DAEMON_PROTOCOL,
   daemonIdentityRequest,
   deleteDaemonInfoIfOwned,
-  deleteDaemonInfoIfStale,
+  reclaimDeadDaemonDescriptor as reclaimDeadDaemonDescriptorUnlocked,
   getDaemonPath,
   getDaemonSpawnLockPath,
   isDaemonAlive,
@@ -333,28 +333,70 @@ export function claimSpawnLock(workflowRoot: string): string | null {
   }
 }
 
+/** Live, foreign, and malformed descriptors skip spawn without taking the lock. */
+function liveOrForeignDescriptorBlocksSpawn(workflowRoot: string): boolean {
+  const path = getDaemonPath(workflowRoot);
+  if (!existsSync(path)) return false;
+  const existing = readDaemonInfo(workflowRoot);
+  if (!existing) return true;
+  if (isDaemonInfoV2(existing) && !isDaemonInfoV2(existing, workflowRoot)) return true;
+  return isDaemonAlive(existing);
+}
+
 /** Return true when an existing descriptor must not be replaced. */
 function descriptorBlocksSpawn(workflowRoot: string): boolean {
   const path = getDaemonPath(workflowRoot);
   if (!existsSync(path)) return false;
+  // Dead-pid descriptors for this workflow are reclaimed so search can spawn a
+  // successor. Malformed, foreign, and live descriptors stay put.
+  if (reclaimDeadDaemonDescriptorUnlocked(workflowRoot) && !existsSync(getDaemonPath(workflowRoot))) {
+    return false;
+  }
   const existing = readDaemonInfo(workflowRoot);
-  // Malformed, foreign-workflow, and live legacy descriptors are unverified.
-  // Preserve them instead of guessing ownership.
   if (!existing) return true;
   if (isDaemonInfoV2(existing) && !isDaemonInfoV2(existing, workflowRoot)) return true;
   if (isDaemonAlive(existing)) return true;
-  return !deleteDaemonInfoIfStale(workflowRoot, existing);
+  return true;
+}
+
+function ownsSpawnLock(workflowRoot: string, token: string): boolean {
+  try {
+    return readFileSync(getDaemonSpawnLockPath(workflowRoot), 'utf-8') === token;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Drop a dead-pid descriptor while holding the spawn lock so unlink cannot
+ * delete a successor published by another startup.
+ * claimSpawnLock may return a fallback token without owning the lock file;
+ * that path must not unlink.
+ */
+export function reclaimDeadDaemonDescriptor(workflowRoot: string): boolean {
+  const token = claimSpawnLock(workflowRoot);
+  if (!token) return false;
+  try {
+    if (!ownsSpawnLock(workflowRoot, token)) return false;
+    return reclaimDeadDaemonDescriptorUnlocked(workflowRoot);
+  } finally {
+    releaseDaemonSpawnLock(workflowRoot, token);
+  }
 }
 
 export async function spawnDaemon(workflowRoot: string): Promise<void> {
-  if (descriptorBlocksSpawn(workflowRoot)) return;
+  if (liveOrForeignDescriptorBlocksSpawn(workflowRoot)) return;
 
   const token = claimSpawnLock(workflowRoot);
   if (!token) return;
 
-  // Linearize with a descriptor that appeared between the first check and lock.
-  if (descriptorBlocksSpawn(workflowRoot)) {
-    releaseDaemonSpawnLock(workflowRoot, token);
+  if (ownsSpawnLock(workflowRoot, token)) {
+    // Reclaim dead descriptors only while holding the spawn lock.
+    if (descriptorBlocksSpawn(workflowRoot)) {
+      releaseDaemonSpawnLock(workflowRoot, token);
+      return;
+    }
+  } else if (liveOrForeignDescriptorBlocksSpawn(workflowRoot)) {
     return;
   }
 

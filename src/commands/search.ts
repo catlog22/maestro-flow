@@ -38,6 +38,7 @@ import {
   isDaemonInfoV2,
   isDaemonReadyResponse,
   readDaemonInfo,
+  reclaimDeadDaemonDescriptor,
   spawnDaemon,
   stopDaemon,
   tryDaemonSearch,
@@ -2192,6 +2193,8 @@ export function registerSearchCommand(program: Command): void {
               ? `  idle=${Math.round(health.idleTimeoutMs / 60_000)}m  deadline=${health.idleDeadline ?? 'pending'}`
               : '';
           console.log(`Search daemon: running${stateTag}  pid=${info.pid}  port=${info.port}  started=${info.startedAt}${idleTag}`);
+        } else if (!isDaemonAlive(info) && reclaimDeadDaemonDescriptor(workflowRoot)) {
+          console.log('Search daemon: not running');
         } else {
           const staleReason = isDaemonAlive(info) ? 'unreachable/unverified' : 'pid dead';
           console.log(`Search daemon: stale (${staleReason})  pid=${info.pid}  port=${info.port}  started=${info.startedAt}`);
