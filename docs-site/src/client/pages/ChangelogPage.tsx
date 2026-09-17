@@ -17,6 +17,17 @@ interface ChangelogEntry {
 
 const changelog: ChangelogEntry[] = [
   {
+    version: '0.5.87',
+    date: '2026-09',
+    changes: [
+      { type: 'feat', text_en: 'v3 Runs now capture their command lifecycle contract hash at creation and refuse to seal after contract drift; a new `run rebind` mutation rebinds a drifted Run to the current contract, while `run check`/`run brief` resolve contracts in diagnostic mode and report contract_drift plus a structured output_contract report instead of throwing', text_zh: 'v3 Run 在创建时捕获命令生命周期契约哈希，契约漂移后拒绝 seal；新增 `run rebind` 变更将漂移的 Run 重新绑定到当前契约，同时 `run check`/`run brief` 以诊断模式解析契约，报告 contract_drift 与结构化 output_contract 报告而不再抛错' },
+      { type: 'feat', text_en: 'help --json catalog v2.0 emits per-command option_specs (names, required, value arity, repeatable, choices) and positionals, and ships validateArgvAgainstCatalog — a preflight argv validator with UNKNOWN_OPTION/MISSING_VALUE/EXCESS_POSITIONAL/MISSING_REQUIRED/UNKNOWN_COMMAND codes and edit-distance suggestions', text_zh: 'help --json catalog v2.0 输出逐命令的 option_specs（名称、必填、值元数、可重复、可选值）与 positionals，并附带 validateArgvAgainstCatalog 预检校验器，提供 UNKNOWN_OPTION/MISSING_VALUE/EXCESS_POSITIONAL/MISSING_REQUIRED/UNKNOWN_COMMAND 错误码与编辑距离建议' },
+      { type: 'feat', text_en: 'Grok Build CLI adaptation (delegate / host assets / MCP / Dashboard), Goal aligned with the host-native /goal surface with Statusline enabled by default, and a knowledge-guard hook that surfaces knowledge-gate signals before project file writes', text_zh: '适配 Grok Build CLI（delegate / 宿主资产 / MCP / Dashboard）；Goal 对齐宿主原生 /goal 并默认开启 Statusline；新增 knowledge-guard hook，在写项目文件前提供知识门可见信号' },
+      { type: 'fix', text_en: 'Windows reliability: spawned git processes no longer flash console windows (windowsHide), hook argv0 avoids shell metacharacters, UNC roots are preserved in lifecycle path normalization, and the Windows test gate (paths/locks/WASM/attestation) is repaired', text_zh: 'Windows 可靠性：spawn 的 git 进程不再闪烁控制台窗口（windowsHide），hook argv0 避开 shell 元字符，生命周期路径规范化保留 UNC 根，并修复 Windows 测试门禁（路径/锁/WASM/attestation）' },
+      { type: 'fix', text_en: 'KG sync and runtime fixes: stale guard reclaim, hidden completed Sessions in the statusline, reconciliation failures recorded as concerns instead of blocking run complete, KG root split / stats stack / xml extractor / dead daemon pid fixes, and the MCP-dispatched delegate worker entry script correction', text_zh: 'KG 同步与运行时修复：过期 guard 回收、状态栏隐藏已完成 Session、对账失败写入 concerns 而不再阻塞 run complete、KG 根分裂/stats 抛栈/xml extractor/daemon 死 pid 修复，以及 MCP 派发的 delegate worker 入口脚本纠正' },
+    ],
+  },
+  {
     version: '0.5.86',
     date: '2026-09',
     changes: [
