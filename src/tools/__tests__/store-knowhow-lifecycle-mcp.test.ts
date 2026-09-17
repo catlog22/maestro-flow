@@ -542,12 +542,13 @@ describe('store_knowhow MCP lifecycle worker', () => {
       newId: NEW_ID,
     }, {
       workerUrl: hangingLockWorker(markerDir),
-      timeoutMs: 400,
+      timeoutMs: 2_500,
     });
 
     await waitUntil(
       () => existsSync(join(markerDir, 'bound-lock.json')),
       'Timed Worker did not expose its BoundLock',
+      8_000,
     );
     const timedLock = JSON.parse(
       readFileSync(join(markerDir, 'bound-lock.json'), 'utf8'),

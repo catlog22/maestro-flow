@@ -50,7 +50,7 @@ export const ATTESTATION_STDIO = Object.freeze([
   'pipe',
   'pipe',
 ]);
-export const ATTESTATION_NODE_RANGE = '>=22.19.0 <23.0.0';
+export const ATTESTATION_NODE_RANGE = '>=22.19.0 <23.0.0 || >=24.0.0 <25.0.0';
 
 const ATTESTATION_FRAME_MAX_BYTES = 64 * 1024 * 1024;
 const ATTESTATION_KEY_BYTES = 32;
@@ -174,10 +174,13 @@ const bootstrap = Buffer.from(encodedBootstrap, 'base64');
 if (bootstrap.toString('base64') !== encodedBootstrap) {
   throw new Error('UNCERTIFIED_ATTESTATION_BOOTSTRAP: noncanonical base64');
 }
-if (process.versions.node.split('.')[0] !== '22'
-    || Number(process.versions.node.split('.')[1]) < 19
-    || typeof registerHooks !== 'function') {
-  throw new Error('UNSUPPORTED_ATTESTATION_RUNTIME');
+{
+  const nodeMajor = Number(process.versions.node.split('.')[0]);
+  const nodeMinor = Number(process.versions.node.split('.')[1]);
+  const nodeSupported = (nodeMajor === 22 && nodeMinor >= 19) || nodeMajor === 24;
+  if (!nodeSupported || typeof registerHooks !== 'function') {
+    throw new Error('UNSUPPORTED_ATTESTATION_RUNTIME');
+  }
 }
 const allowedEnvironment = new Set([
   'path',
@@ -449,7 +452,8 @@ function supportedNodeVersion(version) {
   const match = /^(\d+)\.(\d+)\.(\d+)(?:-|$)/.exec(version);
   if (!match) return false;
   const [, major, minor] = match.map(Number);
-  return major === 22 && minor >= 19;
+  if (major === 22) return minor >= 19;
+  return major === 24;
 }
 
 export async function assertCertifiedAttestationRuntime({

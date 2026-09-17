@@ -274,7 +274,7 @@ describe('Session Run contract parity release gate', () => {
         dimension: 'cache',
         id: 'cache.search.version',
         mutate(root) {
-          replaceOnce(root, 'dashboard/src/server/wiki/wiki-indexer.ts', 'const SEARCH_CACHE_VERSION = 8;', 'const SEARCH_CACHE_VERSION = 7;');
+          replaceOnce(root, 'dashboard/src/server/wiki/wiki-indexer.ts', 'const SEARCH_CACHE_VERSION = 9;', 'const SEARCH_CACHE_VERSION = 7;');
         },
       },
       {

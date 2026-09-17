@@ -276,7 +276,7 @@ describe('external surface manifest', () => {
       ]);
       expect(payload).toEqual(expect.objectContaining({
         schemaVersion: EXTERNAL_SURFACE_MANIFEST_SCHEMA_VERSION,
-        configPath: realpathSync(join(root, '.workflow', 'kg', 'external-surfaces.json')),
+        configPath: realpathSync.native(join(root, '.workflow', 'kg', 'external-surfaces.json')),
         configured: 0,
         resolved: 0,
         errors: [expect.objectContaining({ code: 'invalid-json' })],
