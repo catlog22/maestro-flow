@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { buildV3HelpCatalog, registerHelpJsonCommand } from './help-json.js';
+import { buildV3HelpCatalog, registerHelpJsonCommand, validateArgvAgainstCatalog } from './help-json.js';
 
 function v2Workspace(root: string): void {
   mkdirSync(join(root, ".workflow"), { recursive: true });
@@ -116,6 +116,21 @@ describe('v3 help catalog', () => {
       '--participant', '--actor', '--to-v3', '--request-id', '--reason',
       '--expected-identity-revision', '--expected-activity-revision', '--expected-revisions',
     ]));
+  });
+
+  it('validates argv against Commander-derived option metadata with suggestions', () => {
+    const catalog = buildV3HelpCatalog();
+    const typo = validateArgvAgainstCatalog(catalog, ['session', 'open', 'objective', '--jsno']);
+    expect(typo.ok).toBe(false);
+    expect(typo.errors).toEqual(expect.arrayContaining([
+      expect.objectContaining({ code: 'UNKNOWN_OPTION', argument: '--jsno', suggestion: '--json' }),
+      expect.objectContaining({ code: 'MISSING_REQUIRED', argument: '--id' }),
+    ]));
+    const valid = validateArgvAgainstCatalog(catalog, [
+      'session', 'open', 'objective', '--id', 'session-1',
+      '--participant', 'pi', '--actor', 'pi', '--request-id', 'req-1', '--reason', 'test', '--json',
+    ]);
+    expect(valid).toEqual({ ok: true, errors: [] });
   });
 
   it('requires --json before emitting the catalog', async () => {
