@@ -1,6 +1,6 @@
 import { defineConfig } from 'vitest/config';
 import { resolve } from 'path';
-import { HEAVY_VITEST_FILES, NODE_TEST_FILES, VITEST_INCLUDE } from './scripts/vitest-lanes.mjs';
+import { HEAVY_VITEST_FILES, NODE_TEST_FILES, VITEST_E2E_EXCLUDE, VITEST_INCLUDE } from './scripts/vitest-lanes.mjs';
 
 export default defineConfig({
   test: {
@@ -12,6 +12,7 @@ export default defineConfig({
       '**/dist/**',
       ...NODE_TEST_FILES,
       ...HEAVY_VITEST_FILES,
+      ...VITEST_E2E_EXCLUDE,
     ],
     environment: 'node',
     setupFiles: [resolve(__dirname, 'scripts/vitest-environment-guard.ts')],
