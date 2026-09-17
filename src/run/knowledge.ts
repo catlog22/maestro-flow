@@ -1090,13 +1090,24 @@ export function addCandidate(
     existing.evidence_refs = [...new Set([...existing.evidence_refs, ...input.evidence_refs])];
     return id;
   }
+  // The compatibility-projection fields below (title/content/category) MUST be
+  // derived from `payload` once it exists, never recomputed independently from
+  // `input`. `payload` runs through `canonicalCandidatePayload` ->
+  // `normalizeCanonicalKnowledgeContent`, which re-trims/re-normalizes text
+  // (e.g. `stringValue()`'s `.trim()`); a caller-supplied `input.title` that
+  // was already truncated (e.g. `text.slice(0, 120)`) can retain a trailing
+  // whitespace character the canonical payload strips, making the two views
+  // disagree and tripping `knowledgeCandidateV11Schema`'s `superRefine` check
+  // ("Candidate compatibility projection differs from canonical payload") at
+  // `run complete` time. Sourcing these fields from `payload` when it exists
+  // makes that invariant hold by construction instead of by caller discipline.
   const common = {
     candidate_id: id,
     target: input.target,
     action: input.action,
-    title: input.title,
-    content: input.content,
-    category: input.category,
+    title: payload ? payload.title : input.title,
+    content: payload ? payload.content : input.content,
+    category: payload ? payload.category : input.category,
     source_kind: input.source_kind,
     evidence_refs: [...new Set(input.evidence_refs)],
     occurrences: 1,

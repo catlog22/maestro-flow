@@ -21,6 +21,7 @@ import {
   knowledgeCandidateId,
   stageRunKnowledgeCandidate,
   summarizeSessionKnowledge,
+  upgradeKnowledgeLedgerForStaging,
 } from './knowledge.js';
 import {
   ensureSyntheticKnowledgeSession,
@@ -42,7 +43,9 @@ import { startExecution } from './execution.js';
 import { SessionStore } from './store.js';
 import { buildTranscriptUri, storeTranscriptEvidence } from './transcript-evidence.js';
 import {
+  CURRENT_REPOSITORY_ALIAS,
   initializeRepositoryIdentity,
+  resolveRepositoryContext,
   reseedRepositoryIdentity,
 } from '../repository/context.js';
 
@@ -968,5 +971,57 @@ describe('canonical cross-repository promotion saga', () => {
     })).toThrow(/identity mismatch|not found/i);
     expect(readSessionKnowledgeDelta(new SessionStore(fixture.sourceRoot), sessionId, true)
       .candidates[0].status).toBe('promoting');
+  });
+});
+
+describe('addCandidate compatibility-projection/canonical-payload agreement', () => {
+  it('does not diverge when the caller title is a naive slice ending in whitespace (report.md frontmatter shape)', () => {
+    const projectRoot = root();
+    initializeRepositoryIdentity(projectRoot, { repoName: 'Source' });
+    const { sessionId } = ensureSyntheticKnowledgeSession(projectRoot, 'title-slice-host');
+
+    // Mirrors stageHandoffKnowledgeCandidates: `decision.text.trim().slice(0, 120)`.
+    // Deliberately constructed so character 120 (index 119) is whitespace --
+    // the exact shape that previously left a trailing space in the caller
+    // -supplied `title` while `canonicalCandidatePayload`'s
+    // `normalizeCanonicalKnowledgeContent` independently re-trimmed it via
+    // `stringValue()`, throwing "Candidate compatibility projection differs
+    // from canonical payload" out of `knowledgeCandidateV11Schema`'s
+    // `superRefine` at `run complete` time.
+    const text = `${'x'.repeat(119)} ${'y'.repeat(50)}`;
+    expect(text[119]).toBe(' ');
+    const title = text.trim().slice(0, 120);
+    expect(title.endsWith(' ')).toBe(true);
+
+    const sourceContext = resolveRepositoryContext(CURRENT_REPOSITORY_ALIAS, { projectRoot });
+
+    let candidateId = '';
+    expect(() => {
+      updateSessionKnowledgeSidecar(projectRoot, sessionId, (draft) => {
+        upgradeKnowledgeLedgerForStaging(draft, sourceContext, 'session');
+        candidateId = addCandidate(draft, {
+          target: 'spec',
+          action: 'propose',
+          title,
+          content: text,
+          category: 'arch',
+          source_kind: 'decision',
+          evidence_refs: [`session:${sessionId}`],
+        }, new Date().toISOString());
+        draft.revision++;
+        draft.updated_at = new Date().toISOString();
+      });
+    }).not.toThrow();
+
+    const delta = readSessionKnowledgeDelta(new SessionStore(projectRoot), sessionId, true);
+    const candidate = delta.candidates.find(item => item.candidate_id === candidateId);
+    expect(candidate).toBeDefined();
+    const found = candidate!;
+    expect(isKnowledgeCandidateV11(found)).toBe(true);
+    if (isKnowledgeCandidateV11(found)) {
+      expect(found.title).toBe(found.payload.title);
+      expect(found.content).toBe(found.payload.content);
+      expect(found.category).toBe(found.payload.category);
+    }
   });
 });
