@@ -17,6 +17,15 @@ interface ChangelogEntry {
 
 const changelog: ChangelogEntry[] = [
   {
+    version: '0.5.88',
+    date: '2026-09',
+    changes: [
+      { type: 'feat', text_en: '`run check` now reports a completion_preflight block — ready flag, blockers (contract drift requiring rebind, missing summary, non-running status), warnings, and summary_source — plus a --summary option, so a Run\'s completability can be inspected before `run complete` is attempted', text_zh: '`run check` 现输出 completion_preflight 块——ready 标志、blockers（需 rebind 的契约漂移、缺失 summary、非 running 状态）、warnings 与 summary_source——并新增 --summary 选项，可在执行 `run complete` 前预检 Run 的可完成性' },
+      { type: 'feat', text_en: 'help --json argv validation gains an INVALID_VALUE code: option values are checked against declared choices and the new portable-path-segment value_constraint (applied to --request-id), rejecting path-unsafe identifiers at preflight', text_zh: 'help --json argv 校验新增 INVALID_VALUE 错误码：选项值会按声明的 choices 与新的 portable-path-segment value_constraint（应用于 --request-id）校验，在预检阶段拒绝路径不安全的标识符' },
+      { type: 'fix', text_en: 'scanOutputs now honors declared schema and role from contract produces entries; single-.json primary inference applies only to undeclared outputs, and explicitly mismatched _meta role/schema surface strict contract errors instead of silent repair', text_zh: 'scanOutputs 现遵循契约 produces 中声明的 schema 与 role；单 .json primary 推断仅作用于未声明的输出，显式不匹配的 _meta role/schema 会产生严格契约错误而非被静默修复' },
+    ],
+  },
+  {
     version: '0.5.87',
     date: '2026-09',
     changes: [
