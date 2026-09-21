@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 
-import { scanOutputs } from './artifacts.js';
+import { scanOutputs, validateStrictArtifactContract } from './artifacts.js';
 import type { CommandContract } from './contract.js';
 
 const contract: CommandContract = {
@@ -142,6 +142,38 @@ describe('scanOutputs JSON metadata', () => {
       schemaVersion: 'review-analysis/1.0',
     });
     expect(result.warnings).toContain('outputs/review-analysis.json: missing _meta; inferred kind=review-analysis');
+  });
+
+  it.each(['json', 'ndjson', 'jsonl', 'md'])('infers declared schema and evidence role without metadata in .%s', extension => {
+    const { runDir, sessionDir } = createRun();
+    const path = `outputs/evidence.${extension}`;
+    writeFileSync(join(runDir, path), extension === 'md' ? '# Evidence' : '{"event":"verified"}\n');
+    const declared: CommandContract = {
+      ...contract, contract_version: 2,
+      produces: [{ path, kind: 'evidence', role: 'evidence', schema: 'evidence/2.0', required: true }],
+    };
+    const scan = scanOutputs(runDir, sessionDir, declared);
+    validateStrictArtifactContract(runDir, declared, scan);
+    expect(scan.errors).toEqual([]);
+    expect(scan.artifacts[0]).toMatchObject({ kind: 'evidence', role: 'evidence', schemaVersion: 'evidence/2.0' });
+    expect(scan.warnings).not.toHaveLength(0);
+  });
+
+  it('does not repair explicitly mismatched artifact metadata', () => {
+    const { runDir, sessionDir } = createRun();
+    writeFileSync(join(runDir, 'outputs/evidence.ndjson'), JSON.stringify({
+      _meta: { kind: 'evidence', role: 'attachment', schema: 'evidence/1.0' },
+    }));
+    const declared: CommandContract = {
+      ...contract, contract_version: 2,
+      produces: [{ path: 'outputs/evidence.ndjson', kind: 'evidence', role: 'evidence', schema: 'evidence/2.0' }],
+    };
+    const scan = scanOutputs(runDir, sessionDir, declared);
+    validateStrictArtifactContract(runDir, declared, scan);
+    expect(scan.errors).toEqual(expect.arrayContaining([
+      expect.stringContaining('_meta.role attachment does not match contract evidence'),
+      expect.stringContaining('_meta.schema evidence/1.0 does not match contract evidence/2.0'),
+    ]));
   });
 
   it('registers complete metadata from BOM-prefixed JSON', () => {

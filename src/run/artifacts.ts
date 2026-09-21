@@ -577,8 +577,8 @@ export function scanOutputs(
     const outputRelative = relative(runDir, absolutePath).replaceAll('\\', '/');
     const declared = declaredProduce(contract, outputRelative);
     let kind = declared?.kind ?? basename(name, extname(name));
-    let schemaVersion = `${kind}/1.0`;
-    let role: Artifact['role'] = declared?.primary ? 'primary' : 'attachment';
+    let schemaVersion = typeof declared?.schema === 'string' ? declared.schema : `${kind}/1.0`;
+    let role: Artifact['role'] = declared?.role ?? (declared?.primary ? 'primary' : 'attachment');
     let alias = declared?.alias;
     let warning: string | undefined;
 
@@ -587,7 +587,7 @@ export function scanOutputs(
       let mediaType: string;
       if (candidate.snapshot.stat.isDirectory()) {
         kind = declared?.kind ?? `${name}-collection`;
-        schemaVersion = `${kind}/1.0`;
+        schemaVersion = typeof declared?.schema === 'string' ? declared.schema : `${kind}/1.0`;
         hashed = hashVerifiedDirectory(
           absolutePath,
           candidate.canonicalParent,
@@ -614,10 +614,10 @@ export function scanOutputs(
           if (meta) {
             kind = meta.kind;
             schemaVersion = meta.schema;
-            role = meta.role ?? (extension === '.json' && directJsonCount === 1 ? 'primary' : role);
+            role = meta.role ?? (!declared && extension === '.json' && directJsonCount === 1 ? 'primary' : role);
             alias = meta.alias ?? alias;
           } else {
-            role = extension === '.json' && directJsonCount === 1 ? 'primary' : role;
+            role = !declared && extension === '.json' && directJsonCount === 1 ? 'primary' : role;
             warning = `${outputRelative}: missing _meta; inferred kind=${kind}`;
           }
         } else if (extension === '.md') {
