@@ -131,6 +131,13 @@ describe('v3 help catalog', () => {
       '--participant', 'pi', '--actor', 'pi', '--request-id', 'req-1', '--reason', 'test', '--json',
     ]);
     expect(valid).toEqual({ ok: true, errors: [] });
+    const unsafe = validateArgvAgainstCatalog(catalog, [
+      'session', 'open', 'objective', '--id', 'session-1',
+      '--participant', 'pi', '--actor', 'pi', '--request-id', 'run-control:0#abc', '--reason', 'test', '--json',
+    ]);
+    expect(unsafe.errors).toEqual(expect.arrayContaining([
+      expect.objectContaining({ code: 'INVALID_VALUE', argument: '--request-id' }),
+    ]));
   });
 
   it('requires --json before emitting the catalog', async () => {
@@ -149,6 +156,9 @@ describe('v3 help catalog', () => {
     const body = JSON.parse(result.stdout);
     expect(body.schema_version).toBe('help-catalog/1.0');
     expect(body.commands.map((item: { command: string }) => item.command)).toEqual(expect.arrayContaining(REQUIRED));
+    const complete = body.commands.find((item: { command: string }) => item.command === 'run complete');
+    expect(complete.option_specs.find((option: { names: string[] }) => option.names.includes('--request-id')))
+      .toMatchObject({ value_constraint: 'portable-path-segment' });
   });
 
   it('preserves Commander help [command] output for the v2 CLI', () => {

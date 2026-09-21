@@ -2,6 +2,7 @@ import { Command, type Option } from 'commander';
 import { resolve } from 'node:path';
 
 import { SessionStore } from '../run/store.js';
+import { assertSafePathSegment } from '../run/ids.js';
 
 import { registerArtifactCommand } from './artifact.js';
 import { registerExecutionV3RetiredCommand } from './execution-v3-retired.js';
@@ -14,6 +15,7 @@ export interface HelpCatalogOption {
   value_arity: 0 | 1 | -1;
   repeatable: boolean;
   choices: string[];
+  value_constraint?: 'portable-path-segment' | null;
 }
 
 export interface HelpCatalogPositional {
@@ -37,7 +39,7 @@ export interface HelpCatalogCommand {
 }
 
 export interface HelpCatalogValidationError {
-  code: 'UNKNOWN_OPTION' | 'MISSING_VALUE' | 'EXCESS_POSITIONAL' | 'MISSING_REQUIRED' | 'UNKNOWN_COMMAND';
+  code: 'UNKNOWN_OPTION' | 'MISSING_VALUE' | 'INVALID_VALUE' | 'EXCESS_POSITIONAL' | 'MISSING_REQUIRED' | 'UNKNOWN_COMMAND';
   argument: string;
   commandPath: string;
   suggestion?: string;
@@ -60,6 +62,7 @@ function optionSpec(option: Option): HelpCatalogOption {
     value_arity: takesValue ? (option.variadic ? -1 : 1) : 0,
     repeatable: option.variadic,
     choices: option.argChoices ? [...option.argChoices] : [],
+    value_constraint: option.long === '--request-id' ? 'portable-path-segment' : null,
   };
 }
 
@@ -137,13 +140,26 @@ export function validateArgvAgainstCatalog(
       continue;
     }
     seen.add(name);
-    if (spec.value_arity !== 0 && !argument.includes('=')) {
-      const next = remaining[index + 1];
-      if (!next || (next.startsWith('-') && next !== '-')) {
-        errors.push({ code: 'MISSING_VALUE', argument: name, commandPath: command.command });
-      } else {
+    if (spec.value_arity !== 0) {
+      let value = argument.includes('=') ? argument.slice(argument.indexOf('=') + 1) : undefined;
+      if (value === undefined) {
+        const next = remaining[index + 1];
+        if (!next || (next.startsWith('-') && next !== '-')) {
+          errors.push({ code: 'MISSING_VALUE', argument: name, commandPath: command.command });
+          continue;
+        }
+        value = next;
         index++;
       }
+      let invalid = spec.choices.length > 0 && !spec.choices.includes(value);
+      if (spec.value_constraint === 'portable-path-segment') {
+        try {
+          assertSafePathSegment(value, 'request ID');
+        } catch {
+          invalid = true;
+        }
+      }
+      if (invalid) errors.push({ code: 'INVALID_VALUE', argument: name, commandPath: command.command });
     }
   }
   const maxPositionals = command.positionals.some(item => item.variadic)
