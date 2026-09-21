@@ -388,7 +388,29 @@ describe('formal session/3.0 Commander modules', () => {
     const result = response.result as Record<string, unknown>;
     expect(result.knowledge_reconciliation).toBeUndefined();
     expect(result.warnings).toBeUndefined();
+    expect(result.completion_preflight).toMatchObject({
+      ready: false,
+      blockers: expect.arrayContaining([
+        expect.stringContaining('summary is required'),
+        expect.stringContaining('cannot be completed'),
+      ]),
+      summary_source: null,
+    });
     expect(existsSync(join(root, '.workflow', 'sessions', 's-v3', 'runs', 'run-1', 'knowledge-reconciliation.json'))).toBe(false);
+  });
+
+  it('run check reports a ready completion preflight from report summary', async () => {
+    const root = fixture({ stepStatus: 'running', run: { status: 'running', started_at: '2026-08-12T00:01:00.000Z' } });
+    writeFileSync(join(root, '.workflow', 'sessions', 's-v3', 'runs', 'run-1', 'report.md'), '---\nsummary: report summary\n---\n');
+    const response = await invoke(registerRunV3Command, [
+      'run', 'check', 'run-1', '--session', 's-v3', '--json', '--workflow-root', root,
+    ]);
+    expect(response).toMatchObject({
+      operation: 'check', ok: true,
+      result: {
+        completion_preflight: { ready: true, blockers: [], summary_source: 'report' },
+      },
+    });
   });
 
   it('completes and seals a running Run and its chain step atomically with --advance', async () => {

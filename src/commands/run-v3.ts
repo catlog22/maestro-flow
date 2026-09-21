@@ -1,5 +1,5 @@
 import { createHash, randomUUID } from 'node:crypto';
-import type { Command } from 'commander';
+import { Option, type Command } from 'commander';
 
 import { resolve } from 'node:path';
 
@@ -7,7 +7,8 @@ import { SessionStore } from '../run/store.js';
 import type { RunV30 } from '../run/schemas.js';
 import { artifactRegistrySchema, type ArtifactRegistry } from '../run/schemas.js';
 import { evaluateArtifactContract, scanOutputs, validateStrictArtifactContract } from '../run/artifacts.js';
-import { resolveCommandSource } from '../run/contract.js';
+import { hashCommandContract, resolveCommandSource } from '../run/contract.js';
+import { readReportFrontmatter } from '../run/report.js';
 import { V3StructuredError } from '../run/v3/errors.js';
 import { buildRetryMetadata } from '../run/v3/run-machine.js';
 import {
@@ -186,7 +187,7 @@ export function registerRunV3Command(program: Command): void {
 
   addV3MutationOptions(run.command('complete <run-id>').description('Complete and seal a Run atomically'), 'run')
     .option('--summary <text>', 'completion summary (fallback: report.md frontmatter summary)')
-    .option('--verdict <verdict>', 'done or done_with_concerns', 'done')
+    .addOption(new Option('--verdict <verdict>', 'completion verdict').choices(['done', 'done_with_concerns']).default('done'))
     .option('--advance', 'required: complete the Run and its chain step atomically')
     .requiredOption('--expected-orchestration-revision <n>', 'expected Session orchestration revision', parseV3Revision)
     .action((runId: string, options: V3CommonOptions & {
@@ -441,7 +442,8 @@ export function registerRunV3Command(program: Command): void {
     });
 
   addV3ReadOptions(run.command('check <run-id>').description('Check Run state and available transitions'))
-    .action((runId: string, options: { session?: string; workflowRoot: string }) => {
+    .option('--summary <text>', 'proposed completion summary (fallback: report.md frontmatter summary)')
+    .action((runId: string, options: { session?: string; workflowRoot: string; summary?: string }) => {
       try {
         const { store, options: resolved } = resolveV3Options(options);
         const value = readRunOrThrow(store, resolved.session, runId);
@@ -464,6 +466,29 @@ export function registerRunV3Command(program: Command): void {
           ...outputContract,
           scan_errors: scan.errors,
           scan_warnings: scan.warnings,
+        };
+        const blockers = [...scan.errors];
+        const currentContractHash = `sha256:${hashCommandContract(contract)}`;
+        if (value.command_contract_hash && value.command_contract_hash !== currentContractHash) {
+          blockers.push('Lifecycle contract changed; explicitly rebind the Run before completing it');
+        }
+        const warnings: string[] = [];
+        let reportSummary = '';
+        try {
+          reportSummary = readReportFrontmatter(runDir).summary;
+        } catch (error) {
+          warnings.push(error instanceof Error ? error.message : String(error));
+        }
+        const summary = options.summary?.trim() || reportSummary.trim();
+        if (!summary) blockers.push('summary is required: pass --summary or set report.md frontmatter summary');
+        if (value.status !== 'running') {
+          blockers.push(`Run is ${value.status}; it cannot be completed from this state`);
+        }
+        result.completion_preflight = {
+          ready: blockers.length === 0,
+          blockers,
+          warnings,
+          summary_source: options.summary?.trim() ? 'argument' : reportSummary.trim() ? 'report' : null,
         };
         // Read-only receipt attach: check never re-runs reconciliation (run
         // complete performs the one-shot reconcile). A missing or unreadable
