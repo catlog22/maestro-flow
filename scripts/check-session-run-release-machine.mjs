@@ -514,10 +514,10 @@ async function main() {
       'execution operation claim', 'execution operation heartbeat', 'execution operation release',
       'execution operation status', 'execution pause', 'execution resolve', 'execution resume', 'execution seal',
       'execution start', 'execution status',
-      'run brief', 'run cancel', 'run check', 'run complete', 'run create', 'run decide', 'run next',
-      'run rebind', 'run recall', 'run seal', 'run transition',
+      'run brief', 'run cancel', 'run check', 'run complete', 'run create', 'run decide', 'run done',
+      'run list', 'run next', 'run rebind', 'run recall', 'run seal', 'run status', 'run transition',
       'session archive', 'session chain insert', 'session chain replace', 'session chain skip', 'session chain update',
-      'session complete', 'session list', 'session migrate', 'session open', 'session resume-view',
+      'session complete', 'session done', 'session list', 'session migrate', 'session open', 'session resume-view',
       'session status', 'session unarchive',
     ];
     assert.deepEqual(v3Help.commands.map(command => command.command), expectedV3Commands);
@@ -600,14 +600,14 @@ async function main() {
     });
     assert.deepEqual(completeWithAdvance.result.next, {
       suggest_only: true,
-      command: 'maestro session complete --session release-v3 --participant <actor-id> --actor <actor-id> --request-id <request-id> --reason "<reason>" --expected-orchestration-revision 4 --json',
+      command: 'maestro session complete --session release-v3 --actor <actor-id> --expected-orchestration-revision 4 --json',
       reason: 'Run sealed; no pending chain step remains, so complete the Session',
     });
     assert.deepEqual(completeWithAdvance.result.continuation, {
       operation: 'session-complete',
       locator: { session_id: 'release-v3', run_id: null },
       revision_requirements: { expected_orchestration_revision: 4, expected_run_revision: null },
-      required_caller_fields: ['participant', 'actor', 'request_id', 'reason'],
+      required_caller_fields: ['actor'],
     });
     assert.equal(v3Store.readRunV30('release-v3', 'release-v3-run').status, 'sealed');
     assert.equal(v3Store.readSessionV30('release-v3').chain[0].status, 'completed');

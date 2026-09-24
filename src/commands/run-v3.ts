@@ -4,7 +4,7 @@ import { Option, type Command } from 'commander';
 import { resolve } from 'node:path';
 
 import { SessionStore } from '../run/store.js';
-import type { RunV30 } from '../run/schemas.js';
+import type { RunV30, SessionStateV30 } from '../run/schemas.js';
 import { artifactRegistrySchema, type ArtifactRegistry } from '../run/schemas.js';
 import { evaluateArtifactContract, scanOutputs, validateStrictArtifactContract } from '../run/artifacts.js';
 import { hashCommandContract, resolveCommandSource } from '../run/contract.js';
@@ -55,6 +55,23 @@ type RunMutationOptions = V3CommonOptions & { run: string };
 
 function runResult(mutation: ReturnType<typeof mutateRunV3>): unknown {
   return mutation.transition.result;
+}
+
+/**
+ * `<run-id>` is optional on read commands: a Session with exactly one active
+ * Run resolves it implicitly; zero or several must be disambiguated by the
+ * caller instead of guessing.
+ */
+function requireRunIdArg(sessionState: SessionStateV30, runId: string | undefined): string {
+  if (runId) return runId;
+  const active = sessionState.active_run_ids;
+  if (active.length === 1) return active[0];
+  throw new V3StructuredError(
+    'INVALID_ARGUMENT',
+    active.length === 0
+      ? 'No active Run in this Session — pass <run-id> explicitly'
+      : `Session has ${active.length} active Runs (${active.join(', ')}) — pass <run-id> explicitly`,
+  );
 }
 
 function readRunOrThrow(store: SessionStore, sessionId: string, runId: string): RunV30 {
@@ -185,7 +202,10 @@ export function registerRunV3Command(program: Command): void {
       }
     });
 
-  addV3MutationOptions(run.command('complete <run-id>').description('Complete and seal a Run atomically'), 'run')
+  // Commander reports the first missing mandatory option only; agents then
+  // retry serially discovering each requirement one error at a time. Report
+  // the full contract (including the action-enforced --advance) in one error.
+  const completeCommand = addV3MutationOptions(run.command('complete <run-id>').description('Complete and seal a Run atomically'), 'run')
     .option('--summary <text>', 'completion summary (fallback: report.md frontmatter summary)')
     .addOption(new Option('--verdict <verdict>', 'completion verdict').choices(['done', 'done_with_concerns']).default('done'))
     .option('--advance', 'required: complete the Run and its chain step atomically')
@@ -232,6 +252,19 @@ export function registerRunV3Command(program: Command): void {
         emitV3Error('complete', error, { session: options.session, runId, requestId: options.requestId });
       }
     });
+
+  (completeCommand as unknown as { missingMandatoryOptionValue(option: Option): void })
+    .missingMandatoryOptionValue = function (this: Command, option: Option): void {
+      const missing = this.options
+        .filter(o => o.mandatory && this.getOptionValue(o.attributeName()) === undefined)
+        .map(o => o.flags);
+      this.error(
+        `error: required option${missing.length > 1 ? 's' : ''} ${missing.map(f => `'${f}'`).join(', ')} not specified\n`
+        + `  usage: maestro run complete <run-id> ${missing.join(' ')} --advance\n`
+        + '  optional with defaults: --session, --participant (= --actor), '
+        + '--actor ($MAESTRO_ACTOR), --request-id (derived), --reason (cli:run complete)',
+      );
+    };
 
   addV3MutationOptions(run.command('transition <run-id> <status>').description('Transition a Run between active states'), 'run')
     .option('--expected-orchestration-revision <n>', 'required when failed transition updates the Session chain', parseV3Revision)
@@ -337,12 +370,13 @@ export function registerRunV3Command(program: Command): void {
       }
     });
 
-  addV3ReadOptions(run.command('brief <run-id>').description('Return the v3 Resume Packet for a Run'))
-    .action((runId: string, options: { session?: string; workflowRoot: string }) => {
+  addV3ReadOptions(run.command('brief [run-id]').description('Return the v3 Resume Packet for a Run'))
+    .action((runId: string | undefined, options: { session?: string; workflowRoot: string }) => {
       try {
         const { store, options: resolved } = resolveV3Options(options);
-        const value = readRunOrThrow(store, resolved.session, runId);
         const sessionState = store.readSessionV30(resolved.session);
+        const resolvedRunId = requireRunIdArg(sessionState, runId);
+        const value = readRunOrThrow(store, resolved.session, resolvedRunId);
         const artifactsPath = resolve(store.sessionDir(resolved.session), sessionState.artifacts_ref);
         const registry = store.readJsonFileReadOnly<ArtifactRegistry>(
           artifactsPath,
@@ -354,7 +388,7 @@ export function registerRunV3Command(program: Command): void {
         const continuation = value.status === 'running'
           ? v3CompleteNext({
             sessionId: sessionState.session_id,
-            runId,
+            runId: resolvedRunId,
             orchestrationRevision: sessionState.orchestration_revision,
             runRevision: value.revision,
             reason: 'Run running - execute and complete it with run complete --advance',
@@ -373,13 +407,13 @@ export function registerRunV3Command(program: Command): void {
               })
             : v3CheckNext({
               sessionId: sessionState.session_id,
-              runId,
+              runId: resolvedRunId,
               reason: `Run is ${value.status} - inspect canonical Run state before continuing`,
             });
         emitV3Success({
           operation: 'brief',
           sessionId: resolved.session,
-          runId,
+          runId: resolvedRunId,
           result: {
             schema_version: 'brief-result/3.0',
             session: {
@@ -441,22 +475,24 @@ export function registerRunV3Command(program: Command): void {
       }
     });
 
-  addV3ReadOptions(run.command('check <run-id>').description('Check Run state and available transitions'))
+  addV3ReadOptions(run.command('check [run-id]').description('Check Run state and available transitions'))
     .option('--summary <text>', 'proposed completion summary (fallback: report.md frontmatter summary)')
-    .action((runId: string, options: { session?: string; workflowRoot: string; summary?: string }) => {
+    .action((runId: string | undefined, options: { session?: string; workflowRoot: string; summary?: string }) => {
       try {
         const { store, options: resolved } = resolveV3Options(options);
-        const value = readRunOrThrow(store, resolved.session, runId);
+        const sessionState = store.readSessionV30(resolved.session);
+        const resolvedRunId = requireRunIdArg(sessionState, runId);
+        const value = readRunOrThrow(store, resolved.session, resolvedRunId);
         const transitions: Record<RunV30['status'], string[]> = {
           pending: ['running', 'cancelled'], running: ['completed', 'failed', 'blocked', 'cancelled'],
           blocked: ['running', 'failed', 'cancelled'], completed: ['sealed'], failed: ['sealed'],
           cancelled: ['sealed'], sealed: [],
         };
         const result: Record<string, unknown> = {
-          run_id: runId, status: value.status, revision: value.revision,
+          run_id: resolvedRunId, status: value.status, revision: value.revision,
           available_transitions: transitions[value.status],
         };
-        const runDir = store.runDir(resolved.session, runId);
+        const runDir = store.runDir(resolved.session, resolvedRunId);
         const sessionDir = store.sessionDir(resolved.session);
         const contract = resolveCommandSource(store.projectRoot, value.command).contract;
         const scan = scanOutputs(runDir, sessionDir, contract);
@@ -493,12 +529,27 @@ export function registerRunV3Command(program: Command): void {
         // Read-only receipt attach: check never re-runs reconciliation (run
         // complete performs the one-shot reconcile). A missing or unreadable
         // receipt omits the field entirely without warnings.
-        const receipt = readV3KnowledgeReconciliation(store, resolved.session, runId);
+        const receipt = readV3KnowledgeReconciliation(store, resolved.session, resolvedRunId);
         if (receipt) result.knowledge_reconciliation = v3ReconciliationSummary(receipt);
-        emitV3Success({ operation: 'check', sessionId: resolved.session, runId, result });
+        emitV3Success({ operation: 'check', sessionId: resolved.session, runId: resolvedRunId, result });
       } catch (error) {
         emitV3Error('check', error, { session: options.session, runId });
       }
     });
 
+  // Legacy-name stubs: agents trained on the retired v2 command surface keep
+  // issuing `run status|list|done`. Route each to the v3 replacement instead
+  // of a bare "unknown command".
+  for (const [name, hint] of [
+    ['status', 'maestro run check [run-id]'],
+    ['done', 'maestro run complete <run-id> --participant <id> --actor <id> --request-id <id> --advance'],
+    ['list', 'maestro session list'],
+  ] as const) {
+    run.command(`${name} [args...]`, { hidden: true })
+      .allowUnknownOption()
+      .action(() => {
+        console.error(`Error: 'maestro run ${name}' is retired. Use '${hint}' instead.`);
+        process.exitCode = 1;
+      });
+  }
 }

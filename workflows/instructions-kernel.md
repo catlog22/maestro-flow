@@ -99,6 +99,7 @@ Empty results permit normal discovery only after inspection. If search returns a
 
 ```bash
 maestro search "<query>" [--type <type>] [--category <cat>] [--tag <tag>] [--keyword <word>] [--code] [--kg]
+maestro load <id>                                   # load by ID — type is inferred
 maestro load --type <type> [--list] [--category <cat>] [--keyword <word>] [--tag <tag>] [--id <id>]
 ```
 
@@ -138,6 +139,17 @@ maestro search "topology layout"
 maestro search "DetailedTopologySVG" --code
 maestro load --type spec --category coding
 ```
+
+**Common misroutes** (each was a repeated failure in command history — on `unknown command`/`unknown option`/`required option`, run `--help` once instead of blind retry):
+
+| ❌ Wrong | ✅ Right |
+|----------|----------|
+| `maestro knowledge search <q>` / `knowledge load <id>` | `maestro search <q>` / `maestro load <id>` |
+| `maestro run status` / `run list` / `run done` / `session done` | `run check` / `session list` / `run complete` / `session complete` |
+| `maestro search <q> --type review` | `--category review` (review is a spec category, not a type) |
+| `maestro run complete` discovering options one error at a time | The first error already lists every required flag + `--advance` — supply them all at once |
+| `maestro run brief` / `run check` without a Run | optional `<run-id>` resolves the unique active Run; multiple active Runs require it explicitly |
+| `maestro <cmd> ... 2>/dev/null` | never suppress stderr — it is the only diagnostic channel |
 
 ## Stable Run Knowledge Invariants
 

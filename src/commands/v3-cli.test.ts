@@ -222,15 +222,17 @@ describe('formal session/3.0 Commander modules', () => {
     expect(existsSync(join(root, '.workflow', 'sessions', 's-rejected'))).toBe(false);
   });
 
-  it('requires an explicit --session locator for v3 mutations', async () => {
+  it('resolves the unique open Session when --session is omitted on a mutation', async () => {
     const root = fixture();
-    const program = new Command().name('maestro').exitOverride().configureOutput({ writeErr: () => {} });
-    registerRunV3Command(program);
-    await expect(program.parseAsync([
-      'node', 'maestro', 'run', 'next', '--participant', 'actor', '--actor', 'actor',
-      '--request-id', 'req-no-session', '--reason', 'negative locator test',
+    const response = await invoke(registerRunV3Command, [
+      'run', 'next', '--run', 'run-no-session', '--participant', 'actor', '--actor', 'actor',
+      '--request-id', 'req-no-session', '--reason', 'locator default test',
       '--expected-orchestration-revision', '0', '--json', '--workflow-root', root,
-    ])).rejects.toThrow(/required option '--session <id>'/);
+    ]);
+    expect(response).toMatchObject({
+      operation: 'next', ok: true,
+      locator: { session_id: 's-v3', run_id: 'run-no-session' },
+    });
   });
 
   it('inserts a chain step and creates its next Run', async () => {
@@ -427,12 +429,12 @@ describe('formal session/3.0 Commander modules', () => {
         artifact_publication: { authority: 'transition-receipt/2.0', artifact_ids: [] },
         next: {
           suggest_only: true,
-          command: 'maestro session complete --session s-v3 --participant <actor-id> --actor <actor-id> --request-id <request-id> --reason "<reason>" --expected-orchestration-revision 1 --json',
+          command: 'maestro session complete --session s-v3 --actor <actor-id> --expected-orchestration-revision 1 --json',
         },
         continuation: {
           operation: 'session-complete', locator: { session_id: 's-v3', run_id: null },
           revision_requirements: { expected_orchestration_revision: 1, expected_run_revision: null },
-          required_caller_fields: ['participant', 'actor', 'request_id', 'reason'],
+          required_caller_fields: ['actor'],
         },
       },
     });
@@ -453,7 +455,7 @@ describe('formal session/3.0 Commander modules', () => {
       result: {
         run: { run_id: 'run-1', status: 'sealed', revision: 1 },
         next: {
-          command: 'maestro session complete --session s-v3 --participant <actor-id> --actor <actor-id> --request-id <request-id> --reason "<reason>" --expected-orchestration-revision 1 --json',
+          command: 'maestro session complete --session s-v3 --actor <actor-id> --expected-orchestration-revision 1 --json',
         },
         continuation: {
           operation: 'session-complete',
@@ -768,13 +770,13 @@ describe('formal session/3.0 Commander modules', () => {
         continuation: {
           operation: 'complete', locator: { session_id: 's-v3', run_id: 'run-created' },
           revision_requirements: { expected_orchestration_revision: 1, expected_run_revision: 1 },
-          required_caller_fields: ['participant', 'actor', 'request_id', 'reason'],
+          required_caller_fields: ['actor'],
         },
       },
     });
     expect((response.result as any).next.command).toBe(
-      'maestro run complete run-created --session s-v3 --participant <actor-id> --actor <actor-id> '
-      + '--request-id <request-id> --reason "<reason>" --expected-run-revision 1 '
+      'maestro run complete run-created --session s-v3 --actor <actor-id> '
+      + '--expected-run-revision 1 '
       + '--expected-orchestration-revision 1 --verdict done --advance --json',
     );
     expect(new SessionStore(root).readRunV30('s-v3', 'run-created')).toMatchObject({
@@ -852,13 +854,13 @@ describe('formal session/3.0 Commander modules', () => {
         step_id: 'step-1',
         next: {
           suggest_only: true,
-          command: 'maestro run complete run-next --session s-v3 --participant <actor-id> --actor <actor-id> --request-id <request-id> --reason "<reason>" --expected-run-revision 1 --expected-orchestration-revision 1 --verdict done --advance --json',
+          command: 'maestro run complete run-next --session s-v3 --actor <actor-id> --expected-run-revision 1 --expected-orchestration-revision 1 --verdict done --advance --json',
           reason: 'Run created - execute and complete it with run complete --advance',
         },
         continuation: {
           operation: 'complete', locator: { session_id: 's-v3', run_id: 'run-next' },
           revision_requirements: { expected_orchestration_revision: 1, expected_run_revision: 1 },
-          required_caller_fields: ['participant', 'actor', 'request_id', 'reason'],
+          required_caller_fields: ['actor'],
         },
       },
     });
@@ -1121,5 +1123,147 @@ describe('session unarchive', () => {
       ...mutationFlags(root, '--expected-orchestration-revision', 1),
     ]);
     expect(created).toMatchObject({ operation: 'create', ok: true });
+  });
+});
+
+describe('run/session CLI compatibility', () => {
+  it('resolves the unique active Run when brief omits <run-id>', async () => {
+    const root = fixture({ stepStatus: 'running', run: { status: 'running', started_at: '2026-08-12T00:01:00.000Z' } });
+    const response = await invoke(registerRunV3Command, [
+      'run', 'brief', '--session', 's-v3', '--json', '--workflow-root', root,
+    ]);
+    expect(response).toMatchObject({
+      operation: 'brief', ok: true,
+      locator: { session_id: 's-v3', run_id: 'run-1' },
+    });
+  });
+
+  it('resolves the unique active Run when check omits <run-id>', async () => {
+    const root = fixture({ run: {} });
+    const response = await invoke(registerRunV3Command, [
+      'run', 'check', '--session', 's-v3', '--json', '--workflow-root', root,
+    ]);
+    expect(response).toMatchObject({
+      operation: 'check', ok: true,
+      result: { run_id: 'run-1' },
+    });
+  });
+
+  it('requires an explicit <run-id> when the Session has no active Run', async () => {
+    const root = fixture();
+    const response = await invoke(registerRunV3Command, [
+      'run', 'brief', '--session', 's-v3', '--json', '--workflow-root', root,
+    ]);
+    expect(response).toMatchObject({
+      operation: 'brief', ok: false,
+      error: { code: 'INVALID_ARGUMENT', message: expect.stringContaining('pass <run-id> explicitly') },
+    });
+  });
+
+  it('requires an explicit <run-id> when multiple Runs are active', async () => {
+    const root = fixture({ run: {} });
+    const sessionPath = join(root, '.workflow', 'sessions', 's-v3', 'session.json');
+    const session = JSON.parse(readFileSync(sessionPath, 'utf8')) as SessionStateV30;
+    session.active_run_ids = ['run-1', 'run-2'];
+    writeFileSync(sessionPath, `${JSON.stringify(session, null, 2)}\n`);
+    const response = await invoke(registerRunV3Command, [
+      'run', 'check', '--session', 's-v3', '--json', '--workflow-root', root,
+    ]);
+    expect(response).toMatchObject({
+      operation: 'check', ok: false,
+      error: {
+        code: 'INVALID_ARGUMENT',
+        message: expect.stringContaining('run-1, run-2'),
+      },
+    });
+  });
+
+  it('lists every missing mandatory option on run complete instead of the first only', async () => {
+    const root = fixture({ run: {} });
+    const program = new Command().name('maestro').exitOverride().configureOutput({ writeErr: () => {} });
+    registerRunV3Command(program);
+    await expect(program.parseAsync([
+      'node', 'maestro', 'run', 'complete', 'run-1', '--workflow-root', root,
+    ])).rejects.toThrow(/'--expected-run-revision <n>'[\s\S]*'--expected-orchestration-revision <n>'[\s\S]*--advance/);
+  });
+
+  it.each([
+    [['run', 'status'], 'run check'],
+    [['run', 'done'], 'run complete'],
+    [['run', 'list'], 'session list'],
+  ])('routes retired %s to the v3 replacement', async (args, hint) => {
+    const errors: string[] = [];
+    vi.spyOn(console, 'error').mockImplementation(value => { errors.push(String(value)); });
+    const program = new Command().name('maestro').exitOverride();
+    registerRunV3Command(program);
+    await program.parseAsync(['node', 'maestro', ...args]);
+    expect(errors.join('\n')).toContain(hint);
+    expect(process.exitCode).toBe(1);
+  });
+
+  it('routes retired session done to session complete', async () => {
+    const errors: string[] = [];
+    vi.spyOn(console, 'error').mockImplementation(value => { errors.push(String(value)); });
+    const program = new Command().name('maestro').exitOverride();
+    registerSessionV3Command(program);
+    await program.parseAsync(['node', 'maestro', 'session', 'done']);
+    expect(errors.join('\n')).toContain('session complete');
+    expect(process.exitCode).toBe(1);
+  });
+
+  it('defaults mutation identity flags: actor-only invocation derives participant, request-id and reason', async () => {
+    const root = fixture({ run: {} });
+    const response = await invoke(registerRunV3Command, [
+      'run', 'cancel', 'run-1', '--actor', 'devin',
+      '--expected-run-revision', '0', '--expected-orchestration-revision', '0',
+      '--json', '--workflow-root', root,
+    ]);
+    expect(response).toMatchObject({
+      operation: 'run-cancel', ok: true,
+      locator: { session_id: 's-v3', run_id: 'run-1' },
+      result: { status: 'cancelled' },
+    });
+    expect(response.request_id).toMatch(/^cli-[0-9a-f]{16}$/);
+    expect((response.result as Record<string, unknown>).summary_line)
+      .toBe(`run-cancel ok · session=s-v3 · run=run-1 · rev=1 · req=${response.request_id} · next="maestro run next --session s-v3 --actor <actor-id> --expected-orchestration-revision 0 --json"`);
+  });
+
+  it('replays a verbatim retry under the derived request-id instead of duplicating', async () => {
+    const root = fixture({ run: {} });
+    const args = [
+      'run', 'cancel', 'run-1', '--actor', 'devin',
+      '--expected-run-revision', '0', '--expected-orchestration-revision', '0',
+      '--json', '--workflow-root', root,
+    ];
+    const first = await invoke(registerRunV3Command, args);
+    vi.restoreAllMocks();
+    const second = await invoke(registerRunV3Command, args);
+    expect(first.request_id).toBe(second.request_id);
+    expect(second).toMatchObject({ ok: true, replay: { status: 'replayed' } });
+  });
+
+  it('defaults --actor from MAESTRO_ACTOR when no identity flags are passed', async () => {
+    const root = fixture({ run: {} });
+    vi.stubEnv('MAESTRO_ACTOR', 'env-actor');
+    const response = await invoke(registerRunV3Command, [
+      'run', 'cancel', 'run-1',
+      '--expected-run-revision', '0', '--expected-orchestration-revision', '0',
+      '--json', '--workflow-root', root,
+    ]);
+    expect(response).toMatchObject({ operation: 'run-cancel', ok: true });
+    vi.unstubAllEnvs();
+  });
+
+  it('fails with a clear error when no actor identity is available', async () => {
+    const root = fixture({ run: {} });
+    vi.stubEnv('MAESTRO_ACTOR', '');
+    const program = new Command().name('maestro').exitOverride().configureOutput({ writeErr: () => {} });
+    registerRunV3Command(program);
+    await expect(program.parseAsync([
+      'node', 'maestro', 'run', 'cancel', 'run-1',
+      '--expected-run-revision', '0', '--expected-orchestration-revision', '0',
+      '--json', '--workflow-root', root,
+    ])).rejects.toThrow(/--actor <id>.*MAESTRO_ACTOR/);
+    vi.unstubAllEnvs();
   });
 });

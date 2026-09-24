@@ -141,8 +141,7 @@ describe('v3 compaction reattach', () => {
     expect(briefSession?.orchestration_revision).toBe(4);
     expect((brief.result?.run as Record<string, unknown> | undefined)?.status).toBe('sealed');
     expect((brief.result?.next as { command?: string } | undefined)?.command).toBe(
-      'maestro session complete --session compaction-session --participant <actor-id> '
-      + '--actor <actor-id> --request-id <request-id> --reason "<reason>" '
+      'maestro session complete --session compaction-session --actor <actor-id> '
       + '--expected-orchestration-revision 4 --json',
     );
     expect(brief.result?.continuation).toMatchObject({

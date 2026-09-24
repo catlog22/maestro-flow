@@ -36,8 +36,11 @@ function validateScope(value: string | undefined): import('../tools/spec-loader.
 }
 
 export function registerSpecCommand(program: Command): void {
+  // Hidden from top-level help: `knowhow add --type spec` is the unified
+  // entry-management surface; `maestro spec` remains as a compatibility alias
+  // for scope/injection/lifecycle subcommands.
   const spec = program
-    .command('spec')
+    .command('spec', { hidden: true })
     .description('Project spec management (init, load, list, status)');
 
   // ── load ──────────────────────────────────────────────────────────────

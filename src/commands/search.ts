@@ -63,6 +63,7 @@ import { runExactSearch, type ExactSearchOutcome } from '../search/exact-search.
 
 // Valid type filter values — matches WikiNodeType + virtual aliases.
 const VALID_TYPES = ['project', 'roadmap', 'spec', 'issue', 'knowhow', 'note', 'domain', 'session', 'scratch', 'template'] as const;
+const SPEC_CATEGORIES = ['coding', 'arch', 'debug', 'test', 'review', 'learning', 'ui'] as const;
 
 // Per-category result caps — prevents low-value sources from dominating.
 const CATEGORY_CAPS: Record<string, number> = {
@@ -1741,7 +1742,10 @@ export function registerSearchCommand(program: Command): void {
       const kgMode = opts.kg === true;
 
       if (opts.type && !VALID_TYPES.includes(opts.type)) {
-        console.error(`Error: --type must be one of ${VALID_TYPES.join(', ')} (got "${opts.type}")`);
+        const hint = (SPEC_CATEGORIES as readonly string[]).includes(opts.type)
+          ? ` Did you mean '--category ${opts.type}' (spec category, not a type)?`
+          : '';
+        console.error(`Error: --type must be one of ${VALID_TYPES.join(', ')} (got "${opts.type}").${hint}`);
         process.exit(1);
       }
       if (opts.type === 'template' && (codeOnly || kgMode)) {

@@ -1,6 +1,7 @@
 /**
  * Load Command — Unified knowledge loading (specs, wiki, sessions).
  *
+ *   maestro load <id>                              — load by canonical ID (type inferred)
  *   maestro load --type session --list             — list recent sessions
  *   maestro load --type session --id <id>          — load specific session
  *   maestro load --type spec --category coding     — load coding specs
@@ -361,9 +362,9 @@ function wikiIndexFromDaemon(entries: WikiEntry[], generatedAt?: number): WikiIn
 
 export function registerLoadCommand(program: Command): void {
   program
-    .command('load')
+    .command('load [ids...]')
     .description('Unified knowledge loading — specs, wiki, sessions')
-    .requiredOption('--type <type>', `Entry type: ${VALID_TYPES.join(', ')}`)
+    .option('--type <type>', `Entry type: ${VALID_TYPES.join(', ')} (inferred from ID when omitted)`)
     .option('--id <ids>', 'Load specific entries by ID (comma-separated)')
     .option('--category <cat>', 'Filter by category (e.g. coding, arch, debug, recipe)')
     .option('--keyword <word>', 'Filter entries by keyword in title/body')
@@ -374,20 +375,45 @@ export function registerLoadCommand(program: Command): void {
     .option('--limit <n>', 'Max entries (default: 20 for --list, 10 for load)', '')
     .option('--include-deprecated', 'Include deprecated/superseded entries')
     .option('--json', 'Output as JSON')
-    .action(async (opts) => {
-      const type = opts.type as LoadType;
-      if (!VALID_TYPES.includes(type)) {
+    .action(async (positionalIds: string[] | undefined, opts) => {
+      const positional = (positionalIds ?? [])
+        .flatMap((value: string) => value.split(','))
+        .map((value: string) => value.trim())
+        .filter(Boolean);
+      const declaredType = opts.type as LoadType | undefined;
+      if (declaredType !== undefined && !VALID_TYPES.includes(declaredType)) {
         console.error(`Error: --type must be one of ${VALID_TYPES.join(', ')}`);
         process.exit(1);
       }
 
-      import('../hooks/spec-analytics.js').then(({ logCliEndpoint }) => {
-        logCliEndpoint(process.cwd(), 'load', { type, category: opts.category, id: opts.id, list: opts.list });
-      }).catch(() => {});
-
       const isList = opts.list === true;
       const includeDeprecated = opts.includeDeprecated === true;
-      const ids: string[] = opts.id ? opts.id.split(',').map((s: string) => s.trim()).filter(Boolean) : [];
+      const ids: string[] = [
+        ...(opts.id ? opts.id.split(',').map((s: string) => s.trim()).filter(Boolean) : []),
+        ...positional,
+      ];
+
+      // Canonical IDs carry their own type prefix (knowhow-…, spec:…,
+      // issue-…, session-…), so a bare `maestro load <id>` must not force the
+      // caller to restate --type. --type is only mandatory for browsing.
+      let type = declaredType;
+      if (type === undefined) {
+        if (ids.length === 0) {
+          console.error(
+            `Error: --type is required when browsing (one of ${VALID_TYPES.join(', ')}). `
+            + 'To load by ID: maestro load <id>',
+          );
+          process.exit(1);
+        }
+        // Spec IDs keep the file-backed fast path; every other ID resolves
+        // against the full Wiki index without a declared type. `kg-spec-*`
+        // (dash form) is a KG-projection wiki ID, not a spec file reference.
+        if (ids.every(id => /^(?:spec[:-]|kg-spec:)/i.test(id))) type = 'spec';
+      }
+
+      import('../hooks/spec-analytics.js').then(({ logCliEndpoint }) => {
+        logCliEndpoint(process.cwd(), 'load', { type: type ?? 'auto', category: opts.category, id: opts.id, list: opts.list });
+      }).catch(() => {});
 
       // Architecture templates are global read-only references, not Wiki entries.
       // Keep this path independent from repository resolution, the daemon, and
@@ -426,6 +452,12 @@ export function registerLoadCommand(program: Command): void {
         // instead of asking the daemon for the full Wiki index (which can turn
         // a telemetry-only KG update into a whole-corpus rebuild).
         index = wikiIndexFromDaemon(await loadSpecWikiEntries(targetRepository));
+      } else if (type === undefined) {
+        // Untyped ID lookups always need the whole index: the daemon
+        // selection contract requires a declared type, and positional IDs
+        // may span entry types.
+        index = await withWikiIndexer(undefined, indexer => indexer.get());
+        spawnDaemon(currentRepository.workflowRoot).catch(() => {});
       } else {
         const { authorityKey } = resolveWikiAuthority(currentRepository);
         const selection: DaemonLoadSelection = {
@@ -475,8 +507,11 @@ export function registerLoadCommand(program: Command): void {
           console.error(`Not found or deprecated: ${missing.join(', ')}${suffix}`);
         }
       } else {
+        // Browsing (no IDs) always has a declared type — the early exit above
+        // guarantees it. Narrow once for the filters and labels below.
+        const browseType = type as LoadType;
         let pool = index.entries.filter(e =>
-          matchesType(e, type)
+          matchesType(e, browseType)
           && (includeDeprecated || !isDeprecatedKnowledgeEntry(e))
           && entryMatchesRepository(e, targetRepository, Boolean(opts.repo))
         );
@@ -498,7 +533,7 @@ export function registerLoadCommand(program: Command): void {
           pool = pool.filter(e => e.tags.includes(tag));
         }
 
-        if (type === 'session' || type === 'scratch') {
+        if (browseType === 'session' || browseType === 'scratch') {
           pool.sort((a, b) => new Date(b.updated).getTime() - new Date(a.updated).getTime());
         } else {
           // Content-bearing entries (file-backed or kg nodes with body) sort
@@ -535,7 +570,7 @@ export function registerLoadCommand(program: Command): void {
       }
 
       if (isList) {
-        console.log(`${type}: ${entries.length} entries`);
+        console.log(`${type ?? 'knowledge'}: ${entries.length} entries`);
         for (const e of entries) console.log(formatListLine(e));
         return;
       }
@@ -548,7 +583,7 @@ export function registerLoadCommand(program: Command): void {
 function findEntryForRepository(
   index: WikiIndex,
   id: string,
-  type: LoadType,
+  type: LoadType | undefined,
   target: RepositoryContext,
   originExplicit: boolean,
 ): WikiEntry | null {
@@ -557,7 +592,8 @@ function findEntryForRepository(
   if (!originExplicit) return direct;
   const lower = id.toLowerCase();
   return index.entries.find(entry => {
-    if (!entryMatchesRepository(entry, target, true) || !matchesType(entry, type)) return false;
+    if (!entryMatchesRepository(entry, target, true)) return false;
+    if (type !== undefined && !matchesType(entry, type)) return false;
     const entryId = entry.id.toLowerCase();
     return entryId === lower || entryId.endsWith(`:${lower}`);
   }) ?? null;

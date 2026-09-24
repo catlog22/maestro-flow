@@ -1,3 +1,4 @@
+import { Command } from 'commander';
 import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -12,7 +13,7 @@ import { touchChannel } from '../run/knowledge-identity.js';
 import { createRun } from '../run/runtime.js';
 import type { RunV30, SessionStateV30 } from '../run/schemas.js';
 import { SessionStore } from '../run/store.js';
-import { recordLoadedKnowledge } from './load.js';
+import { recordLoadedKnowledge, registerLoadCommand } from './load.js';
 
 function v2Workspace(root: string): void {
   mkdirSync(join(root, ".workflow"), { recursive: true });
@@ -289,5 +290,24 @@ describe('explicit knowledge load attribution', () => {
       ))).toBe(false);
     }
     expect(await consumptionCount(root)).toBe(1);
+  });
+});
+
+describe('load positional IDs', () => {
+  it('still requires --type when browsing with no IDs', async () => {
+    root = mkdtempSync(join(tmpdir(), 'maestro-load-browse-'));
+    v2Workspace(root);
+    previousCwd = process.cwd();
+    process.chdir(root);
+    const errors: string[] = [];
+    vi.spyOn(console, 'error').mockImplementation(value => { errors.push(String(value)); });
+    vi.spyOn(process, 'exit').mockImplementation(((code?: number) => {
+      throw new Error(`exit:${code}`);
+    }) as typeof process.exit);
+    const program = new Command().name('maestro').exitOverride();
+    registerLoadCommand(program);
+    await expect(program.parseAsync(['node', 'maestro', 'load'])).rejects.toThrow('exit:1');
+    expect(errors.join('\n')).toContain('--type is required when browsing');
+    expect(errors.join('\n')).toContain('maestro load <id>');
   });
 });

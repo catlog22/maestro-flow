@@ -27,6 +27,7 @@ import { projectResumeMapV1 } from '../run/v3/resume-view.js';
 import {
   addV3MutationOptions,
   addV3ReadOptions,
+  applyV3MutationIdentityDefaults,
   assertV3ParticipantIdentity,
   emitV3Error,
   emitV3Success,
@@ -202,13 +203,14 @@ export function registerSessionV3Command(program: Command): void {
 
   addV3ReadOptions(session.command('open <objective>').description('Open a new session/3.0 Session'))
     .requiredOption('--id <id>', 'new Session ID')
-    .requiredOption('--participant <id>', 'participant opening the Session')
-    .requiredOption('--actor <id>', 'authorized actor')
-    .requiredOption('--request-id <id>', 'idempotency request ID')
-    .requiredOption('--reason <text>', 'audit reason')
+    .option('--participant <id>', 'participant opening the Session (default: --actor)')
+    .option('--actor <id>', 'authorized actor (default: $MAESTRO_ACTOR)')
+    .option('--request-id <id>', 'idempotency request ID (default: derived from the invocation)')
+    .option('--reason <text>', 'audit reason (default: cli:<command>)')
     .option('--evidence <ref>', 'evidence reference (repeatable)', (value, previous: string[] = []) => [...previous, value], [])
     .option('--definition-of-done <text>', 'definition of done', '')
     .option('--chain <commands...>', 'initial chain commands')
+    .hook('preAction', applyV3MutationIdentityDefaults)
     .action((objective: string, options: V3CommonOptions & { id: string; definitionOfDone: string; chain?: string[] }) => {
       try {
         assertV3ParticipantIdentity(options);
@@ -230,10 +232,10 @@ export function registerSessionV3Command(program: Command): void {
     .option('--session <id>', 'legacy Session ID (mutually exclusive with --all)')
     .option('--all', 'migrate every non-session/3.0 Session')
     .requiredOption('--to-v3', 'confirm migration to session/3.0')
-    .requiredOption('--participant <id>', 'participant performing the migration; must equal --actor')
-    .requiredOption('--actor <id>', 'authorized actor')
-    .requiredOption('--request-id <id>', 'migration audit request ID')
-    .requiredOption('--reason <text>', 'migration audit reason')
+    .option('--participant <id>', 'participant performing the migration (default: --actor)')
+    .option('--actor <id>', 'authorized actor (default: $MAESTRO_ACTOR)')
+    .option('--request-id <id>', 'migration audit request ID (default: derived from the invocation)')
+    .option('--reason <text>', 'migration audit reason (default: cli:<command>)')
     .option('--expected-identity-revision <n>', 'expected legacy Session identity revision', parseV3Revision)
     .option('--expected-activity-revision <n>', 'expected legacy Session activity revision', parseV3Revision)
     .option('--expected-revisions <json>', 'JSON revisions manifest keyed by Session ID for --all')
@@ -241,6 +243,7 @@ export function registerSessionV3Command(program: Command): void {
     .option('--definition-of-done <text>', 'override definition of done')
     .option('--json', 'emit run-response/1.2 JSON')
     .option('--workflow-root <path>', 'project root containing .workflow', process.cwd())
+    .hook('preAction', applyV3MutationIdentityDefaults)
     .action((options: {
       session?: string; all?: boolean; toV3: boolean; participant: string; actor: string;
       requestId: string; reason: string; evidence?: string[];
@@ -482,4 +485,12 @@ export function registerSessionV3Command(program: Command): void {
       goalRef: options.goalRef, stage: options.stage, decisionRef: options.decisionRef,
     })));
 
+  // Legacy-name stub: `session done` predates session/3.0 and is still issued
+  // by agents trained on the retired surface. Route to `session complete`.
+  session.command('done [args...]', { hidden: true })
+    .allowUnknownOption()
+    .action(() => {
+      console.error("Error: 'maestro session done' is retired. Use 'maestro session complete' instead.");
+      process.exitCode = 1;
+    });
 }

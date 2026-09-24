@@ -12,7 +12,7 @@ The filename is retained for compatibility. Under `session/3.0`, goal/boundary/d
 
 1. Run `maestro capabilities --json`; require the v3 six-key exact contract (`features.session_run_minimal_v3/entity_revision_cas/participant_identity/request_receipts_v2 = true`, `execution_lease/operation_registry = false`, `session_schema_writes` containing `session/3.0`, `execution_schema_writes` empty, `run_response_writes` containing `run-response/1.2`) or fail closed.
 2. Resolve exactly one compatible Session through read-only recall, then read `maestro session status --session {session_id} --json`.
-3. Retain exact `session_id + orchestration_revision` (plus `run_revision` for run-target mutations) and one authorized `actor_id`; pass that same value to `--participant` and `--actor`. Never infer current authority from Session status.
+3. Retain exact `session_id + orchestration_revision` (plus `run_revision` for run-target mutations) and one authorized `actor_id`; pass it to `--actor` (`--participant` defaults to it). Never infer current authority from Session status.
 4. Snapshot current Session objective, boundary contract, sealed Run handoffs, pending chain, decisions, and revision. A completed/archived Session cannot host new Runs until unarchived.
 
 ## 2. Parse and Assess
@@ -33,19 +33,19 @@ Construct the pending-tail chain change in memory:
 
 Do not edit protocol JSON or issue direct chain mutations from a Skill. The orchestrator applies the pending-tail change through the fenced chain surface after Skill assessment:
 
-`maestro session chain replace --session {session_id} --step-id <id> --command <name> --participant {actor_id} --actor {actor_id} --request-id {replace_request_id} --reason "{reason}" --expected-orchestration-revision {orchestration_revision} --json`
+`maestro session chain replace --session {session_id} --step-id <id> --command <name> --actor {actor_id} --expected-orchestration-revision {orchestration_revision} --json`
 
-or `maestro session chain insert --session {session_id} --step-id <id> --command <name> [--arg <value> ...] [--after-step <id>] [--goal-ref <id>] [--stage <name>] [--decision-ref <id>] --participant {actor_id} --actor {actor_id} --request-id {insert_request_id} --reason "{reason}" --expected-orchestration-revision {orchestration_revision} --json` for added steps. Skipping a non-running step uses the fully fenced `session chain skip` form with evidence.
+or `maestro session chain insert --session {session_id} --step-id <id> --command <name> [--arg <value> ...] [--after-step <id>] [--goal-ref <id>] [--stage <name>] [--decision-ref <id>] --actor {actor_id} --expected-orchestration-revision {orchestration_revision} --json` for added steps. Skipping a non-running step uses the fully fenced `session chain skip` form with evidence.
 
 ## 4. Commit the Amendment
 
 After confirmation, dispatch the amended step through the exact fenced call:
 
-`maestro run next --session {session_id} --participant {actor_id} --actor {actor_id} --request-id {next_request_id} --reason "{reason}" --expected-orchestration-revision {orchestration_revision} --json`
+`maestro run next --session {session_id} --actor {actor_id} --expected-orchestration-revision {orchestration_revision} --json`
 
 and complete it with:
 
-`maestro run complete {run_id} --session {session_id} --participant {actor_id} --actor {actor_id} --request-id {complete_request_id} --reason "{reason}" --expected-orchestration-revision {orchestration_revision} --expected-run-revision {run_revision} --verdict {done|done_with_concerns} --advance --json`
+`maestro run complete {run_id} --session {session_id} --actor {actor_id} --expected-orchestration-revision {orchestration_revision} --expected-run-revision {run_revision} --verdict {done|done_with_concerns} --advance --json`
 
 Runtime must atomically validate and seal the Run plus advance the chain step and return `run-response/1.2`. Consume its fresh `orchestration_revision` before continuing. Reject by recording a blocking concern; revise by re-reading `maestro session status` and applying another fenced chain mutation.
 

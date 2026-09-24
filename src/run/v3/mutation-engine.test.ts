@@ -432,7 +432,7 @@ describe('v3 mutation engine', () => {
       operation: 'run-complete-and-seal', status: 'sealed',
       next: {
         suggest_only: true,
-        command: 'maestro run next --session s-1 --participant <actor-id> --actor <actor-id> --request-id <request-id> --reason "<reason>" --expected-orchestration-revision 1 --json',
+        command: 'maestro run next --session s-1 --actor <actor-id> --expected-orchestration-revision 1 --json',
       },
       continuation: {
         operation: 'next', locator: { session_id: 's-1', run_id: null },

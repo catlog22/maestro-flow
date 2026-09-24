@@ -128,7 +128,7 @@ Created:
 
 End the step through the v3 Run lifecycle (no text block output):
 ```
-maestro run complete {run_id} --session {session_id} --participant {actor_id} --actor {actor_id} --request-id {complete_request_id} --reason "complete init Run" --expected-orchestration-revision {orchestration_revision} --expected-run-revision {run_revision} --verdict {VERDICT} [--summary "<summary>"] --advance --json
+maestro run complete {run_id} --session {session_id} --actor {actor_id} --expected-orchestration-revision {orchestration_revision} --expected-run-revision {run_revision} --verdict {VERDICT} [--summary "<summary>"] --advance --json
 ```
 (run-id 由 birth packet 提供 — 自动解析当前 running 步)
 

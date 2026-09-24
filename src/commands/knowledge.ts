@@ -1294,4 +1294,20 @@ export function registerKnowledgeCommand(program: Command): void {
         process.exitCode = 1;
       }
     });
+
+  // Guided stubs: `knowledge` owns lifecycle governance only — retrieval lives
+  // on the top-level `search`/`load` commands. Route the common misroute to a
+  // concrete fix instead of a bare "unknown command".
+  for (const [name, hint] of [
+    ['search', 'maestro search <query> [--type <type>]'],
+    ['load', 'maestro load <id>  or  maestro load --type <type> --id <id>'],
+  ] as const) {
+    knowledge
+      .command(`${name} [args...]`, { hidden: true })
+      .allowUnknownOption()
+      .action(() => {
+        console.error(`Error: 'maestro knowledge ${name}' does not exist. Use '${hint}' instead.`);
+        process.exitCode = 1;
+      });
+  }
 }

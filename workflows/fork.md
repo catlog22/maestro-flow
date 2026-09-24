@@ -156,7 +156,7 @@ Display:
     cd {wtPath}
 
     # Continue session lifecycle:
-    maestro run next --session {sessionId} --participant {actorId} --actor {actorId} --request-id {requestId} --reason "continue forked session" --expected-orchestration-revision {orchestrationRevision} --json
+    maestro run next --session {sessionId} --actor {actorId} --expected-orchestration-revision {orchestrationRevision} --json
 
   Or delegate (automated):
     maestro delegate "run full lifecycle for session" --cd {wtPath} --mode write

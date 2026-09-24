@@ -195,8 +195,8 @@ describe('v3 Run shell', () => {
     const briefResult = brief.result as Record<string, unknown>;
     expect((briefResult.knowledge_context as { path?: string } | null)?.path).toBeTruthy();
     expect((briefResult.next as { command: string }).command).toBe(
-      'maestro run complete run-next --session s-v3 --participant <actor-id> --actor <actor-id> '
-      + '--request-id <request-id> --reason "<reason>" --expected-run-revision 1 '
+      'maestro run complete run-next --session s-v3 --actor <actor-id> '
+      + '--expected-run-revision 1 '
       + '--expected-orchestration-revision 1 --verdict done --advance --json',
     );
     const runDir = join(root, '.workflow', 'sessions', 's-v3', 'runs', 'run-next');

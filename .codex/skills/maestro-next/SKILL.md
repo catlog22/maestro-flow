@@ -251,19 +251,19 @@ Single-run path only. Multi-step execution is handled by `/maestro` (manual) and
 For first-tier steps (those with prepare/ + workflows/ files):
 
 ```bash
-# 1. Open an empty Session; participant and actor are the same identity.
-maestro session open "<objective>" --id YYYYMMDD-<step>-<topic> --participant {actor_id} --actor {actor_id} --request-id {open_request_id} --reason "open single-step Session" --json
+# 1. Open an empty Session; --actor carries the authorized identity (--participant defaults to it).
+maestro session open "<objective>" --id YYYYMMDD-<step>-<topic> --actor {actor_id} --json
 #    Or attach an existing compatible Session read-only first: maestro session status --session {session_id} --json
 
 # 2. Persist the selected step and each required positional command input.
-maestro session chain insert --session {session_id} --step-id {step_id} --command <step> --arg "<domain input>" --participant {actor_id} --actor {actor_id} --request-id {insert_request_id} --reason "add selected step" --expected-orchestration-revision {open_orchestration_revision} --json
+maestro session chain insert --session {session_id} --step-id {step_id} --command <step> --arg "<domain input>" --actor {actor_id} --expected-orchestration-revision {open_orchestration_revision} --json
 
 # 2a. LLM performs pre-task thinking using the prepare guidance embedded in the birth packet.
 
 # 3. Dispatch with the exact revision returned by chain insert.
-maestro run next --session {session_id} --participant {actor_id} --actor {actor_id} --request-id {next_request_id} --reason "dispatch selected step" --expected-orchestration-revision {insert_orchestration_revision} --json
+maestro run next --session {session_id} --actor {actor_id} --expected-orchestration-revision {insert_orchestration_revision} --json
 #    Direct machine-protocol alternative (only for an existing exact step):
-#    maestro run create <step> "<domain input>" --session {session_id} --run {run_id} --step {step_id} --goal "<goal>" --input <ART-id> --participant {actor_id} --actor {actor_id} --request-id {create_request_id} --reason "create selected Run" --expected-orchestration-revision {step_orchestration_revision} --json
+#    maestro run create <step> "<domain input>" --session {session_id} --run {run_id} --step {step_id} --goal "<goal>" --input <ART-id> --actor {actor_id} --expected-orchestration-revision {step_orchestration_revision} --json
 #    Returns: run_id, run_dir, upstream, resolved task, entry blockers, and structured executable continuation
 
 # 3a. Entry blocker degradation (execute-specific)
@@ -291,7 +291,7 @@ maestro run next --session {session_id} --participant {actor_id} --actor {actor_
 
 # 6. Check and complete the run
 maestro run check {run_id} --session {session_id} --json
-maestro run complete {run_id} --session {session_id} --participant {actor_id} --actor {actor_id} --request-id {complete_request_id} --reason "complete selected step" --expected-orchestration-revision {orchestration_revision} --expected-run-revision {run_revision} --verdict done --advance --json
+maestro run complete {run_id} --session {session_id} --actor {actor_id} --expected-orchestration-revision {orchestration_revision} --expected-run-revision {run_revision} --verdict done --advance --json
 ```
 
 After `run complete --advance`: re-infer lifecycle and surface the natural next step as a continuation hint — stepwise multi-step work proceeds by re-invoking `/maestro-next` or `/maestro -c`.

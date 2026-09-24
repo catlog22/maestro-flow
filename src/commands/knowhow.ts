@@ -47,8 +47,9 @@ export function registerKnowhowCommand(program: Command): void {
   knowhow
     .command('add')
     .description('Create a new knowhow entry')
-    .requiredOption('--type <type>', 'session|tip|template|recipe|reference|decision|asset|blueprint|document')
+    .requiredOption('--type <type>', 'session|tip|template|recipe|reference|decision|asset|blueprint|document|spec')
     .requiredOption('--title <title>', 'Entry title')
+    .option('--category <cat>', 'Required when --type spec: coding|arch|debug|test|review|learning|ui')
     .option('--content <text>', 'Canonical entry content (markdown)')
     .option('--content-file <path>', 'Read canonical content from file')
     .option('--body <text>', '[deprecated] Alias for --content')
@@ -75,8 +76,8 @@ export function registerKnowhowCommand(program: Command): void {
       }
 
       const type = opts.type as string;
-      if (!CATEGORIES.includes(type as any)) {
-        console.error(`Unknown type: ${type}. Must be one of: ${CATEGORIES.join(', ')}`);
+      if (type !== 'spec' && !CATEGORIES.includes(type as any)) {
+        console.error(`Unknown type: ${type}. Must be one of: ${CATEGORIES.join(', ')}, spec`);
         process.exitCode = 1;
         return;
       }
@@ -86,6 +87,52 @@ export function registerKnowhowCommand(program: Command): void {
         ? readFileSync(contentFile, 'utf-8')
         : (opts.content ?? opts.body);
       try {
+        if (type === 'spec') {
+          // Spec entries are injectable index entries living in
+          // .workflow/specs/<category>.md — route to the spec writer instead
+          // of creating a knowhow document.
+          const { appendSpecEntry } = await import('../tools/spec-writer.js');
+          const { VALID_CATEGORIES } = await import('../tools/spec-entry-parser.js');
+          if (opts.id || opts.decisionState || opts.tool || opts.language) {
+            console.error('Error: --id, --decision-state, --tool and --language do not apply to --type spec');
+            process.exitCode = 1;
+            return;
+          }
+          if (!VALID_CATEGORIES.includes(opts.category)) {
+            console.error(`Error: --type spec requires --category <cat> (one of ${VALID_CATEGORIES.join(', ')})`);
+            process.exitCode = 1;
+            return;
+          }
+          const projectRoot = getProjectRoot();
+          const context = opts.repo
+            ? resolveRepositoryContext(opts.repo, {
+              projectRoot,
+              require: { mode: 'write', corpus: 'spec' },
+            })
+            : resolveRepositoryContext('current', { projectRoot });
+          const appliesToRepoIds = resolveRepositorySelectorIds(opts.appliesToRepo ?? [], { projectRoot });
+          const keywords = typeof opts.keywords === 'string'
+            ? opts.keywords.split(',').map((word: string) => word.trim()).filter(Boolean)
+            : [];
+          const result = appendSpecEntry(
+            context.projectRoot, opts.category, opts.title, content, keywords,
+            opts.sourceRef, 'project', undefined, undefined, undefined,
+            { operationContext: context, relatedPaths: opts.relatedPath, appliesToRepoIds },
+          );
+          if (!result.ok) {
+            console.error(`Error: failed to add spec entry "${opts.title}"`);
+            process.exitCode = 1;
+            return;
+          }
+          if (result.duplicate) console.log(`⚠ Skipped duplicate: "${result.title}" already exists in ${result.file}`);
+          else console.log(`✓ Added to ${result.file} [${result.category}] "${result.title}"`);
+          if (!result.duplicate) {
+            const { invalidateSearchIndex } = await import('../search/daemon-client.js');
+            invalidateSearchIndex(context.workflowRoot).catch(() => {});
+          }
+          return;
+        }
+
         const projectRoot = getProjectRoot();
         const context = opts.repo
           ? resolveRepositoryContext(opts.repo, {

@@ -355,7 +355,7 @@ if (jsonHelpMode) {
   console.error('    Codex:        $maestro "your intent"');
   console.error();
   console.error('  Or use a CLI subcommand directly:');
-  console.error('    maestro run start|status|next|brief|check|done');
+  console.error('    maestro run next|brief|check|complete');
   console.error('    maestro delegate "prompt" --to <tool>');
   console.error('    maestro explore "prompt"');
   console.error();

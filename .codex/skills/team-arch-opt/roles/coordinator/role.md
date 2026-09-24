@@ -106,11 +106,11 @@ TEXT-LEVEL ONLY. No source code reading.
 
 After session folder creation and before role-spec generation:
 
-1. **Resolve Run** (birth-packet first): if the dispatch context already carries `run_id` / `run_dir` (injected by an orchestrator), store them in `team-session.json` and skip self-start — a second allocation mints a duplicate Run. Otherwise execute this receipt-chained self-start recipe; `{open_request_id}`, `{insert_request_id}`, and `{next_request_id}` are distinct stable IDs, and every revision comes from the immediately preceding receipt:
+1. **Resolve Run** (birth-packet first): if the dispatch context already carries `run_id` / `run_dir` (injected by an orchestrator), store them in `team-session.json` and skip self-start — a second allocation mints a duplicate Run. Otherwise execute this receipt-chained self-start recipe; every revision comes from the immediately preceding receipt and `--actor` carries the authorized identity (`--participant` defaults to it; the CLI derives a stable request ID per distinct invocation):
    ```bash
-   maestro session open "<task summary>" --id <slug> --participant {actor_id} --actor {actor_id} --request-id {open_request_id} --reason "open self-started team-arch-opt Session" --json
-   maestro session chain insert --session {session_id} --step-id {step_id} --command team-arch-opt --arg "<task summary>" --participant {actor_id} --actor {actor_id} --request-id {insert_request_id} --reason "add team-arch-opt task" --expected-orchestration-revision {open_orchestration_revision} --json
-   maestro run next --session {session_id} --participant {actor_id} --actor {actor_id} --request-id {next_request_id} --reason "dispatch team-arch-opt task" --expected-orchestration-revision {insert_orchestration_revision} --json
+   maestro session open "<task summary>" --id <slug> --actor {actor_id} --json
+   maestro session chain insert --session {session_id} --step-id {step_id} --command team-arch-opt --arg "<task summary>" --actor {actor_id} --expected-orchestration-revision {open_orchestration_revision} --json
+   maestro run next --session {session_id} --actor {actor_id} --expected-orchestration-revision {insert_orchestration_revision} --json
    ```
    - Slug format: `YYYYMMDD-team-arch-opt-<topic>` (ASCII, ≤64 chars)
    - Store returned `run_id` and `run_dir` in `team-session.json`:

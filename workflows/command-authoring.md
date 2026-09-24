@@ -323,13 +323,13 @@ Next steps:
 
 ### Orchestrated Run completion
 
-An executor reports `run_id`, check state, artifacts, summary, concerns, and optional proposal path to the orchestrator. It MUST NOT complete or mutate the Session itself. The orchestrator consumes the exact birth/check receipt, uses one actor identity for both participant fields, and maps a successful result to:
+An executor reports `run_id`, check state, artifacts, summary, concerns, and optional proposal path to the orchestrator. It MUST NOT complete or mutate the Session itself. The orchestrator consumes the exact birth/check receipt, supplies the authorized identity via `--actor` (`--participant` defaults to it), and maps a successful result to:
 
 ```
-maestro run complete {run_id} --session {session_id} --participant {actor_id} --actor {actor_id} --request-id {complete_request_id} --reason "complete orchestrated Run" [--evidence <path> ...] --expected-orchestration-revision {orchestration_revision} --expected-run-revision {run_revision} --verdict {done|done_with_concerns} [--summary "..."] --advance --json
+maestro run complete {run_id} --session {session_id} --actor {actor_id} [--evidence <path> ...] --expected-orchestration-revision {orchestration_revision} --expected-run-revision {run_revision} --verdict {done|done_with_concerns} [--summary "..."] --advance --json
 ```
 
-Every mutation uses a distinct stable request ID and the exact revision returned by the immediately preceding receipt. A hard external blocker uses fully specified `maestro run transition {run_id} blocked --session {session_id} --participant {actor_id} --actor {actor_id} --request-id {blocked_request_id} --reason "<reason>" --expected-run-revision {run_revision} --json`; an abandoned attempt uses the equivalently fenced `maestro run cancel`. A typed chain proposal is never applied implicitly by completion: the orchestrator validates it and applies its operations through receipt-chained `session chain insert|replace|skip` mutations.
+Every mutation uses a distinct stable request ID and the exact revision returned by the immediately preceding receipt. A hard external blocker uses fully specified `maestro run transition {run_id} blocked --session {session_id} --actor {actor_id} --expected-run-revision {run_revision} --json`; an abandoned attempt uses the equivalently fenced `maestro run cancel`. A typed chain proposal is never applied implicitly by completion: the orchestrator validates it and applies its operations through receipt-chained `session chain insert|replace|skip` mutations.
 
 `--evidence` / `--artifact` paths resolve relative to the **Run directory**, not the shell CWD, and must stay inside it — pass run-relative paths (e.g. `outputs/…`) or absolute paths within the Run directory.
 

@@ -13,14 +13,14 @@ describe('v3 continuation contracts', () => {
       sessionId: 'session-1', orchestrationRevision: 7, reason: 'dispatch the next Run',
     });
     expect(contract.next.command).toBe(
-      'maestro run next --session session-1 --participant <actor-id> --actor <actor-id> '
-      + '--request-id <request-id> --reason "<reason>" --expected-orchestration-revision 7 --json',
+      'maestro run next --session session-1 --actor <actor-id> '
+      + '--expected-orchestration-revision 7 --json',
     );
     expect(v3ContinuationMetadataSchema.parse(contract.continuation)).toEqual({
       operation: 'next',
       locator: { session_id: 'session-1', run_id: null },
       revision_requirements: { expected_orchestration_revision: 7, expected_run_revision: null },
-      required_caller_fields: ['participant', 'actor', 'request_id', 'reason'],
+      required_caller_fields: ['actor'],
     });
   });
 
@@ -30,12 +30,12 @@ describe('v3 continuation contracts', () => {
       reason: 'resolve the gate',
     });
     expect(contract.next.command).toBe(
-      'maestro run decide gate-1 --session session-1 --participant <actor-id> --actor <actor-id> '
-      + '--request-id <request-id> --reason "<reason>" --expected-orchestration-revision 8 '
+      'maestro run decide gate-1 --session session-1 --actor <actor-id> '
+      + '--expected-orchestration-revision 8 '
       + '--verdict <verdict> --json',
     );
     expect(contract.continuation.required_caller_fields).toEqual([
-      'participant', 'actor', 'request_id', 'reason', 'verdict',
+      'actor', 'verdict',
     ]);
   });
 
@@ -50,7 +50,7 @@ describe('v3 continuation contracts', () => {
       operation: 'next',
       locator: { session_id: 'session-1', run_id: null, execution_id: 'legacy' },
       revision_requirements: { expected_orchestration_revision: 7, expected_run_revision: null },
-      required_caller_fields: ['participant', 'actor', 'request_id', 'reason'],
+      required_caller_fields: ['actor'],
     })).toThrow();
   });
 });

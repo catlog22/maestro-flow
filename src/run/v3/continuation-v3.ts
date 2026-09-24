@@ -46,10 +46,12 @@ export interface V3NextContract {
   continuation: V3ContinuationMetadata;
 }
 
-const MUTATION_CALLER_TEMPLATE = '--participant <actor-id> --actor <actor-id> '
-  + '--request-id <request-id> --reason "<reason>"';
+// Caller flags other than --actor carry safe defaults (--participant falls
+// back to --actor, --request-id derives from the invocation, --reason defaults
+// to cli:<command>), so emitted commands only require the actor identity.
+const MUTATION_CALLER_TEMPLATE = '--actor <actor-id>';
 const MUTATION_CALLER_FIELDS: V3RequiredCallerField[] = [
-  'participant', 'actor', 'request_id', 'reason',
+  'actor',
 ];
 
 function metadata(input: {

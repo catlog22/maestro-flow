@@ -13,9 +13,7 @@ const COMMON_REQUIRED = [
   'participant_identity',
   'request_receipts_v2',
   'session_schema_writes',
-  '--request-id',
   '--expected-orchestration-revision',
-  '--participant',
   '--actor',
   'maestro session status',
 ];
@@ -62,59 +60,59 @@ const CANONICAL_FORBIDDEN = [
 
 const EXECUTION_MUTATIONS = {
   'maestro session open': [
-    '--id', '--participant', '--actor', '--request-id', '--reason', '--json',
+    '--id', '--actor', '--json',
   ],
   'maestro session chain insert': [
-    '--session', '--step-id', '--command', '--participant', '--actor', '--request-id', '--reason',
+    '--session', '--step-id', '--command', '--actor',
     '--expected-orchestration-revision', '--json',
   ],
   'maestro session chain replace': [
-    '--session', '--step-id', '--command', '--participant', '--actor', '--request-id', '--reason',
+    '--session', '--step-id', '--command', '--actor',
     '--expected-orchestration-revision', '--json',
   ],
   'maestro session chain update': [
-    '--session', '--step-id', '--participant', '--actor', '--request-id', '--reason',
+    '--session', '--step-id', '--actor',
     '--expected-orchestration-revision', '--json',
   ],
   'maestro session chain skip': [
-    '--session', '--step-id', '--participant', '--actor', '--request-id', '--reason', '--evidence',
+    '--session', '--step-id', '--actor', '--evidence',
     '--expected-orchestration-revision', '--json',
   ],
   'maestro session complete': [
-    '--session', '--participant', '--actor', '--request-id', '--reason',
+    '--session', '--actor',
     '--expected-orchestration-revision', '--json',
   ],
   'maestro session migrate': [
-    '--session', '--to-v3', '--participant', '--actor', '--request-id', '--reason',
+    '--session', '--to-v3', '--actor',
     '--expected-identity-revision', '--expected-activity-revision', '--json',
   ],
   'maestro run next': [
-    '--session', '--participant', '--actor', '--request-id', '--reason',
+    '--session', '--actor',
     '--expected-orchestration-revision', '--json',
   ],
   'maestro run create': [
-    '--session', '--run', '--step', '--participant', '--actor', '--request-id', '--reason',
+    '--session', '--run', '--step', '--actor',
     '--expected-orchestration-revision', '--json',
   ],
   'maestro run complete': [
     '--session', '--advance', '--verdict', '--expected-run-revision', '--expected-orchestration-revision',
-    '--participant', '--actor', '--request-id', '--reason', '--json',
+    '--actor', '--json',
   ],
   'maestro run decide': [
     '--session', '--verdict', '--confidence', '--expected-orchestration-revision',
-    '--participant', '--actor', '--request-id', '--reason', '--json',
+    '--actor', '--json',
   ],
   'maestro run cancel': [
     '--session', '--expected-run-revision', '--expected-orchestration-revision',
-    '--participant', '--actor', '--request-id', '--reason', '--json',
+    '--actor', '--json',
   ],
   'maestro run transition': [
     '--session', '--expected-run-revision',
-    '--participant', '--actor', '--request-id', '--reason', '--json',
+    '--actor', '--json',
   ],
   'maestro artifact republish': [
     '--session', '--assessment-hash', '--consumer', '--alias', '--expected-artifact-revision',
-    '--expected-orchestration-revision', '--participant', '--actor', '--request-id', '--reason', '--json',
+    '--expected-orchestration-revision', '--actor', '--json',
   ],
 };
 

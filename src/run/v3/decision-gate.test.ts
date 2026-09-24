@@ -114,7 +114,7 @@ describe('v3 decision gates', () => {
         operation: 'run-decide',
         locator: { session_id: 's-1', run_id: null },
         revision_requirements: { expected_orchestration_revision: 2, expected_run_revision: null },
-        required_caller_fields: ['participant', 'actor', 'request_id', 'reason', 'verdict'],
+        required_caller_fields: ['actor', 'verdict'],
       },
       next: { command: expect.stringContaining('maestro run decide P-1') },
     });

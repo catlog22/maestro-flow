@@ -1,7 +1,7 @@
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { join, resolve } from 'node:path';
-import { InvalidArgumentError, type Command } from 'commander';
+import { InvalidArgumentError, type Command, type Option } from 'commander';
 
 import type { RunOperationV12, RunResponseV12, TransitionReceiptV20 } from '../run/protocol-schemas.js';
 import { createRunResponseError, createRunResponseSuccess, emitRunResponse, stableRunResponseErrorCodeV12 } from '../run/response.js';
@@ -63,19 +63,77 @@ export function assertV3ParticipantIdentity(options: { participant: string; acto
   }
 }
 
+export function applyV3MutationIdentityDefaults(thisCommand: Command): void {
+  const opts = thisCommand.opts() as {
+    session?: string; participant?: string; actor?: string;
+    requestId?: string; reason?: string;
+  };
+  // An explicit --participant wins over $MAESTRO_ACTOR for --actor's default:
+  // the participant/actor equality contract then still validates a caller
+  // that mixed explicit identities.
+  if (!opts.actor) {
+    const envActor = process.env.MAESTRO_ACTOR?.trim();
+    opts.actor = opts.participant ?? (envActor ? envActor : undefined);
+  }
+  if (!opts.participant) opts.participant = opts.actor;
+  if (!opts.actor) {
+    thisCommand.error(
+      "error: required option '--actor <id>' not specified (or set MAESTRO_ACTOR)",
+      { code: 'commander.missingMandatoryOptionValue' },
+    );
+  }
+  const commandPath = [thisCommand.parent?.name(), thisCommand.name()]
+    .filter((part): part is string => Boolean(part))
+    .join(' ');
+  if (!opts.reason) opts.reason = `cli:${commandPath}`;
+  if (!opts.requestId) {
+    // Deterministic idempotency key: the same invocation retried verbatim
+    // derives the same request ID and replays; any changed input (including
+    // positional args like <run-id> or a different --summary) produces a
+    // different key. Explicit --request-id is untouched.
+    const fingerprint = JSON.stringify({
+      command: commandPath,
+      args: thisCommand.processedArgs,
+      opts,
+    });
+    opts.requestId = `cli-${createHash('sha256').update(fingerprint).digest('hex').slice(0, 16)}`;
+  }
+}
+
 export function addV3MutationOptions(command: Command, target: 'run' | 'orchestration'): Command {
+  // Identity/context flags carry safe defaults so a mutation needs only its
+  // revision fence: --participant falls back to --actor, --actor to
+  // $MAESTRO_ACTOR, --reason to "cli:<command>", --request-id to a hash of the
+  // invocation (identical retries replay instead of duplicating), and
+  // --session resolves through the standard unique-open/current-binding path
+  // in resolveV3Options.
   const configured = command
-    .requiredOption('--session <id>', 'exact Session ID')
+    .option('--session <id>', 'Session ID (default: unique open Session or current binding)')
     .option('--json', 'emit run-response/1.2 JSON')
     .option('--workflow-root <path>', 'project root containing .workflow', process.cwd())
-    .requiredOption('--participant <id>', 'participant performing the mutation; must equal --actor')
-    .requiredOption('--actor <id>', 'authorized actor')
-    .requiredOption('--request-id <id>', 'idempotency request ID')
-    .requiredOption('--reason <text>', 'audit reason')
+    .option('--participant <id>', 'participant performing the mutation (default: --actor)')
+    .option('--actor <id>', 'authorized actor (default: $MAESTRO_ACTOR)')
+    .option('--request-id <id>', 'idempotency request ID (default: derived from the invocation)')
+    .option('--reason <text>', 'audit reason (default: cli:<command>)')
     .option('--evidence <ref>', 'evidence reference (repeatable)', collectV3, []);
-  return target === 'run'
+  const revised = target === 'run'
     ? configured.requiredOption('--expected-run-revision <n>', 'expected Run revision', parseV3Revision)
     : configured.requiredOption('--expected-orchestration-revision <n>', 'expected Session orchestration revision', parseV3Revision);
+  revised.hook('preAction', applyV3MutationIdentityDefaults);
+  // Report every missing mandatory option in one error instead of forcing
+  // callers to discover them one retry at a time.
+  (revised as unknown as { missingMandatoryOptionValue(option: Option): void })
+    .missingMandatoryOptionValue = function (this: Command, option: Option): void {
+      const missing = this.options
+        .filter(o => o.mandatory && this.getOptionValue(o.attributeName()) === undefined)
+        .map(o => o.flags);
+      this.error(
+        `error: required option${missing.length > 1 ? 's' : ''} ${missing.map(f => `'${f}'`).join(', ')} not specified\n`
+        + '  optional with defaults: --session, --participant (= --actor), '
+        + '--actor ($MAESTRO_ACTOR), --request-id (derived), --reason (cli:<command>)',
+      );
+    };
+  return revised;
 }
 
 export function v3Store(options: { workflowRoot: string }): SessionStore {
@@ -132,6 +190,32 @@ export function emitV3Success(input: {
   result: unknown;
   mutation?: V3MutationResult;
 }): void {
+  // `result` is schema-free (z.unknown()), so object results can carry a
+  // grep-friendly one-line summary without touching the strict envelope.
+  // Callers get session/run/revision/next without JSON-parsing the payload.
+  let result = input.result;
+  if (result !== null && typeof result === 'object' && !Array.isArray(result)) {
+    const record = result as Record<string, unknown>;
+    const nextCommand = (() => {
+      const readCommand = (value: unknown): string | null =>
+        value !== null && typeof value === 'object' && !Array.isArray(value)
+          && typeof (value as Record<string, unknown>).command === 'string'
+          ? (value as Record<string, unknown>).command as string
+          : null;
+      const direct = readCommand(record.next);
+      if (direct) return direct;
+      return readCommand((record.continuation as Record<string, unknown> | null)?.next);
+    })();
+    const summaryLine = [
+      `${input.operation} ok`,
+      input.sessionId ? `session=${input.sessionId}` : null,
+      input.runId ? `run=${input.runId}` : null,
+      input.mutation ? `rev=${input.mutation.transition.revision_after}` : null,
+      input.requestId ? `req=${input.requestId}` : null,
+      nextCommand ? `next="${nextCommand}"` : null,
+    ].filter((part): part is string => Boolean(part)).join(' · ');
+    result = { summary_line: summaryLine, ...record };
+  }
   emitRunResponse(createRunResponseSuccess({
     schema_version: 'run-response/1.2',
     operation: input.operation,
@@ -142,7 +226,7 @@ export function emitV3Success(input: {
       ? { status: input.mutation.status, transition_id: input.mutation.transition.transition_id }
       : null,
     warnings: [],
-    result: input.result,
+    result,
   }));
 }
 

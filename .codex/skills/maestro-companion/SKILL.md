@@ -79,12 +79,12 @@ Linear: resolve Session identity -> dispatch Run -> explore -> confirm -> do -> 
 
 ### 1. Create
 
-Follow the self-start flow in `run-mode.md`. Negotiate capabilities, then execute the three receipt-chained mutations below. `{open_request_id}`, `{insert_request_id}`, and `{next_request_id}` are distinct stable IDs; use the exact `session_id` and `orchestration_revision` returned by each preceding receipt. Participant and actor are the same authorized identity.
+Follow the self-start flow in `run-mode.md`. Negotiate capabilities, then execute the three receipt-chained mutations below. `--actor` carries the authorized identity (`--participant` defaults to it); use the exact `session_id` and `orchestration_revision` returned by each preceding receipt.
 
 ```bash
-maestro session open "<intent>" --id <slug> --participant {actor_id} --actor {actor_id} --request-id {open_request_id} --reason "open self-started Companion Session" --json
-maestro session chain insert --session {session_id} --step-id {step_id} --command companion --arg "<intent>" --participant {actor_id} --actor {actor_id} --request-id {insert_request_id} --reason "add Companion task" --expected-orchestration-revision {open_orchestration_revision} --json
-maestro run next --session {session_id} --participant {actor_id} --actor {actor_id} --request-id {next_request_id} --reason "dispatch Companion task" --expected-orchestration-revision {insert_orchestration_revision} --json
+maestro session open "<intent>" --id <slug> --actor {actor_id} --json
+maestro session chain insert --session {session_id} --step-id {step_id} --command companion --arg "<intent>" --actor {actor_id} --expected-orchestration-revision {open_orchestration_revision} --json
+maestro run next --session {session_id} --actor {actor_id} --expected-orchestration-revision {insert_orchestration_revision} --json
 ```
 
 The Session objective is metadata; `session chain insert --arg "<intent>"` supplies Companion's positional domain text. Never pass task prose through `--input`; that option accepts only sealed same-Session Artifact IDs. Consume the `run next` birth packet's `task` and structured `continuation`, and retain its exact Run locator and revisions.

@@ -116,7 +116,7 @@ Note: maestro-next suggests `--complete` when 'Tests green + active session'. Or
 **2c. Complete the Session**
 
 1. Use the `orchestration_revision` captured in Step 0 (re-read if any mutation happened since)
-2. When the chain is terminal (every Run sealed, every decision terminal), call the complete `maestro session complete` command from `run-mode.md`, supplying the exact `session_id`, `--participant`, `--actor`, `--request-id`, `--reason`, `--expected-orchestration-revision`, and `--json`
+2. When the chain is terminal (every Run sealed, every decision terminal), call the complete `maestro session complete` command from `run-mode.md`, supplying the exact `session_id`, `--actor`, `--expected-orchestration-revision`, and `--json`
 3. Verify the transition receipt; never mutate Session lifecycle state or edit runtime-owned protocol JSON. The completed Session identity remains durable and may be archived/unarchived later
 
 **2d. DAG progression**
@@ -136,14 +136,14 @@ Note: maestro-next suggests `--complete` when 'Tests green + active session'. Or
 
 1. Verify status is `completed` or `failed` (an `open` Session must `--complete` or fail first; `archived` is already archived)
 2. Call the fenced transition with the current `orchestration_revision`:
-   `maestro session archive --session {session_id} --participant {actor_id} --actor {actor_id} --request-id {archive_request_id} --reason "<reason>" [--evidence <ref> ...] --expected-orchestration-revision {orchestration_revision} --json`
+   `maestro session archive --session {session_id} --actor {actor_id} [--evidence <ref> ...] --expected-orchestration-revision {orchestration_revision} --json`
 3. Verify the `run-response/1.2` receipt (`status: archived`, revision incremented). Archived Sessions reject all mutations (`create_run`/`advance_chain`/`transition_run`/`add_evidence`/`decide`) until `--unarchive`
 
 ### Step 4: Unarchive (`--unarchive`) — return to open
 
 1. Verify status is `archived`
 2. Call the fenced transition:
-   `maestro session unarchive --session {session_id} --participant {actor_id} --actor {actor_id} --request-id {unarchive_request_id} --reason "<reason>" [--evidence <ref> ...] --expected-orchestration-revision {orchestration_revision} --json`
+   `maestro session unarchive --session {session_id} --actor {actor_id} [--evidence <ref> ...] --expected-orchestration-revision {orchestration_revision} --json`
 3. Verify the receipt (`status: open`). The Session accepts Runs and chain mutations again; extend it with `maestro session chain insert ...` and `maestro run next`
 
 ### Step 5: Knowledge only (`--knowledge`)
@@ -196,6 +196,6 @@ Status: DONE
 - [ ] Reconciliation dispositions reviewed; unresolved items were explicitly retained or resolved
 - [ ] User reviewed candidates, or pending backlog was reported and deliberately retained
 - [ ] Selected knowledge promoted only through `maestro knowledge promote`
-- [ ] Lifecycle mutations used the fenced v3 command set (`--participant/--actor/--request-id/--reason/--expected-orchestration-revision/--json`) and the transition receipt was verified
+- [ ] Lifecycle mutations used the fenced v3 command set (`--actor`, `--expected-orchestration-revision`, `--json`) and the transition receipt was verified
 - [ ] Dep-ready sessions identified and activation offered (on `--complete`)
 </success_criteria>

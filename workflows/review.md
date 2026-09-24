@@ -302,9 +302,9 @@ Completion disposition:
 
 | BLOCK routing | Completion |
 |---|---|
-| valid proposal emitted | orchestrator validates the proposal, applies each pending-tail operation through receipt-chained fenced `maestro session chain insert`, then runs `maestro run complete {run_id} --session {session_id} --participant {actor_id} --actor {actor_id} --request-id {complete_request_id} --reason "complete review with repair proposal" --expected-orchestration-revision {orchestration_revision} --expected-run-revision {run_revision} --verdict done_with_concerns --advance --json` |
+| valid proposal emitted | orchestrator validates the proposal, applies each pending-tail operation through receipt-chained fenced `maestro session chain insert`, then runs `maestro run complete {run_id} --session {session_id} --actor {actor_id} --expected-orchestration-revision {orchestration_revision} --expected-run-revision {run_revision} --verdict done_with_concerns --advance --json` |
 | immediate formal decision follows | complete the review Run with the same fully fenced form and `done_with_concerns`, consume the fresh receipt, then submit the gate through the structured `continuation`'s exact fenced `maestro run decide` contract |
-| neither is available | run `maestro run transition {run_id} blocked --session {session_id} --participant {actor_id} --actor {actor_id} --request-id {blocked_request_id} --reason "BLOCK has no valid repair route" --expected-run-revision {run_revision} --json`; do not advance the pre-existing tail |
+| neither is available | run `maestro run transition {run_id} blocked --session {session_id} --actor {actor_id} --expected-run-revision {run_revision} --json`; do not advance the pre-existing tail |
 
 ---
 

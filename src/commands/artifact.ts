@@ -7,6 +7,7 @@ import { republishArtifactLegacy } from '../run/runtime.js';
 import { SessionStore } from '../run/store.js';
 import { republishArtifactV3 } from '../run/v3/mutation-engine.js';
 import {
+  applyV3MutationIdentityDefaults,
   assertV3ParticipantIdentity,
   collectV3,
   emitV3Error,
@@ -81,14 +82,15 @@ export function registerArtifactCommand(program: Command): void {
 
   addReadOptions(artifact.command('republish <artifact-id>').description('Publish audited compatibility authority without rewriting the source'))
     .requiredOption('--assessment-hash <sha256>', 'exact inspect assessment hash')
-    .requiredOption('--request-id <id>', 'idempotency request ID')
+    .option('--request-id <id>', 'idempotency request ID (default: derived from the invocation)')
     .requiredOption('--expected-artifact-revision <n>', 'expected Artifact registry revision', parseV3Revision)
     .option('--expected-orchestration-revision <n>', 'expected Session orchestration revision', parseV3Revision)
     .option('--expected-session-revision <n>', 'deprecated alias of --expected-orchestration-revision', parseV3Revision)
-    .requiredOption('--participant <id>', 'participant performing the mutation')
-    .requiredOption('--actor <id>', 'authorized actor')
-    .requiredOption('--reason <text>', 'audit reason')
+    .option('--participant <id>', 'participant performing the mutation (default: --actor)')
+    .option('--actor <id>', 'authorized actor (default: $MAESTRO_ACTOR)')
+    .option('--reason <text>', 'audit reason (default: cli:<command>)')
     .option('--evidence <ref>', 'evidence reference (repeatable)', collectV3, [])
+    .hook('preAction', applyV3MutationIdentityDefaults)
     .action((artifactId: string, options: ArtifactRepublishCliOptions) => {
       try {
         assertV3ParticipantIdentity(options);

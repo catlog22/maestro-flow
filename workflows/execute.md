@@ -32,11 +32,11 @@ IF latest-review (review-findings) is available:
   count findings with actionable fix scope
   IF ≤3 findings AND each touches ≤2 files:
     → Companion path: write report.md with degradation note,
-      run `maestro run cancel {run_id} --session {session_id} --participant {actor_id} --actor {actor_id} --request-id {cancel_request_id} --reason "reroute execute attempt to Companion" --expected-run-revision {run_revision} --expected-orchestration-revision {orchestration_revision} --json`,
+      run `maestro run cancel {run_id} --session {session_id} --actor {actor_id} --expected-run-revision {run_revision} --expected-orchestration-revision {orchestration_revision} --json`,
       then surface: /maestro-companion "<finding summaries as intent>"
   ELSE:
     → Odyssey planex path: write report.md with degradation note,
-      run `maestro run cancel {run_id} --session {session_id} --participant {actor_id} --actor {actor_id} --request-id {cancel_request_id} --reason "reroute execute attempt to Odyssey planex" --expected-run-revision {run_revision} --expected-orchestration-revision {orchestration_revision} --json`,
+      run `maestro run cancel {run_id} --session {session_id} --actor {actor_id} --expected-run-revision {run_revision} --expected-orchestration-revision {orchestration_revision} --json`,
       then surface: /odyssey-planex "<review findings as requirement>"
 
 ELSE IF latest-debug (diagnosis) is available AND fix-directions present:
@@ -48,10 +48,10 @@ ELSE IF latest-debug (diagnosis) is available AND fix-directions present:
 ELSE:
   → E001: No plan and no alternative upstream. Abort.
     Write report.md with verdict: blocked, summary: "No current-plan; run plan first"
-    run `maestro run transition {run_id} blocked --session {session_id} --participant {actor_id} --actor {actor_id} --request-id {blocked_request_id} --reason "current-plan and alternative upstream are absent" --expected-run-revision {run_revision} --json`
+    run `maestro run transition {run_id} blocked --session {session_id} --actor {actor_id} --expected-run-revision {run_revision} --json`
 ```
 
-**Degradation transition protocol**: cancellation or blocked transition preserves the attempted Run without claiming completion. Each mutation uses a unique stable request ID, `participant == actor`, the exact Run revision from the latest birth/check receipt, and the explicit Session locator. A cancelled/failed attempt leaves its chain step pending; do not allocate a retry implicitly. report.md MUST note: (1) why degradation was triggered, (2) which upstream was available, (3) the target command. The `next` field in report frontmatter points to the degradation target.
+**Degradation transition protocol**: cancellation or blocked transition preserves the attempted Run without claiming completion. Each mutation uses the exact Run revision from the latest birth/check receipt, and the explicit Session locator. A cancelled/failed attempt leaves its chain step pending; do not allocate a retry implicitly. report.md MUST note: (1) why degradation was triggered, (2) which upstream was available, (3) the target command. The `next` field in report frontmatter points to the degradation target.
 
 **Never proceed to Step 1+ without a plan.** The execution machinery below requires a normalized in-memory execution model. A structured Maestro plan supplies it directly; a `plan/1.0` artifact with `source_format: pi-markdown` must first be normalized from its authoritative Markdown as specified in Step 2.
 
