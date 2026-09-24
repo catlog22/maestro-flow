@@ -13,6 +13,7 @@ import {
   readdirSync,
   statSync,
   copyFileSync,
+  chmodSync,
   readFileSync,
   writeFileSync,
   renameSync,
@@ -564,6 +565,26 @@ import type { CopyStats } from '../core/tag-injector.js';
 // Recursive copy with manifest tracking
 // ---------------------------------------------------------------------------
 
+/**
+ * Windows: CopyFileW refuses to overwrite a read-only destination
+ * (ERROR_ACCESS_DENIED → EPERM). Clear the attribute and retry once.
+ * Sources like vendored git pack files carry the read-only bit through
+ * the first copy, so every subsequent reinstall hits this path.
+ */
+export function copyFileOverwrite(src: string, dest: string): void {
+  try {
+    copyFileSync(src, dest);
+  } catch (err) {
+    const code = (err as NodeJS.ErrnoException).code;
+    if ((code === 'EPERM' || code === 'EACCES') && existsSync(dest)) {
+      chmodSync(dest, 0o666);
+      copyFileSync(src, dest);
+      return;
+    }
+    throw err;
+  }
+}
+
 export function copyRecursive(
   src: string,
   dest: string,
@@ -586,7 +607,7 @@ export function copyRecursive(
       stats.skipped++;
       return;
     }
-    copyFileSync(src, dest);
+    copyFileOverwrite(src, dest);
     stats.files++;
     addFile(manifest, dest);
     return;
@@ -600,6 +621,9 @@ export function copyRecursive(
   }
 
   for (const entry of readdirSync(src)) {
+    // Git internals are never installable assets — vendored repos under
+    // component sources (e.g. ref/zvec-grep) carry read-only pack files.
+    if (entry === '.git') continue;
     if (fileFilter && !fileFilter(entry)) continue;
     if (PRESERVE_FILES.has(entry) && existsSync(join(dest, entry))) {
       stats.skipped++;
@@ -613,7 +637,7 @@ export function copyRecursive(
     if (st.isDirectory()) {
       copyRecursive(srcPath, destPath, stats, manifest);
     } else {
-      copyFileSync(srcPath, destPath);
+      copyFileOverwrite(srcPath, destPath);
       stats.files++;
       addFile(manifest, destPath);
     }

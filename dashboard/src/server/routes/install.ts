@@ -229,7 +229,7 @@ export function createInstallRoutes(): Hono {
           const r = injectDocFile(src, dest, stats, manifest, def.section);
           if (r.warning) migrationWarnings.push(r.warning);
         } else {
-          const { files, dirs } = copyDirectory(src, dest, manifest);
+          const { files, dirs } = copyDirectory(src, dest, manifest, def.fileFilter);
           stats.files += files;
           stats.dirs += dirs;
         }

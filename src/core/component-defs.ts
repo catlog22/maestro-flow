@@ -170,6 +170,9 @@ export const COMPONENT_DEFS: ComponentDef[] = [
     alwaysGlobal: true,
     mandatory: true,
     platform: 'shared',
+    // Mirrors the `!ref/zvec-grep` entry in package.json files — a locally
+    // vendored reference clone, never shipped or installed.
+    fileFilter: (name) => name !== 'zvec-grep',
   },
   {
     id: 'arch-kb',

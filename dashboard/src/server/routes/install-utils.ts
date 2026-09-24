@@ -37,6 +37,8 @@ import {
   type ComponentDef,
 } from '../../../../src/core/component-defs.js';
 import {
+  copyFileOverwrite,
+  countFilesFiltered,
   scanDisabledItems,
   restoreDisabledState,
   type DisabledItem,
@@ -140,7 +142,9 @@ export function scanAvailableSources(
 ): ComponentInfo[] {
   return COMPONENT_DEFS.map((def) => {
     const fullSource = join(sourceDir, def.sourcePath);
-    const fileCount = countFiles(fullSource);
+    const fileCount = def.fileFilter
+      ? countFilesFiltered(fullSource, def.fileFilter)
+      : countFiles(fullSource);
     const targetDir = def.target(mode, projectPath ?? '');
     return {
       id: def.id,
@@ -161,6 +165,7 @@ export function copyDirectory(
   src: string,
   dest: string,
   manifest: Manifest,
+  fileFilter?: (name: string) => boolean,
 ): { files: number; dirs: number } {
   if (!existsSync(src)) return { files: 0, dirs: 0 };
 
@@ -174,6 +179,10 @@ export function copyDirectory(
   }
 
   for (const entry of readdirSync(src, { withFileTypes: true })) {
+    // Git internals are never installable assets (same as CLI copyRecursive)
+    if (entry.name === '.git') continue;
+    if (fileFilter && !fileFilter(entry.name)) continue;
+
     const srcPath = join(src, entry.name);
     const destPath = join(dest, entry.name);
 
@@ -191,7 +200,7 @@ export function copyDirectory(
         dirs++;
         addDir(manifest, destDir);
       }
-      copyFileSync(srcPath, destPath);
+      copyFileOverwrite(srcPath, destPath);
       files++;
       addFile(manifest, destPath);
     }
