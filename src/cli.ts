@@ -128,7 +128,10 @@ const requestedSubcommand = requestedCommandIndex >= 0 ? preDispatch.routingArgs
 const requestedWorkflowRoot = preDispatch.workflowRoot;
 let v3WriterMode = false;
 if (requestedCommand === 'run' || requestedCommand === 'session'
-  || requestedCommand === 'execution' || requestedCommand === 'help') {
+  || requestedCommand === 'execution' || requestedCommand === 'help'
+  // Bare `maestro`/`maestro --help` registers the full tree — it must reflect
+  // the selected writer too, not always the legacy surface.
+  || requestedCommand === undefined) {
   const { SessionStore } = await import('./run/store.js');
   v3WriterMode = new SessionStore(requestedWorkflowRoot).sessionSchemaSelection().writer === 'session/3.0';
 }
@@ -332,8 +335,8 @@ if (jsonHelpMode) {
     register(program);
   } else {
     const seen = new Set<(p: Command) => void>();
-    for (const [name, loader] of Object.entries(commandLoaders)) {
-      const register = await loader();
+    for (const name of Object.keys(commandLoaders)) {
+      const register = await requestedRegistration(name);
       if (seen.has(register)) continue;
       seen.add(register);
       register(program);
@@ -365,8 +368,8 @@ if (jsonHelpMode) {
   // Multiple keys may point to the same register function (e.g. a command and
   // its alias share one module); deduplicate so we register each module once.
   const seen = new Set<(p: Command) => void>();
-  for (const [name, loader] of Object.entries(commandLoaders)) {
-    const register = await loader();
+  for (const name of Object.keys(commandLoaders)) {
+    const register = await requestedRegistration(name);
     if (seen.has(register)) continue;
     seen.add(register);
     register(program);

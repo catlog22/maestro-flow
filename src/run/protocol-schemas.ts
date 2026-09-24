@@ -1270,6 +1270,10 @@ export const runOperationV12Schema = z.enum([
   'execution-operation-claim', 'execution-operation-heartbeat',
   'execution-operation-release', 'execution-operation-status',
   'artifact-inspect', 'artifact-republish',
+  // Retired-name stubs keep answering with structured envelopes so callers
+  // trained on the v2 surface get a routable replacement instead of a bare
+  // "unknown command".
+  'run-done', 'run-list', 'run-status', 'session-done',
 ]);
 
 const responseCommonSchema = z.object({

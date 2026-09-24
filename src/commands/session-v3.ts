@@ -36,6 +36,7 @@ import {
   mutateSessionStatusV3,
   mutationIdentity,
   parseV3Revision,
+  registerV3RetiredStub,
   resolveV3Options,
   type V3CommonOptions,
   v3Store,
@@ -486,11 +487,7 @@ export function registerSessionV3Command(program: Command): void {
     })));
 
   // Legacy-name stub: `session done` predates session/3.0 and is still issued
-  // by agents trained on the retired surface. Route to `session complete`.
-  session.command('done [args...]', { hidden: true })
-    .allowUnknownOption()
-    .action(() => {
-      console.error("Error: 'maestro session done' is retired. Use 'maestro session complete' instead.");
-      process.exitCode = 1;
-    });
+  // by agents trained on the retired surface. Answer with a structured
+  // envelope pointing at `session complete`.
+  registerV3RetiredStub(session, 'done', 'session-done', 'maestro session complete');
 }

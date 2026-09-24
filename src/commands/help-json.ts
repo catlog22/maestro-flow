@@ -180,9 +180,21 @@ export function validateArgvAgainstCatalog(
   return { ok: errors.length === 0, errors };
 }
 
+// Retired-name stubs stay registered (hidden) so callers trained on the v2
+// surface get a routable replacement instead of a bare "unknown command".
+// The catalog must surface them as retired — never as live read commands.
+const RETIRED_STUB_REPLACEMENTS: Record<string, string> = {
+  'run status': 'maestro run check [run-id]',
+  'run done': 'maestro run complete <run-id> --advance',
+  'run list': 'maestro session list',
+  'session done': 'maestro session complete',
+};
+
 function classify(path: string, options: string[]): Pick<HelpCatalogCommand, 'mutation_scope' | 'cas_target'> {
   if (path === 'artifact republish') return { mutation_scope: 'artifact', cas_target: 'artifact' };
-  if (path.startsWith('execution ')) return { mutation_scope: 'retired', cas_target: 'none' };
+  if (path.startsWith('execution ') || path in RETIRED_STUB_REPLACEMENTS) {
+    return { mutation_scope: 'retired', cas_target: 'none' };
+  }
   if (path === 'session open') return { mutation_scope: 'orchestration', cas_target: 'none' };
   if (path === 'session migrate') return { mutation_scope: 'orchestration', cas_target: 'orchestration' };
   if (!options.includes('--request-id')) return { mutation_scope: 'read', cas_target: 'none' };
@@ -200,7 +212,7 @@ function walk(command: Command, prefix: string[] = []): HelpCatalogCommand[] {
   const commandPath = path.join(' ');
   const options = command.options.map(optionName).sort();
   const classification = classify(commandPath, options);
-  const deprecated = commandPath.startsWith('execution ');
+  const deprecated = commandPath.startsWith('execution ') || commandPath in RETIRED_STUB_REPLACEMENTS;
   return [{
     command: commandPath,
     description: command.description(),
@@ -210,7 +222,8 @@ function walk(command: Command, prefix: string[] = []): HelpCatalogCommand[] {
     positionals: positionalSpec(command),
     examples: [`maestro ${commandPath} --help`],
     deprecated,
-    replacement: deprecated ? 'session status / run check' : null,
+    replacement: RETIRED_STUB_REPLACEMENTS[commandPath]
+      ?? (deprecated ? 'session status / run check' : null),
   }];
 }
 

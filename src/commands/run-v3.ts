@@ -46,6 +46,7 @@ import {
   listV3Sessions,
   mutationIdentity,
   parseV3Revision,
+  registerV3RetiredStub,
   resolveV3Options,
   type V3CommonOptions,
   v3Store,
@@ -538,18 +539,10 @@ export function registerRunV3Command(program: Command): void {
     });
 
   // Legacy-name stubs: agents trained on the retired v2 command surface keep
-  // issuing `run status|list|done`. Route each to the v3 replacement instead
-  // of a bare "unknown command".
-  for (const [name, hint] of [
-    ['status', 'maestro run check [run-id]'],
-    ['done', 'maestro run complete <run-id> --participant <id> --actor <id> --request-id <id> --advance'],
-    ['list', 'maestro session list'],
-  ] as const) {
-    run.command(`${name} [args...]`, { hidden: true })
-      .allowUnknownOption()
-      .action(() => {
-        console.error(`Error: 'maestro run ${name}' is retired. Use '${hint}' instead.`);
-        process.exitCode = 1;
-      });
-  }
+  // issuing `run status|list|done`. Each still answers with a structured
+  // envelope carrying the v3 replacement instead of a bare "unknown command".
+  registerV3RetiredStub(run, 'status', 'run-status', 'maestro run check [run-id]');
+  registerV3RetiredStub(run, 'done', 'run-done',
+    'maestro run complete <run-id> --participant <id> --actor <id> --request-id <id> --advance');
+  registerV3RetiredStub(run, 'list', 'run-list', 'maestro session list');
 }

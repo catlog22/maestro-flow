@@ -267,6 +267,48 @@ export function emitV3Error(
   }));
 }
 
+function retiredNextAction(replacement: string): string {
+  const words = replacement
+    .replace(/^maestro\s+/, '')
+    .replace(/\s*[[<].*$/s, '')
+    .trim()
+    .split(/\s+/);
+  return `use-${words.join('-')}`;
+}
+
+/**
+ * Retired v2 command names stay routable on the session/3.0 surface: the stub
+ * prints a human hint on stderr AND emits a run-response/1.2
+ * SESSION_SCHEMA_UNSUPPORTED envelope on stdout carrying the replacement,
+ * matching the retired Execution command family.
+ */
+export function registerV3RetiredStub(
+  parent: Command,
+  commandName: string,
+  operation: RunOperationV12,
+  replacement: string,
+): void {
+  const commandPath = operation.replaceAll('-', ' ');
+  parent.command(`${commandName} [args...]`, { hidden: true })
+    .allowUnknownOption()
+    .option('--session <id>', 'Session ID')
+    .option('--request-id <id>', 'request ID')
+    .option('--json', 'emit run-response/1.2 JSON')
+    .option('--workflow-root <path>', 'project root containing .workflow', process.cwd())
+    .action(function (this: Command) {
+      const options = this.opts() as { session?: string; requestId?: string };
+      console.error(`Error: 'maestro ${commandPath}' is retired. Use '${replacement}' instead.`);
+      emitV3Error(operation, new V3StructuredError(
+        'SESSION_SCHEMA_UNSUPPORTED',
+        `maestro ${commandPath} is retired for session/3.0 workspaces`,
+        {
+          details: { deprecated_command: commandPath, replacement_command: replacement },
+          next_actions: [retiredNextAction(replacement)],
+        },
+      ), { session: options.session, requestId: options.requestId });
+    });
+}
+
 export type SessionStatusOperation =
   | 'session-archive'
   | 'session-unarchive';

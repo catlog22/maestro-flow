@@ -77,8 +77,12 @@ describe('v3 help catalog', () => {
         expect(item.options).toEqual(expect.arrayContaining(['--participant', '--actor', '--request-id']));
       }
       if (item.deprecated) {
-        expect(item.command.startsWith('execution ')).toBe(true);
+        expect(
+          item.command.startsWith('execution ')
+          || ['run status', 'run done', 'run list', 'session done'].includes(item.command),
+        ).toBe(true);
         expect(item.replacement).toBeTruthy();
+        expect(item.mutation_scope).toBe('retired');
       }
       if (item.command === 'session migrate') {
         expect(item.options).toEqual(expect.arrayContaining([
@@ -116,6 +120,20 @@ describe('v3 help catalog', () => {
       '--participant', '--actor', '--to-v3', '--request-id', '--reason',
       '--expected-identity-revision', '--expected-activity-revision', '--expected-revisions',
     ]));
+    // Retired-name stubs stay listed so preflight accepts `--json` and the CLI
+    // can return the routable retirement envelope — but they are never
+    // advertised as live reads.
+    for (const [stub, replacement] of [
+      ['run status', 'run check'],
+      ['run done', 'run complete'],
+      ['run list', 'session list'],
+      ['session done', 'session complete'],
+    ] as const) {
+      const entry = catalog.find(item => item.command === stub);
+      expect(entry).toMatchObject({ mutation_scope: 'retired', deprecated: true });
+      expect(entry?.replacement).toContain(replacement);
+      expect(entry?.options).toContain('--json');
+    }
   });
 
   it('validates argv against Commander-derived option metadata with suggestions', () => {

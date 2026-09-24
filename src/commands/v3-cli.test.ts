@@ -1188,27 +1188,43 @@ describe('run/session CLI compatibility', () => {
   });
 
   it.each([
-    [['run', 'status'], 'run check'],
-    [['run', 'done'], 'run complete'],
-    [['run', 'list'], 'session list'],
-  ])('routes retired %s to the v3 replacement', async (args, hint) => {
+    [['run', 'status'], 'run-status', 'run check'],
+    [['run', 'done'], 'run-done', 'run complete'],
+    [['run', 'list'], 'run-list', 'session list'],
+  ])('routes retired %s to the v3 replacement', async (args, operation, hint) => {
     const errors: string[] = [];
+    const writes: string[] = [];
     vi.spyOn(console, 'error').mockImplementation(value => { errors.push(String(value)); });
+    vi.spyOn(process.stdout, 'write').mockImplementation(value => { writes.push(String(value)); return true; });
     const program = new Command().name('maestro').exitOverride();
     registerRunV3Command(program);
     await program.parseAsync(['node', 'maestro', ...args]);
     expect(errors.join('\n')).toContain(hint);
     expect(process.exitCode).toBe(1);
+    // Machine callers always get a run-response/1.2 envelope naming the
+    // replacement — never a bare text-only failure.
+    const envelope = JSON.parse(writes.join('')) as { operation: string; ok: boolean; error: { code: string; details: { replacement_command?: string } } };
+    expect(envelope.ok).toBe(false);
+    expect(envelope.operation).toBe(operation);
+    expect(envelope.error.code).toBe('SESSION_SCHEMA_UNSUPPORTED');
+    expect(envelope.error.details.replacement_command).toContain(hint.split(' ')[0]);
   });
 
   it('routes retired session done to session complete', async () => {
     const errors: string[] = [];
+    const writes: string[] = [];
     vi.spyOn(console, 'error').mockImplementation(value => { errors.push(String(value)); });
+    vi.spyOn(process.stdout, 'write').mockImplementation(value => { writes.push(String(value)); return true; });
     const program = new Command().name('maestro').exitOverride();
     registerSessionV3Command(program);
     await program.parseAsync(['node', 'maestro', 'session', 'done']);
     expect(errors.join('\n')).toContain('session complete');
     expect(process.exitCode).toBe(1);
+    const envelope = JSON.parse(writes.join('')) as { operation: string; ok: boolean; error: { code: string; details: { replacement_command?: string } } };
+    expect(envelope.ok).toBe(false);
+    expect(envelope.operation).toBe('session-done');
+    expect(envelope.error.code).toBe('SESSION_SCHEMA_UNSUPPORTED');
+    expect(envelope.error.details.replacement_command).toContain('session complete');
   });
 
   it('defaults mutation identity flags: actor-only invocation derives participant, request-id and reason', async () => {
