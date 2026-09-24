@@ -21,7 +21,7 @@ allowed-tools:
   - spawn_agents_on_csv
   - wait_agent
 session-mode: none
-version: 0.5.88
+version: 0.5.89
 ---
 
 <purpose>

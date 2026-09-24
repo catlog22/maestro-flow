@@ -17,6 +17,15 @@ interface ChangelogEntry {
 
 const changelog: ChangelogEntry[] = [
   {
+    version: '0.5.89',
+    date: '2026-09',
+    changes: [
+      { type: 'feat', text_en: 'Session/3.0 mutation identity flags gain safe defaults — --participant falls back to --actor, --actor to $MAESTRO_ACTOR, --reason to cli:<command>, --request-id to a deterministic idempotency key, and --session resolves the unique open Session — while revision CAS fences stay mandatory', text_zh: 'Session/3.0 变更身份标志获得安全默认值——--participant 回退到 --actor，--actor 回退到 $MAESTRO_ACTOR，--reason 回退到 cli:<command>，--request-id 回退到确定性幂等键，--session 解析唯一打开的 Session——revision CAS 栅栏仍为必填' },
+      { type: 'fix', text_en: 'Retired run status/done/list and session done stubs now emit run-response/1.2 error envelopes with replacement_command guidance, the help catalog marks them retired/deprecated, and bare --help registers the command generation matching the workflow-root writer', text_zh: '退役的 run status/done/list 与 session done stub 现输出带 replacement_command 指引的 run-response/1.2 错误信封，help 目录将其标记为 retired/deprecated，裸 --help 按工作区 writer 注册对应代际的命令面' },
+      { type: 'fix', text_en: 'Install copy paths skip .git internals and the vendored zvec-grep reference clone, and overwrite read-only destination files on Windows instead of failing with EPERM', text_zh: '安装复制路径跳过 .git 内部目录与 vendored zvec-grep 参考克隆，并在 Windows 上覆盖只读目标文件而非 EPERM 失败' },
+    ],
+  },
+  {
     version: '0.5.88',
     date: '2026-09',
     changes: [
