@@ -267,7 +267,8 @@ const SUPPORT_PROFILES = [
     id: 'knowledge-skill-canon',
     path: '.claude/commands/maestro-knowledge.md',
     required: [
-      'does not require Session seal',
+      'does not require Session completion',
+      'later unrelated Session activity alone does not invalidate the snapshot',
       'immutable candidate version/content hash',
       'evidence roots/hash',
       'current corpus fingerprint',
@@ -467,17 +468,143 @@ export function inspectExecutionPromptSupport(root = process.cwd()) {
   });
 }
 
+export const KNOWLEDGE_CLOSEOUT_REF = '@~/.maestro/ref/knowledge-closeout.md';
+export const KNOWLEDGE_CLOSEOUT_ENTRIES = [
+  'workflows/run-mode.md',
+  'workflows/run-mode-lite.md',
+  'workflows/orchestrator-run-loop.md',
+  '.claude/commands/maestro-knowledge.md',
+  '.claude/commands/maestro-companion.md',
+  '.claude/commands/maestro-session-manage.md',
+];
+
+// Check the shared protocol once; importers need routing and a Read fallback,
+// not copies of the protocol's prose. These are prompt guards, not CLI gates.
+const CLOSEOUT_STEPS = [
+  ['Review', ['maestro knowledge review {session_id} --json', 'No candidates']],
+  ['Refresh', ['Only when review reports **missing/stale** reconciliation receipts, and the caller permits receipt repair, run', 'missing/stale', 'caller permits receipt repair', '--refresh --json', 'read the returned view', 'report the exact blocker']],
+  ['Present', ['exact ID', 'title', 'content', 'source/evidence anchors', 'freshness/eligibility', 'matches', 'relationship choices', 'recommended', 'rationale', 'untrusted evidence']],
+  ['Authorize', ['ask-user-question', 'explicit human', 'exact candidate set', 'content/evidence', 'relationship/target', 'publication action', 'selection, rejection, and deferral', 'displayed fixed list of IDs', 'Importance, `-y`, machine recommendations', 'advisory decision policy', '`accepted` decision status', '**not** knowledge publication approval', 'does not authorize writes', 'defer and report', 'Do not fabricate `duplicate`']],
+  ['Execute', ['Freeze the approved IDs', 'one candidate at a time', 'Do not widen selection with `--all`', '**after** explicit confirmation', 'maestro knowledge promote {session_id} --resolve <approved-candidate-id>', '--as <duplicate|related|conflict|supersede|unique>', '--target <matched-knowledge-id>', '--reason', '`unique` has **no `--target`**', 'current evidence-backed `matches`', '`duplicate`/`conflict` suppress', 'only relationship adjudication was authorized', 'deprecated `review --resolve` compatibility', 'maestro knowledge promote {session_id} --candidate <approved-candidate-id> --json', '`promote --resolve` is the preferred', '`review --resolve` remains the deprecated', 'Stop on blocked/uncertain results', 'never direct-write Spec/Knowhow']],
+  ['Verify', ['Read each execution result', 're-read `maestro knowledge review {session_id} --json`', 'actual publication outcomes/knowledge IDs', 'remaining pending', 'command issuance is not success', 're-present and re-confirm', 'Never silently reuse approval', 'all source Runs sealed', 'does **not** require Session completion', 'immutable candidate version/content hash', 'exact Session identity/revision', 'non-empty evidence roots/hash', 'candidate-snapshot/corpus reconciliation', 'final commit']],
+];
+
+function validateCloseoutRouting(text, path) {
+  const errors = missingTokens(text, [KNOWLEDGE_CLOSEOUT_REF, 'Read', 'not expanded', 'no longer in context'])
+    .map(token => `${path}: missing knowledge closeout reference/load token: ${token}`);
+  const fallback = text.split(/\r?\n\s*\r?\n/).some(paragraph => (
+    paragraph.includes('not expanded') && paragraph.includes('no longer in context')
+    && paragraph.includes(`Read ${KNOWLEDGE_CLOSEOUT_REF} explicitly before`)
+  ));
+  if (!fallback) errors.push(`${path}: missing explicit knowledge closeout Read-before-use fallback`);
+  return errors;
+}
+
+function validateCloseoutSafety(text, path) {
+  const errors = [];
+  const canonical = canonicalBranch(text).replace(/[`*]/g, '');
+  // Positive directives only: negative warnings and labeled legacy branches
+  // remain legal. No change to the CLI's independent --all semantics.
+  const rules = [
+    ['automatic publication approval', /(?:-y|importance|machine (?:recommendations|advice)|advisory decision policy|accepted decision status)\s+(?:is|are|grants?|authorizes?)\s+(?:explicit\s+)?knowledge publication approval/i],
+    ['execution before authorization', /(?:^|\n)\s*(?:Execute|Run|Publish|Resolve|Promote)[^\n.!?]*\b(?:before (?:asking|confirming|authorization)|then (?:ask|confirm))\b/i],
+    ['canonical v2 main path', /(?:canonical|primary|default) (?:closeout|knowledge|promotion) (?:path|protocol)[^\n]*\b(?:session\/2\.0|run-response\/1\.1)\b/i],
+    ['Session completion promotion prerequisite', /session-source (?:candidate|publication)\s+requires? (?:permanent )?Session completion/i],
+    ['unrelated activity invalidates source snapshot', /unrelated Session activity (?:alone )?(?:invalidates|must invalidate) (?:the )?snapshot/i],
+  ];
+  for (const [description, pattern] of rules) {
+    const unsafe = canonical.split(/\r?\n/).some(line => {
+      const match = pattern.exec(line);
+      if (!match) return false;
+      const prefix = line.slice(0, match.index).split(/[.!?]/).pop();
+      return !/\b(?:never|do not|must not|not)\b/i.test(prefix);
+    });
+    if (unsafe) errors.push(`${path}: unsafe knowledge closeout: ${description}`);
+  }
+  // Shell continuations belong to one command, even across physical lines.
+  const logicalCommands = canonical.replace(/\\\r?\n\s*/g, ' ');
+  for (const line of commandLines(logicalCommands, 'maestro knowledge promote')) {
+    if (/--all\b/.test(line)) errors.push(`${path}: unsafe knowledge closeout: executable bulk promotion`);
+  }
+  return errors;
+}
+
+export function inspectKnowledgeCloseout(root = process.cwd()) {
+  const path = 'ref/knowledge-closeout.md';
+  const text = read(root, path);
+  const errors = [];
+  if (text === null) errors.push(`${path}: missing shared knowledge closeout source`);
+  else {
+    errors.push(...validateCloseoutRouting(text, path));
+    const headings = [...text.matchAll(/^### (\d+)\. (Review|Refresh|Present|Authorize|Execute|Verify)\s*$/gm)];
+    if (headings.map(match => `${match[1]}. ${match[2]}`).join(' → ') !== CLOSEOUT_STEPS.map(([name], i) => `${i + 1}. ${name}`).join(' → ')) {
+      errors.push(`${path}: knowledge closeout must order Review → Refresh → Present → Authorize → Execute → Verify`);
+    }
+    for (const [name, required] of CLOSEOUT_STEPS) {
+      const index = headings.findIndex(match => match[2] === name);
+      const section = index < 0 ? '' : text.slice(headings[index].index, headings[index + 1]?.index ?? text.length);
+      errors.push(...missingTokens(section, required).map(token => `${path}: missing knowledge closeout ${name} token: ${token}`));
+    }
+    errors.push(...missingTokens(text, ['completion owner', 'Workers stage/check/report and return', 'Intermediate Runs continue', 'Zero candidates, rejection, deferral', 'review-only request permits read-only', 'not implicit `--refresh`, `--resolve`, or promotion']).map(token => `${path}: missing knowledge closeout boundary: ${token}`));
+    errors.push(...validateCloseoutSafety(text, path));
+  }
+  const results = [{ id: 'knowledge-closeout-ref', path, errors }];
+  for (const entry of [...KNOWLEDGE_CLOSEOUT_ENTRIES, 'ref/finish-work.md']) {
+    const source = read(root, entry);
+    const entryErrors = source === null ? [`${entry}: missing knowledge closeout entry`] : [
+      ...validateCloseoutRouting(canonicalBranch(source), entry),
+      ...validateCloseoutSafety(source, entry),
+    ];
+    if (entry === 'ref/finish-work.md' && source !== null) {
+      entryErrors.push(...missingTokens(source, ['staging-only', 'finish-work does not perform resolution, promotion, or canonical completion']).map(token => `${entry}: missing staging-only boundary: ${token}`));
+    }
+    results.push({ id: `knowledge-closeout:${entry}`, path: entry, errors: entryErrors });
+  }
+  return results;
+}
+
 export function validateExecutionPromptSemantics(root = process.cwd()) {
   return [
+    ...inspectKnowledgeCloseout(root),
     ...inspectExecutionPromptSuite(root),
     ...inspectExecutionPromptSupport(root),
     ...inspectActiveExecutionPromptImporters(root),
   ].flatMap(result => result.errors);
 }
 
+export function inspectKnowledgeCloseoutMirrors(root = process.cwd()) {
+  const results = [];
+  for (const platform of ['.agy', '.agents', '.codex']) {
+    for (const name of ['maestro-knowledge', 'maestro-companion', 'maestro-session-manage']) {
+      const source = read(root, `.claude/commands/${name}.md`);
+      if (source === null) continue;
+      const path = `${platform}/skills/${name}/SKILL.md`;
+      const text = read(root, path);
+      const errors = text === null ? [`${path}: missing generated closeout mirror`] : [
+        ...validateCloseoutRouting(text, path),
+        ...validateCloseoutSafety(text, path),
+      ];
+      if (text !== null) {
+        const mode = name === 'maestro-knowledge' ? 'none' : 'run';
+        if (frontmatterSessionMode(text) !== mode) errors.push(`${path}: closeout mirror must use session-mode: ${mode}`);
+        // Check only closeout semantics, allowing platform tool/frontmatter rewrites.
+        const required = name === 'maestro-knowledge'
+          ? [...SUPPORT_PROFILES.find(profile => profile.id === 'knowledge-skill-canon').required,
+            'inline `promote --resolve`', 'deprecated compatibility fallback', 'relationship-only',
+            'fixed approved candidate IDs', 'no question tool and no explicit authorization means defer']
+          : ['completion owner', 'Review → Refresh → Present → Authorize → Execute → Verify',
+            name === 'maestro-companion' ? 'never grants knowledge publication approval' : 'not publication approval'];
+        errors.push(...missingTokens(text, required).map(token => `${path}: closeout mirror semantic drift: ${token}`));
+      }
+      results.push({ id: `knowledge-closeout-mirror:${path}`, path, errors });
+    }
+  }
+  return results;
+}
+
 export function inspectExecutionPromptMirrors(root = process.cwd()) {
   const sourcePath = '.claude/commands/maestro-ralph.md';
-  if (!existsSync(join(root, sourcePath))) return [];
+  if (!existsSync(join(root, sourcePath))) return inspectKnowledgeCloseoutMirrors(root);
   const required = [
     'maestro capabilities --json', 'session/3.0', 'run/3.0', 'run-response/1.2',
     'session_run_minimal_v3', 'orchestration_revision', 'maestro session complete',
@@ -504,6 +631,7 @@ export function inspectExecutionPromptMirrors(root = process.cwd()) {
   });
   return [
     ...ralphResults,
+    ...inspectKnowledgeCloseoutMirrors(root),
     ...inspectActiveExecutionPromptImporters(root, '.codex'),
   ];
 }

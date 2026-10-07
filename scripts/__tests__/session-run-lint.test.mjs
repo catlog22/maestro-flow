@@ -1,17 +1,19 @@
 import assert from 'node:assert/strict';
 import { mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 import { execFileSync, spawnSync } from 'node:child_process';
 import test from 'node:test';
 import {
   classifySessionRunProfile,
+  CODEX_RUN_REF,
   RUN_MODE_LITE_REF,
   RUN_MODE_REF,
 } from '../session-run-profiles.mjs';
 import { lintSessionRunMirrors } from '../lint-session-run-mirrors.mjs';
 import {
   canonicalBranch,
+  KNOWLEDGE_CLOSEOUT_REF,
   validateExecutionPromptSemantics,
 } from '../session-execution-prompt-semantics.mjs';
 import {
@@ -125,6 +127,9 @@ test('mirror lint reports a deterministic missing-root diagnostic', () => {
     mkdirSync(join(root, '.claude', 'skills'), { recursive: true });
     mkdirSync(join(root, '.agy', 'skills'), { recursive: true });
     mkdirSync(join(root, '.codex', 'skills'), { recursive: true });
+    mkdirSync(join(root, '.agents', 'skills'), { recursive: true });
+    assert.deepEqual(lintSessionRunMirrors(root), []);
+    rmSync(join(root, '.agents', 'skills'), { recursive: true });
     const errors = lintSessionRunMirrors(root);
     assert.ok(errors.includes('.agents/skills: missing mirror root'));
   } finally {
@@ -144,15 +149,72 @@ test('mirror lint detects lifecycle profile divergence', () => {
       const dir = join(root, mirror, 'skills', 'demo');
       mkdirSync(dir, { recursive: true });
       const target = mirror === '.codex'
-        ? fm('run', RUN_MODE_LITE_REF, 'version: 1.0.0\ncontract:\n  consumes: []\n  produces: []\n  gates:\n    entry: []\n    exit: []\n')
+        ? fm('run', `${RUN_MODE_REF}\n${CODEX_RUN_REF}`, 'version: 1.0.0\ncontract:\n  consumes: []\n  produces: []\n  gates:\n    entry: []\n    exit: []\n')
         : source;
       writeFileSync(join(dir, 'SKILL.md'), target);
     }
+    assert.deepEqual(lintSessionRunMirrors(root), []);
+    const targetPath = join(root, '.codex', 'skills', 'demo', 'SKILL.md');
+    writeFileSync(targetPath, readFileSync(targetPath, 'utf8').replace(RUN_MODE_REF, RUN_MODE_LITE_REF));
     assert.ok(lintSessionRunMirrors(root).some(error => error.includes('lifecycle profile lite diverges from full')));
   } finally {
     rmSync(root, { recursive: true, force: true });
   }
 });
+
+// Generated tracked mirrors intentionally remain untouched in this phase.
+// Construct only these three current-source semantic surfaces in a temp root;
+// this proves the mirror guard, not generator freshness or release parity.
+function createCloseoutMirrorFixture() {
+  const root = mkdtempSync(join(tmpdir(), 'session-closeout-mirrors-'));
+  writeFileSync(join(root, 'package.json'), '{"version":"1.0.0"}');
+  mkdirSync(join(root, '.claude', 'skills'), { recursive: true });
+  for (const name of ['maestro-knowledge', 'maestro-companion', 'maestro-session-manage']) {
+    const sourcePath = `.claude/commands/${name}.md`;
+    const source = readFileSync(join(process.cwd(), sourcePath), 'utf8');
+    mkdirSync(dirname(join(root, sourcePath)), { recursive: true });
+    writeFileSync(join(root, sourcePath), source);
+    for (const platform of ['.agy', '.agents', '.codex']) {
+      const path = join(root, platform, 'skills', name, 'SKILL.md');
+      mkdirSync(dirname(path), { recursive: true });
+      const target = platform === '.codex'
+        ? source.replace(/^---\r?\n/, '---\nversion: 1.0.0\n') + (name === 'maestro-knowledge' ? '' : `\n${CODEX_RUN_REF}\n`)
+        : source;
+      writeFileSync(path, target);
+    }
+  }
+  return root;
+}
+
+for (const platform of ['.agy', '.agents', '.codex']) {
+  for (const name of ['maestro-knowledge', 'maestro-companion', 'maestro-session-manage']) {
+    test(`closeout mirror lint rejects a missing shared ref: ${platform}/${name}`, () => {
+      const root = createCloseoutMirrorFixture();
+      try {
+        assert.deepEqual(lintSessionRunMirrors(root), []);
+        const path = join(root, platform, 'skills', name, 'SKILL.md');
+        writeFileSync(path, readFileSync(path, 'utf8').replaceAll(KNOWLEDGE_CLOSEOUT_REF, '@~/.maestro/ref/absent.md'));
+        assert.ok(lintSessionRunMirrors(root).some(error => error.includes(`${platform}/skills/${name}/SKILL.md: missing knowledge closeout reference/load token`)));
+      } finally {
+        rmSync(root, { recursive: true, force: true });
+      }
+    });
+  }
+  test(`none knowledge mirror lint detects semantic drift independently of Run importers: ${platform}`, () => {
+    const root = createCloseoutMirrorFixture();
+    try {
+      assert.deepEqual(lintSessionRunMirrors(root), []);
+      const path = join(root, platform, 'skills/maestro-knowledge/SKILL.md');
+      const token = 'later unrelated Session activity alone does not invalidate the snapshot';
+      const source = readFileSync(path, 'utf8');
+      assert.ok(source.includes(token));
+      writeFileSync(path, source.replace(token, 'later unrelated Session activity alone invalidates the snapshot'));
+      assert.ok(lintSessionRunMirrors(root).some(error => error.includes(`${platform}/skills/maestro-knowledge/SKILL.md: closeout mirror semantic drift: ${token}`)));
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+}
 
 test('source lint passes after the Odyssey alias migration', () => {
   const repoRoot = process.cwd();
@@ -191,7 +253,9 @@ test('source lint passes after the Odyssey alias migration', () => {
   assert.match(lite, /`kind` and `schema` are required together/);
   assert.match(lite, /maestro knowledge stage knowhow/);
   assert.match(lite, /--signal cited\|validated\|contradicted --signal-ids <comma-separated ids>/);
-  assert.match(lite, /maestro knowledge review <session_id>/);
+  assert.ok(lite.includes(KNOWLEDGE_CLOSEOUT_REF));
+  const closeout = readFileSync(join(repoRoot, 'ref/knowledge-closeout.md'), 'utf8');
+  assert.match(closeout, /maestro knowledge review \{session_id\} --json/);
   assert.match(lite, /maestro run complete.*--advance/);
   assert.match(lite, /resolved `task`/);
   assert.match(lite, /structured executable `continuation`/);
@@ -224,8 +288,11 @@ test('source lint passes after the Odyssey alias migration', () => {
   assert.doesNotMatch(full, /same normalized intent/);
 
   const manage = readFileSync(join(repoRoot, '.claude', 'commands', 'maestro-session-manage.md'), 'utf8');
-  assert.match(manage, /maestro knowledge review \{session_id\} --json/);
-  assert.match(manage, /maestro knowledge promote \{session_id\} --candidate/);
+  assert.ok(manage.includes(KNOWLEDGE_CLOSEOUT_REF));
+  assert.ok(manage.includes('approved adjudication/publication inline with `promote --resolve`'));
+  assert.ok(manage.includes('`promote --candidate` for already eligible fixed approved IDs'));
+  assert.ok(manage.includes('material changes require re-presentation and re-confirmation'));
+  assert.match(closeout, /maestro knowledge promote \{session_id\} --candidate <approved-candidate-id>/);
   assert.doesNotMatch(manage, /Scan session artifacts|recommend `\/maestro-spec add/);
 
   const maestro = readFileSync(join(repoRoot, '.claude', 'commands', 'maestro.md'), 'utf8');

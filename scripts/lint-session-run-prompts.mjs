@@ -301,7 +301,7 @@ else {
     '--transcript-quote',
     'review_required',
     'knowledge-candidate-receipt/1.0',
-    'maestro knowledge promote',
+    '@~/.maestro/ref/knowledge-closeout.md',
     'run-response/1.2',
     'orchestration_revision',
     'artifact_compatibility_v1',
@@ -352,7 +352,7 @@ else {
     '`kind` and `schema` are required together',
     '--signal-ids',
     'maestro knowledge stage',
-    'maestro knowledge review',
+    '@~/.maestro/ref/knowledge-closeout.md',
     'run-response/1.2',
     'maestro run complete',
   ]) {

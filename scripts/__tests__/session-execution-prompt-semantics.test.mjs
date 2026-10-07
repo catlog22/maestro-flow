@@ -2,10 +2,20 @@ import { copyFileSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSy
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import { validateExecutionPromptSemantics } from '../session-execution-prompt-semantics.mjs';
+import {
+  KNOWLEDGE_CLOSEOUT_ENTRIES,
+  KNOWLEDGE_CLOSEOUT_REF,
+  inspectKnowledgeCloseoutMirrors,
+  validateExecutionPromptSemantics,
+} from '../session-execution-prompt-semantics.mjs';
 
 const repoRoot = process.cwd();
 const fixtureFiles = [
+  'ref/knowledge-closeout.md',
+  'ref/finish-work.md',
+  '.claude/commands/maestro-knowledge.md',
+  '.claude/commands/maestro-companion.md',
+  '.claude/commands/maestro-session-manage.md',
   'workflows/run-mode.md',
   'workflows/run-mode-lite.md',
   'workflows/orchestrator-run-loop.md',
@@ -40,6 +50,8 @@ function createFixture() {
     mkdirSync(dirname(target), { recursive: true });
     copyFileSync(join(repoRoot, relativePath), target);
   }
+  // Every counterexample starts with a complete, independently green source fixture.
+  expect(validateExecutionPromptSemantics(root)).toEqual([]);
   return root;
 }
 
@@ -52,6 +64,137 @@ function replace(root, relativePath, before, after, all = false) {
 
 afterEach(() => {
   while (tempRoots.length > 0) rmSync(tempRoots.pop(), { recursive: true, force: true });
+});
+
+describe('shared knowledge closeout guards', () => {
+  const entryPaths = [...KNOWLEDGE_CLOSEOUT_ENTRIES, 'ref/finish-work.md'];
+  it.each(entryPaths)('requires the shared reference in %s', path => {
+    const root = createFixture();
+    replace(root, path, KNOWLEDGE_CLOSEOUT_REF, '@~/.maestro/ref/missing-closeout.md', true);
+    expect(validateExecutionPromptSemantics(root)).toContain(`${path}: missing knowledge closeout reference/load token: ${KNOWLEDGE_CLOSEOUT_REF}`);
+  });
+
+  it.each(entryPaths)('requires the explicit context-loss Read fallback in %s', path => {
+    const root = createFixture();
+    replace(root, path, 'no longer in context', 'already available', true);
+    expect(validateExecutionPromptSemantics(root)).toContain(`${path}: missing knowledge closeout reference/load token: no longer in context`);
+  });
+
+  it.each(entryPaths)('cannot replace the fallback with an unrelated Read token in %s', path => {
+    const root = createFixture();
+    replace(root, path, `Read ${KNOWLEDGE_CLOSEOUT_REF} explicitly before`, 'Assume it is available before');
+    // Unrelated reads must not stand in for loading the referenced protocol.
+    replace(root, path, '\n', '\nRead unrelated documentation.\n');
+    expect(validateExecutionPromptSemantics(root)).toContain(`${path}: missing explicit knowledge closeout Read-before-use fallback`);
+  });
+
+  it.each(entryPaths)('rejects reading the wrong file in the same fallback paragraph: %s', path => {
+    const root = createFixture();
+    replace(root, path, `Read ${KNOWLEDGE_CLOSEOUT_REF} explicitly before`, 'Read unrelated documentation explicitly before');
+    expect(validateExecutionPromptSemantics(root)).toContain(`${path}: missing explicit knowledge closeout Read-before-use fallback`);
+  });
+
+  it('requires the referenced file to exist, not merely a path token', () => {
+    const root = createFixture();
+    rmSync(join(root, 'ref/knowledge-closeout.md'));
+    expect(validateExecutionPromptSemantics(root)).toContain('ref/knowledge-closeout.md: missing shared knowledge closeout source');
+  });
+
+  it('rejects moving execution before authorization', () => {
+    const root = createFixture();
+    const path = join(root, 'ref/knowledge-closeout.md');
+    const text = readFileSync(path, 'utf8');
+    const start = text.indexOf('### 4. Authorize');
+    const execute = text.indexOf('### 5. Execute');
+    const verify = text.indexOf('### 6. Verify');
+    writeFileSync(path, text.slice(0, start) + text.slice(execute, verify) + text.slice(start, execute) + text.slice(verify));
+    expect(validateExecutionPromptSemantics(root).join('\n')).toMatch(/must order Review → Refresh → Present → Authorize → Execute → Verify/);
+  });
+
+  it('rejects unconditional refresh even when the required keywords remain', () => {
+    const root = createFixture();
+    const condition = 'Only when review reports **missing/stale** reconciliation receipts, and the caller permits receipt repair, run';
+    replace(root, 'ref/knowledge-closeout.md', condition,
+      'Always refresh all reconciliation receipts, including fresh ones, when the caller permits receipt repair; missing/stale receipts are one possible reason. Run');
+    expect(validateExecutionPromptSemantics(root)).toContain(`ref/knowledge-closeout.md: missing knowledge closeout Refresh token: ${condition}`);
+  });
+
+  const omissions = [
+    ['Refresh', 'caller permits receipt repair'],
+    ['Refresh', 'missing/stale'],
+    ...['exact ID', 'title', 'content', 'source/evidence anchors', 'freshness/eligibility', 'matches', 'relationship choices', 'recommended', 'rationale'].map(token => ['Present', token]),
+    ['Authorize', 'ask-user-question'],
+    ['Authorize', 'exact candidate set'],
+    ['Authorize', 'does not authorize writes'],
+    ['Authorize', 'defer and report'],
+    ['Authorize', 'Do not fabricate `duplicate`'],
+    ['Execute', '**after** explicit confirmation'],
+    ['Execute', '`promote --resolve` is the preferred'],
+    ['Execute', 'deprecated `review --resolve` compatibility'],
+    ['Execute', 'only relationship adjudication was authorized'],
+    ['Execute', 'one candidate at a time'],
+    ['Execute', 'Do not widen selection with `--all`'],
+    ['Execute', '`unique` has **no `--target`**'],
+    ['Execute', 'current evidence-backed `matches`'],
+    ['Verify', 'Read each execution result'],
+    ['Verify', 're-read `maestro knowledge review {session_id} --json`'],
+    ['Verify', 'actual publication outcomes/knowledge IDs'],
+    ['Verify', 're-present and re-confirm'],
+    ['Verify', 'does **not** require Session completion'],
+  ];
+  it.each(omissions)('detects missing %s contract: %s', (step, token) => {
+    const root = createFixture();
+    const path = join(root, 'ref/knowledge-closeout.md');
+    const text = readFileSync(path, 'utf8');
+    const start = text.indexOf(`. ${step}\n`);
+    const end = text.indexOf('\n### ', start);
+    const section = text.slice(start, end < 0 ? text.length : end);
+    expect(section).toContain(token);
+    writeFileSync(path, text.slice(0, start) + section.replaceAll(token, '[removed]') + (end < 0 ? '' : text.slice(end)));
+    expect(validateExecutionPromptSemantics(root)).toContain(`ref/knowledge-closeout.md: missing knowledge closeout ${step} token: ${token}`);
+  });
+
+  it.each([
+    ['-y grants knowledge publication approval.', 'automatic publication approval'],
+    ['Importance is knowledge publication approval.', 'automatic publication approval'],
+    ['Machine recommendations are knowledge publication approval.', 'automatic publication approval'],
+    ['Execute promotion before asking the human.', 'execution before authorization'],
+    ['Resolve the candidate then confirm publication.', 'execution before authorization'],
+    ['Canonical knowledge path uses session/2.0.', 'canonical v2 main path'],
+    ['maestro knowledge promote {session_id} --all --json', 'executable bulk promotion'],
+    ['maestro knowledge promote {session_id} \\\n  --all --json', 'executable bulk promotion'],
+    ['maestro knowledge promote {session_id} \\\r\n  --all --json', 'executable bulk promotion'],
+    ['A session-source candidate requires Session completion.', 'Session completion promotion prerequisite'],
+    ['Unrelated Session activity alone invalidates the snapshot.', 'unrelated activity invalidates source snapshot'],
+  ])('rejects contradictory positive instructions: %s', (instruction, diagnostic) => {
+    const root = createFixture();
+    replace(root, '.claude/commands/maestro-knowledge.md', '\n</dispatch>', `\n${instruction}\n</dispatch>`);
+    expect(validateExecutionPromptSemantics(root)).toContain(`.claude/commands/maestro-knowledge.md: unsafe knowledge closeout: ${diagnostic}`);
+  });
+
+  it('permits negative warnings, CLI --all documentation and explicit legacy compatibility', () => {
+    const root = createFixture();
+    replace(root, '.claude/commands/maestro-knowledge.md', '\n</dispatch>', '\nNever execute promotion before asking the human.\n-y does not grant knowledge publication approval.\nImportance is not knowledge publication approval.\nMachine recommendations are not knowledge publication approval.\nDo not use canonical knowledge path session/2.0.\nNever assume a session-source candidate requires Session completion.\nNever assume unrelated Session activity alone invalidates the snapshot.\n## Legacy `session/1.x/2.x` Compatibility Branch\nCanonical knowledge path uses session/2.0.\nmaestro knowledge promote legacy --all --json\n</dispatch>');
+    expect(validateExecutionPromptSemantics(root)).toEqual([]);
+  });
+
+  it('retains staging-only finish-work ownership', () => {
+    const root = createFixture();
+    replace(root, 'ref/finish-work.md', 'finish-work does not perform resolution, promotion, or canonical completion', 'finish-work performs publication');
+    expect(validateExecutionPromptSemantics(root).join('\n')).toMatch(/ref\/finish-work\.md: missing staging-only boundary/);
+  });
+
+  it('tests mirrors from current sources in temporary fixtures only', () => {
+    const root = createFixture();
+    for (const platform of ['.agy', '.agents', '.codex']) {
+      for (const name of ['maestro-knowledge', 'maestro-companion', 'maestro-session-manage']) {
+        const target = join(root, platform, 'skills', name, 'SKILL.md');
+        mkdirSync(dirname(target), { recursive: true });
+        copyFileSync(join(root, '.claude/commands', `${name}.md`), target);
+      }
+    }
+    expect(inspectKnowledgeCloseoutMirrors(root).flatMap(result => result.errors)).toEqual([]);
+  });
 });
 
 describe('Session identity plus bounded Execution prompt semantics', () => {
@@ -121,7 +264,7 @@ describe('Session identity plus bounded Execution prompt semantics', () => {
     replace(
       root,
       'workflows/run-mode.md',
-      'maestro run complete {run_id} --session {session_id} --participant {actor_id} --actor {actor_id} --request-id {complete_request_id} --reason "<reason>" [--evidence <ref> ...] --expected-orchestration-revision {orchestration_revision} --expected-run-revision {run_revision} --verdict {done|done_with_concerns} [--summary "<summary>"] --advance --json',
+      'maestro run complete {run_id} --session {session_id} --actor {actor_id} [--evidence <ref> ...] --expected-orchestration-revision {orchestration_revision} --expected-run-revision {run_revision} --verdict {done|done_with_concerns} [--summary "<summary>"] --advance --json',
       'maestro run complete {run_id} --session {session_id} ... --json',
     );
     expect(validateExecutionPromptSemantics(root).join('\n')).toMatch(
