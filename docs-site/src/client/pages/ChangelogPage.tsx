@@ -17,6 +17,16 @@ interface ChangelogEntry {
 
 const changelog: ChangelogEntry[] = [
   {
+    version: '0.5.90',
+    date: '2026-10',
+    changes: [
+      { type: 'fix', text_en: 'Knowledge closeout is owned by the completion coordinator through a shared Review → Refresh → Present → Authorize → Execute → Verify protocol; publication requires explicit human approval for fixed candidate IDs, never -y, machine advice, or accepted decisions', text_zh: '知识收尾由完成协调者负责，统一执行 Review → Refresh → Present → Authorize → Execute → Verify 协议；发布必须获得对固定候选 ID 的明确人工授权，-y、机器建议及 accepted 决策均不构成发布批准' },
+      { type: 'fix', text_en: 'Workers and finish-work only stage and hand off candidates; deferred knowledge does not block task completion, and canonical session-source promotion validates immutable snapshots without requiring Session completion', text_zh: 'Worker 与 finish-work 仅暂存及交接候选；延期知识不阻断任务完成，规范 session-source 晋升校验不可变快照而不要求 Session 已完成' },
+      { type: 'fix', text_en: 'KG sync resolves the real CLI entry before checking its JavaScript suffix, restoring background dispatch for extensionless npm symlinks while retaining unavailable-entry fallback', text_zh: 'KG sync 在检查 JavaScript 后缀前解析 CLI 入口真实路径，恢复无扩展名 npm 软链接的后台派发，同时保留不可用入口回退' },
+      { type: 'chore', text_en: 'Prompt semantic guards and negative fixtures cover closeout loading, authorization ordering, receipt refresh, staging boundaries, and generated mirror drift', text_zh: 'Prompt 语义守卫及反例 fixture 覆盖收尾文档加载、授权顺序、回执刷新、暂存边界与生成镜像漂移' },
+    ],
+  },
+  {
     version: '0.5.89',
     date: '2026-09',
     changes: [
