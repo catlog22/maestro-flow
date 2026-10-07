@@ -1,6 +1,8 @@
 # Workflow: finish-work
 
-> Knowledge model: session-level decoupling MVP. Wrap-up **stages candidates** (run-source when a run is linked, session-source otherwise); it NEVER writes the spec/knowhow corpus directly. Corpus writes happen only via `maestro knowledge promote` after the source is sealed with a fresh reconciliation receipt.
+> Knowledge model: wrap-up **stages candidates** (run-source when a run is linked, session-source otherwise); it NEVER writes the spec/knowhow corpus directly or completes a canonical Session. Run-source promotion requires sealed source Runs and fresh reconciliation; canonical `session/3.0` session-source promotion uses immutable candidate/evidence snapshots and fresh reconciliation, not Session completion.
+
+Owner closeout reference: `@~/.maestro/ref/knowledge-closeout.md`. If not expanded by the host or no longer in context, Read @~/.maestro/ref/knowledge-closeout.md explicitly before handing off closeout. The completion owner executes Review → Refresh → Present → Authorize → Execute → Verify; finish-work itself remains staging-only.
 
 ## Inputs
 
@@ -50,7 +52,7 @@ Iterate detected files; build a `fragments[]` array. Each fragment: `{ kind, cat
 
 **Keyword extraction**: take 3-5 lowercased domain terms (filter stop words, take frequency-ranked nouns/identifiers from content).
 
-**Duplicate pre-check** (cheap, advisory): `maestro search "<title keywords>" --json` per fragment; if an entry with the same title already exists in the corpus, skip staging that fragment (`skipped_count++`, reason `duplicate-in-corpus`). Fine-grained duplicate/related/conflict disposition happens later at `maestro knowledge promote --resolve` (or the deprecated `review --resolve` fallback) — do not block staging on fuzzy matches here.
+**Duplicate pre-check** (cheap, advisory): `maestro search "<title keywords>" --json` per fragment; if an entry with the same title already exists in the corpus, skip staging that fragment (`skipped_count++`, reason `duplicate-in-corpus`). Fine-grained duplicate/related/conflict disposition happens later through the owner's shared closeout protocol: explicit confirmation before inline `promote --resolve` (deprecated `review --resolve` remains a relationship-only fallback), or approved-ID `promote --candidate` if already eligible. Do not block staging on fuzzy matches here or infer publication approval from a locked decision.
 
 ### 3. Stage fragments as candidates
 
@@ -83,7 +85,7 @@ Canonical parameter contract: ordinary Knowhow requires only `type/title/content
 - Below confidence threshold: increment `skipped_count`, do nothing.
 - CLI failure: log W002, continue with remaining fragments; flag harvest as [LOW CONFIDENCE] (CLI failure).
 
-**Timing law**: staging must happen BEFORE the run/session is sealed (sealed targets reject writes). Promotion is a separate, later step (Step 5 note).
+**Timing law**: stage run-source candidates before Run completion; obey the exact source's CLI write authority for session-source staging. Canonical `session/3.0` has no permanent Session seal prerequisite for promotion. Promotion is a separate owner action, never part of finish-work (Step 5). Older sealed-Session rules apply only in explicitly selected legacy compatibility.
 
 ### 3.5 Domain Term Extraction (interactive, conditional)
 
@@ -113,7 +115,7 @@ Skip conditions:
 
 ### 4. Write `archive.json`
 
-Overwrites; idempotent. Schema `session-archive/1.1`. `archive.json` is session-level metadata owned by this workflow (not a run artifact): it lives in `SESSION_DIR`, is never registered in `artifacts.json`, and is not consumed by the CLI.
+Overwrites; idempotent. Schema `session-archive/1.1`. `archive.json` is session-level metadata owned by this workflow (not a run artifact): it lives in `SESSION_DIR`, is never registered in `artifacts.json`, and is not consumed by the CLI. Its standalone workflow lifecycle is not canonical Session authority; for a linked canonical Session, preserve its observed status/completed_at rather than declaring completion during staging. Only the owner's successful fenced `session complete` receipt proves canonical completion.
 
 ```jsonc
 {
@@ -121,7 +123,7 @@ Overwrites; idempotent. Schema `session-archive/1.1`. `archive.json` is session-
   "session_id": "{SESSION_ID}",
   "session_type": "{SESSION_TYPE}",
   "session_path": "{SESSION_DIR relative to .workflow/}",
-  "lifecycle": { "status": "completed", "completed_at": "{ISO now}", "archived_at": null, "linked_run": "{LINKED_RUN or null}" },
+  "lifecycle": { "status": "{observed canonical status or standalone completed}", "completed_at": "{observed completion time or null; ISO now only for standalone completion}", "archived_at": null, "linked_run": "{LINKED_RUN or null}" },
   "content_refs": [ /* one entry per file detected in Step 1, schema { type, path } */ ],
   "extraction": {
     "harvested": true,
@@ -142,20 +144,22 @@ If Step 2 produced zero fragments or user chose skip:
 ### 5. Report
 
 ```
-=== SESSION COMPLETE ===
-Session: {SESSION_ID} ({SESSION_TYPE})
+=== FINISH-WORK STAGED ===
+Session: {SESSION_ID} ({SESSION_TYPE}) — canonical completion not asserted
 Candidates: {N} staged ({S_spec} spec / {S_knowhow} knowhow), {skipped_count} skipped
-Next: seal the run/session, then `maestro knowledge review <session-id> --refresh` → resolve → promote
-        (candidates become corpus/searchable only after promotion)
+Owner handoff: exact CLI-returned Session/Run locator, candidate IDs, evidence anchors, warnings
+Closeout: completion owner follows @~/.maestro/ref/knowledge-closeout.md;
+          finish-work does not perform resolution, promotion, or canonical completion.
 ```
 
 ## Idempotency
 
-- Re-running re-stages only fragments whose duplicate pre-check finds no corpus match; review-time disposition (`--as duplicate`) absorbs any residual double-staging. `archive.json` is overwritten, not appended.
+- Re-running re-stages only fragments whose duplicate pre-check finds no corpus match; evidence-backed duplicate confirmation in owner closeout handles residual double-staging. Rejection/deferral never fabricates a duplicate disposition. `archive.json` is overwritten, not appended.
 
 ## Boundary
 
-- Does NOT write the spec/knowhow corpus directly — staging only; the corpus is written exclusively by `maestro knowledge promote` (dual-source gates: run-source = sealed run + fresh receipt; session-source = sealed Session + fresh session receipt + non-empty stage `--evidence`).
+- Does NOT write the spec/knowhow corpus directly — staging only; the corpus is written exclusively by explicitly approved `maestro knowledge promote` (run-source = sealed source Runs + fresh receipt; canonical session-source = immutable candidate/evidence snapshots + fresh session receipt + non-empty stage `--evidence`, revalidated at final commit). Zero candidates, rejection, or deferral do not prevent otherwise valid owner completion.
+- Does NOT complete a canonical Session or replace owner closeout with raw shell instructions.
 - Does NOT flip `archived_at` or move files.
 - Does NOT prune `context-package.json`.
 - Does NOT touch `state.json` — caller handles artifact registration.

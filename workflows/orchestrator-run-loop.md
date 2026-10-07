@@ -2,6 +2,7 @@
 # Canonical Orchestrator Run Loop
 
 Canonical lifecycle reference: `@~/.maestro/workflows/run-mode.md`.
+Knowledge closeout reference: `@~/.maestro/ref/knowledge-closeout.md`. If not expanded by the host or no longer in context, Read @~/.maestro/ref/knowledge-closeout.md explicitly before terminal closeout; the completion owner executes its Review → Refresh → Present → Authorize → Execute → Verify protocol.
 
 Maestro and Ralph share this loop. Session (`session/3.0`) is durable topic identity owning the chain, decisions, artifact registry, and the `orchestration_revision` CAS fence; each Run is an immutable step attempt; Runtime alone writes protocol records. There is no Execution, no lease, and no paused state.
 
@@ -54,7 +55,7 @@ For new-runtime responses, the `run-response/1.2` locator/fence, resolved `task`
 | `evaluate_decision` | Read one decision card, dispatch a read-only evaluator, then invoke fenced `maestro run decide` |
 | `accept_reuse` | Apply REVIEW rules below without changing the chain anchor |
 | `recover_session` | Read `session status` / `run check`, transition or cancel the stuck Run, then re-dispatch with `run next` |
-| `seal_session` | Revalidate Session terminal gates, then use fenced `maestro session complete ... --json` |
+| `seal_session` | Revalidate terminal gates, perform owner knowledge closeout per the shared reference, then use fenced `maestro session complete ... --json`; deferred backlog does not block completion |
 | `offer_recommendations` | Show chain-external suggestions only; never allocate a Run implicitly |
 | `repair_chain` / `stop` | Stop and report structured reasons; never bypass authority |
 
@@ -135,7 +136,7 @@ Goal amendment snapshots the current Session, performs impact analysis and confi
 
 ### 6. Complete
 
-After all Runs are sealed, the chain is terminal (every step completed or skipped with evidence), and no open decision gate remains:
+After all Runs are sealed, the chain is terminal (every step completed or skipped with evidence), and no open decision gate remains, execute the shared knowledge closeout protocol as completion owner. Intermediate Runs continue normally; workers do not repeat the approval question. Zero candidates, rejection, or deferral leave any backlog intact and do not block the following completion:
 
 `maestro session complete --session {session_id} --actor {actor_id} [--evidence <ref> ...] --expected-orchestration-revision {orchestration_revision} --json`
 
