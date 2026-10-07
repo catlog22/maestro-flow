@@ -32,10 +32,11 @@ version: 0.5.89
 
 <required_reading>
 @~/.maestro/workflows/run-mode.md
+@~/.maestro/ref/knowledge-closeout.md
 @~/.maestro/workflows/codex-run-mode.md
 </required_reading>
 
-If any required file above was not expanded into context by the host, or its content is no longer in context, Read it explicitly before executing any step.
+If any required file above was not expanded into context by the host, or its content is no longer in context, Read every required file explicitly before executing any step; for knowledge closeout, Read @~/.maestro/ref/knowledge-closeout.md explicitly before closeout.
 
 <purpose>
 Minimal-run execution channel. Full LLM capability with one bounded Run and evidence appended to `{run_dir}/evidence/companion-log.md`.
@@ -58,7 +59,7 @@ $ARGUMENTS — intent text + optional flags.
 
 | Flag | Effect |
 |------|--------|
-| `-y` | Skip confirmation, execute directly |
+| `-y` | Skip bounded task confirmation; never grants knowledge publication approval |
 
 Mode detection: intent → execute | empty → request_user_input: request intent text; if still empty → display usage hint and exit
 
@@ -148,14 +149,14 @@ Before completion, put accepted decisions/locked constraints in `report.md`. If 
 
 ```bash
 maestro knowledge stage knowhow "<title>" --content-file <path|-> --run <run_id>
-# Then use the complete fenced `maestro run complete ... --advance` and, when the
-# chain is terminal, `maestro session complete` from run-mode.md with the current
-# locator, orchestration_revision, and identity.
+# Then use fenced `maestro run complete ... --advance` from run-mode.md.
+# At terminal closeout, the completion owner executes knowledge-closeout.md,
+# then `maestro session complete` with the current locator/revision/identity.
 ```
 
 Display: `Companion done. Run: {run_id} | Evidence: {path}`
 
-If the completion receipt contains candidate IDs, display its `review_command`. Do not persist the same insight again through `/maestro-spec` or `/maestro-knowhow`.
+As completion owner, execute `@~/.maestro/ref/knowledge-closeout.md` (Review → Refresh → Present → Authorize → Execute → Verify) at terminal overall-task closeout; displaying only the receipt's `review_command` is insufficient. Zero candidates, rejection, or deferral allow completion with any backlog reported. If dispatched, return candidate IDs/warnings to the orchestrator instead of repeating its approval question. Do not persist the same insight again through `/maestro-spec` or `/maestro-knowhow`.
 
 If execution revealed the task requires multi-phase audit/diagnosis (e.g., root cause unknown, >3 files need coordinated changes), suggest: `/maestro-odyssey "<scope>" --mode debug|improve` for re-planning.
 
