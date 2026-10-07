@@ -273,10 +273,13 @@ function spawnSyncWorker(projectRoot: string, sessionId: string): SpawnWorkerRes
     return { status: 'already-running', mode: current.owner?.mode ?? 'foreign' };
   }
 
-  const entry = process.argv[1];
-  if (!entry || !/\.[cm]?js$/.test(entry)) return { status: 'unavailable' };
-  const token = randomUUID();
+  const entryPath = process.argv[1];
+  if (!entryPath) return { status: 'unavailable' };
   try {
+    // Resolve npm's extensionless executable symlink before checking the worker entry.
+    const entry = realpathSync(entryPath);
+    if (!/\.[cm]?js$/.test(entry)) return { status: 'unavailable' };
+    const token = randomUUID();
     const child = spawn(
       process.execPath,
       [entry, 'hooks', 'run', 'kg-sync'],
