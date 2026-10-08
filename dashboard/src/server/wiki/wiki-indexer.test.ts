@@ -333,9 +333,17 @@ Facet ranking legacy target.
       includeCliSessions: false,
       evidenceRecorder: event => evidenceEvents.push(event),
     });
+    const subject = reader as unknown as { captureSourceSnapshot: () => Promise<Map<string, string>> };
+    let fullScans = 0;
+    const originalSnapshot = subject.captureSourceSnapshot.bind(reader);
+    subject.captureSourceSnapshot = async () => {
+      fullScans++;
+      return originalSnapshot();
+    };
     const result = await reader.searchWithMeta('read-only sentinel', 5, { skipEmbedding: true });
     await reader.close();
 
+    expect(fullScans).toBe(0);
     expect(result.results.map(item => item.entry.id)).toContain('spec:project:read-only');
     expect(evidenceEvents.map(event => event.event)).toContain('filesystem-cache-read');
     expect(evidenceEvents).not.toContainEqual(expect.objectContaining({ event: 'filesystem-cache-write' }));
@@ -345,6 +353,197 @@ Facet ranking legacy target.
       expect(await readFile(join(tmpRoot, path))).toEqual(before[path].bytes);
       expect(info.mtimeMs).toBe(before[path].mtimeMs);
     }
+  });
+
+  it.each(['edit', 'addition', 'removal', 'optional'] as const)(
+    'invalidates a cold reader cache after source %s', async change => {
+      await write('specs/cold-reader.md', '---\ntitle: Original\n---\n# Original');
+      const writer = new WikiIndexer({ workflowRoot: tmpRoot });
+      await writer.get();
+      await expect.poll(() => stat(join(tmpRoot, 'search-cache.json'))
+        .then(() => true, () => false)).toBe(true);
+      await writer.close();
+
+      if (change === 'edit') {
+        await write('specs/cold-reader.md', '---\ntitle: Edited source\n---\n# Edited source');
+      } else if (change === 'addition') {
+        await write('specs/added.md', '---\ntitle: Added source\n---\n# Added source');
+      } else if (change === 'removal') {
+        await rm(join(tmpRoot, 'specs', 'cold-reader.md'));
+      } else {
+        await write('project.md', '---\ntitle: New optional source\n---\n# New optional source');
+      }
+      const reader = new WikiIndexer({ workflowRoot: tmpRoot, role: 'reader' });
+      const loaded = await reader.get();
+      await reader.close();
+      if (change === 'edit') expect(loaded.byId['spec:project:cold-reader']?.title).toBe('Edited source');
+      else if (change === 'addition') expect(loaded.byId['spec:project:added']?.title).toBe('Added source');
+      else if (change === 'removal') expect(loaded.byId['spec:project:cold-reader']).toBeUndefined();
+      else expect(loaded.entries.some(entry => entry.title === 'New optional source')).toBe(true);
+    },
+  );
+
+  it.each(['project', 'team', 'global'] as const)(
+    'invalidates a cold reader cache when an absent %s spec scope appears', async scope => {
+      const previousMaestroHome = process.env.MAESTRO_HOME;
+      process.env.MAESTRO_HOME = join(tmpRoot, 'global');
+      try {
+        await write('project.md', '# Existing project');
+        const writer = new WikiIndexer({ workflowRoot: tmpRoot });
+        await writer.get();
+        await expect.poll(() => stat(join(tmpRoot, 'search-cache.json'))
+          .then(() => true, () => false)).toBe(true);
+        await writer.close();
+
+        const dir = scope === 'global' ? join(tmpRoot, 'global', 'specs')
+          : scope === 'team' ? join(tmpRoot, 'collab', 'specs') : join(tmpRoot, 'specs');
+        await mkdir(dir, { recursive: true });
+        await writeFile(join(dir, 'new-scope.md'), '---\ntitle: Newly created scope\n---\n# Newly created scope');
+        const reader = new WikiIndexer({ workflowRoot: tmpRoot, role: 'reader' });
+        expect((await reader.get()).byId[`spec:${scope}:new-scope`]?.title).toBe('Newly created scope');
+        await reader.close();
+      } finally {
+        if (previousMaestroHome === undefined) delete process.env.MAESTRO_HOME;
+        else process.env.MAESTRO_HOME = previousMaestroHome;
+      }
+    },
+  );
+
+  it('invalidates a cold reader cache after an in-root source junction is retargeted', async () => {
+    await write('targets/first/source.md', '---\ntitle: First target\n---\n# First target');
+    await write('targets/second/source.md', '---\ntitle: Second target\n---\n# Second target');
+    const alias = join(tmpRoot, 'specs');
+    const linkType = process.platform === 'win32' ? 'junction' : 'dir';
+    await symlink(join(tmpRoot, 'targets', 'first'), alias, linkType);
+    const writer = new WikiIndexer({ workflowRoot: tmpRoot });
+    expect((await writer.get()).byId['spec:project:source']?.title).toBe('First target');
+    await expect.poll(() => stat(join(tmpRoot, 'search-cache.json'))
+      .then(() => true, () => false)).toBe(true);
+    await writer.close();
+
+    await rm(alias);
+    await symlink(join(tmpRoot, 'targets', 'second'), alias, linkType);
+    const reader = new WikiIndexer({ workflowRoot: tmpRoot, role: 'reader' });
+    expect((await reader.get()).byId['spec:project:source']?.title).toBe('Second target');
+    await reader.close();
+  });
+
+  it('keeps full validation for chained source links on cold and warm readers', async () => {
+    await write('targets/first/source.md', '---\ntitle: First chained target\n---\n# First chained target');
+    await write('targets/second/source.md', '---\ntitle: Second chained target\n---\n# Second chained target');
+    await mkdir(join(tmpRoot, 'links'));
+    const current = join(tmpRoot, 'links', 'current');
+    const linkType = process.platform === 'win32' ? 'junction' : 'dir';
+    await symlink(join(tmpRoot, 'targets', 'first'), current, linkType);
+    await symlink(current, join(tmpRoot, 'specs'), linkType);
+    const writer = new WikiIndexer({ workflowRoot: tmpRoot });
+    expect((await writer.get()).byId['spec:project:source']?.title).toBe('First chained target');
+    await expect.poll(() => stat(join(tmpRoot, 'search-cache.json'))
+      .then(() => true, () => false)).toBe(true);
+
+    await rm(current);
+    await symlink(join(tmpRoot, 'targets', 'second'), current, linkType);
+    const reader = new WikiIndexer({ workflowRoot: tmpRoot, role: 'reader' });
+    const subject = reader as unknown as { captureSourceSnapshot: () => Promise<Map<string, string>> };
+    const originalSnapshot = subject.captureSourceSnapshot.bind(reader);
+    let fullScans = 0;
+    subject.captureSourceSnapshot = async () => { fullScans++; return originalSnapshot(); };
+    expect((await reader.get()).byId['spec:project:source']?.title).toBe('Second chained target');
+    expect(fullScans).toBeGreaterThan(0);
+    await reader.close();
+    expect((await writer.get()).byId['spec:project:source']?.title).toBe('Second chained target');
+    await writer.close();
+  });
+
+  it.each(['fenced-to-allowed', 'allowed-to-fenced'] as const)(
+    'invalidates a cold reader cache after a %s source junction transition', async direction => {
+      const outside = await mkdtemp(join(tmpdir(), 'wiki-fenced-scope-'));
+      try {
+        await writeFile(join(outside, 'source.md'), '---\ntitle: Fenced source\n---\n# Fenced source');
+        await write('targets/source.md', '---\ntitle: Allowed source\n---\n# Allowed source');
+        const alias = join(tmpRoot, 'specs');
+        const allowed = join(tmpRoot, 'targets');
+        const linkType = process.platform === 'win32' ? 'junction' : 'dir';
+        await symlink(direction === 'fenced-to-allowed' ? outside : allowed, alias, linkType);
+        const writer = new WikiIndexer({ workflowRoot: tmpRoot });
+        const first = await writer.get();
+        expect(first.byId['spec:project:source']?.title)
+          .toBe(direction === 'fenced-to-allowed' ? undefined : 'Allowed source');
+        expect(first.entries.some(entry => entry.title === 'Fenced source')).toBe(false);
+        await expect.poll(() => stat(join(tmpRoot, 'search-cache.json'))
+          .then(() => true, () => false)).toBe(true);
+        await writer.close();
+
+        await rm(alias);
+        await symlink(direction === 'fenced-to-allowed' ? allowed : outside, alias, linkType);
+        const reader = new WikiIndexer({ workflowRoot: tmpRoot, role: 'reader' });
+        const loaded = await reader.get();
+        expect(loaded.byId['spec:project:source']?.title)
+          .toBe(direction === 'fenced-to-allowed' ? 'Allowed source' : undefined);
+        expect(loaded.entries.some(entry => entry.title === 'Fenced source')).toBe(false);
+        await reader.close();
+      } finally {
+        await rm(outside, { recursive: true, force: true });
+      }
+    },
+  );
+
+  it('keeps full source validation for caches without the snapshot completeness marker', async () => {
+    await write('specs/legacy.md', '# Legacy source');
+    const writer = new WikiIndexer({ workflowRoot: tmpRoot });
+    await writer.get();
+    await expect.poll(() => stat(join(tmpRoot, 'search-cache.json'))
+      .then(() => true, () => false)).toBe(true);
+    await writer.close();
+    const cachePath = join(tmpRoot, 'search-cache.json');
+    const cache = JSON.parse(await readFile(cachePath, 'utf8'));
+    delete cache.sourceSnapshotVersion;
+    await writeFile(cachePath, JSON.stringify(cache));
+
+    const reader = new WikiIndexer({ workflowRoot: tmpRoot, role: 'reader' });
+    const subject = reader as unknown as { captureSourceSnapshot: () => Promise<Map<string, string>> };
+    const originalSnapshot = subject.captureSourceSnapshot.bind(reader);
+    let fullScans = 0;
+    subject.captureSourceSnapshot = async () => { fullScans++; return originalSnapshot(); };
+    expect((await reader.get()).byId['spec:project:legacy']).toBeDefined();
+    expect(fullScans).toBe(1);
+    await reader.close();
+  });
+
+  it('upgrades an obsolete snapshot through publisher-owned cache publication', async () => {
+    await write('specs/upgrade.md', '# Upgrade source');
+    const writer = new WikiIndexer({ workflowRoot: tmpRoot });
+    await writer.get();
+    const cachePath = join(tmpRoot, 'search-cache.json');
+    await expect.poll(() => stat(cachePath).then(() => true, () => false)).toBe(true);
+    await writer.close();
+    const cache = JSON.parse(await readFile(cachePath, 'utf8'));
+    const previousGeneration = cache.generatedAt;
+    cache.sourceSnapshotVersion = 1;
+    await writeFile(cachePath, JSON.stringify(cache));
+
+    const publisher = new WikiIndexer({ workflowRoot: tmpRoot });
+    expect((await publisher.get()).byId['spec:project:upgrade']).toBeDefined();
+    await expect.poll(async () => JSON.parse(await readFile(cachePath, 'utf8')).sourceSnapshotVersion).toBe(2);
+    await publisher.close();
+    expect(JSON.parse(await readFile(cachePath, 'utf8')).generatedAt).not.toBe(previousGeneration);
+  });
+
+  it('yields to daemon lifecycle requests while capturing a large source snapshot', async () => {
+    await Promise.all(Array.from({ length: 130 }, (_, index) =>
+      write(`specs/yield-${index}.md`, `# Source ${index}`)));
+    const indexer = new WikiIndexer({ workflowRoot: tmpRoot, role: 'reader' });
+    const subject = indexer as unknown as { captureSourceSnapshot: () => Promise<Map<string, string>> };
+    let completed = false;
+    const work = subject.captureSourceSnapshot().then(snapshot => {
+      completed = true;
+      return snapshot;
+    });
+    await new Promise<void>(resolveTick => setImmediate(resolveTick));
+    expect(completed).toBe(false);
+    const snapshot = await work;
+    expect([...snapshot.keys()].filter(path => /yield-\d+\.md$/.test(path))).toHaveLength(130);
+    await indexer.close();
   });
 
   it('rejects a search cache whose companion wiki index is missing', async () => {

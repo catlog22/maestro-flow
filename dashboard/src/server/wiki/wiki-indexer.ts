@@ -96,6 +96,7 @@ import type { SearchCandidateBudget, SearchCandidateCounts } from '../../../../s
 // v8: persist only canonical repository attribution and rehydrate live routing metadata.
 // v7 remains dual-readable so existing caches can be rebuilt without losing compatibility.
 const SEARCH_CACHE_VERSION = 9;
+const SOURCE_SNAPSHOT_VERSION = 2;
 const LEGACY_SEARCH_CACHE_VERSION = 8;
 const OLDER_SEARCH_CACHE_VERSION = 7;
 const COMPILED_POSTINGS_ENV = 'MAESTRO_SEARCH_COMPILED_POSTINGS';
@@ -738,7 +739,9 @@ export class WikiIndexer {
     // tracks WAL-mode graph commits. readdirSync is disproportionately
     // expensive on some Windows setups (~1.5ms per call), which made the
     // full scan dominate warm query latency.
-    if (recordedPaths === null) {
+    // Alias chains can change without touching the final lexical link or
+    // target. Keep full resolution for these snapshots instead of trusting stats.
+    if (recordedPaths === null || [...snapshot.values()].some(value => value.startsWith('l:'))) {
       return !snapshotsEqual(snapshot, await this.captureSourceSnapshot());
     }
     // Issue all bounded re-stat probes together. Serial synchronous stats are
@@ -790,11 +793,19 @@ export class WikiIndexer {
         sourceStat.ctimeMs,
       ].join(':'));
     };
-    // Synchronous syscalls throughout: the snapshot is a small, bounded
-    // fingerprint set (budget + maxDepth guards below), and per-entry async
-    // awaits serialize libuv round-trips — each costs ~1-2ms on Windows and
-    // dominates both the warm hasSourceChanges path and the cold rebuild
-    // race check. Sync stats measure ~10x faster here.
+    // Keep cheap synchronous stats, but yield between batches so large
+    // histories do not starve daemon health/shutdown requests.
+    let scannedPaths = 0;
+    const recordAlias = (candidate: string, realPath: string): void => {
+      const lexicalPath = resolve(candidate);
+      const samePath = process.platform === 'win32'
+        ? lexicalPath.toLowerCase() === realPath.toLowerCase()
+        : lexicalPath === realPath;
+      if (!samePath) {
+        try { snapshot.set(lexicalPath, sourceAliasFingerprint(lstatSync(lexicalPath))); }
+        catch { snapshot.set(lexicalPath, 'm'); }
+      }
+    };
     const add = (
       candidate: string,
       allowedRoot: string,
@@ -802,20 +813,18 @@ export class WikiIndexer {
     ): string | null => {
       const resolved = resolveAllowedSourcePathInfo(candidate, allowedRoot, kind);
       if (!resolved) {
-        // Keep a bounded negative sentinel for optional source paths. Without
-        // it, creating project.md (or an initially absent source directory)
-        // after a warm build is invisible because none of the recorded paths
-        // changes. Existing but fenced paths are deliberately not recorded:
-        // they must stay unreadable and must not force perpetual rebuilds.
+        // Track absent and fenced aliases without reading their targets, so
+        // making an optional source readable invalidates the cached generation.
         const resolvedCandidate = resolve(candidate);
         try {
-          lstatSync(resolvedCandidate);
+          snapshot.set(resolvedCandidate, sourceAliasFingerprint(lstatSync(resolvedCandidate)));
         } catch {
           snapshot.set(resolvedCandidate, 'm');
         }
         return null;
       }
       record(resolved.path, resolved.stat);
+      recordAlias(candidate, resolved.path);
       return resolved.path;
     };
     const addWal = (candidate: string, allowedRoot: string): void => {
@@ -823,12 +832,12 @@ export class WikiIndexer {
       if (resolved) {
         if (resolved.stat.size === 0) snapshot.set(resolved.path, 'z');
         else record(resolved.path, resolved.stat);
+        recordAlias(candidate, resolved.path);
         return;
       }
       const resolvedCandidate = resolve(candidate);
       try {
-        // Existing but fenced paths remain unreadable and untracked.
-        lstatSync(resolvedCandidate);
+        snapshot.set(resolvedCandidate, sourceAliasFingerprint(lstatSync(resolvedCandidate)));
       } catch {
         // Read-only SQLite opens may create an empty WAL. Treat missing and
         // empty as the same source state; any committed (>0 byte) WAL fails
@@ -836,7 +845,7 @@ export class WikiIndexer {
         snapshot.set(resolvedCandidate, 'z');
       }
     };
-    const scan = (
+    const scan = async (
       candidate: string,
       allowedRoot: string,
       accept: (name: string, path: string) => boolean,
@@ -846,7 +855,7 @@ export class WikiIndexer {
       skipDir?: (name: string) => boolean,
       budget?: { remaining: number },
       newestFirst = false,
-    ): void => {
+    ): Promise<void> => {
       if (depth > maxDepth || budget?.remaining === 0) return;
       const realDir = depth === 0
         ? add(candidate, allowedRoot, 'directory')
@@ -858,13 +867,16 @@ export class WikiIndexer {
         ? right.localeCompare(left)
         : left.localeCompare(right));
       for (const name of names) {
+        if (++scannedPaths % 64 === 0) {
+          await new Promise<void>(resolveYield => setImmediate(resolveYield));
+        }
         const child = resolveAllowedDirectSourcePathInfo(join(realDir, name), realDir, 'any');
         if (!child) continue;
         const childStat = child.stat;
         if (childStat.isDirectory()) {
           record(child.path, childStat);
           if (recurse && !skipDir?.(name)) {
-            scan(
+            await scan(
               child.path,
               allowedRoot,
               accept,
@@ -887,8 +899,8 @@ export class WikiIndexer {
     add(join(this.workflowRoot, 'config.json'), this.workflowRoot);
     add(join(this.workflowRoot, 'project.md'), this.workflowRoot);
     add(join(this.workflowRoot, 'roadmap.md'), this.workflowRoot);
-    scan(join(this.workflowRoot, 'knowhow'), this.workflowRoot, name => name.toLowerCase().endsWith('.md'), true);
-    scan(join(this.workflowRoot, 'issues'), this.workflowRoot, name => name.toLowerCase().endsWith('.jsonl'), false);
+    await scan(join(this.workflowRoot, 'knowhow'), this.workflowRoot, name => name.toLowerCase().endsWith('.md'), true);
+    await scan(join(this.workflowRoot, 'issues'), this.workflowRoot, name => name.toLowerCase().endsWith('.jsonl'), false);
     add(join(this.workflowRoot, 'domain', 'glossary.json'), this.workflowRoot);
     add(join(this.workflowRoot, 'codebase', 'doc-index.json'), this.workflowRoot);
     add(join(this.workflowRoot, 'codebase', 'knowledge-graph.json'), this.workflowRoot);
@@ -899,7 +911,7 @@ export class WikiIndexer {
     // open, so including it makes the snapshot unstable across a build and
     // forces the rebuild loop to spin.
     addWal(join(this.workflowRoot, 'kg', 'maestro.db-wal'), this.workflowRoot);
-    scan(
+    await scan(
       join(this.workflowRoot, 'sessions'),
       this.workflowRoot,
       name => name === 'session.json' || name === 'artifacts.json' || name === 'gates.json'
@@ -911,17 +923,24 @@ export class WikiIndexer {
       name => name === 'work' || name === 'tmp',
     );
 
+    // Absent scopes must invalidate when they are created after publication.
+    add(join(this.workflowRoot, 'specs'), this.workflowRoot, 'directory');
+    add(join(this.workflowRoot, 'collab', 'specs'), this.workflowRoot, 'directory');
+    if (this.persistence !== 'memory-only') {
+      const globalSpecs = join(process.env.MAESTRO_HOME ?? join(homedir(), '.maestro'), 'specs');
+      add(globalSpecs, globalSpecs, 'directory');
+    }
     for (const scope of this.resolveSpecScopes()) {
-      scan(scope.dir, scope.allowedRoot, name => name.toLowerCase().endsWith('.md'), false);
+      await scan(scope.dir, scope.allowedRoot, name => name.toLowerCase().endsWith('.md'), false);
     }
 
     for (const lw of this.linkedWorkspaces) {
       add(join(lw.workflowRoot, 'repository.json'), lw.workflowRoot);
       if (lw.shareTypes.has('spec')) {
-        scan(join(lw.workflowRoot, 'specs'), lw.workflowRoot, name => name.toLowerCase().endsWith('.md'), false);
+        await scan(join(lw.workflowRoot, 'specs'), lw.workflowRoot, name => name.toLowerCase().endsWith('.md'), false);
       }
       if (lw.shareTypes.has('knowhow')) {
-        scan(join(lw.workflowRoot, 'knowhow'), lw.workflowRoot, name => name.toLowerCase().endsWith('.md'), true);
+        await scan(join(lw.workflowRoot, 'knowhow'), lw.workflowRoot, name => name.toLowerCase().endsWith('.md'), true);
       }
       if (lw.shareTypes.has('domain')) {
         add(join(lw.workflowRoot, 'domain', 'glossary.json'), lw.workflowRoot);
@@ -933,7 +952,7 @@ export class WikiIndexer {
         addWal(join(lw.workflowRoot, 'kg', 'maestro.db-wal'), lw.workflowRoot);
       }
       if (lw.shareTypes.has('session')) {
-        scan(join(lw.workflowRoot, 'sessions'), lw.workflowRoot, name =>
+        await scan(join(lw.workflowRoot, 'sessions'), lw.workflowRoot, name =>
           name === 'session.json' || name === 'artifacts.json' || name === 'gates.json'
           || name === 'run.json' || name === 'report.md' || name === 'knowledge-delta.json'
           || name.endsWith('.json'), true, 16, 0, name => name === 'work' || name === 'tmp');
@@ -980,6 +999,7 @@ export class WikiIndexer {
       ]);
       const cached = validateSearchCache(JSON.parse(raw));
       if (!cached) return false;
+      if (this.role === 'publisher' && cached.sourceSnapshotVersion !== SOURCE_SNAPSHOT_VERSION) return false;
       const persistedIndex = JSON.parse(indexRaw) as unknown;
       if (!persistedIndex || typeof persistedIndex !== 'object' || Array.isArray(persistedIndex)) return false;
       const persistedRecord = persistedIndex as Record<string, unknown>;
@@ -1001,7 +1021,8 @@ export class WikiIndexer {
         this.cliSessionFingerprint = cachedCliFingerprint;
       }
       if (sourceFingerprint(snapshot) !== cached.sourceFingerprint
-        || await this.hasSourceChanges(snapshot)
+        || await this.hasSourceChanges(snapshot,
+          cached.sourceSnapshotVersion === SOURCE_SNAPSHOT_VERSION ? [...snapshot.keys()] : null)
         || generation !== this.rebuildGeneration) return false;
 
       const entries = this.rehydrateCachedEntries(cached.entries, cached.version);
@@ -1170,6 +1191,7 @@ export class WikiIndexer {
       };
       await writeChunk(`{"version":${cacheVersion},"generatedAt":${index.generatedAt}`);
       await writeChunk(`,"sourceFingerprint":${JSON.stringify(sourceFingerprint(snapshot))}`);
+      await writeChunk(`,"sourceSnapshotVersion":${SOURCE_SNAPSHOT_VERSION}`);
       if (cliSessionFingerprint) {
         await writeChunk(`,"cliSessionFingerprint":${JSON.stringify(cliSessionFingerprint)}`);
       }
@@ -3557,6 +3579,10 @@ function snapshotsEqual(
   return true;
 }
 
+function sourceAliasFingerprint(info: NonNullable<ReturnType<typeof lstatSync>>): string {
+  return `l:${info.dev}:${info.ino}:${info.size}:${info.mtimeMs}:${info.ctimeMs}`;
+}
+
 function sourceFingerprint(snapshot: ReadonlyMap<string, string>): string {
   const hash = createHash('sha256');
   const entries = [...snapshot.entries()].sort(([left], [right]) => left.localeCompare(right));
@@ -3651,6 +3677,7 @@ interface ValidatedSearchCache {
   version: number;
   generatedAt: number;
   sourceFingerprint: string;
+  sourceSnapshotVersion?: number;
   /** Optional for legacy caches; required before reuse when CLI sources are enabled. */
   cliSessionFingerprint?: string;
   mtimeSnapshot: Array<[string, string]>;
@@ -3666,6 +3693,7 @@ function validateSearchCache(value: unknown): ValidatedSearchCache | null {
     || !Number.isFinite(value.generatedAt)
     || typeof value.sourceFingerprint !== 'string'
     || !/^[0-9a-f]{64}$/.test(value.sourceFingerprint)
+    || (value.sourceSnapshotVersion !== undefined && !Number.isSafeInteger(value.sourceSnapshotVersion))
     || (value.cliSessionFingerprint !== undefined
       && (typeof value.cliSessionFingerprint !== 'string'
         || !/^[0-9a-f]{64}$/.test(value.cliSessionFingerprint)))
@@ -3704,6 +3732,7 @@ function validateSearchCache(value: unknown): ValidatedSearchCache | null {
     version: value.version as number,
     generatedAt: value.generatedAt as number,
     sourceFingerprint: value.sourceFingerprint,
+    ...(value.sourceSnapshotVersion === undefined ? {} : { sourceSnapshotVersion: value.sourceSnapshotVersion as number }),
     ...(value.cliSessionFingerprint === undefined
       ? {}
       : { cliSessionFingerprint: value.cliSessionFingerprint }),

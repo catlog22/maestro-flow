@@ -456,8 +456,8 @@ export function registerLoadCommand(program: Command): void {
         // Untyped ID lookups always need the whole index: the daemon
         // selection contract requires a declared type, and positional IDs
         // may span entry types.
-        index = await withWikiIndexer(undefined, indexer => indexer.get());
         spawnDaemon(currentRepository.workflowRoot).catch(() => {});
+        index = await withWikiIndexer(undefined, indexer => indexer.get());
       } else {
         const { authorityKey } = resolveWikiAuthority(currentRepository);
         const selection: DaemonLoadSelection = {
@@ -481,11 +481,10 @@ export function registerLoadCommand(program: Command): void {
         if (daemonResult?.ok && Array.isArray(daemonResult.entries)) {
           index = wikiIndexFromDaemon(daemonResult.entries, daemonResult.generatedAt);
         } else {
-          index = await withWikiIndexer(undefined, indexer => indexer.get());
-          // `load` used to remain permanently cold because only `search` spawned
-          // the resident indexer. Warm future load/search calls after this safe
-          // read-only fallback; spawn arbitration keeps concurrent callers single.
+          // Start recovery before local work: a caller timeout must not prevent
+          // the daemon from warming. Spawn arbitration keeps callers single.
           spawnDaemon(currentRepository.workflowRoot).catch(() => {});
+          index = await withWikiIndexer(undefined, indexer => indexer.get());
         }
       }
       let entries: WikiEntry[];

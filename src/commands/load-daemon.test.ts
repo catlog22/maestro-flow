@@ -5,6 +5,7 @@ import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { WikiEntry } from '#maestro-dashboard/wiki/wiki-types.js';
+import { WikiIndexer } from '#maestro-dashboard/wiki/wiki-indexer.js';
 
 const daemon = vi.hoisted(() => ({
   load: vi.fn(),
@@ -99,6 +100,34 @@ describe('load daemon reuse', () => {
       }),
     );
     expect(daemon.spawn).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    { label: 'typed', flags: ['--type', 'knowhow'] },
+    { label: 'untyped', flags: [] },
+  ])('starts daemon recovery before local fallback ($label)', async ({ flags }) => {
+    daemon.load.mockResolvedValue(null);
+    const selected = entry();
+    const get = vi.spyOn(WikiIndexer.prototype, 'get').mockResolvedValue({
+      entries: [selected], byId: { [selected.id]: selected },
+      byType: { project: [], roadmap: [], spec: [], issue: [], knowhow: [selected], note: [], domain: [] },
+      backlinks: {}, generatedAt: 42,
+    });
+    const logs: string[] = [];
+    vi.spyOn(console, 'log').mockImplementation(value => { logs.push(String(value)); });
+    const program = new Command();
+    program.exitOverride();
+    registerLoadCommand(program);
+
+    await program.parseAsync([
+      'node', 'maestro', 'load', ...flags, '--id', selected.id, '--json',
+    ]);
+
+    expect(daemon.spawn).toHaveBeenCalledOnce();
+    expect(daemon.spawn.mock.invocationCallOrder[0]).toBeLessThan(get.mock.invocationCallOrder[0]!);
+    expect(JSON.parse(logs.at(-1)!)).toMatchObject({
+      totalLoaded: 1, entries: [{ id: selected.id, body: selected.body }],
+    });
   });
 
   it('loads exact spec IDs from bounded file scopes without calling the daemon', async () => {
