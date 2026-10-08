@@ -17,6 +17,15 @@ interface ChangelogEntry {
 
 const changelog: ChangelogEntry[] = [
   {
+    version: '0.5.91',
+    date: '2026-10',
+    changes: [
+      { type: 'fix', text_en: 'Knowledge load starts daemon recovery before local fallback work, so caller timeouts no longer prevent recovery from starting', text_zh: '知识 load 在执行本地回退前启动守护进程恢复，避免调用超时截断恢复启动' },
+      { type: 'fix', text_en: 'Cold readers reuse recorded paths for complete, alias-free source snapshots; legacy and aliased snapshots retain full validation, while publishers migrate obsolete snapshot metadata', text_zh: '冷读取器对完整且无路径别名的来源快照复用记录路径；旧快照与含链接的快照保留完整校验，由发布者迁移过期快照元数据' },
+      { type: 'fix', text_en: 'Large source scans yield between batches to reduce daemon lifecycle starvation; regression coverage includes optional scopes, source edits, fenced aliases, and chained links', text_zh: '大型来源扫描分批让出事件循环，减少守护进程生命周期请求饥饿；回归覆盖可选规范目录、源文件变更、受路径栅栏限制的别名与链式链接' },
+    ],
+  },
+  {
     version: '0.5.90',
     date: '2026-10',
     changes: [
