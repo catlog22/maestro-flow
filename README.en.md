@@ -202,6 +202,7 @@ maestro/
 │   ├── graph/               # Knowledge graph (SQLite + tree-sitter)
 │   └── core/                # Tool registry, extension loader
 ├── dashboard/               # Web dashboard (React 19)
+├── docs-site/               # Documentation site (version tracks package.json, currently 0.5.67)
 ├── .claude/
 │   ├── commands/            # 64 slash commands
 │   ├── agents/              # 23 agent definitions
@@ -209,6 +210,8 @@ maestro/
 ├── workflows/               # 115 workflow definitions
 └── templates/               # 92 JSON templates
 ```
+
+Coverage reports, `npm pack` tarballs, editor history, and one-off snapshots are not part of the tree. `.claude/` is the source for commands, agents, and skills, not a disposable copy.
 
 </details>
 

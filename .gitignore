@@ -44,6 +44,19 @@ dashboard/dist-server/
 dashboard/node_modules/
 .history
 .claude/settings.local.json
+.claude/scheduled_tasks.lock
+
+# Generated reports, pack tarballs, and one-off snapshots. Not source.
+/coverage/
+/dashboard/coverage/
+/*.tgz
+/docs-site-snap.txt
+/sidebar-snapshot.txt
+/toc-check.png
+/test-goal.txt
+/repro-atomic.mts
+/plan.json
+/.mcp.json.bak
 
 # Antigravity CLI auto-creates this for project discovery (empty on Windows without symlink permission)
 .antigravitycli/

@@ -201,6 +201,7 @@ maestro/
 │   ├── graph/               # 知识图谱（SQLite + tree-sitter）
 │   └── core/                # 工具注册、扩展加载
 ├── dashboard/               # Web 仪表盘（React 19）
+├── docs-site/               # 文档站（版本与 package.json 对齐，当前 0.5.67）
 ├── .claude/
 │   ├── commands/            # 64 斜杠命令
 │   ├── agents/              # 23 Agent 定义
@@ -208,6 +209,8 @@ maestro/
 ├── workflows/               # 115 工作流定义
 └── templates/               # 92 JSON 模板
 ```
+
+覆盖率报告、`npm pack` 的 tarball、编辑器历史和一次性快照不入库。`.claude/` 是命令、Agent 和技能的源，不是可删的副本。
 
 </details>
 
